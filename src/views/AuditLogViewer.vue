@@ -18,7 +18,7 @@
 							id="start-date"
 							v-model="filters.startDate"
 							type="text"
-							placeholder="dd.mm.yyyy"
+							:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 							pattern="\d{2}\.\d{2}\.\d{4}"
 							:label="$t('arbeitszeitcheck', 'Start Date')"
 							@blur="validateGermanDate('startDate')" />
@@ -31,7 +31,7 @@
 							id="end-date"
 							v-model="filters.endDate"
 							type="text"
-							placeholder="dd.mm.yyyy"
+							:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 							pattern="\d{2}\.\d{2}\.\d{4}"
 							:label="$t('arbeitszeitcheck', 'End Date')"
 							@blur="validateGermanDate('endDate')" />
@@ -236,6 +236,7 @@
 import { NcButton, NcSelect, NcTextField, NcLoadingIcon, NcEmptyContent, NcModal } from '@nextcloud/vue'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'AuditLogViewer',
@@ -366,10 +367,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error loading audit logs:', error)
-				this.showNotification(
-					this.$t('arbeitszeitcheck', 'Error loading audit logs. Please try again.'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -485,7 +484,12 @@ export default {
 					isHTML: false
 				})
 			} else {
-				alert(message)
+				// Fallback for development - use console for non-critical messages
+				if (type === 'error') {
+					console.error(message)
+				} else {
+					console.log(`${type}: ${message}`)
+				}
 			}
 		}
 	}
@@ -493,8 +497,47 @@ export default {
 </script>
 
 <style scoped>
+.timetracking-audit-log,
+.timetracking-audit-log-viewer {
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-audit-log,
+	.timetracking-audit-log-viewer {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-audit-log,
+	.timetracking-audit-log-viewer {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
+}
+
 .timetracking-audit-log {
-	padding: calc(var(--default-grid-baseline) * 2);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-audit-log {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-audit-log {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-dashboard__header {

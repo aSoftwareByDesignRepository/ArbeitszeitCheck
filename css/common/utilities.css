@@ -1,0 +1,161 @@
+/**
+ * Utility Classes for ArbeitszeitCheck
+ * Common utility classes for quick styling
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+/* Display Utilities */
+.arbeitszeitcheck-hidden {
+	display: none !important;
+}
+
+.arbeitszeitcheck-visible {
+	display: block !important;
+}
+
+.arbeitszeitcheck-inline {
+	display: inline !important;
+}
+
+.arbeitszeitcheck-inline-block {
+	display: inline-block !important;
+}
+
+.arbeitszeitcheck-flex {
+	display: flex !important;
+}
+
+/* Visibility Utilities */
+.arbeitszeitcheck-invisible {
+	visibility: hidden;
+}
+
+/* Spacing Utilities */
+.arbeitszeitcheck-margin--none {
+	margin: 0 !important;
+}
+
+.arbeitszeitcheck-margin--small {
+	margin: calc(var(--default-grid-baseline) * 0.5) !important;
+}
+
+.arbeitszeitcheck-margin--medium {
+	margin: var(--default-grid-baseline) !important;
+}
+
+.arbeitszeitcheck-margin--large {
+	margin: calc(var(--default-grid-baseline) * 2) !important;
+}
+
+.arbeitszeitcheck-padding--none {
+	padding: 0 !important;
+}
+
+.arbeitszeitcheck-padding--small {
+	padding: calc(var(--default-grid-baseline) * 0.5) !important;
+}
+
+.arbeitszeitcheck-padding--medium {
+	padding: var(--default-grid-baseline) !important;
+}
+
+.arbeitszeitcheck-padding--large {
+	padding: calc(var(--default-grid-baseline) * 2) !important;
+}
+
+/* Border Utilities */
+.arbeitszeitcheck-border--none {
+	border: none !important;
+}
+
+.arbeitszeitcheck-border--thin {
+	border: 1px solid var(--color-border);
+}
+
+.arbeitszeitcheck-border--radius {
+	border-radius: var(--border-radius);
+}
+
+.arbeitszeitcheck-border--radius-small {
+	border-radius: calc(var(--border-radius) * 0.5);
+}
+
+/* Shadow Utilities */
+.arbeitszeitcheck-shadow--none {
+	box-shadow: none !important;
+}
+
+.arbeitszeitcheck-shadow--small {
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.arbeitszeitcheck-shadow--medium {
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.arbeitszeitcheck-shadow--large {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Width Utilities */
+.arbeitszeitcheck-width--full {
+	width: 100% !important;
+}
+
+.arbeitszeitcheck-width--auto {
+	width: auto !important;
+}
+
+/* Height Utilities */
+.arbeitszeitcheck-height--full {
+	height: 100% !important;
+}
+
+.arbeitszeitcheck-height--auto {
+	height: auto !important;
+}
+
+/* Overflow Utilities */
+.arbeitszeitcheck-overflow--hidden {
+	overflow: hidden !important;
+}
+
+.arbeitszeitcheck-overflow--auto {
+	overflow: auto !important;
+}
+
+.arbeitszeitcheck-overflow--scroll {
+	overflow: scroll !important;
+}
+
+/* Position Utilities */
+.arbeitszeitcheck-position--relative {
+	position: relative !important;
+}
+
+.arbeitszeitcheck-position--absolute {
+	position: absolute !important;
+}
+
+.arbeitszeitcheck-position--fixed {
+	position: fixed !important;
+}
+
+/* Z-Index Utilities */
+.arbeitszeitcheck-z--low {
+	z-index: 1;
+}
+
+.arbeitszeitcheck-z--medium {
+	z-index: 100;
+}
+
+.arbeitszeitcheck-z--high {
+	z-index: 1000;
+}
+
+.arbeitszeitcheck-z--highest {
+	z-index: 10000;
+}

@@ -248,6 +248,7 @@
 import { NcButton, NcTextField, NcSelect, NcLoadingIcon, NcEmptyContent, NcModal } from '@nextcloud/vue'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'WorkingTimeModels',
@@ -316,10 +317,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error loading working time models:', error)
-				this.showNotification(
-					this.$t('arbeitszeitcheck', 'Error loading working time models. Please try again.'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -360,10 +359,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error loading working time model:', error)
-				this.showNotification(
-					this.$t('arbeitszeitcheck', 'Error loading working time model. Please try again.'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			}
 		},
 		async saveModel() {
@@ -395,8 +392,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error saving working time model:', error)
-				const errorMessage = error.response?.data?.error || this.$t('arbeitszeitcheck', 'Error saving working time model. Please try again.')
-				this.showNotification(errorMessage, 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isSaving = false
 			}
@@ -430,8 +427,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error deleting working time model:', error)
-				const errorMessage = error.response?.data?.error || this.$t('arbeitszeitcheck', 'Error deleting working time model. Please try again.')
-				this.showNotification(errorMessage, 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isDeleting = false
 			}
@@ -469,7 +466,12 @@ export default {
 					isHTML: false
 				})
 			} else {
-				alert(message)
+				// Fallback for development - use console for non-critical messages
+				if (type === 'error') {
+					console.error(message)
+				} else {
+					console.log(`${type}: ${message}`)
+				}
 			}
 		}
 	}
@@ -478,9 +480,9 @@ export default {
 
 <style scoped>
 .timetracking-working-time-models {
-	padding: calc(var(--default-grid-baseline) * 2);
-	max-width: 1400px;
-	margin: 0 auto;
+	padding: 0;
+	width: 100%;
+	max-width: 100%;
 }
 
 .timetracking-dashboard__header {

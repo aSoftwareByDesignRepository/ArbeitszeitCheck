@@ -13,7 +13,7 @@
 					<NcTextField
 						v-model="startDate"
 						type="text"
-						placeholder="dd.mm.yyyy"
+						:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 						pattern="\d{2}\.\d{2}\.\d{4}"
 						:label="$t('arbeitszeitcheck', 'Start Date')"
 						@blur="validateGermanDate('startDate')"
@@ -21,7 +21,7 @@
 					<NcTextField
 						v-model="endDate"
 						type="text"
-						placeholder="dd.mm.yyyy"
+						:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 						pattern="\d{2}\.\d{2}\.\d{4}"
 						:label="$t('arbeitszeitcheck', 'End Date')"
 						@blur="validateGermanDate('endDate')"
@@ -208,10 +208,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load compliance report:', error)
-				this.showNotification(
-					error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to load compliance report'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -233,7 +231,8 @@ export default {
 				this.showNotification(this.$t('arbeitszeitcheck', 'Report export started'), 'success')
 			} catch (error) {
 				console.error('Failed to export report:', error)
-				this.showNotification(this.$t('arbeitszeitcheck', 'Failed to export report'), 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				// Reset export state after a short delay to allow download to start
 				setTimeout(() => {
@@ -270,7 +269,23 @@ export default {
 
 <style scoped>
 .timetracking-compliance-reports {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-compliance-reports {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-compliance-reports {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-report-filters {
@@ -337,7 +352,7 @@ export default {
 }
 
 .timetracking-report-card:hover {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 8px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 }
 
 .timetracking-report-card--error {

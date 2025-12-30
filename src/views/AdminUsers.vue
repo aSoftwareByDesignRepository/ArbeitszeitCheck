@@ -196,7 +196,7 @@
 								id="start-date"
 								v-model="editForm.startDate"
 								type="text"
-								placeholder="dd.mm.yyyy"
+								:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 								pattern="\d{2}\.\d{2}\.\d{4}"
 								:label="$t('arbeitszeitcheck', 'Start Date')"
 								@blur="validateGermanDate('startDate')" />
@@ -209,7 +209,7 @@
 								id="end-date"
 								v-model="editForm.endDate"
 								type="text"
-								placeholder="dd.mm.yyyy"
+								:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 								pattern="\d{2}\.\d{2}\.\d{4}"
 								:label="$t('arbeitszeitcheck', 'End Date')"
 								@blur="validateGermanDate('endDate')" />
@@ -243,6 +243,7 @@ import { NcButton, NcTextField, NcSelect, NcLoadingIcon, NcEmptyContent, NcModal
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { formatDateGerman, parseGermanDate } from '../utils/dateUtils.js'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'AdminUsers',
@@ -317,10 +318,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error loading users:', error)
-				this.showNotification(
-					this.$t('arbeitszeitcheck', 'Error loading users. Please try again.'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -377,10 +376,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error loading user details:', error)
-				this.showNotification(
-					this.$t('arbeitszeitcheck', 'Error loading user details. Please try again.'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 				this.closeEditModal()
 			} finally {
 				this.isLoadingUserDetails = false
@@ -424,8 +421,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error saving user settings:', error)
-				const errorMessage = error.response?.data?.error || this.$t('arbeitszeitcheck', 'Error saving user settings. Please try again.')
-				this.showNotification(errorMessage, 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isSaving = false
 			}
@@ -462,7 +459,12 @@ export default {
 					isHTML: false
 				})
 			} else {
-				alert(message)
+				// Fallback for development - use console for non-critical messages
+				if (type === 'error') {
+					console.error(message)
+				} else {
+					console.log(`${type}: ${message}`)
+				}
 			}
 		}
 	}
@@ -471,9 +473,9 @@ export default {
 
 <style scoped>
 .timetracking-admin-users {
-	padding: calc(var(--default-grid-baseline) * 2);
-	max-width: 1400px;
-	margin: 0 auto;
+	padding: 0;
+	width: 100%;
+	max-width: 100%;
 }
 
 .timetracking-dashboard__header {

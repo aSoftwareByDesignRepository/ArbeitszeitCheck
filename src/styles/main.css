@@ -1,150 +1,338 @@
-/* ArbeitszeitCheck Main Styles - Properly Isolated */
+/* ArbeitszeitCheck Main Styles - Clean Design Based on projectcheck */
 
 /* Import Nextcloud design system variables */
 @import url('../../../../core/css/variables.css');
 
-/* Base component styles with proper isolation */
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
 .arbeitszeitcheck-app {
 	font-family: var(--font-face);
 	line-height: var(--line-height);
 	color: var(--color-main-text);
 	background-color: var(--color-main-background);
+	scroll-behavior: smooth;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
 }
 
-/* Dashboard styles */
-.timetracking-dashboard {
-	padding: var(--default-grid-baseline);
-	background-color: var(--color-main-background);
-	border-radius: var(--border-radius);
+/* ============================================
+   LAYOUT & CONTAINERS
+   ============================================ */
+
+/* All main view containers - full width, consistent padding */
+.timetracking-dashboard,
+.timetracking-time-entries,
+.timetracking-absences,
+.timetracking-reports,
+.timetracking-calendar,
+.timetracking-timeline,
+.timetracking-compliance-dashboard,
+.timetracking-admin-dashboard,
+.timetracking-manager-dashboard,
+.timetracking-compliance-reports,
+.timetracking-compliance-violations,
+.timetracking-audit-log-viewer,
+.timetracking-working-time-models,
+.timetracking-admin-users {
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+	min-height: auto;
+	overflow: visible;
 }
+
+@media (min-width: 1024px) {
+	.timetracking-dashboard,
+	.timetracking-time-entries,
+	.timetracking-absences,
+	.timetracking-reports,
+	.timetracking-calendar,
+	.timetracking-timeline,
+	.timetracking-compliance-dashboard,
+	.timetracking-admin-dashboard,
+	.timetracking-manager-dashboard,
+	.timetracking-compliance-reports,
+	.timetracking-compliance-violations,
+	.timetracking-audit-log-viewer,
+	.timetracking-working-time-models,
+	.timetracking-admin-users {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-dashboard,
+	.timetracking-time-entries,
+	.timetracking-absences,
+	.timetracking-reports,
+	.timetracking-calendar,
+	.timetracking-timeline,
+	.timetracking-compliance-dashboard,
+	.timetracking-admin-dashboard,
+	.timetracking-manager-dashboard,
+	.timetracking-compliance-reports,
+	.timetracking-compliance-violations,
+	.timetracking-audit-log-viewer,
+	.timetracking-working-time-models,
+	.timetracking-admin-users {
+		padding: 2rem 4rem;
+	}
+}
+
+/* ============================================
+   PAGE HEADERS (like projectcheck)
+   ============================================ */
 
 .timetracking-dashboard__header {
-	margin-bottom: calc(var(--default-grid-baseline) * 2);
-	padding-bottom: var(--default-grid-baseline);
+	background: linear-gradient(135deg,
+		var(--color-primary-background) 0%,
+		var(--color-background-hover) 100%);
 	border-bottom: 1px solid var(--color-border);
+	padding: 2.5rem 2rem;
+	margin: 0 0 2rem 0;
+	border-radius: 0;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .timetracking-dashboard__title {
-	font-size: 24px;
-	font-weight: 600;
-	color: var(--color-main-text);
-	margin: 0 0 var(--default-grid-baseline) 0;
+	font-size: 2.25rem;
+	font-weight: 700;
+	color: var(--color-main-text) !important;
+	margin: 0 0 0.75rem 0;
+	line-height: 1.2;
+	text-shadow: none !important;
+	background: transparent !important;
+	-webkit-text-fill-color: var(--color-main-text) !important;
+	background-clip: unset !important;
+	-webkit-background-clip: unset !important;
 }
 
 .timetracking-dashboard__subtitle {
-	font-size: 14px;
-	color: var(--color-text-maxcontrast);
-	margin: 0;
+	font-size: 1.1rem;
+	color: var(--color-text-maxcontrast) !important;
+	margin: 0 0 1.5rem 0;
+	line-height: 1.5;
+	font-weight: 400;
 }
 
-/* Clock section styles */
-.timetracking-clock-section {
-	margin-bottom: calc(var(--default-grid-baseline) * 2);
-	padding: var(--default-grid-baseline);
-	background-color: var(--color-background-dark);
-	border-radius: var(--border-radius);
+/* ============================================
+   SECTIONS (like projectcheck .section)
+   ============================================ */
+
+.timetracking-section,
+.timetracking-clock-section,
+.timetracking-status-section,
+.timetracking-today-section,
+.timetracking-recent-section {
+	background: var(--color-main-background);
+	border-radius: 16px;
+	margin-bottom: 2rem;
+	overflow: visible;
+	box-shadow: 0 2px 20px rgba(0, 0, 0, 0.04);
+	border: 1px solid var(--color-border);
+	position: relative;
+	height: auto;
+	padding: 2rem;
 }
 
-.timetracking-clock-section h3 {
-	margin: 0 0 var(--default-grid-baseline) 0;
-	font-size: 18px;
+/* Section Titles - Maximum Contrast */
+.timetracking-section-title,
+h3.timetracking-section-title,
+h4.timetracking-section-title {
+	font-size: 1.5rem;
 	font-weight: 600;
-	color: var(--color-main-text);
+	color: var(--color-main-text) !important;
+	margin: 0 0 0.5rem 0;
+	text-shadow: none !important;
+	background: transparent !important;
+	-webkit-text-fill-color: var(--color-main-text) !important;
+	background-clip: unset !important;
+	-webkit-background-clip: unset !important;
 }
+
+.timetracking-section-help {
+	font-size: 0.95rem;
+	color: var(--color-text-maxcontrast);
+	margin: 0 0 1.5rem 0;
+	line-height: 1.5;
+}
+
+/* ============================================
+   CARDS (like projectcheck .project-card)
+   ============================================ */
+
+.timetracking-summary-item,
+.timetracking-overview-card,
+.timetracking-compliance-card,
+.timetracking-stats-card,
+.timetracking-approval-item,
+.timetracking-violation-item,
+.timetracking-entry-item {
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: 12px;
+	overflow: hidden;
+	transition: all 0.3s ease;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.timetracking-summary-item:hover,
+.timetracking-overview-card:hover,
+.timetracking-compliance-card:hover,
+.timetracking-stats-card:hover,
+.timetracking-approval-item:hover,
+.timetracking-violation-item:hover,
+.timetracking-entry-item:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+	border-color: var(--color-primary);
+}
+
+/* Clickable cards */
+.timetracking-summary-item--clickable {
+	cursor: pointer;
+}
+
+.timetracking-summary-item__label {
+	font-size: 13px;
+	color: var(--color-text-light);
+	margin-bottom: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	font-weight: 600;
+}
+
+.timetracking-summary-item__value {
+	font-size: 32px;
+	font-weight: 800;
+	color: var(--color-main-text) !important;
+	margin: 0;
+	line-height: 1.2;
+	letter-spacing: -0.02em;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
 
 .timetracking-clock-buttons {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--default-grid-baseline);
+	gap: 1rem;
 }
 
-/* Button styles */
-.timetracking-btn {
-	padding: calc(var(--default-grid-baseline) * 0.75) var(--default-grid-baseline);
-	border: none;
-	border-radius: var(--border-radius);
+.action-with-explanation {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	align-items: stretch;
+}
+
+.action-explanation {
+	font-size: 13px;
+	color: var(--color-text-light);
+	margin: 0;
+	text-align: center;
+	line-height: 1.4;
+}
+
+/* ============================================
+   TABLES (like projectcheck)
+   ============================================ */
+
+.timetracking-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	background-color: var(--color-main-background);
+	border-radius: 12px;
+	overflow: hidden;
+	border: 1px solid var(--color-border);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.timetracking-table th,
+.timetracking-table td {
+	padding: 1rem 1.5rem;
+	text-align: left;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.timetracking-table th {
+	background: var(--color-background-hover);
+	font-weight: 700;
+	color: var(--color-main-text) !important;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+.timetracking-table td {
+	font-size: 14px;
+	color: var(--color-main-text);
+}
+
+.timetracking-table tbody tr:hover td {
+	background-color: var(--color-background-hover);
+}
+
+.timetracking-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* ============================================
+   FORMS
+   ============================================ */
+
+.timetracking-form {
+	background-color: var(--color-main-background);
+	padding: 2rem;
+	border-radius: 12px;
+	border: 1px solid var(--color-border);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.timetracking-form-group {
+	margin-bottom: 1.5rem;
+}
+
+.timetracking-form-label {
+	display: block;
+	margin-bottom: 0.5rem;
 	font-size: 14px;
 	font-weight: 500;
-	cursor: pointer;
-	transition: all 0.2s ease;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-height: 36px;
-	text-decoration: none;
+	color: var(--color-main-text) !important;
+}
+
+.timetracking-form-input {
+	width: 100%;
+	padding: 0.75rem 1rem;
+	border: 2px solid var(--color-border);
+	border-radius: 12px;
+	font-size: 14px;
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
 	box-sizing: border-box;
+	transition: all 0.2s ease;
 }
 
-.timetracking-btn:focus {
-	outline: 2px solid var(--color-primary);
-	outline-offset: 2px;
+.timetracking-form-input:hover {
+	border-color: var(--color-primary-element);
 }
 
-.timetracking-btn:disabled {
-	cursor: not-allowed;
-	opacity: 0.5;
+.timetracking-form-input:focus {
+	outline: none;
+	border-color: var(--color-primary);
+	box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), 0.1);
 }
 
-.timetracking-btn--primary {
-	background-color: var(--color-primary);
-	color: var(--color-primary-text);
-}
-
-.timetracking-btn--primary:hover:not(:disabled) {
-	background-color: var(--color-primary-hover);
-}
-
-.timetracking-btn--secondary {
-	background-color: var(--color-background-darker);
-	color: var(--color-main-text);
-	border: 1px solid var(--color-border);
-}
-
-.timetracking-btn--secondary:hover:not(:disabled) {
-	background-color: var(--color-background-hover);
-}
-
-.timetracking-btn--warning {
-	background-color: var(--color-warning);
-	color: var(--color-warning-text);
-}
-
-.timetracking-btn--warning:hover:not(:disabled) {
-	background-color: var(--color-warning-hover);
-}
-
-.timetracking-btn--success {
-	background-color: var(--color-success);
-	color: var(--color-success-text);
-}
-
-.timetracking-btn--success:hover:not(:disabled) {
-	background-color: var(--color-success-hover);
-}
-
-.timetracking-btn--danger {
-	background-color: var(--color-error);
-	color: var(--color-error-text);
-}
-
-.timetracking-btn--danger:hover:not(:disabled) {
-	background-color: var(--color-error-hover);
-}
-
-/* Status display styles */
-.timetracking-status-section {
-	margin-bottom: calc(var(--default-grid-baseline) * 2);
-	padding: var(--default-grid-baseline);
-	background-color: var(--color-background-hover);
-	border-radius: var(--border-radius);
-}
-
-.timetracking-status-section h3 {
-	margin: 0 0 var(--default-grid-baseline) 0;
-	font-size: 18px;
-	font-weight: 600;
-	color: var(--color-main-text);
-}
+/* ============================================
+   STATUS DISPLAYS
+   ============================================ */
 
 .timetracking-status-display {
 	font-size: 14px;
@@ -152,8 +340,8 @@
 }
 
 .timetracking-status-display p {
-	margin: 0;
-	padding: calc(var(--default-grid-baseline) * 0.5) 0;
+	margin: 0.5rem 0;
+	color: var(--color-main-text);
 }
 
 .timetracking-status--active {
@@ -167,505 +355,257 @@
 }
 
 .timetracking-status--inactive {
-	color: var(--color-text-maxcontrast);
+	color: var(--color-text-light);
 }
 
-/* Today's summary styles */
-.timetracking-today-section {
-	padding: var(--default-grid-baseline);
-	background-color: var(--color-background-hover);
-	border-radius: var(--border-radius);
+.timetracking-status--good {
+	color: var(--color-success);
 }
 
-.timetracking-today-section h3 {
-	margin: 0 0 var(--default-grid-baseline) 0;
-	font-size: 18px;
-	font-weight: 600;
-	color: var(--color-main-text);
+.timetracking-status--warning {
+	color: var(--color-warning);
 }
+
+.timetracking-status--error {
+	color: var(--color-error);
+}
+
+/* ============================================
+   GRIDS
+   ============================================ */
 
 .timetracking-today-summary {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-	gap: var(--default-grid-baseline);
-}
-
-.timetracking-summary-item {
-	padding: var(--default-grid-baseline);
-	background-color: var(--color-main-background);
-	border-radius: var(--border-radius);
-	border: 1px solid var(--color-border);
-	text-align: center;
-}
-
-.timetracking-summary-item__label {
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
-	margin-bottom: calc(var(--default-grid-baseline) * 0.25);
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-	font-weight: 500;
-}
-
-.timetracking-summary-item__value {
-	font-size: 24px;
-	font-weight: 700;
-	color: var(--color-main-text);
-	margin: 0;
-}
-
-/* Form styles */
-.timetracking-form {
-	background-color: var(--color-main-background);
-	padding: var(--default-grid-baseline);
-	border-radius: var(--border-radius);
-	border: 1px solid var(--color-border);
-}
-
-.timetracking-form-group {
-	margin-bottom: var(--default-grid-baseline);
-}
-
-.timetracking-form-group:last-child {
-	margin-bottom: 0;
-}
-
-.timetracking-form-label {
-	display: block;
-	margin-bottom: calc(var(--default-grid-baseline) * 0.5);
-	font-size: 14px;
-	font-weight: 500;
-	color: var(--color-main-text);
-}
-
-.timetracking-form-input {
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 1.5rem;
 	width: 100%;
-	padding: calc(var(--default-grid-baseline) * 0.75);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	font-size: 14px;
-	background-color: var(--color-main-background);
-	color: var(--color-main-text);
-	box-sizing: border-box;
 }
 
-.timetracking-form-input:focus {
-	outline: none;
-	border-color: var(--color-primary);
-	box-shadow: 0 0 0 2px var(--color-primary-light);
+@media (min-width: 1024px) {
+	.timetracking-today-summary {
+		grid-template-columns: repeat(4, 1fr);
+	}
 }
 
-.timetracking-textarea {
-	width: 100%;
-	padding: calc(var(--default-grid-baseline) * 0.75);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	font-size: 14px;
-	background-color: var(--color-main-background);
-	color: var(--color-main-text);
-	box-sizing: border-box;
-	font-family: inherit;
-	resize: vertical;
-	min-height: 80px;
+.timetracking-overview-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+	gap: 1.5rem;
+	margin-bottom: 2rem;
 }
 
-.timetracking-textarea:focus {
-	outline: none;
-	border-color: var(--color-primary);
-	box-shadow: 0 0 0 2px var(--color-primary-light);
+/* ============================================
+   BREAK WARNINGS
+   ============================================ */
+
+.break-warning-section {
+	margin-bottom: 2rem;
 }
 
-.timetracking-form-error {
-	color: var(--color-error);
-	font-size: 12px;
-	margin-top: calc(var(--default-grid-baseline) * 0.25);
+.break-warning {
+	padding: 1.5rem;
+	border-radius: 12px;
+	border: 2px solid var(--color-warning);
+	background: rgba(var(--color-warning-rgb), 0.1);
+	display: flex;
+	gap: 1rem;
+	align-items: flex-start;
 }
 
-/* Table styles */
-.timetracking-table {
-	width: 100%;
-	border-collapse: collapse;
-	background-color: var(--color-main-background);
-	border-radius: var(--border-radius);
-	overflow: hidden;
-	border: 1px solid var(--color-border);
+.break-warning__icon {
+	font-size: 2rem;
+	flex-shrink: 0;
 }
 
-.timetracking-table th,
-.timetracking-table td {
-	padding: var(--default-grid-baseline);
-	text-align: left;
-	border-bottom: 1px solid var(--color-border);
+.break-warning__content {
+	flex: 1;
 }
 
-.timetracking-table th {
-	background-color: var(--color-background-hover);
+.break-warning__title {
+	font-size: 1.1rem;
 	font-weight: 600;
-	color: var(--color-main-text);
+	color: var(--color-main-text) !important;
+	margin: 0 0 0.5rem 0;
+}
+
+.break-warning__message {
+	font-size: 14px;
+	color: var(--color-main-text) !important;
+	margin: 0 0 1rem 0;
+	line-height: 1.5;
+}
+
+.break-warning--info {
+	border-color: var(--color-primary);
+	background-color: rgba(var(--color-primary-rgb), 0.1);
+}
+
+.break-warning--warning {
+	border-color: var(--color-warning);
+	background-color: rgba(var(--color-warning-rgb), 0.1);
+}
+
+.break-warning--critical {
+	border-color: var(--color-error);
+	background-color: rgba(var(--color-error-rgb), 0.1);
+}
+
+/* ============================================
+   COMPLIANCE STATUS
+   ============================================ */
+
+.compliance-status-display {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0.5rem;
+	border-radius: 8px;
+	background-color: var(--color-background-hover);
+}
+
+.compliance-status-display__icon {
+	font-size: 1.2rem;
+}
+
+.compliance-status-display__text {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--color-main-text) !important;
+}
+
+.compliance-status-explanation {
 	font-size: 12px;
+	color: var(--color-text-light);
+	margin: 0.5rem 0 0 0;
+	text-align: center;
+	line-height: 1.4;
+}
+
+.compliance-action-hint {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-primary);
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
 }
 
-.timetracking-table td {
+.help-icon-button {
+	background: none;
+	border: none;
+	cursor: pointer;
 	font-size: 14px;
-	color: var(--color-main-text);
-}
-
-.timetracking-table tr:hover td {
-	background-color: var(--color-background-hover);
-}
-
-/* Loading states */
-.timetracking-loading {
+	margin-left: 0.5rem;
+	padding: 2px 4px;
+	border-radius: 50%;
+	width: 20px;
+	height: 20px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	padding: var(--default-grid-baseline);
+	vertical-align: middle;
+	transition: background-color 0.2s ease;
 }
 
-.timetracking-spinner {
-	width: 20px;
-	height: 20px;
-	border: 2px solid var(--color-border);
-	border-top: 2px solid var(--color-primary);
-	border-radius: 50%;
-	animation: timetracking-spin 1s linear infinite;
+.help-icon-button:hover {
+	background-color: var(--color-background-hover);
 }
 
-@keyframes timetracking-spin {
-	0% { transform: rotate(0deg); }
-	100% { transform: rotate(360deg); }
+.help-icon-button:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
 }
 
-/* Empty states */
+.compliance-help-text {
+	margin-top: 1rem;
+	padding: 1rem;
+	background-color: var(--color-background-hover);
+	border-radius: 8px;
+	border: 1px solid var(--color-border);
+	font-size: 13px;
+	color: var(--color-main-text) !important;
+	line-height: 1.6;
+}
+
+.compliance-help-text p {
+	margin: 0 0 0.5rem 0;
+	font-weight: 600;
+}
+
+.compliance-help-text ul {
+	margin: 0;
+	padding-left: 1.5rem;
+}
+
+.compliance-help-text li {
+	margin-bottom: 0.5rem;
+}
+
+/* ============================================
+   EMPTY STATES
+   ============================================ */
+
 .timetracking-empty {
 	text-align: center;
-	padding: calc(var(--default-grid-baseline) * 2);
+	padding: 3rem 2rem;
 	color: var(--color-text-maxcontrast);
 }
 
-.timetracking-empty__icon {
-	width: 48px;
-	height: 48px;
-	margin: 0 auto calc(var(--default-grid-baseline));
-	opacity: 0.5;
-}
+/* ============================================
+   RESPONSIVE
+   ============================================ */
 
-.timetracking-empty__title {
-	font-size: 18px;
-	font-weight: 600;
-	color: var(--color-main-text);
-	margin: 0 0 var(--default-grid-baseline) 0;
-}
-
-.timetracking-empty__message {
-	font-size: 14px;
-	margin: 0;
-}
-
-/* Responsive design */
 @media (max-width: 768px) {
-	.timetracking-clock-buttons {
-		flex-direction: column;
+	.timetracking-dashboard,
+	.timetracking-time-entries,
+	.timetracking-absences,
+	.timetracking-reports,
+	.timetracking-calendar,
+	.timetracking-timeline,
+	.timetracking-compliance-dashboard,
+	.timetracking-admin-dashboard,
+	.timetracking-manager-dashboard,
+	.timetracking-compliance-reports,
+	.timetracking-compliance-violations,
+	.timetracking-audit-log-viewer,
+	.timetracking-working-time-models,
+	.timetracking-admin-users {
+		padding: 1rem;
 	}
 
-	.timetracking-btn {
-		width: 100%;
-		justify-content: center;
+	.timetracking-clock-buttons {
+		flex-direction: column;
 	}
 
 	.timetracking-today-summary {
 		grid-template-columns: 1fr;
 	}
 
-	.timetracking-dashboard {
-		padding: calc(var(--default-grid-baseline) * 0.5);
+	.timetracking-overview-cards {
+		grid-template-columns: 1fr;
 	}
 }
 
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-	.timetracking-btn {
-		border: 2px solid currentColor;
-	}
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
 
+/* High contrast mode */
+@media (prefers-contrast: high) {
 	.timetracking-form-input {
 		border-width: 2px;
 	}
 }
 
-/* Reduced motion support */
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-	.timetracking-btn {
-		transition: none;
-	}
-
-	.timetracking-spinner {
-		animation: none;
-	}
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme]) {
-		--timetracking-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-	}
-}
-
-/* Manager dashboard styles */
-.timetracking-manager-dashboard {
-	padding: var(--default-grid-baseline);
-}
-
-.timetracking-overview-cards {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-	gap: var(--default-grid-baseline);
-	margin-bottom: calc(var(--default-grid-baseline) * 2);
-}
-
-.timetracking-overview-card {
-	background-color: var(--color-main-background);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	padding: var(--default-grid-baseline);
-	display: flex;
-	align-items: center;
-	gap: var(--default-grid-baseline);
-}
-
-.timetracking-overview-card__icon {
-	font-size: 32px;
-	width: 48px;
-	height: 48px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	background-color: var(--color-background-hover);
-	border-radius: var(--border-radius);
-}
-
-.timetracking-overview-card__content {
-	flex: 1;
-}
-
-.timetracking-overview-card__value {
-	font-size: 24px;
-	font-weight: 700;
-	color: var(--color-main-text);
-	margin-bottom: calc(var(--default-grid-baseline) * 0.25);
-}
-
-.timetracking-overview-card__label {
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-	font-weight: 500;
-}
-
-.timetracking-section {
-	margin-bottom: calc(var(--default-grid-baseline) * 2);
-	padding: var(--default-grid-baseline);
-	background-color: var(--color-background-hover);
-	border-radius: var(--border-radius);
-	border: 1px solid var(--color-border);
-}
-
-.timetracking-section__header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: var(--default-grid-baseline);
-}
-
-.timetracking-section__header h3 {
-	margin: 0;
-	font-size: 18px;
-	font-weight: 600;
-	color: var(--color-main-text);
-}
-
-.timetracking-team-table {
-	overflow-x: auto;
-}
-
-.timetracking-approvals-list {
-	display: flex;
-	flex-direction: column;
-	gap: var(--default-grid-baseline);
-}
-
-.timetracking-approval-item {
-	background-color: var(--color-main-background);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	padding: var(--default-grid-baseline);
-}
-
-.timetracking-approval-item__header {
-	font-weight: 600;
-	color: var(--color-main-text);
-	margin-bottom: calc(var(--default-grid-baseline) * 0.5);
-}
-
-.timetracking-approval-item__details {
-	color: var(--color-text-maxcontrast);
-	font-size: 14px;
-	margin-bottom: var(--default-grid-baseline);
-}
-
-.timetracking-approval-item__actions {
-	display: flex;
-	gap: var(--default-grid-baseline);
-}
-
-.timetracking-compliance-summary {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-	gap: var(--default-grid-baseline);
-}
-
-.timetracking-compliance-item {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: calc(var(--default-grid-baseline) * 0.75);
-	background-color: var(--color-main-background);
-	border-radius: var(--border-radius);
-	border: 1px solid var(--color-border);
-}
-
-.timetracking-compliance-item__label {
-	font-size: 14px;
-	color: var(--color-text-maxcontrast);
-}
-
-.timetracking-compliance-item__value {
-	font-size: 16px;
-	font-weight: 600;
-	color: var(--color-main-text);
-}
-
-.timetracking-quick-actions {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-	gap: var(--default-grid-baseline);
-}
-
-/* Settings styles */
-.timetracking-settings {
-	padding: var(--default-grid-baseline);
-	background-color: var(--color-main-background);
-}
-
-.timetracking-settings__header {
-	margin-bottom: calc(var(--default-grid-baseline) * 2);
-	padding-bottom: var(--default-grid-baseline);
-	border-bottom: 1px solid var(--color-border);
-}
-
-.timetracking-settings__header h2 {
-	font-size: 24px;
-	font-weight: 600;
-	color: var(--color-main-text);
-	margin: 0 0 var(--default-grid-baseline) 0;
-}
-
-.timetracking-settings__header p {
-	font-size: 14px;
-	color: var(--color-text-maxcontrast);
-	margin: 0;
-}
-
-.timetracking-settings-section {
-	margin-bottom: calc(var(--default-grid-baseline) * 2);
-	padding: var(--default-grid-baseline);
-	background-color: var(--color-background-hover);
-	border-radius: var(--border-radius);
-	border: 1px solid var(--color-border);
-}
-
-.timetracking-settings-section h3 {
-	margin: 0 0 var(--default-grid-baseline) 0;
-	font-size: 18px;
-	font-weight: 600;
-	color: var(--color-main-text);
-}
-
-.timetracking-settings-section p {
-	margin: 0 0 var(--default-grid-baseline) 0;
-	color: var(--color-text-maxcontrast);
-	line-height: 1.5;
-}
-
-.timetracking-checkbox {
-	display: flex;
-	align-items: center;
-	cursor: pointer;
-	font-size: 14px;
-	color: var(--color-main-text);
-	margin-bottom: var(--default-grid-baseline);
-}
-
-.timetracking-checkbox input[type="checkbox"] {
-	position: absolute;
-	opacity: 0;
-	cursor: pointer;
-}
-
-.timetracking-checkbox__checkmark {
-	width: 20px;
-	height: 20px;
-	background-color: var(--color-main-background);
-	border: 2px solid var(--color-border);
-	border-radius: 3px;
-	margin-right: calc(var(--default-grid-baseline) * 0.75);
-	position: relative;
-	transition: all 0.2s ease;
-}
-
-.timetracking-checkbox input[type="checkbox"]:checked ~ .timetracking-checkbox__checkmark {
-	background-color: var(--color-primary);
-	border-color: var(--color-primary);
-}
-
-.timetracking-checkbox input[type="checkbox"]:checked ~ .timetracking-checkbox__checkmark::after {
-	content: '';
-	position: absolute;
-	top: 2px;
-	left: 6px;
-	width: 6px;
-	height: 10px;
-	border: solid white;
-	border-width: 0 2px 2px 0;
-	transform: rotate(45deg);
-}
-
-.timetracking-btn-group {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--default-grid-baseline);
-}
-
-.timetracking-form-help {
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
-	margin: calc(var(--default-grid-baseline) * 0.25) 0 0 0;
-	line-height: 1.4;
-}
-
-/* Print styles */
-@media print {
-	.timetracking-btn,
-	.timetracking-form-input {
-		display: none;
-	}
-
-	.timetracking-dashboard,
-	.timetracking-settings {
-		box-shadow: none;
-		border: 1px solid #000;
+	* {
+		transition: none !important;
+		animation: none !important;
 	}
 }

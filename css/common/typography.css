@@ -1,0 +1,119 @@
+/**
+ * Typography Styles for ArbeitszeitCheck
+ * Uses Nextcloud design system typography
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+/* Typography Base */
+.arbeitszeitcheck-typography {
+	font-family: var(--font-face, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif);
+	line-height: var(--line-height, 1.5);
+	color: var(--color-main-text);
+}
+
+/* Headings */
+.arbeitszeitcheck-heading--1 {
+	font-size: 2rem;
+	font-weight: 600;
+	line-height: 1.2;
+	margin: 0 0 var(--default-grid-baseline) 0;
+	color: var(--color-main-text);
+}
+
+.arbeitszeitcheck-heading--2 {
+	font-size: 1.5rem;
+	font-weight: 600;
+	line-height: 1.3;
+	margin: 0 0 calc(var(--default-grid-baseline) * 0.75) 0;
+	color: var(--color-main-text);
+}
+
+.arbeitszeitcheck-heading--3 {
+	font-size: 1.25rem;
+	font-weight: 600;
+	line-height: 1.4;
+	margin: 0 0 calc(var(--default-grid-baseline) * 0.5) 0;
+	color: var(--color-main-text);
+}
+
+.arbeitszeitcheck-heading--4 {
+	font-size: 1.125rem;
+	font-weight: 600;
+	line-height: 1.4;
+	margin: 0 0 calc(var(--default-grid-baseline) * 0.5) 0;
+	color: var(--color-main-text);
+}
+
+/* Body Text */
+.arbeitszeitcheck-text--body {
+	font-size: 1rem;
+	line-height: 1.5;
+	color: var(--color-main-text);
+}
+
+.arbeitszeitcheck-text--small {
+	font-size: 0.875rem;
+	line-height: 1.5;
+	color: var(--color-text-maxcontrast);
+}
+
+.arbeitszeitcheck-text--large {
+	font-size: 1.125rem;
+	line-height: 1.5;
+	color: var(--color-main-text);
+}
+
+/* Text Utilities */
+.arbeitszeitcheck-text--bold {
+	font-weight: 600;
+}
+
+.arbeitszeitcheck-text--normal {
+	font-weight: 400;
+}
+
+.arbeitszeitcheck-text--light {
+	font-weight: 300;
+}
+
+.arbeitszeitcheck-text--center {
+	text-align: center;
+}
+
+.arbeitszeitcheck-text--left {
+	text-align: left;
+}
+
+.arbeitszeitcheck-text--right {
+	text-align: right;
+}
+
+/* Text Truncation */
+.arbeitszeitcheck-text--truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.arbeitszeitcheck-text--wrap {
+	white-space: normal;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+}
+
+/* Responsive Typography */
+@media (max-width: 768px) {
+	.arbeitszeitcheck-heading--1 {
+		font-size: 1.75rem;
+	}
+	
+	.arbeitszeitcheck-heading--2 {
+		font-size: 1.25rem;
+	}
+	
+	.arbeitszeitcheck-heading--3 {
+		font-size: 1.125rem;
+	}
+}

@@ -22,6 +22,7 @@ return [
 		['name' => 'time_tracking#getStatus', 'url' => '/api/clock/status', 'verb' => 'GET'],
 		['name' => 'time_tracking#startBreak', 'url' => '/api/break/start', 'verb' => 'POST'],
 		['name' => 'time_tracking#endBreak', 'url' => '/api/break/end', 'verb' => 'POST'],
+		['name' => 'time_tracking#getBreakStatus', 'url' => '/api/break/status', 'verb' => 'GET'],
 
 		// Time entry management routes
 		['name' => 'time_entry#index', 'url' => '/time-entries', 'verb' => 'GET'],

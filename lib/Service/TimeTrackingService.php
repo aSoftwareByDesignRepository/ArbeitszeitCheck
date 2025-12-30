@@ -363,4 +363,153 @@ class TimeTrackingService
 		$complianceService->checkComplianceAfterClockOut($timeEntry);
 	}
 
+	/**
+	 * Calculate required break duration based on working hours (German labor law - ArbZG)
+	 * 
+	 * @param float $hoursWorked Total hours worked today (including current session)
+	 * @return int Required break duration in minutes
+	 */
+	public function calculateRequiredBreakMinutes(float $hoursWorked): int
+	{
+		// German labor law (ArbZG):
+		// - 6+ hours: 30 minutes break required
+		// - 9+ hours: 45 minutes break required
+		
+		if ($hoursWorked >= 9) {
+			return 45; // 45 minutes required after 9 hours
+		} elseif ($hoursWorked >= 6) {
+			return 30; // 30 minutes required after 6 hours
+		}
+		
+		return 0; // No break required if less than 6 hours
+	}
+
+	/**
+	 * Calculate taken break minutes for a user today
+	 *
+	 * @param string $userId
+	 * @return float Break duration in minutes
+	 */
+	public function calculateTakenBreakMinutes(string $userId): float
+	{
+		try {
+			$today = new \DateTime();
+			$today->setTime(0, 0, 0);
+			$tomorrow = clone $today;
+			$tomorrow->modify('+1 day');
+
+			$entries = $this->timeEntryMapper->findByUserAndDateRange($userId, $today, $tomorrow);
+			
+			$totalBreakMinutes = 0.0;
+			foreach ($entries as $entry) {
+				$breakDuration = $entry->getBreakDurationHours();
+				if ($breakDuration > 0) {
+					$totalBreakMinutes += $breakDuration * 60; // Convert hours to minutes
+				}
+			}
+
+			return round($totalBreakMinutes, 1);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error calculating taken break minutes for user ' . $userId . ': ' . $e->getMessage(), ["exception" => $e]);
+			return 0.0;
+		}
+	}
+
+	/**
+	 * Get break status for user (current session)
+	 * 
+	 * @param string $userId
+	 * @return array Break status with warnings and suggestions
+	 */
+	public function getBreakStatus(string $userId): array
+	{
+		try {
+			// Calculate hours worked today (including current active session)
+			$hoursWorked = $this->getTodayHours($userId);
+			
+			// Add current session if active
+			$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
+			$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
+			$currentEntry = $activeEntry ?: $breakEntry;
+			
+			if ($currentEntry) {
+				$now = new \DateTime();
+				$sessionStart = $currentEntry->getStartTime();
+				if ($sessionStart) {
+					$sessionDuration = ($now->getTimestamp() - $sessionStart->getTimestamp()) / 3600; // hours
+					
+					// Subtract break time if on break
+					if ($currentEntry->getBreakStartTime() !== null && $currentEntry->getBreakEndTime() === null) {
+						$breakHours = ($now->getTimestamp() - $currentEntry->getBreakStartTime()->getTimestamp()) / 3600;
+						$sessionDuration -= $breakHours;
+					} elseif ($currentEntry->getBreakStartTime() !== null && $currentEntry->getBreakEndTime() !== null) {
+						$breakHours = ($currentEntry->getBreakEndTime()->getTimestamp() - $currentEntry->getBreakStartTime()->getTimestamp()) / 3600;
+						$sessionDuration -= $breakHours;
+					}
+					
+					$hoursWorked += $sessionDuration;
+				}
+			}
+			
+			$requiredBreak = $this->calculateRequiredBreakMinutes($hoursWorked);
+			$takenBreak = $this->calculateTakenBreakMinutes($userId);
+			$remainingBreak = max(0, $requiredBreak - $takenBreak);
+			
+			$warningLevel = $this->getBreakWarningLevel($hoursWorked, $takenBreak, $requiredBreak);
+			
+			return [
+				'hours_worked' => round($hoursWorked, 2),
+				'required_break_minutes' => $requiredBreak,
+				'taken_break_minutes' => round($takenBreak, 1),
+				'remaining_break_minutes' => round($remainingBreak, 1),
+				'break_required' => $remainingBreak > 0,
+				'warning_level' => $warningLevel
+			];
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting break status for user ' . $userId . ': ' . $e->getMessage(), ["exception" => $e]);
+			return [
+				'hours_worked' => 0.0,
+				'required_break_minutes' => 0,
+				'taken_break_minutes' => 0.0,
+				'remaining_break_minutes' => 0.0,
+				'break_required' => false,
+				'warning_level' => 'none'
+			];
+		}
+	}
+
+	/**
+	 * Get break warning level based on hours worked and break status
+	 *
+	 * @param float $hoursWorked
+	 * @param float $takenBreak
+	 * @param int $requiredBreak
+	 * @return string Warning level: 'none', 'info', 'warning', 'critical'
+	 */
+	private function getBreakWarningLevel(float $hoursWorked, float $takenBreak, int $requiredBreak): string
+	{
+		if ($requiredBreak === 0) {
+			return 'none';
+		}
+
+		$remainingBreak = max(0, $requiredBreak - $takenBreak);
+		
+		// Critical: 9+ hours and still need 30+ minutes
+		if ($hoursWorked >= 9 && $remainingBreak >= 30) {
+			return 'critical';
+		}
+		
+		// Warning: 6+ hours and still need 15+ minutes, or approaching 9 hours
+		if (($hoursWorked >= 6 && $remainingBreak >= 15) || ($hoursWorked >= 8.5 && $requiredBreak >= 45)) {
+			return 'warning';
+		}
+		
+		// Info: Break required but not urgent
+		if ($remainingBreak > 0) {
+			return 'info';
+		}
+		
+		return 'none';
+	}
+
 }

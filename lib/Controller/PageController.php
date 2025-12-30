@@ -42,6 +42,8 @@ class PageController extends Controller
 	{
 		// Load translations for the app
 		Util::addTranslations('arbeitszeitcheck');
+		// Add CSS stylesheet (extracted by webpack)
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
 		// Add script using modern API (replaces deprecated script() function in template)
 		Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 		
@@ -64,6 +66,7 @@ class PageController extends Controller
 	public function dashboard(): TemplateResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
 		Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 		$response = new TemplateResponse('arbeitszeitcheck', 'index');
 		$response->cacheFor(0);
@@ -93,6 +96,7 @@ class PageController extends Controller
 	public function calendar(): TemplateResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
 		Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 		$response = new TemplateResponse('arbeitszeitcheck', 'index');
 		$response->cacheFor(0);
@@ -108,6 +112,7 @@ class PageController extends Controller
 	public function timeline(): TemplateResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
 		Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 		$response = new TemplateResponse('arbeitszeitcheck', 'index');
 		$response->cacheFor(0);

@@ -377,14 +377,58 @@
 				</div>
 			</div>
 		</NcModal>
+
+		<!-- Rejection Reason Modal -->
+		<NcModal
+			v-if="rejectionModal.show"
+			:name="$t('arbeitszeitcheck', 'Reject Request')"
+			@close="closeRejectionModal"
+			:show-close="true"
+		>
+			<div class="timetracking-modal-content">
+				<div class="timetracking-form-group">
+					<label for="rejection-reason" class="timetracking-form-label">
+						{{ $t('arbeitszeitcheck', 'Reason for rejection (optional)') }}
+					</label>
+					<NcTextField
+						id="rejection-reason"
+						v-model="rejectionModal.reason"
+						type="text"
+						:label="$t('arbeitszeitcheck', 'Reason')"
+						:placeholder="$t('arbeitszeitcheck', 'Enter reason for rejection...')"
+					/>
+					<p class="timetracking-form-help">
+						{{ $t('arbeitszeitcheck', 'You can provide an optional reason for rejecting this request. This will be visible to the employee.') }}
+					</p>
+				</div>
+				<div class="timetracking-modal-actions">
+					<NcButton
+						type="error"
+						@click="confirmRejection"
+						:disabled="isProcessing === rejectionModal.id"
+						:aria-label="$t('arbeitszeitcheck', 'Confirm rejection')"
+					>
+						{{ isProcessing === rejectionModal.id ? $t('arbeitszeitcheck', 'Processing...') : $t('arbeitszeitcheck', 'Reject') }}
+					</NcButton>
+					<NcButton
+						type="secondary"
+						@click="closeRejectionModal"
+						:disabled="isProcessing === rejectionModal.id"
+					>
+						{{ $t('arbeitszeitcheck', 'Cancel') }}
+					</NcButton>
+				</div>
+			</div>
+		</NcModal>
 	</div>
 </template>
 
 <script>
-import { NcButton, NcLoadingIcon, NcEmptyContent, NcModal } from '@nextcloud/vue'
+import { NcButton, NcLoadingIcon, NcEmptyContent, NcModal, NcTextField } from '@nextcloud/vue'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { formatDateGerman } from '../utils/dateUtils.js'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'ManagerDashboard',
@@ -392,7 +436,8 @@ export default {
 		NcButton,
 		NcLoadingIcon,
 		NcEmptyContent,
-		NcModal
+		NcModal,
+		NcTextField
 	},
 	data() {
 		return {
@@ -420,7 +465,13 @@ export default {
 			},
 			selectedEmployee: null,
 			isLoadingEmployeeDetails: false,
-			employeeDetails: null
+			employeeDetails: null,
+			rejectionModal: {
+				show: false,
+				type: null,
+				id: null,
+				reason: ''
+			}
 		}
 	},
 	mounted() {
@@ -447,7 +498,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load team overview:', error)
-				this.showNotification(this.$t('arbeitszeitcheck', 'Failed to load team overview'), 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoadingTeam = false
 			}
@@ -463,7 +515,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load pending approvals:', error)
-				this.showNotification(this.$t('arbeitszeitcheck', 'Failed to load pending approvals'), 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoadingApprovals = false
 			}
@@ -520,20 +573,30 @@ export default {
 					}
 				}
 			} catch (error) {
-				this.showNotification(
-					error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to approve request'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isProcessing = null
 			}
 		},
-		async rejectRequest(type, id) {
-			const reason = prompt(this.$t('arbeitszeitcheck', 'Reason for rejection (optional):'))
-			if (reason === null) {
-				return // User cancelled
+		rejectRequest(type, id) {
+			this.rejectionModal = {
+				show: true,
+				type: type,
+				id: id,
+				reason: ''
 			}
-
+		},
+		closeRejectionModal() {
+			this.rejectionModal = {
+				show: false,
+				type: null,
+				id: null,
+				reason: ''
+			}
+		},
+		async confirmRejection() {
+			const { type, id, reason } = this.rejectionModal
 			this.isProcessing = id
 			try {
 				if (type === 'absence') {
@@ -560,12 +623,11 @@ export default {
 					}
 				}
 			} catch (error) {
-				this.showNotification(
-					error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to reject request'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isProcessing = null
+				this.closeRejectionModal()
 			}
 		},
 		async viewEmployee(userId) {
@@ -611,7 +673,8 @@ export default {
 						}
 					}
 				} catch (error) {
-					this.showNotification(this.$t('arbeitszeitcheck', 'Failed to load employee details'), 'error')
+					const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+					this.showNotification(userMessage, 'error')
 					this.closeEmployeeModal()
 				} finally {
 					this.isLoadingEmployeeDetails = false
@@ -723,7 +786,23 @@ export default {
 
 <style scoped>
 .timetracking-manager-dashboard {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-manager-dashboard {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-manager-dashboard {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-overview-cards {
@@ -745,7 +824,7 @@ export default {
 }
 
 .timetracking-overview-card:hover {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 8px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 }
 
 .timetracking-overview-card--warning {
@@ -892,11 +971,11 @@ export default {
 
 .timetracking-approval-badge--absence {
 	background: var(--color-primary);
-	color: var(--color-primary-text, #ffffff);
+	color: var(--color-primary-text);
 }
 
 .timetracking-approval-badge--time-entry {
-	background: var(--color-warning, #eca700);
+	background: var(--color-warning);
 	color: var(--color-main-background);
 }
 
@@ -936,11 +1015,11 @@ export default {
 
 .timetracking-approval-badge--absence {
 	background: var(--color-primary);
-	color: var(--color-primary-text, #ffffff);
+	color: var(--color-primary-text);
 }
 
 .timetracking-approval-badge--time-entry {
-	background: var(--color-warning, #eca700);
+	background: var(--color-warning);
 	color: var(--color-main-background);
 }
 

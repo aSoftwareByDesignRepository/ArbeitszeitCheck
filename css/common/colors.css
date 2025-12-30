@@ -1,0 +1,74 @@
+/**
+ * Common Color Styles for ArbeitszeitCheck
+ * Uses ONLY Nextcloud CSS variables - no hardcoded colors
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+/* Color Utilities - All use Nextcloud variables */
+.arbeitszeitcheck-bg--main {
+	background-color: var(--color-main-background);
+}
+
+.arbeitszeitcheck-bg--dark {
+	background-color: var(--color-background-dark);
+}
+
+.arbeitszeitcheck-bg--hover {
+	background-color: var(--color-background-hover);
+}
+
+.arbeitszeitcheck-bg--primary {
+	background-color: var(--color-primary-element);
+}
+
+.arbeitszeitcheck-text--main {
+	color: var(--color-main-text);
+}
+
+.arbeitszeitcheck-text--light {
+	color: var(--color-text-light);
+}
+
+.arbeitszeitcheck-text--maxcontrast {
+	color: var(--color-text-maxcontrast);
+}
+
+.arbeitszeitcheck-text--primary {
+	color: var(--color-primary-element);
+}
+
+.arbeitszeitcheck-border {
+	border-color: var(--color-border);
+}
+
+.arbeitszeitcheck-border--dark {
+	border-color: var(--color-border-dark);
+}
+
+/* Status Colors */
+.arbeitszeitcheck-status--success {
+	color: var(--color-success, #46ba61);
+}
+
+.arbeitszeitcheck-status--warning {
+	color: var(--color-warning, #eca700);
+}
+
+.arbeitszeitcheck-status--error {
+	color: var(--color-error, #e9322d);
+}
+
+/* Background Status Colors */
+.arbeitszeitcheck-bg--success {
+	background-color: var(--color-success-background, rgba(70, 186, 97, 0.1));
+}
+
+.arbeitszeitcheck-bg--warning {
+	background-color: var(--color-warning-background, rgba(236, 167, 0, 0.1));
+}
+
+.arbeitszeitcheck-bg--error {
+	background-color: var(--color-error-background, rgba(233, 50, 45, 0.1));
+}

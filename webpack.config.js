@@ -19,13 +19,16 @@ webpackConfig.entry = {
 webpackConfig.output = {
 	path: path.resolve(__dirname, 'js'),
 	filename: '[name].js',
-	chunkFilename: '[name].js'
+	chunkFilename: '[name].js',
+	// CSS files will be extracted to css/ directory by MiniCssExtractPlugin
+	assetModuleFilename: '../css/[name][ext]'
 }
 
 // CRITICAL: Configure Vue for @nextcloud/vue v9+ and Vue 3.4+
 // v9+ requires the full Vue build with compiler APIs (createApp, openBlock, mergeModels, etc.)
 // Vue 3.4+ includes mergeModels in the bundler build
-// Note: Templates are still compiled at build time via vue-loader, so no CSP issues
+// CSP COMPLIANCE: Templates are compiled at build time via vue-loader (no runtime template compilation)
+// This ensures no 'unsafe-eval' is needed - all templates are pre-compiled to render functions
 if (webpackConfig.resolve) {
 	webpackConfig.resolve.alias = webpackConfig.resolve.alias || {}
 	// Use the full Vue bundler build for v9+ compatibility (includes all internal utilities)
@@ -54,13 +57,29 @@ if (webpackConfig.externals) {
 webpackConfig.optimization = webpackConfig.optimization || {}
 webpackConfig.optimization.splitChunks = false
 webpackConfig.optimization.runtimeChunk = false
-// Disable source maps in production to save memory
-if (process.env.NODE_ENV === 'production') {
+// Source maps - ALWAYS CSP-compatible (no eval, no unsafe-eval)
+// For production: no source maps (saves memory, size, and ensures CSP compliance)
+// For development: use 'source-map' (CSP-compatible, no eval) - NEVER use 'eval-*'
+// CRITICAL: Nextcloud's CSP does not allow 'unsafe-eval', so we must never use eval-based source maps
+if (process.env.NODE_ENV === 'production' || process.env.DOCKER_BUILD) {
+	// Production builds: no source maps for maximum CSP compliance
 	webpackConfig.devtool = false
+} else {
+	// Development: use 'source-map' (CSP-compatible, no eval)
+	// NEVER use 'eval-cheap-module-source-map' or any 'eval-*' variant
+	webpackConfig.devtool = 'source-map'
 }
 // Reduce memory usage during build
 webpackConfig.parallelism = 1
-webpackConfig.cache = false
+// Enable incremental builds (cache) for faster rebuilds
+// Use filesystem cache in Docker, memory cache locally
+webpackConfig.cache = process.env.DOCKER_BUILD ? {
+	type: 'filesystem',
+	cacheDirectory: path.resolve(__dirname, '.webpack-cache'),
+	buildDependencies: {
+		config: [__filename]
+	}
+} : true
 // Additional memory optimizations
 webpackConfig.performance = {
 	hints: false // Disable performance hints to save memory

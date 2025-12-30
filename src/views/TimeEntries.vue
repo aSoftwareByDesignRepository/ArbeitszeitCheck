@@ -332,6 +332,7 @@ import { NcButton, NcTextField, NcLoadingIcon, NcEmptyContent, NcModal } from '@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { formatDateGerman, parseGermanDate, isoToGerman } from '../utils/dateUtils.js'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'TimeEntries',
@@ -412,7 +413,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load entries:', error)
-				this.showNotification(this.$t('arbeitszeitcheck', 'Failed to load time entries'), 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -511,10 +513,8 @@ export default {
 					throw new Error(response.data.error || this.$t('arbeitszeitcheck', 'Failed to update entry'))
 				}
 			} catch (error) {
-				this.showNotification(
-					error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to update time entry'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isSavingEdit = false
 			}
@@ -600,10 +600,8 @@ export default {
 					throw new Error(response.data.error || this.$t('arbeitszeitcheck', 'Failed to submit correction request'))
 				}
 			} catch (error) {
-				this.showNotification(
-					error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to submit correction request'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isSubmittingCorrection = false
 			}
@@ -781,11 +779,27 @@ export default {
 
 .timetracking-form-label.required::after {
 	content: ' *';
-	color: var(--color-error, #e9322d);
+	color: var(--color-error);
 }
 
 .timetracking-time-entries {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-time-entries {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-time-entries {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-dashboard__header {
@@ -918,7 +932,7 @@ export default {
 
 .timetracking-form-label.required::after {
 	content: ' *';
-	color: var(--color-error, #e9322d);
+	color: var(--color-error);
 }
 
 @media (max-width: 768px) {

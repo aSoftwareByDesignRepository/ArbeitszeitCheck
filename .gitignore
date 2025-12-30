@@ -34,3 +34,7 @@ config/config.php
 # Temporary files
 *.tmp
 *.temp
+
+# Webpack cache (for incremental builds)
+.webpack-cache/
+webpack-entry-temp.config.js

@@ -194,4 +194,28 @@ class TimeTrackingController extends Controller
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
+
+	/**
+	 * Get break status endpoint
+	 *
+	 * @NoAdminRequired
+	 */
+	public function getBreakStatus(): JSONResponse
+	{
+		try {
+			$userId = $this->getUserId();
+			$breakStatus = $this->timeTrackingService->getBreakStatus($userId);
+
+			return new JSONResponse([
+				'success' => true,
+				'breakStatus' => $breakStatus
+			]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController::getBreakStatus: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $e->getMessage()
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
 }

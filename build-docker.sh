@@ -32,6 +32,10 @@ echo -e "${BLUE}[INFO]${NC} Using container: $CONTAINER_NAME"
 echo -e "${BLUE}[INFO]${NC} Installing dependencies (if needed)..."
 docker-compose exec -T nextcloud bash -c "cd /var/www/html/custom_apps/arbeitszeitcheck && npm install"
 
+# Ensure webpack cache directory exists in container
+echo -e "${BLUE}[INFO]${NC} Setting up webpack cache for incremental builds..."
+docker-compose exec -T nextcloud bash -c "cd /var/www/html/custom_apps/arbeitszeitcheck && mkdir -p .webpack-cache && chmod -R 777 .webpack-cache" || true
+
 echo -e "${BLUE}[INFO]${NC} Building frontend assets sequentially (to reduce memory usage)..."
 # Build entries one at a time to avoid memory issues
 # This approach uses much less memory than building all entries at once
@@ -72,8 +76,10 @@ baseConfig.entry = {
 module.exports = baseConfig
 EOFCONFIG"
     
-    # Build with reduced memory (1.5GB per entry)
-    if docker-compose exec -T nextcloud bash -c "cd /var/www/html/custom_apps/arbeitszeitcheck && NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1536' npx webpack --config webpack-entry-temp.config.js --mode=production --no-stats 2>&1 | tail -5"; then
+    # Build with reduced memory (1.5GB per entry) and incremental cache
+    # Use production mode to avoid CSP violations (no eval in source maps)
+    # Cache is enabled in webpack.config.js for incremental builds
+    if docker-compose exec -T nextcloud bash -c "cd /var/www/html/custom_apps/arbeitszeitcheck && DOCKER_BUILD=1 NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1536' npx webpack --config webpack-entry-temp.config.js --mode=production 2>&1 | tail -10"; then
         echo -e "${GREEN}[SUCCESS]${NC} Built ${ENTRY_NAME}"
     else
         echo -e "${YELLOW}[WARNING]${NC} Failed to build ${ENTRY_NAME}, continuing with next entry..."

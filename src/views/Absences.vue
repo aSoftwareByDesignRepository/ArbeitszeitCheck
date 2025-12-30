@@ -184,6 +184,7 @@ import { NcButton, NcLoadingIcon, NcEmptyContent, NcModal, NcSelect, NcTextField
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { formatDateGerman, parseGermanDate, isoToGerman } from '../utils/dateUtils.js'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'Absences',
@@ -378,9 +379,9 @@ export default {
 					throw new Error(response.data.error || this.$t('arbeitszeitcheck', 'Failed to submit absence request'))
 				}
 			} catch (error) {
-				const errorMessage = error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to submit absence request')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
 				if (typeof OC !== 'undefined' && OC.Notification) {
-					OC.Notification.showTemporary(errorMessage, {
+					OC.Notification.showTemporary(userMessage, {
 						timeout: 5000,
 						isHTML: false
 					})
@@ -411,8 +412,9 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to cancel absence:', error)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
 				if (typeof OC !== 'undefined' && OC.Notification) {
-					OC.Notification.showTemporary(this.$t('arbeitszeitcheck', 'Failed to cancel absence request'), {
+					OC.Notification.showTemporary(userMessage, {
 						timeout: 5000,
 						isHTML: false
 					})
@@ -469,7 +471,23 @@ export default {
 
 <style scoped>
 .timetracking-absences {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-absences {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-absences {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-dashboard__header {

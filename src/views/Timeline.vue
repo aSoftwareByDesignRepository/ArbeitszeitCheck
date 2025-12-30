@@ -14,7 +14,7 @@
 						id="timeline-start-date"
 						v-model="startDate"
 						type="text"
-						placeholder="dd.mm.yyyy"
+						:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 						pattern="\d{2}\.\d{2}\.\d{4}"
 						:label="$t('arbeitszeitcheck', 'Start Date')"
 						@blur="validateGermanDate('startDate')"
@@ -26,7 +26,7 @@
 						id="timeline-end-date"
 						v-model="endDate"
 						type="text"
-						placeholder="dd.mm.yyyy"
+						:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 						pattern="\d{2}\.\d{2}\.\d{4}"
 						:label="$t('arbeitszeitcheck', 'End Date')"
 						@blur="validateGermanDate('endDate')"
@@ -374,10 +374,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load timeline:', error)
-				this.showNotification(
-					this.$t('arbeitszeitcheck', 'Failed to load timeline'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -610,7 +608,23 @@ export default {
 
 <style scoped>
 .timetracking-timeline {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-timeline {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-timeline {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-timeline__filters {
@@ -678,7 +692,7 @@ export default {
 }
 
 .timetracking-timeline__day:hover {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 8px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 }
 
 .timetracking-timeline__day--today {
@@ -720,7 +734,7 @@ export default {
 
 .timetracking-timeline__day-badge--today {
 	background: var(--color-primary);
-	color: var(--color-primary-text, #ffffff);
+	color: var(--color-primary-text);
 }
 
 .timetracking-timeline__day-badge--weekend {
@@ -766,14 +780,14 @@ export default {
 .timetracking-timeline__period:focus {
 	transform: scale(1.05);
 	z-index: 10;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 2px 8px var(--color-box-shadow, rgba(0, 0, 0, 0.2));
 	outline: 2px solid var(--color-primary);
 	outline-offset: 2px;
 }
 
 .timetracking-timeline__period--work {
 	background: var(--color-primary);
-	color: var(--color-primary-text, #ffffff);
+	color: var(--color-primary-text);
 }
 
 .timetracking-timeline__period--break {
@@ -827,7 +841,7 @@ export default {
 .timetracking-timeline__entry:hover,
 .timetracking-timeline__entry:focus {
 	background: var(--color-background-hover);
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 4px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 	outline: 2px solid var(--color-primary);
 	outline-offset: 2px;
 }
@@ -837,11 +851,11 @@ export default {
 }
 
 .timetracking-timeline__entry--completed {
-	border-left: 4px solid var(--color-success, #46ba61);
+	border-left: 4px solid var(--color-success);
 }
 
 .timetracking-timeline__entry--pending {
-	border-left: 4px solid var(--color-warning, #eca700);
+	border-left: 4px solid var(--color-warning);
 }
 
 .timetracking-timeline__entry-time {

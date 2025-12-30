@@ -33,7 +33,7 @@
 							id="report-date"
 							v-model="reportDate"
 							type="text"
-							placeholder="dd.mm.yyyy"
+							:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 							pattern="\d{2}\.\d{2}\.\d{4}"
 							:label="$t('arbeitszeitcheck', 'Date')"
 							@blur="validateGermanDate('reportDate')"
@@ -46,7 +46,7 @@
 							id="report-week-start"
 							v-model="weekStartDate"
 							type="text"
-							placeholder="dd.mm.yyyy"
+							:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 							pattern="\d{2}\.\d{2}\.\d{4}"
 							:label="$t('arbeitszeitcheck', 'Week Start')"
 							@blur="validateGermanDate('weekStartDate')"
@@ -71,7 +71,7 @@
 								id="report-start-date"
 								v-model="startDate"
 								type="text"
-								placeholder="dd.mm.yyyy"
+								:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 								pattern="\d{2}\.\d{2}\.\d{4}"
 								:label="$t('arbeitszeitcheck', 'Start Date')"
 								@blur="validateGermanDate('startDate')"
@@ -83,7 +83,7 @@
 								id="report-end-date"
 								v-model="endDate"
 								type="text"
-								placeholder="dd.mm.yyyy"
+								:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 								pattern="\d{2}\.\d{2}\.\d{4}"
 								:label="$t('arbeitszeitcheck', 'End Date')"
 								@blur="validateGermanDate('endDate')"
@@ -539,6 +539,7 @@ import { NcButton, NcTextField, NcSelect, NcLoadingIcon, NcEmptyContent } from '
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { formatDateGerman, parseGermanDate } from '../utils/dateUtils.js'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'Reports',
@@ -740,10 +741,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load report:', error)
-				this.showNotification(
-					error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to load report'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -891,7 +890,23 @@ export default {
 
 <style scoped>
 .timetracking-reports {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-reports {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-reports {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-section {
@@ -1006,7 +1021,7 @@ export default {
 }
 
 .timetracking-report-card:hover {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 8px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 }
 
 .timetracking-report-card--success {

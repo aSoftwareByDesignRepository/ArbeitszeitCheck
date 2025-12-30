@@ -168,10 +168,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Error loading admin statistics:', error)
-				this.showNotification(
-					this.$t('arbeitszeitcheck', 'Error loading statistics. Please try again.'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -215,8 +213,12 @@ export default {
 					isHTML: false
 				})
 			} else {
-				// Fallback if OC.Notification is not available
-				alert(message)
+				// Fallback for development - use console for non-critical messages
+				if (type === 'error') {
+					console.error(message)
+				} else {
+					console.log(`${type}: ${message}`)
+				}
 			}
 		}
 	}
@@ -225,9 +227,23 @@ export default {
 
 <style scoped>
 .timetracking-admin-dashboard {
-	padding: calc(var(--default-grid-baseline) * 2);
-	max-width: 1200px;
-	margin: 0 auto;
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-admin-dashboard {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-admin-dashboard {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-dashboard__header {
@@ -266,7 +282,7 @@ export default {
 	background: var(--color-main-background);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large);
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 1px 3px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 }
 
 .timetracking-overview-card__icon {

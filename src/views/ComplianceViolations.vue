@@ -12,7 +12,7 @@
 					<NcTextField
 						v-model="filters.startDate"
 						type="text"
-						placeholder="dd.mm.yyyy"
+						:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 						pattern="\d{2}\.\d{2}\.\d{4}"
 						:label="$t('arbeitszeitcheck', 'Start Date')"
 						@blur="validateGermanDate('startDate')"
@@ -20,7 +20,7 @@
 					<NcTextField
 						v-model="filters.endDate"
 						type="text"
-						placeholder="dd.mm.yyyy"
+						:placeholder="$t('arbeitszeitcheck', 'dd.mm.yyyy')"
 						pattern="\d{2}\.\d{2}\.\d{4}"
 						:label="$t('arbeitszeitcheck', 'End Date')"
 						@blur="validateGermanDate('endDate')"
@@ -170,6 +170,7 @@ import { NcButton, NcTextField, NcLoadingIcon, NcEmptyContent } from '@nextcloud
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { formatDateGerman, parseGermanDate } from '../utils/dateUtils.js'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'ComplianceViolations',
@@ -245,7 +246,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load violations:', error)
-				this.showNotification(this.$t('arbeitszeitcheck', 'Failed to load violations'), 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -261,10 +263,8 @@ export default {
 					throw new Error(response.data.error || this.$t('arbeitszeitcheck', 'Failed to resolve violation'))
 				}
 			} catch (error) {
-				this.showNotification(
-					error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to resolve violation'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isResolving = null
 			}
@@ -338,7 +338,23 @@ export default {
 
 <style scoped>
 .timetracking-compliance-violations {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-compliance-violations {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-compliance-violations {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-filters {

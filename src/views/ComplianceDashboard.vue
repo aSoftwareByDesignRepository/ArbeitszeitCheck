@@ -16,9 +16,12 @@
 			<div v-else class="timetracking-compliance-status">
 				<div class="timetracking-compliance-status__cards">
 					<div class="timetracking-compliance-card" :class="{'timetracking-compliance-card--compliant': complianceStatus.compliant, 'timetracking-compliance-card--non-compliant': !complianceStatus.compliant}">
-						<div class="timetracking-compliance-card__icon" :aria-label="$t('arbeitszeitcheck', 'Compliance status')">
-							<span v-if="complianceStatus.compliant">✓</span>
-							<span v-else>⚠</span>
+						<div class="timetracking-compliance-card__icon">
+							<!-- ✅ CORRECT: Icon with aria-hidden, text is in content below -->
+							<span aria-hidden="true">
+								<span v-if="complianceStatus.compliant">✓</span>
+								<span v-else>⚠</span>
+							</span>
 						</div>
 						<div class="timetracking-compliance-card__content">
 							<div class="timetracking-compliance-card__value">
@@ -29,7 +32,7 @@
 					</div>
 
 					<div class="timetracking-compliance-card">
-						<div class="timetracking-compliance-card__icon" aria-label="Total violations">
+						<div class="timetracking-compliance-card__icon" aria-hidden="true">
 							{{ complianceStatus.violation_count }}
 						</div>
 						<div class="timetracking-compliance-card__content">
@@ -39,7 +42,7 @@
 					</div>
 
 					<div class="timetracking-compliance-card timetracking-compliance-card--error">
-						<div class="timetracking-compliance-card__icon" aria-label="Critical violations">
+						<div class="timetracking-compliance-card__icon" aria-hidden="true">
 							{{ complianceStatus.critical_violations }}
 						</div>
 						<div class="timetracking-compliance-card__content">
@@ -49,7 +52,7 @@
 					</div>
 
 					<div class="timetracking-compliance-card timetracking-compliance-card--warning">
-						<div class="timetracking-compliance-card__icon" aria-label="Warning violations">
+						<div class="timetracking-compliance-card__icon" aria-hidden="true">
 							{{ complianceStatus.warning_violations }}
 						</div>
 						<div class="timetracking-compliance-card__content">
@@ -59,7 +62,7 @@
 					</div>
 
 					<div class="timetracking-compliance-card timetracking-compliance-card--info">
-						<div class="timetracking-compliance-card__icon" aria-label="Info violations">
+						<div class="timetracking-compliance-card__icon" aria-hidden="true">
 							{{ complianceStatus.info_violations }}
 						</div>
 						<div class="timetracking-compliance-card__content">
@@ -157,6 +160,7 @@ import { NcButton, NcLoadingIcon, NcEmptyContent } from '@nextcloud/vue'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { formatDateGerman } from '../utils/dateUtils.js'
+import { getUserFriendlyError } from '../utils/errorMessages.js'
 
 export default {
 	name: 'ComplianceDashboard',
@@ -196,7 +200,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load compliance status:', error)
-				this.showNotification(this.$t('arbeitszeitcheck', 'Failed to load compliance status'), 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -229,10 +234,8 @@ export default {
 					throw new Error(response.data.error || this.$t('arbeitszeitcheck', 'Failed to resolve violation'))
 				}
 			} catch (error) {
-				this.showNotification(
-					error.response?.data?.error || error.message || this.$t('arbeitszeitcheck', 'Failed to resolve violation'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isResolving = null
 			}
@@ -265,7 +268,8 @@ export default {
 				this.showNotification(this.$t('arbeitszeitcheck', 'Report generated successfully'), 'success')
 			} catch (error) {
 				console.error('Failed to generate report:', error)
-				this.showNotification(this.$t('arbeitszeitcheck', 'Failed to generate report'), 'error')
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isGeneratingReport = false
 			}
@@ -321,7 +325,23 @@ export default {
 
 <style scoped>
 .timetracking-compliance-dashboard {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-compliance-dashboard {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-compliance-dashboard {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-loading-container {
@@ -352,7 +372,7 @@ export default {
 }
 
 .timetracking-compliance-card:hover {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 8px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 }
 
 .timetracking-compliance-card__icon {
@@ -405,7 +425,7 @@ export default {
 
 .timetracking-compliance-card__label {
 	font-size: 14px;
-	color: var(--color-text-maxcontrast);
+	color: var(--color-text-light);
 }
 
 .timetracking-recent-violations {

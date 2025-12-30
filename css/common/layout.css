@@ -1,0 +1,118 @@
+/**
+ * Common Layout Styles for ArbeitszeitCheck
+ * Properly isolated with app-specific prefixes
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+/* Layout Container */
+.arbeitszeitcheck-layout {
+	display: flex;
+	min-height: 100vh;
+	background-color: var(--color-main-background);
+}
+
+/* Sidebar Layout */
+.arbeitszeitcheck-layout__sidebar {
+	flex-shrink: 0;
+	width: 240px;
+}
+
+/* Content Area */
+.arbeitszeitcheck-layout__content {
+	flex: 1;
+	min-width: 0;
+	padding: var(--default-grid-baseline);
+	overflow-x: auto;
+}
+
+/* Responsive: Mobile Layout */
+@media (max-width: 768px) {
+	.arbeitszeitcheck-layout__content {
+		padding: calc(var(--default-grid-baseline) * 0.5);
+	}
+}
+
+/* Container Styles */
+.arbeitszeitcheck-container {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: var(--default-grid-baseline);
+}
+
+.arbeitszeitcheck-container--narrow {
+	max-width: 800px;
+}
+
+.arbeitszeitcheck-container--wide {
+	max-width: 1600px;
+}
+
+/* Grid Layouts */
+.arbeitszeitcheck-grid {
+	display: grid;
+	gap: var(--default-grid-baseline);
+}
+
+.arbeitszeitcheck-grid--2 {
+	grid-template-columns: repeat(2, 1fr);
+}
+
+.arbeitszeitcheck-grid--3 {
+	grid-template-columns: repeat(3, 1fr);
+}
+
+.arbeitszeitcheck-grid--4 {
+	grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 1024px) {
+	.arbeitszeitcheck-grid--3,
+	.arbeitszeitcheck-grid--4 {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
+@media (max-width: 768px) {
+	.arbeitszeitcheck-grid--2,
+	.arbeitszeitcheck-grid--3,
+	.arbeitszeitcheck-grid--4 {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Flexbox Utilities */
+.arbeitszeitcheck-flex {
+	display: flex;
+}
+
+.arbeitszeitcheck-flex--column {
+	flex-direction: column;
+}
+
+.arbeitszeitcheck-flex--center {
+	align-items: center;
+	justify-content: center;
+}
+
+.arbeitszeitcheck-flex--between {
+	justify-content: space-between;
+}
+
+.arbeitszeitcheck-flex--gap {
+	gap: var(--default-grid-baseline);
+}
+
+/* Spacing Utilities */
+.arbeitszeitcheck-spacing--small {
+	padding: calc(var(--default-grid-baseline) * 0.5);
+}
+
+.arbeitszeitcheck-spacing--medium {
+	padding: var(--default-grid-baseline);
+}
+
+.arbeitszeitcheck-spacing--large {
+	padding: calc(var(--default-grid-baseline) * 2);
+}

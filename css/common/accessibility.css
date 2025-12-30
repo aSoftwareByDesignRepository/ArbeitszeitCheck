@@ -1,0 +1,109 @@
+/**
+ * Accessibility Styles for ArbeitszeitCheck
+ * WCAG 2.1 AAA compliant
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+/* Focus Indicators - Visible and High Contrast */
+.arbeitszeitcheck-focusable:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+	border-radius: var(--border-radius);
+}
+
+/* Skip to Content Link (for screen readers) */
+.arbeitszeitcheck-skip-link {
+	position: absolute;
+	top: -40px;
+	left: 0;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	padding: 8px 16px;
+	text-decoration: none;
+	z-index: 10000;
+	border: 2px solid var(--color-primary-element);
+}
+
+.arbeitszeitcheck-skip-link:focus {
+	top: 0;
+}
+
+/* Screen Reader Only Text */
+.arbeitszeitcheck-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+	.arbeitszeitcheck-sidebar__link {
+		border: 1px solid var(--color-main-text);
+	}
+	
+	.arbeitszeitcheck-sidebar__link--active {
+		border-width: 2px;
+	}
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* Keyboard Navigation Enhancements */
+.arbeitszeitcheck-keyboard-nav {
+	/* Ensure all interactive elements are keyboard accessible */
+}
+
+.arbeitszeitcheck-keyboard-nav a:focus,
+.arbeitszeitcheck-keyboard-nav button:focus,
+.arbeitszeitcheck-keyboard-nav input:focus,
+.arbeitszeitcheck-keyboard-nav select:focus,
+.arbeitszeitcheck-keyboard-nav textarea:focus {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+}
+
+/* Touch Target Sizes (Minimum 44x44px for mobile) */
+.arbeitszeitcheck-touch-target {
+	min-height: 44px;
+	min-width: 44px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Color Contrast Utilities */
+.arbeitszeitcheck-contrast--high {
+	color: var(--color-main-text);
+	background-color: var(--color-main-background);
+}
+
+/* ARIA Live Regions */
+.arbeitszeitcheck-live-region {
+	position: absolute;
+	left: -10000px;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+}
+
+/* Focus Trap for Modals */
+.arbeitszeitcheck-focus-trap {
+	/* Focus trap implementation handled in JavaScript */
+}

@@ -455,10 +455,8 @@ export default {
 				}
 			} catch (error) {
 				console.error('Failed to load time entries:', error)
-				this.showNotification(
-					this.$t('arbeitszeitcheck', 'Failed to load time entries'),
-					'error'
-				)
+				const userMessage = getUserFriendlyError(error, this.$t.bind(this))
+				this.showNotification(userMessage, 'error')
 			} finally {
 				this.isLoading = false
 			}
@@ -566,7 +564,23 @@ export default {
 
 <style scoped>
 .timetracking-calendar {
-	padding: var(--default-grid-baseline);
+	padding: 2rem;
+	width: 100% !important;
+	max-width: 100% !important;
+	box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+	.timetracking-calendar {
+		padding: 2rem 3rem;
+	}
+}
+
+@media (min-width: 1920px) {
+	.timetracking-calendar {
+		padding: 2rem 4rem;
+		max-width: 100% !important;
+	}
 }
 
 .timetracking-calendar__navigation {
@@ -631,7 +645,7 @@ export default {
 .timetracking-calendar__day:hover,
 .timetracking-calendar__day:focus {
 	background: var(--color-background-hover);
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 4px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
@@ -643,7 +657,7 @@ export default {
 
 .timetracking-calendar__day--today {
 	border: 2px solid var(--color-primary);
-	background: var(--color-primary-element-light, rgba(var(--color-primary-rgb, 0, 130, 201), 0.1));
+	background: var(--color-primary-element-light);
 }
 
 .timetracking-calendar__day--weekend {
@@ -677,18 +691,18 @@ export default {
 }
 
 .timetracking-calendar__entry--active {
-	background: var(--color-primary-element-light, rgba(var(--color-primary-rgb, 0, 130, 201), 0.1));
-	color: var(--color-primary-text, #ffffff);
+	background: var(--color-primary-element-light);
+	color: var(--color-primary-text);
 }
 
 .timetracking-calendar__entry--completed {
-	background: var(--color-success-background, rgba(70, 186, 97, 0.1));
-	color: var(--color-success, #46ba61);
+	background: var(--color-success-background);
+	color: var(--color-success);
 }
 
 .timetracking-calendar__entry--pending {
-	background: var(--color-warning-background, rgba(236, 167, 0, 0.1));
-	color: var(--color-warning, #eca700);
+	background: var(--color-warning-background);
+	color: var(--color-warning);
 }
 
 .timetracking-calendar__entry--break {
@@ -738,7 +752,7 @@ export default {
 
 .timetracking-calendar__week-day-header--today {
 	border: 2px solid var(--color-primary);
-	background: var(--color-primary-element-light, rgba(var(--color-primary-rgb, 0, 130, 201), 0.1));
+	background: var(--color-primary-element-light);
 }
 
 .timetracking-calendar__week-day-header--weekend {
@@ -780,7 +794,7 @@ export default {
 
 .timetracking-calendar__week-day-content--today {
 	border: 2px solid var(--color-primary);
-	background: var(--color-primary-element-light, rgba(var(--color-primary-rgb, 0, 130, 201), 0.1));
+	background: var(--color-primary-element-light);
 }
 
 .timetracking-calendar__week-day-content--weekend {
@@ -804,7 +818,7 @@ export default {
 .timetracking-calendar__week-entry:hover,
 .timetracking-calendar__week-entry:focus {
 	background: var(--color-background-hover);
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 4px var(--color-box-shadow, rgba(0, 0, 0, 0.1));
 	outline: 2px solid var(--color-primary);
 	outline-offset: 2px;
 }

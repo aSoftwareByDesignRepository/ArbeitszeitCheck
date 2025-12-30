@@ -10,6 +10,7 @@ import Absences from './views/Absences.vue'
 import Reports from './views/Reports.vue'
 import Calendar from './views/Calendar.vue'
 import Timeline from './views/Timeline.vue'
+import ComplianceDashboard from './views/ComplianceDashboard.vue'
 
 // Global styles with proper isolation
 import './styles/main.css'
@@ -32,15 +33,35 @@ app.config.globalProperties.$t = function(appName, text, ...args) {
 		if (arguments.length === 1) {
 			const safeText = String(appName || '')
 			const result = translate('arbeitszeitcheck', safeText)
+			// If translation returns the same text, it might not be loaded - try direct OC.L10N
+			if (result === safeText && typeof OC !== 'undefined' && OC.L10N && OC.L10N.get) {
+				const ocResult = OC.L10N.get('arbeitszeitcheck', safeText)
+				return ocResult !== safeText ? ocResult : safeText
+			}
 			return result || safeText
 		}
 		// Otherwise use the provided app name or default
 		const safeAppName = String(appName || 'arbeitszeitcheck')
 		const safeText = String(text || '')
 		const result = translate(safeAppName, safeText, ...args)
+		// Fallback to OC.L10N if @nextcloud/l10n doesn't work
+		if (result === safeText && typeof OC !== 'undefined' && OC.L10N && OC.L10N.get) {
+			const ocResult = OC.L10N.get(safeAppName, safeText)
+			return ocResult !== safeText ? ocResult : safeText
+		}
 		return result || safeText
 	} catch (e) {
 		console.warn('Translation error:', e, { appName, text, args })
+		// Try OC.L10N as fallback
+		if (typeof OC !== 'undefined' && OC.L10N && OC.L10N.get) {
+			try {
+				const app = arguments.length === 1 ? 'arbeitszeitcheck' : String(appName || 'arbeitszeitcheck')
+				const txt = arguments.length === 1 ? String(appName || '') : String(text || '')
+				return OC.L10N.get(app, txt) || txt
+			} catch (ocError) {
+				console.warn('OC.L10N fallback error:', ocError)
+			}
+		}
 		// Return the text as fallback
 		return arguments.length === 1 ? String(appName || '') : String(text || '')
 	}
@@ -97,6 +118,12 @@ const router = createRouter({
 			path: '/timeline',
 			name: 'Timeline',
 			component: Timeline,
+			props: true
+		},
+		{
+			path: '/compliance',
+			name: 'ComplianceDashboard',
+			component: ComplianceDashboard,
 			props: true
 		}
 	]

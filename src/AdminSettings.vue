@@ -370,7 +370,12 @@ export default {
 					isHTML: false
 				})
 			} else {
-				alert(message)
+				// Fallback for development - use console for non-critical messages
+				if (type === 'error') {
+					console.error(message)
+				} else {
+					console.log(`${type}: ${message}`)
+				}
 			}
 		}
 	}
