@@ -13,35 +13,58 @@ namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
+use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
+use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
+use OCP\IURLGenerator;
+use OCP\IL10N;
 
 /**
  * TimeEntryController
  */
 class TimeEntryController extends Controller
 {
+	use CSPTrait;
+
 	private TimeEntryMapper $timeEntryMapper;
 	private IUserSession $userSession;
+	private \OCA\ArbeitszeitCheck\Service\OvertimeService $overtimeService;
+	private IURLGenerator $urlGenerator;
+	private IL10N $l10n;
+	private AuditLogMapper $auditLogMapper;
 
 	public function __construct(
 		string $appName,
 		IRequest $request,
 		TimeEntryMapper $timeEntryMapper,
-		IUserSession $userSession
+		IUserSession $userSession,
+		\OCA\ArbeitszeitCheck\Service\OvertimeService $overtimeService,
+		IURLGenerator $urlGenerator,
+		CSPService $cspService,
+		IL10N $l10n,
+		AuditLogMapper $auditLogMapper
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->userSession = $userSession;
+		$this->overtimeService = $overtimeService;
+		$this->urlGenerator = $urlGenerator;
+		$this->l10n = $l10n;
+		$this->auditLogMapper = $auditLogMapper;
+		$this->setCspService($cspService);
 	}
 
 	/**
-	 * Get current user ID
+	 * Get current user ID from session
 	 *
-	 * @return string
+	 * @return string Current user's UID
+	 * @throws \Exception If user is not authenticated
 	 */
 	private function getUserId(): string
 	{
@@ -69,7 +92,7 @@ class TimeEntryController extends Controller
 			
 			// Validate date
 			if (!checkdate($month, $day, $year)) {
-				throw new \Exception('Invalid date: ' . $dateString);
+				throw new \Exception($this->l10n->t('Invalid date: %s', [$dateString]));
 			}
 			
 			return new \DateTime(sprintf('%04d-%02d-%02d', $year, $month, $day));
@@ -79,20 +102,23 @@ class TimeEntryController extends Controller
 		try {
 			return new \DateTime($dateString);
 		} catch (\Throwable $e) {
-			throw new \Exception('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: ' . $dateString);
+			throw new \Exception($this->l10n->t('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: %s', [$dateString]));
 		}
 	}
 
 	/**
 	 * Get time entries endpoint
 	 *
+	 * Retrieves time entries for the current user with optional filtering by date range and status.
+	 * Supports pagination for large datasets.
+	 *
 	 * @NoAdminRequired
-	 * @param string|null $start_date Start date filter (Y-m-d)
-	 * @param string|null $end_date End date filter (Y-m-d)
-	 * @param string|null $status Status filter
-	 * @param int|null $limit
-	 * @param int|null $offset
-	 * @return JSONResponse
+	 * @param string|null $start_date Start date filter (Y-m-d format)
+	 * @param string|null $end_date End date filter (Y-m-d format)
+	 * @param string|null $status Status filter (active, completed, break, pending_approval, rejected)
+	 * @param int|null $limit Maximum number of entries to return (default: 25)
+	 * @param int|null $offset Number of entries to skip for pagination (default: 0)
+	 * @return JSONResponse JSON response with 'success', 'entries' array, and 'total' count
 	 */
 	public function index(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
 	{
@@ -136,7 +162,7 @@ class TimeEntryController extends Controller
 					\OCP\Log\logger('arbeitszeitcheck')->error('Invalid end_date format: ' . $end_date, ['exception' => $e]);
 					return new JSONResponse([
 						'success' => false,
-						'error' => 'Invalid end date format'
+						'error' => $this->l10n->t('Invalid end date format')
 					], Http::STATUS_BAD_REQUEST);
 				}
 			}
@@ -173,7 +199,7 @@ class TimeEntryController extends Controller
 						\OCP\Log\logger('arbeitszeitcheck')->error('Invalid end_date format: ' . $end_date, ['exception' => $e]);
 						return new JSONResponse([
 							'success' => false,
-							'error' => 'Invalid end date format'
+							'error' => $this->l10n->t('Invalid end date format')
 						], Http::STATUS_BAD_REQUEST);
 					}
 					$allEntries = $this->timeEntryMapper->findByUserAndDateRange($userId, $startDateTime, $endDateTime);
@@ -224,6 +250,88 @@ class TimeEntryController extends Controller
 	}
 
 	/**
+	 * Show create time entry form page
+	 *
+	 * @NoAdminRequired
+	 * @NoCSRFRequired
+	 * @return TemplateResponse
+	 */
+	public function create(): TemplateResponse
+	{
+		$response = new TemplateResponse(
+			$this->appName,
+			'time-entries',
+			[
+				'urlGenerator' => $this->urlGenerator,
+				'mode' => 'create',
+				'entry' => null,
+				'entries' => [],
+				'stats' => []
+			]
+		);
+		return $this->configureCSP($response);
+	}
+
+	/**
+	 * Show edit time entry form page
+	 *
+	 * Renders the time entry edit form for the specified entry. Verifies ownership
+	 * before displaying the form. Redirects to list if access is denied.
+	 *
+	 * @NoAdminRequired
+	 * @NoCSRFRequired
+	 * @param int $id Time entry ID to edit
+	 * @return TemplateResponse Template response with time-entries template and entry data, or error message
+	 */
+	public function edit(int $id): TemplateResponse
+	{
+		try {
+			$userId = $this->getUserId();
+			$entry = $this->timeEntryMapper->find($id);
+
+			// Check ownership
+			if ($entry->getUserId() !== $userId) {
+				// Redirect to time entries list if access denied
+				$response = new TemplateResponse(
+					$this->appName,
+					'time-entries',
+					[
+						'urlGenerator' => $this->urlGenerator,
+						'error' => 'Access denied'
+					],
+					'blank'
+				);
+				return $this->configureCSP($response);
+			}
+
+			$response = new TemplateResponse(
+				$this->appName,
+				'time-entries',
+				[
+					'urlGenerator' => $this->urlGenerator,
+					'mode' => 'edit',
+					'entry' => $entry,
+					'entries' => [],
+					'stats' => []
+				]
+			);
+			return $this->configureCSP($response);
+		} catch (\Throwable $e) {
+			// Redirect to time entries list on error
+			$response = new TemplateResponse(
+				$this->appName,
+				'time-entries',
+				[
+					'urlGenerator' => $this->urlGenerator,
+					'error' => $e->getMessage()
+				],
+				'blank'
+			);
+			return $this->configureCSP($response);
+		}
+	}
+
+	/**
 	 * Get time entry by ID endpoint
 	 *
 	 * @NoAdminRequired
@@ -248,6 +356,11 @@ class TimeEntryController extends Controller
 				'success' => true,
 				'entry' => $entry->getSummary()
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Time entry not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
@@ -291,7 +404,38 @@ class TimeEntryController extends Controller
 			$timeEntry->setCreatedAt(new \DateTime());
 			$timeEntry->setUpdatedAt(new \DateTime());
 
+			// Validate entry before inserting
+			$errors = $timeEntry->validate();
+			if (!empty($errors)) {
+				// Translate validation errors
+				$translatedErrors = [];
+				foreach ($errors as $field => $message) {
+					$translatedErrors[$field] = $this->l10n->t($message);
+				}
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Validation failed'),
+					'errors' => $translatedErrors
+				], Http::STATUS_BAD_REQUEST);
+			}
+
 			$savedEntry = $this->timeEntryMapper->insert($timeEntry);
+
+			// Log the action
+			try {
+				$summary = $savedEntry->getSummary();
+				$this->auditLogMapper->logAction(
+					$userId,
+					'time_entry_created',
+					'time_entry',
+					$savedEntry->getId(),
+					null,
+					$summary
+				);
+			} catch (\Throwable $e) {
+				// Log error but don't fail the request
+				\OCP\Log\logger('arbeitszeitcheck')->error('Error creating audit log for time entry create: ' . $e->getMessage(), ['exception' => $e]);
+			}
 
 			return new JSONResponse([
 				'success' => true,
@@ -309,13 +453,19 @@ class TimeEntryController extends Controller
 	/**
 	 * Update time entry endpoint
 	 *
+	 * Updates an existing time entry. Only manual entries or entries with pending_approval
+	 * status can be updated. Ownership is verified before allowing updates. Changes are
+	 * validated and logged in the audit trail.
+	 *
 	 * @NoAdminRequired
-	 * @param int $id Time entry ID
-	 * @param string|null $date New date
-	 * @param float|null $hours New hours
+	 * @param int $id Time entry ID to update
+	 * @param string|null $date New date (Y-m-d format, backward compatibility)
+	 * @param float|null $hours New hours worked (backward compatibility)
 	 * @param string|null $description New description
-	 * @param string|null $project_check_project_id New project ID
-	 * @return JSONResponse
+	 * @param string|null $project_check_project_id New ProjectCheck project ID
+	 * @return JSONResponse JSON response with 'success' and updated 'entry' data, or 'error' on failure
+	 * @throws DoesNotExistException If time entry not found
+	 * @throws \Exception If user doesn't own the entry, entry cannot be edited, or validation fails
 	 */
 	public function update(int $id, ?string $date = null, ?float $hours = null, ?string $description = null, ?string $project_check_project_id = null): JSONResponse
 	{
@@ -335,36 +485,110 @@ class TimeEntryController extends Controller
 			if (!$entry->getIsManualEntry() && $entry->getStatus() !== TimeEntry::STATUS_PENDING_APPROVAL) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Cannot edit automatic time entries'
+					'error' => $this->l10n->t('Cannot edit automatic time entries')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
-			if ($date) {
-				$entry->setStartTime(new \DateTime($date));
-			}
-			if ($hours !== null) {
-				// Calculate end time based on hours from start time
-				if ($entry->getStartTime()) {
-					$startTime = clone $entry->getStartTime();
-					$endTime = clone $startTime;
-					$endTime->modify('+' . round($hours * 3600) . ' seconds');
-					$entry->setEndTime($endTime);
+			// Get data from request body
+			$params = $this->request->getParams();
+			$startTime = $params['startTime'] ?? null;
+			$endTime = $params['endTime'] ?? null;
+			$breakStartTime = $params['breakStartTime'] ?? null;
+			$breakEndTime = $params['breakEndTime'] ?? null;
+
+			// New format: startTime and endTime
+			if ($startTime && $endTime) {
+				$entry->setStartTime(new \DateTime($startTime));
+				$entry->setEndTime(new \DateTime($endTime));
+
+				// Set break times if provided
+				if ($breakStartTime && $breakEndTime) {
+					$entry->setBreakStartTime(new \DateTime($breakStartTime));
+					$entry->setBreakEndTime(new \DateTime($breakEndTime));
+				} else {
+					// Clear break times if not provided
+					$entry->setBreakStartTime(null);
+					$entry->setBreakEndTime(null);
 				}
 			}
-			if ($description !== null) {
+			// Old format: date and hours (backward compatibility)
+			else {
+				if ($date) {
+					$entry->setStartTime(new \DateTime($date));
+				}
+				if ($hours !== null) {
+					// Calculate end time based on hours from start time
+					if ($entry->getStartTime()) {
+						$startTime = clone $entry->getStartTime();
+						$endTime = clone $startTime;
+						$endTime->modify('+' . round($hours * 3600) . ' seconds');
+						$entry->setEndTime($endTime);
+					}
+				}
+			}
+
+			// Update description from params or function parameter
+			if (isset($params['description'])) {
+				$entry->setDescription($params['description']);
+			} elseif ($description !== null) {
 				$entry->setDescription($description);
 			}
+
 			if ($project_check_project_id !== null) {
 				$entry->setProjectCheckProjectId($project_check_project_id);
+			}
+
+			// Validate entry
+			$errors = $entry->validate();
+			if (!empty($errors)) {
+				// Translate validation errors
+				$translatedErrors = [];
+				foreach ($errors as $field => $message) {
+					$translatedErrors[$field] = $this->l10n->t($message);
+				}
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Validation failed'),
+					'errors' => $translatedErrors
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			// Get old values before update
+			$oldSummary = null;
+			try {
+				$oldSummary = $entry->getSummary();
+			} catch (\Throwable $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->error('Error getting old summary for time entry update audit log: ' . $e->getMessage(), ['exception' => $e]);
 			}
 
 			$entry->setUpdatedAt(new \DateTime());
 			$updatedEntry = $this->timeEntryMapper->update($entry);
 
+			// Log the action
+			try {
+				$newSummary = $updatedEntry->getSummary();
+				$this->auditLogMapper->logAction(
+					$userId,
+					'time_entry_updated',
+					'time_entry',
+					$id,
+					$oldSummary,
+					$newSummary
+				);
+			} catch (\Throwable $e) {
+				// Log error but don't fail the request
+				\OCP\Log\logger('arbeitszeitcheck')->error('Error creating audit log for time entry update: ' . $e->getMessage(), ['exception' => $e]);
+			}
+
 			return new JSONResponse([
 				'success' => true,
 				'entry' => $updatedEntry->getSummary()
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Time entry not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
@@ -375,16 +599,99 @@ class TimeEntryController extends Controller
 	}
 
 	/**
-	 * Request correction for a time entry
-	 * Changes entry status to pending_approval and sends notification to manager
+	 * Update time entry endpoint (POST method for form submissions)
+	 *
+	 * Handles POST requests for updating time entries. Delegates to the update() method.
+	 *
+	 * @NoAdminRequired
+	 * @param int $id Time entry ID to update
+	 * @return JSONResponse JSON response with 'success' and updated 'entry' data, or 'error' on failure
+	 */
+	public function updatePost(int $id): JSONResponse
+	{
+		$params = $this->request->getParams();
+		$date = $params['date'] ?? null;
+		$hours = isset($params['hours']) ? (float)$params['hours'] : null;
+		$description = $params['description'] ?? null;
+		$project_check_project_id = $params['project_check_project_id'] ?? $params['projectCheckProjectId'] ?? null;
+
+		return $this->update($id, $date, $hours, $description, $project_check_project_id);
+	}
+
+	/**
+	 * Get deletion impact information for a time entry
+	 *
+	 * Returns information about what will be affected if the time entry is deleted,
+	 * such as related compliance violations, reports, or other dependencies.
 	 *
 	 * @NoAdminRequired
 	 * @param int $id Time entry ID
-	 * @param string|null $justification Reason for correction request
-	 * @param string|null $newDate Proposed new date (Y-m-d format)
-	 * @param float|null $newHours Proposed new hours
-	 * @param string|null $newDescription Proposed new description
-	 * @return JSONResponse
+	 * @return JSONResponse JSON response with 'success' and 'impact' information
+	 */
+	public function getDeletionImpact(int $id): JSONResponse
+	{
+		try {
+			$userId = $this->getUserId();
+			$entry = $this->timeEntryMapper->find($id);
+
+			// Check ownership
+			if ($entry->getUserId() !== $userId) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Access denied')
+				], Http::STATUS_FORBIDDEN);
+			}
+
+			// Check if entry can be deleted
+			$canDelete = $entry->getIsManualEntry();
+			$impact = [
+				'canDelete' => $canDelete,
+				'isManualEntry' => $entry->getIsManualEntry(),
+				'status' => $entry->getStatus(),
+				'warnings' => []
+			];
+
+			if (!$canDelete) {
+				$impact['warnings'][] = $this->l10n->t('Only manual time entries can be deleted. Automatic entries cannot be deleted.');
+			}
+
+			if ($entry->getStatus() === TimeEntry::STATUS_PENDING_APPROVAL) {
+				$impact['warnings'][] = $this->l10n->t('This entry has a pending correction request. Deleting it may affect the approval process.');
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'impact' => $impact
+			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Time entry not found')
+			], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController::getDeletionImpact: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $e->getMessage()
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Request correction for a time entry
+	 *
+	 * Allows users to request corrections to their time entries. Changes the entry
+	 * status to pending_approval and sends a notification to the user's manager.
+	 * The original data and proposed changes are logged in the audit trail.
+	 *
+	 * Supports both old format (newDate, newHours) and new format (startTime, endTime)
+	 * for backward compatibility.
+	 *
+	 * @NoAdminRequired
+	 * @param int $id Time entry ID to request correction for
+	 * @return JSONResponse JSON response with 'success' and updated 'entry' data, or 'error' on failure
+	 * @throws DoesNotExistException If time entry not found
+	 * @throws \Exception If user doesn't own the entry, correction already pending, or validation fails
 	 */
 	public function requestCorrection(int $id): JSONResponse
 	{
@@ -405,13 +712,20 @@ class TimeEntryController extends Controller
 			if ($currentStatus === TimeEntry::STATUS_PENDING_APPROVAL) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Correction request already pending'
+					'error' => $this->l10n->t('Correction request already pending')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
 			// Get data from request body
 			$params = $this->request->getParams();
 			$justification = $params['justification'] ?? null;
+			$startTime = $params['startTime'] ?? null;
+			$endTime = $params['endTime'] ?? null;
+			$breakStartTime = $params['breakStartTime'] ?? null;
+			$breakEndTime = $params['breakEndTime'] ?? null;
+			$description = $params['description'] ?? null;
+			
+			// Backward compatibility: support old format (newDate, newHours, newDescription)
 			$newDate = $params['newDate'] ?? null;
 			$newHours = isset($params['newHours']) ? (float)$params['newHours'] : null;
 			$newDescription = $params['newDescription'] ?? null;
@@ -425,28 +739,54 @@ class TimeEntryController extends Controller
 			}
 
 			// Store proposed changes in justification field (format: JSON with original and proposed values)
-			$startTime = $entry->getStartTime();
-			if (!$startTime) {
+			$entryStartTime = $entry->getStartTime();
+			if (!$entryStartTime) {
 				return new JSONResponse([
 					'success' => false,
 					'error' => 'Time entry has no start time'
 				], Http::STATUS_BAD_REQUEST);
 			}
+			
 			$originalData = [
-				'date' => $startTime->format('Y-m-d'),
-				'hours' => $entry->getDurationHours(),
+				'startTime' => $entryStartTime->format('c'),
+				'endTime' => $entry->getEndTime() ? $entry->getEndTime()->format('c') : null,
+				'breakStartTime' => $entry->getBreakStartTime() ? $entry->getBreakStartTime()->format('c') : null,
+				'breakEndTime' => $entry->getBreakEndTime() ? $entry->getBreakEndTime()->format('c') : null,
+				'durationHours' => $entry->getDurationHours(),
 				'description' => $entry->getDescription()
 			];
 
 			$proposedData = [];
-			if ($newDate) {
-				$proposedData['date'] = $newDate;
-			}
-			if ($newHours !== null) {
-				$proposedData['hours'] = $newHours;
-			}
-			if ($newDescription !== null) {
-				$proposedData['description'] = $newDescription;
+			
+			// New format: startTime and endTime
+			if ($startTime && $endTime) {
+				$proposedStartTime = new \DateTime($startTime);
+				$proposedEndTime = new \DateTime($endTime);
+				$proposedData['startTime'] = $proposedStartTime->format('c');
+				$proposedData['endTime'] = $proposedEndTime->format('c');
+				
+				if ($breakStartTime && $breakEndTime) {
+					$proposedBreakStartTime = new \DateTime($breakStartTime);
+					$proposedBreakEndTime = new \DateTime($breakEndTime);
+					$proposedData['breakStartTime'] = $proposedBreakStartTime->format('c');
+					$proposedData['breakEndTime'] = $proposedBreakEndTime->format('c');
+				}
+				
+				if ($description !== null) {
+					$proposedData['description'] = $description;
+				}
+			} 
+			// Old format: newDate and newHours (backward compatibility)
+			elseif ($newDate || $newHours !== null) {
+				if ($newDate) {
+					$proposedData['date'] = $newDate;
+				}
+				if ($newHours !== null) {
+					$proposedData['hours'] = $newHours;
+				}
+				if ($newDescription !== null) {
+					$proposedData['description'] = $newDescription;
+				}
 			}
 
 			$correctionData = [
@@ -462,20 +802,36 @@ class TimeEntryController extends Controller
 			$entry->setUpdatedAt(new \DateTime());
 
 			// Apply proposed changes temporarily (will be finalized on approval)
-			if ($newDate) {
-				$entry->setStartTime($this->parseDate($newDate));
-				if ($entry->getEndTime() && $newHours !== null) {
+			if ($startTime && $endTime) {
+				// New format
+				$entry->setStartTime(new \DateTime($startTime));
+				$entry->setEndTime(new \DateTime($endTime));
+				
+				if ($breakStartTime && $breakEndTime) {
+					$entry->setBreakStartTime(new \DateTime($breakStartTime));
+					$entry->setBreakEndTime(new \DateTime($breakEndTime));
+				}
+				
+				if ($description !== null) {
+					$entry->setDescription($description);
+				}
+			} elseif ($newDate || $newHours !== null) {
+				// Old format (backward compatibility)
+				if ($newDate) {
+					$entry->setStartTime($this->parseDate($newDate));
+					if ($entry->getEndTime() && $newHours !== null) {
+						$endTime = clone $entry->getStartTime();
+						$endTime->modify('+' . round($newHours * 3600) . ' seconds');
+						$entry->setEndTime($endTime);
+					}
+				} elseif ($newHours !== null && $entry->getStartTime()) {
 					$endTime = clone $entry->getStartTime();
 					$endTime->modify('+' . round($newHours * 3600) . ' seconds');
 					$entry->setEndTime($endTime);
 				}
-			} elseif ($newHours !== null && $entry->getStartTime()) {
-				$endTime = clone $entry->getStartTime();
-				$endTime->modify('+' . round($newHours * 3600) . ' seconds');
-				$entry->setEndTime($endTime);
-			}
-			if ($newDescription !== null) {
-				$entry->setDescription($newDescription);
+				if ($newDescription !== null) {
+					$entry->setDescription($newDescription);
+				}
 			}
 
 			$updatedEntry = $this->timeEntryMapper->update($entry);
@@ -511,8 +867,13 @@ class TimeEntryController extends Controller
 			return new JSONResponse([
 				'success' => true,
 				'entry' => $updatedEntry->getSummary(),
-				'message' => 'Correction request submitted successfully'
+				'message' => $this->l10n->t('Correction request submitted successfully')
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Time entry not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
@@ -551,11 +912,44 @@ class TimeEntryController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
+			// Get entry data before deletion for audit log
+			$deletedSummary = null;
+			try {
+				$deletedSummary = $entry->getSummary();
+			} catch (\Throwable $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->error('Error getting summary for time entry delete audit log: ' . $e->getMessage(), ['exception' => $e]);
+				$deletedSummary = [
+					'id' => $entry->getId(),
+					'userId' => $entry->getUserId(),
+					'status' => $entry->getStatus()
+				];
+			}
+
 			$this->timeEntryMapper->delete($entry);
+
+			// Log the action
+			try {
+				$this->auditLogMapper->logAction(
+					$userId,
+					'time_entry_deleted',
+					'time_entry',
+					$id,
+					$deletedSummary,
+					null
+				);
+			} catch (\Throwable $e) {
+				// Log error but don't fail the request
+				\OCP\Log\logger('arbeitszeitcheck')->error('Error creating audit log for time entry delete: ' . $e->getMessage(), ['exception' => $e]);
+			}
 
 			return new JSONResponse([
 				'success' => true
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Time entry not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
@@ -573,7 +967,7 @@ class TimeEntryController extends Controller
 	 * @param string|null $end_date End date for statistics
 	 * @return JSONResponse
 	 */
-	public function stats(?string $start_date = null, ?string $end_date = null): JSONResponse
+	public function getStats(?string $start_date = null, ?string $end_date = null): JSONResponse
 	{
 		try {
 			$userId = $this->getUserId();
@@ -590,9 +984,8 @@ class TimeEntryController extends Controller
 			$workingDays = $this->calculateWorkingDays($start, $end);
 			$averageHoursPerDay = $workingDays > 0 ? $totalHours / $workingDays : 0;
 
-			// Calculate overtime using OvertimeService
-			$overtimeService = \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\OvertimeService::class);
-			$overtimeData = $overtimeService->calculateOvertime($userId, $start, $end);
+			// Calculate overtime using injected OvertimeService
+			$overtimeData = $this->overtimeService->calculateOvertime($userId, $start, $end);
 
 			return new JSONResponse([
 				'success' => true,
@@ -626,9 +1019,12 @@ class TimeEntryController extends Controller
 	/**
 	 * Calculate working days between two dates (excluding weekends)
 	 *
-	 * @param \DateTime $start
-	 * @param \DateTime $end
-	 * @return int
+	 * Counts the number of working days (Monday to Friday) between two dates, inclusive.
+	 * Used for calculating overtime and working time statistics.
+	 *
+	 * @param \DateTime $start Start date (inclusive)
+	 * @param \DateTime $end End date (inclusive)
+	 * @return int Number of working days between the dates (excluding weekends)
 	 */
 	private function calculateWorkingDays(\DateTime $start, \DateTime $end): int
 	{
@@ -647,15 +1043,35 @@ class TimeEntryController extends Controller
 	}
 
 	/**
-	 * API: Get time entries (alias for index)
+	 * Legacy API: Get time entries (alias for index)
+	 *
+	 * Legacy endpoint for backward compatibility. Delegates to the index() method.
 	 *
 	 * @NoAdminRequired
-	 * @param string|null $start_date
-	 * @param string|null $end_date
-	 * @param string|null $status
-	 * @param int|null $limit
-	 * @param int|null $offset
-	 * @return JSONResponse
+	 * @param string|null $start_date Start date filter (Y-m-d format)
+	 * @param string|null $end_date End date filter (Y-m-d format)
+	 * @param string|null $status Status filter
+	 * @param int|null $limit Maximum number of entries to return (default: 25)
+	 * @param int|null $offset Number of entries to skip for pagination (default: 0)
+	 * @return JSONResponse JSON response with 'success', 'entries' array, and 'total' count
+	 */
+	public function index_api(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
+	{
+		return $this->index($start_date, $end_date, $status, $limit, $offset);
+	}
+
+	/**
+	 * API: Get time entries (alias for index)
+	 *
+	 * REST API endpoint for retrieving time entries. Delegates to the index() method.
+	 *
+	 * @NoAdminRequired
+	 * @param string|null $start_date Start date filter (Y-m-d format)
+	 * @param string|null $end_date End date filter (Y-m-d format)
+	 * @param string|null $status Status filter
+	 * @param int|null $limit Maximum number of entries to return (default: 25)
+	 * @param int|null $offset Number of entries to skip for pagination (default: 0)
+	 * @return JSONResponse JSON response with 'success', 'entries' array, and 'total' count
 	 */
 	public function apiIndex(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
 	{
@@ -683,15 +1099,92 @@ class TimeEntryController extends Controller
 	public function apiStore(): JSONResponse
 	{
 		$params = $this->request->getParams();
+		
+		// Support both old format (date + hours) and new format (date + startTime + endTime)
 		$date = $params['date'] ?? null;
+		$startTime = $params['startTime'] ?? null;
+		$endTime = $params['endTime'] ?? null;
+		$breakStartTime = $params['breakStartTime'] ?? null;
+		$breakEndTime = $params['breakEndTime'] ?? null;
 		$hours = isset($params['hours']) ? (float)$params['hours'] : null;
 		$description = $params['description'] ?? null;
 		$project_check_project_id = $params['project_check_project_id'] ?? $params['projectCheckProjectId'] ?? null;
 
+		// New format: startTime and endTime
+		if ($startTime && $endTime) {
+			try {
+				$userId = $this->getUserId();
+
+				$timeEntry = new TimeEntry();
+				$timeEntry->setUserId($userId);
+				$timeEntry->setStartTime(new \DateTime($startTime));
+				$timeEntry->setEndTime(new \DateTime($endTime));
+				
+				// Set break times if provided
+				if ($breakStartTime && $breakEndTime) {
+					$timeEntry->setBreakStartTime(new \DateTime($breakStartTime));
+					$timeEntry->setBreakEndTime(new \DateTime($breakEndTime));
+				}
+				
+				$timeEntry->setDescription($description);
+				$timeEntry->setProjectCheckProjectId($project_check_project_id);
+				$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+				$timeEntry->setIsManualEntry(true);
+				$timeEntry->setJustification('Manual entry created via employee portal');
+				$timeEntry->setCreatedAt(new \DateTime());
+				$timeEntry->setUpdatedAt(new \DateTime());
+
+				// Validate entry
+				$errors = $timeEntry->validate();
+				if (!empty($errors)) {
+					// Translate validation errors
+					$translatedErrors = [];
+					foreach ($errors as $field => $message) {
+						$translatedErrors[$field] = $this->l10n->t($message);
+					}
+					return new JSONResponse([
+						'success' => false,
+						'error' => implode(', ', $translatedErrors),
+						'errors' => $translatedErrors
+					], Http::STATUS_BAD_REQUEST);
+				}
+
+				$savedEntry = $this->timeEntryMapper->insert($timeEntry);
+
+				// Log the action
+				try {
+					$summary = $savedEntry->getSummary();
+					$this->auditLogMapper->logAction(
+						$userId,
+						'time_entry_created',
+						'time_entry',
+						$savedEntry->getId(),
+						null,
+						$summary
+					);
+				} catch (\Throwable $e) {
+					// Log error but don't fail the request
+					\OCP\Log\logger('arbeitszeitcheck')->error('Error creating audit log for time entry apiStore: ' . $e->getMessage(), ['exception' => $e]);
+				}
+
+				return new JSONResponse([
+					'success' => true,
+					'entry' => $savedEntry->getSummary()
+				], Http::STATUS_CREATED);
+			} catch (\Throwable $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController::apiStore: ' . $e->getMessage(), ['exception' => $e]);
+				return new JSONResponse([
+					'success' => false,
+					'error' => $e->getMessage()
+				], Http::STATUS_INTERNAL_SERVER_ERROR);
+			}
+		}
+
+		// Old format: date + hours (backward compatibility)
 		if (!$date || $hours === null) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => 'Date and hours are required'
+				'error' => 'Either (date and hours) or (startTime and endTime) are required'
 			], Http::STATUS_BAD_REQUEST);
 		}
 
@@ -701,9 +1194,12 @@ class TimeEntryController extends Controller
 	/**
 	 * API: Update time entry (accepts JSON body)
 	 *
+	 * REST API endpoint for updating time entries. Accepts data in the request body.
+	 * Delegates to the update() method for actual processing.
+	 *
 	 * @NoAdminRequired
-	 * @param int $id
-	 * @return JSONResponse
+	 * @param int $id Time entry ID to update
+	 * @return JSONResponse JSON response with 'success' and updated 'entry' data, or 'error' on failure
 	 */
 	public function apiUpdate(int $id): JSONResponse
 	{
@@ -731,25 +1227,27 @@ class TimeEntryController extends Controller
 	/**
 	 * API: Get overtime information
 	 *
+	 * Calculates and returns overtime information for the current user for the specified period.
+	 * Overtime is calculated based on working time models and actual hours worked.
+	 *
 	 * @NoAdminRequired
-	 * @param string|null $period Period: 'daily', 'weekly', 'monthly', 'yearly', or 'custom'
-	 * @param string|null $start_date Start date for custom period (Y-m-d)
-	 * @param string|null $end_date End date for custom period (Y-m-d)
-	 * @return JSONResponse
+	 * @param string|null $period Period type: 'daily', 'weekly', 'monthly', 'yearly', or 'custom' (default: 'monthly')
+	 * @param string|null $start_date Start date for custom period (Y-m-d format, required if period is 'custom')
+	 * @param string|null $end_date End date for custom period (Y-m-d format, required if period is 'custom')
+	 * @return JSONResponse JSON response with 'success', 'overtime' hours, and 'period' information
 	 */
 	public function getOvertime(?string $period = 'monthly', ?string $start_date = null, ?string $end_date = null): JSONResponse
 	{
 		try {
 			$userId = $this->getUserId();
-			$overtimeService = \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\OvertimeService::class);
 
 			$overtimeData = match($period) {
-				'daily' => $overtimeService->getDailyOvertime($userId),
-				'weekly' => $overtimeService->getWeeklyOvertime($userId),
-				'monthly' => $overtimeService->calculateMonthlyOvertime($userId),
-				'yearly' => $overtimeService->calculateYearlyOvertime($userId),
-				'custom' => $this->getCustomPeriodOvertime($overtimeService, $userId, $start_date, $end_date),
-				default => $overtimeService->calculateMonthlyOvertime($userId)
+				'daily' => $this->overtimeService->getDailyOvertime($userId),
+				'weekly' => $this->overtimeService->getWeeklyOvertime($userId),
+				'monthly' => $this->overtimeService->calculateMonthlyOvertime($userId),
+				'yearly' => $this->overtimeService->calculateYearlyOvertime($userId),
+				'custom' => $this->getCustomPeriodOvertime($this->overtimeService, $userId, $start_date, $end_date),
+				default => $this->overtimeService->calculateMonthlyOvertime($userId)
 			};
 
 			return new JSONResponse([
@@ -775,8 +1273,7 @@ class TimeEntryController extends Controller
 	{
 		try {
 			$userId = $this->getUserId();
-			$overtimeService = \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\OvertimeService::class);
-			$balance = $overtimeService->getOvertimeBalance($userId);
+			$balance = $this->overtimeService->getOvertimeBalance($userId);
 
 			return new JSONResponse([
 				'success' => true,
@@ -803,7 +1300,7 @@ class TimeEntryController extends Controller
 	private function getCustomPeriodOvertime($overtimeService, string $userId, ?string $start_date, ?string $end_date): array
 	{
 		if (!$start_date || !$end_date) {
-			throw new \Exception('Start date and end date are required for custom period');
+			throw new \Exception($this->l10n->t('Start date and end date are required for custom period'));
 		}
 
 		$start = new \DateTime($start_date);

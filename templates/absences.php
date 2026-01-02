@@ -31,6 +31,9 @@ Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 $absences = $_['absences'] ?? [];
 $urlGenerator = $_['urlGenerator'] ?? \OC::$server->getURLGenerator();
 $stats = $_['stats'] ?? [];
+$mode = $_['mode'] ?? 'list'; // 'list', 'create', 'edit'
+$absence = $_['absence'] ?? null;
+$error = $_['error'] ?? null;
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -51,9 +54,26 @@ $stats = $_['stats'] ?? [];
         <div class="section page-header-section">
             <div class="header-content">
                 <div class="header-text">
-                    <h2><?php p($l->t('Absences')); ?></h2>
-                    <p><?php p($l->t('Manage vacation, sick leave, and other absences')); ?></p>
+                    <h2><?php 
+                        if ($mode === 'create') {
+                            p($l->t('Request Time Off'));
+                        } elseif ($mode === 'edit') {
+                            p($l->t('Edit Absence Request'));
+                        } else {
+                            p($l->t('Absences'));
+                        }
+                    ?></h2>
+                    <p><?php 
+                        if ($mode === 'create') {
+                            p($l->t('Request a new absence. Your manager will review and approve or reject your request.'));
+                        } elseif ($mode === 'edit') {
+                            p($l->t('Edit your absence request. You can only edit pending requests.'));
+                        } else {
+                            p($l->t('Manage vacation, sick leave, and other absences'));
+                        }
+                    ?></p>
                 </div>
+                <?php if ($mode === 'list'): ?>
                 <div class="header-actions">
                     <button id="btn-request-absence" 
                             class="btn btn--primary" 
@@ -70,30 +90,132 @@ $stats = $_['stats'] ?? [];
                         <?php p($l->t('Filter')); ?>
                     </button>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
 
-        <!-- Stats Cards -->
-        <div class="section">
-            <?php if (!empty($stats)): ?>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <span class="stat-label"><?php p($l->t('Vacation Days Remaining')); ?></span>
-                        <span class="stat-value"><?php p($stats['vacation_days_remaining'] ?? 0); ?></span>
+        <?php if ($mode === 'create' || $mode === 'edit'): ?>
+            <!-- Create/Edit Form -->
+            <div class="section">
+                <?php if ($error): ?>
+                    <div class="alert alert--error">
+                        <p><?php p($error); ?></p>
                     </div>
-                    <div class="stat-card">
-                        <span class="stat-label"><?php p($l->t('Pending Requests')); ?></span>
-                        <span class="stat-value"><?php p($stats['pending_requests'] ?? 0); ?></span>
+                <?php endif; ?>
+                
+                <form id="absence-form" class="form" method="POST" action="<?php 
+                    if ($mode === 'create') {
+                        p($urlGenerator->linkToRoute('arbeitszeitcheck.absence.store'));
+                    } else {
+                        p($urlGenerator->linkToRoute('arbeitszeitcheck.absence.updatePost', ['id' => $absence->getId()]));
+                    }
+                ?>">
+                    <div class="form-group">
+                        <label for="absence-type" class="form-label">
+                            <?php p($l->t('Type')); ?> <span class="form-required">*</span>
+                        </label>
+                        <select id="absence-type" name="type" class="form-select" required>
+                            <option value=""><?php p($l->t('Select the type of absence you want to request')); ?></option>
+                            <option value="vacation" <?php echo ($absence && $absence->getType() === 'vacation') ? 'selected' : ''; ?>>
+                                <?php p($l->t('Vacation')); ?>
+                            </option>
+                            <option value="sick_leave" <?php echo ($absence && $absence->getType() === 'sick_leave') ? 'selected' : ''; ?>>
+                                <?php p($l->t('Sick Leave')); ?>
+                            </option>
+                            <option value="personal_leave" <?php echo ($absence && $absence->getType() === 'personal_leave') ? 'selected' : ''; ?>>
+                                <?php p($l->t('Personal Leave')); ?>
+                            </option>
+                            <option value="parental_leave" <?php echo ($absence && $absence->getType() === 'parental_leave') ? 'selected' : ''; ?>>
+                                <?php p($l->t('Parental Leave')); ?>
+                            </option>
+                            <option value="special_leave" <?php echo ($absence && $absence->getType() === 'special_leave') ? 'selected' : ''; ?>>
+                                <?php p($l->t('Special Leave')); ?>
+                            </option>
+                            <option value="unpaid_leave" <?php echo ($absence && $absence->getType() === 'unpaid_leave') ? 'selected' : ''; ?>>
+                                <?php p($l->t('Unpaid Leave')); ?>
+                            </option>
+                            <option value="home_office" <?php echo ($absence && $absence->getType() === 'home_office') ? 'selected' : ''; ?>>
+                                <?php p($l->t('Home Office')); ?>
+                            </option>
+                            <option value="business_trip" <?php echo ($absence && $absence->getType() === 'business_trip') ? 'selected' : ''; ?>>
+                                <?php p($l->t('Business Trip')); ?>
+                            </option>
+                        </select>
+                        <p class="form-help"><?php p($l->t('Select the type of absence you want to request')); ?></p>
                     </div>
-                    <div class="stat-card">
-                        <span class="stat-label"><?php p($l->t('Days Taken This Year')); ?></span>
-                        <span class="stat-value"><?php p($stats['days_taken_this_year'] ?? 0); ?></span>
-                    </div>
-                </div>
-            <?php endif; ?>
-        </div>
 
-        <!-- Absences Table -->
+                    <div class="form-group">
+                        <label for="absence-start-date" class="form-label">
+                            <?php p($l->t('Start Date')); ?> <span class="form-required">*</span>
+                        </label>
+                        <input type="date" 
+                               id="absence-start-date" 
+                               name="start_date" 
+                               class="form-input" 
+                               value="<?php echo $absence ? $absence->getStartDate()->format('Y-m-d') : ''; ?>"
+                               min="<?php echo date('Y-m-d'); ?>"
+                               required>
+                        <p class="form-help"><?php p($l->t('The first day of your absence')); ?></p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="absence-end-date" class="form-label">
+                            <?php p($l->t('End Date')); ?> <span class="form-required">*</span>
+                        </label>
+                        <input type="date" 
+                               id="absence-end-date" 
+                               name="end_date" 
+                               class="form-input" 
+                               value="<?php echo $absence ? $absence->getEndDate()->format('Y-m-d') : ''; ?>"
+                               min="<?php echo date('Y-m-d'); ?>"
+                               required>
+                        <p class="form-help"><?php p($l->t('The last day of your absence')); ?></p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="absence-reason" class="form-label">
+                            <?php p($l->t('Reason')); ?>
+                        </label>
+                        <textarea id="absence-reason" 
+                                  name="reason" 
+                                  class="form-textarea" 
+                                  rows="4"
+                                  placeholder="<?php p($l->t('Optional reason or notes for your absence request')); ?>"><?php echo $absence ? htmlspecialchars($absence->getReason() ?? '') : ''; ?></textarea>
+                        <p class="form-help"><?php p($l->t('You can provide additional information about your absence request')); ?></p>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn--primary">
+                            <?php echo $mode === 'create' ? $l->t('Submit Request') : $l->t('Update Request'); ?>
+                        </button>
+                        <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.absences')); ?>" class="btn btn--secondary">
+                            <?php p($l->t('Cancel')); ?>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        <?php else: ?>
+            <!-- Stats Cards -->
+            <div class="section">
+                <?php if (!empty($stats)): ?>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-label"><?php p($l->t('Vacation Days Remaining')); ?></span>
+                            <span class="stat-value"><?php p($stats['vacation_days_remaining'] ?? 0); ?></span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label"><?php p($l->t('Pending Requests')); ?></span>
+                            <span class="stat-value"><?php p($stats['pending_requests'] ?? 0); ?></span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label"><?php p($l->t('Days Taken This Year')); ?></span>
+                            <span class="stat-value"><?php p($stats['days_taken_this_year'] ?? 0); ?></span>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Absences Table -->
         <div class="section">
             <div class="table-container">
                     <table class="table table--hover" id="absences-table">
@@ -114,11 +236,20 @@ $stats = $_['stats'] ?? [];
                                     <tr data-absence-id="<?php p($absence->getId()); ?>">
                                         <td>
                                             <span class="absence-type-badge type-<?php p($absence->getType()); ?>">
-                                                <?php p($l->t(ucfirst($absence->getType()))); ?>
+                                                <?php 
+                                                $typeKey = $absence->getType();
+                                                $typeLabel = match($typeKey) {
+                                                    'vacation' => $l->t('Vacation'),
+                                                    'sick' => $l->t('Sick Leave'),
+                                                    'sick_leave' => $l->t('Sick Leave'),
+                                                    default => $l->t(ucfirst($typeKey))
+                                                };
+                                                p($typeLabel);
+                                                ?>
                                             </span>
                                         </td>
-                                        <td><?php p($absence->getStartDate()->format('Y-m-d')); ?></td>
-                                        <td><?php p($absence->getEndDate()->format('Y-m-d')); ?></td>
+                                        <td><?php p($absence->getStartDate()->format('d.m.Y')); ?></td>
+                                        <td><?php p($absence->getEndDate()->format('d.m.Y')); ?></td>
                                         <td><?php p($absence->getDays()); ?></td>
                                         <td class="reason-cell">
                                             <?php 
@@ -138,7 +269,16 @@ $stats = $_['stats'] ?? [];
                                                     default => 'secondary'
                                                 };
                                             ?>">
-                                                <?php p($l->t(ucfirst($absence->getStatus()))); ?>
+                                                <?php 
+                                                $statusKey = $absence->getStatus();
+                                                $statusLabel = match($statusKey) {
+                                                    'approved' => $l->t('Approved'),
+                                                    'pending' => $l->t('Pending'),
+                                                    'rejected' => $l->t('Rejected'),
+                                                    default => $l->t(ucfirst($statusKey))
+                                                };
+                                                p($statusLabel);
+                                                ?>
                                             </span>
                                         </td>
                                         <td class="actions-cell">
@@ -185,6 +325,7 @@ $stats = $_['stats'] ?? [];
                     </table>
                 </div>
             </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -192,6 +333,7 @@ $stats = $_['stats'] ?? [];
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
     window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.page = 'absences';
+    window.ArbeitszeitCheck.mode = <?php echo json_encode($mode, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.absences = <?php echo json_encode(array_map(function($absence) {
         return [
             'id' => $absence->getId(),
@@ -208,6 +350,94 @@ $stats = $_['stats'] ?? [];
     window.ArbeitszeitCheck.apiUrl = {
         absences: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.index'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         create: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.store'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        update: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.updatePost', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>.replace('__ID__', ''),
         delete: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.delete', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>.replace('__ID__', '')
     };
+    
+    // Handle form submission for create/edit
+    <?php if ($mode === 'create' || $mode === 'edit'): ?>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('absence-form');
+        const startDateInput = document.getElementById('absence-start-date');
+        const endDateInput = document.getElementById('absence-end-date');
+        
+        // Validate end date is not before start date
+        function validateDates() {
+            if (startDateInput.value && endDateInput.value) {
+                if (new Date(endDateInput.value) < new Date(startDateInput.value)) {
+                    endDateInput.setCustomValidity('<?php echo addslashes($l->t('End date cannot be before start date')); ?>');
+                    return false;
+                } else {
+                    endDateInput.setCustomValidity('');
+                }
+            }
+            return true;
+        }
+        
+        if (startDateInput) {
+            startDateInput.addEventListener('change', function() {
+                if (endDateInput.value) {
+                    validateDates();
+                }
+                // Update end date min to be at least start date
+                if (this.value) {
+                    endDateInput.min = this.value;
+                }
+            });
+        }
+        
+        if (endDateInput) {
+            endDateInput.addEventListener('change', validateDates);
+        }
+        
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                if (!validateDates()) {
+                    return;
+                }
+                
+                const formData = new FormData(form);
+                const data = {
+                    type: formData.get('type'),
+                    start_date: formData.get('start_date'),
+                    end_date: formData.get('end_date'),
+                    reason: formData.get('reason') || null
+                };
+                
+                const url = <?php echo $mode === 'create' 
+                    ? json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.store'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
+                    : json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.updatePost', ['id' => $absence->getId()]), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+                ?>;
+                
+                const method = 'POST';
+                
+                if (window.ArbeitszeitCheck && window.ArbeitszeitCheck.callApi) {
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    const originalText = submitBtn ? submitBtn.textContent : '';
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = (window.t && window.t('arbeitszeitcheck', 'Submitting...')) || 'Submitting...';
+                    }
+                    
+                    window.ArbeitszeitCheck.callApi(url, method, data, true)
+                        .then(() => {
+                            // Redirect handled by callApi with reloadOnSuccess
+                        })
+                        .catch(error => {
+                            console.error('Error submitting absence request:', error);
+                            if (submitBtn) {
+                                submitBtn.disabled = false;
+                                submitBtn.textContent = originalText;
+                            }
+                        });
+                } else {
+                    // Fallback: submit form normally
+                    form.submit();
+                }
+            });
+        }
+    });
+    <?php endif; ?>
 </script>

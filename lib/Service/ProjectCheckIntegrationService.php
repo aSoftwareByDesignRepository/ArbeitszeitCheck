@@ -58,8 +58,9 @@ class ProjectCheckIntegrationService
 
 		try {
 			// Query ProjectCheck database tables directly
-			// Note: In a real implementation, this would use ProjectCheck's API
-			// For now, we'll query the tables directly (assuming we know their structure)
+			// This implementation queries the ProjectCheck database tables directly
+			// as a working integration approach. If ProjectCheck provides a formal API
+			// in the future, this can be refactored to use that API.
 
 			$query = $this->db->getQueryBuilder();
 			$query->select(['p.id', 'p.name', 'p.customer_id', 'c.name as customer_name'])
@@ -231,7 +232,7 @@ class ProjectCheckIntegrationService
 						->from('projectcheck_time_entries')
 						->where($existingQuery->expr()->eq('project_id', $existingQuery->createNamedParameter($entry['project_check_project_id'])))
 						->andWhere($existingQuery->expr()->eq('user_id', $existingQuery->createNamedParameter($entry['user_id'])))
-						->andWhere($existingQuery->expr()->eq('date', $existingQuery->createNamedParameter($entry['start_time'], \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_DATE)));
+						->andWhere($existingQuery->expr()->eq('date', $existingQuery->createNamedParameter($entry['start_time'] instanceof \DateTime ? $entry['start_time']->format('Y-m-d') : $entry['start_time'], \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR)));
 
 					$existing = $existingQuery->executeQuery()->fetch();
 
@@ -242,7 +243,7 @@ class ProjectCheckIntegrationService
 							->values([
 								'project_id' => $insertQuery->createNamedParameter($entry['project_check_project_id']),
 								'user_id' => $insertQuery->createNamedParameter($entry['user_id']),
-								'date' => $insertQuery->createNamedParameter($entry['start_time'], \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_DATE),
+								'date' => $insertQuery->createNamedParameter($entry['start_time'] instanceof \DateTime ? $entry['start_time']->format('Y-m-d') : $entry['start_time'], \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR),
 								'hours' => $insertQuery->createNamedParameter($entry['hours']),
 								'description' => $insertQuery->createNamedParameter($entry['description'] ?? ''),
 								'hourly_rate' => $insertQuery->createNamedParameter($entry['hourly_rate'] ?? 0),

@@ -176,8 +176,8 @@ class AuditLogMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
-			->where($qb->expr()->gte('created_at', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->lt('created_at', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
+			->where($qb->expr()->gte('created_at', $qb->createNamedParameter($startDate->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lt('created_at', $qb->createNamedParameter($endDate->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
 			->orderBy('created_at', 'DESC');
 
 		if ($userId !== null) {
@@ -229,11 +229,13 @@ class AuditLogMapper extends QBMapper
 		}
 
 		if (isset($filters['start_date'])) {
-			$qb->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($filters['start_date'], IQueryBuilder::PARAM_DATE)));
+			$start = $filters['start_date'] instanceof \DateTime ? $filters['start_date']->format('Y-m-d H:i:s') : $filters['start_date'];
+			$qb->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($start, IQueryBuilder::PARAM_STR)));
 		}
 
 		if (isset($filters['end_date'])) {
-			$qb->andWhere($qb->expr()->lt('created_at', $qb->createNamedParameter($filters['end_date'], IQueryBuilder::PARAM_DATE)));
+			$end = $filters['end_date'] instanceof \DateTime ? $filters['end_date']->format('Y-m-d H:i:s') : $filters['end_date'];
+			$qb->andWhere($qb->expr()->lt('created_at', $qb->createNamedParameter($end, IQueryBuilder::PARAM_STR)));
 		}
 
 		return (int)$qb->executeQuery()->fetchOne();
@@ -259,11 +261,13 @@ class AuditLogMapper extends QBMapper
 		->orderBy('count', 'DESC');
 
 		if (isset($filters['start_date'])) {
-			$qb->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($filters['start_date'], IQueryBuilder::PARAM_DATE)));
+			$start = $filters['start_date'] instanceof \DateTime ? $filters['start_date']->format('Y-m-d H:i:s') : $filters['start_date'];
+			$qb->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($start, IQueryBuilder::PARAM_STR)));
 		}
 
 		if (isset($filters['end_date'])) {
-			$qb->andWhere($qb->expr()->lt('created_at', $qb->createNamedParameter($filters['end_date'], IQueryBuilder::PARAM_DATE)));
+			$end = $filters['end_date'] instanceof \DateTime ? $filters['end_date']->format('Y-m-d H:i:s') : $filters['end_date'];
+			$qb->andWhere($qb->expr()->lt('created_at', $qb->createNamedParameter($end, IQueryBuilder::PARAM_STR)));
 		}
 
 		$results = $qb->executeQuery()->fetchAll();
@@ -310,7 +314,7 @@ class AuditLogMapper extends QBMapper
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->delete($this->getTableName())
-			->where($qb->expr()->lt('created_at', $qb->createNamedParameter($twoYearsAgo, IQueryBuilder::PARAM_DATE)));
+			->where($qb->expr()->lt('created_at', $qb->createNamedParameter($twoYearsAgo->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)));
 
 		return $qb->executeStatement();
 	}

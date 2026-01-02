@@ -14,8 +14,10 @@ namespace OCA\ArbeitszeitCheck\Controller;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
+use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -23,6 +25,7 @@ use OCP\IRequest;
 use OCP\IUserSession;
 use OCP\IGroupManager;
 use OCP\IUserManager;
+use OCP\IL10N;
 use OCP\Util;
 
 /**
@@ -30,6 +33,8 @@ use OCP\Util;
  */
 class ManagerController extends Controller
 {
+	use CSPTrait;
+
 	private AbsenceService $absenceService;
 	private TimeTrackingService $timeTrackingService;
 	private ComplianceService $complianceService;
@@ -37,6 +42,7 @@ class ManagerController extends Controller
 	private IUserSession $userSession;
 	private IGroupManager $groupManager;
 	private IUserManager $userManager;
+	private IL10N $l10n;
 
 	public function __construct(
 		string $appName,
@@ -47,7 +53,9 @@ class ManagerController extends Controller
 		AbsenceMapper $absenceMapper,
 		IUserSession $userSession,
 		IGroupManager $groupManager,
-		IUserManager $userManager
+		IUserManager $userManager,
+		CSPService $cspService,
+		IL10N $l10n
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
@@ -57,6 +65,8 @@ class ManagerController extends Controller
 		$this->userSession = $userSession;
 		$this->groupManager = $groupManager;
 		$this->userManager = $userManager;
+		$this->l10n = $l10n;
+		$this->setCspService($cspService);
 	}
 
 	/**
@@ -131,8 +141,79 @@ class ManagerController extends Controller
 	public function dashboard(): TemplateResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
+		
+		// Add common CSS files
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		
+		// Add common JavaScript files
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
 		Util::addScript('arbeitszeitcheck', 'manager-dashboard');
-		return new TemplateResponse('arbeitszeitcheck', 'manager-dashboard');
+		
+		try {
+			$managerId = $this->getUserId();
+			$teamUserIds = $this->getTeamMemberIds($managerId);
+
+			// Get team statistics
+			$today = new \DateTime();
+			$today->setTime(0, 0, 0);
+			
+			$teamStats = [
+				'total_members' => count($teamUserIds),
+				'active_today' => 0,
+				'total_hours_today' => 0,
+				'pending_absences' => 0
+			];
+
+			$teamMembers = [];
+			foreach (array_slice($teamUserIds, 0, 10) as $userId) {
+				$user = $this->userManager->get($userId);
+				if (!$user) continue;
+
+				$todayHours = $this->timeTrackingService->getTodayHours($userId);
+				$status = $this->timeTrackingService->getStatus($userId);
+				$pendingAbsences = $this->absenceService->getAbsencesByUser($userId, ['status' => 'pending']);
+
+				if ($todayHours > 0) {
+					$teamStats['active_today']++;
+				}
+				$teamStats['total_hours_today'] += $todayHours;
+				$teamStats['pending_absences'] += count($pendingAbsences);
+
+				$teamMembers[] = [
+					'userId' => $userId,
+					'displayName' => $user->getDisplayName(),
+					'todayHours' => round($todayHours, 2),
+					'status' => $status['status'] ?? 'clocked_out',
+					'pendingAbsences' => count($pendingAbsences)
+				];
+			}
+
+			$response = new TemplateResponse('arbeitszeitcheck', 'manager-dashboard', [
+				'teamStats' => $teamStats,
+				'teamMembers' => $teamMembers,
+				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			]);
+			return $this->configureCSP($response);
+		} catch (\Throwable $e) {
+			$response = new TemplateResponse('arbeitszeitcheck', 'manager-dashboard', [
+				'teamStats' => [
+					'total_members' => 0,
+					'active_today' => 0,
+					'total_hours_today' => 0,
+					'pending_absences' => 0
+				],
+				'teamMembers' => [],
+				'error' => $e->getMessage(),
+				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			]);
+			return $this->configureCSP($response);
+		}
 	}
 
 	/**
@@ -559,7 +640,7 @@ class ManagerController extends Controller
 			if (!in_array($entry->getUserId(), $teamUserIds)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Access denied - user is not in your team'
+					'error' => $this->l10n->t('Access denied - user is not in your team')
 				], Http::STATUS_FORBIDDEN);
 			}
 
@@ -609,8 +690,13 @@ class ManagerController extends Controller
 				'entry' => $updatedEntry->getSummary(),
 				'message' => 'Time entry correction approved successfully'
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Time entry not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::approveTimeEntryCorrection: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
 			return new JSONResponse([
 				'success' => false,
 				'error' => $e->getMessage()
@@ -646,7 +732,7 @@ class ManagerController extends Controller
 			if (!in_array($entry->getUserId(), $teamUserIds)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Access denied - user is not in your team'
+					'error' => $this->l10n->t('Access denied - user is not in your team')
 				], Http::STATUS_FORBIDDEN);
 			}
 
@@ -707,10 +793,15 @@ class ManagerController extends Controller
 			return new JSONResponse([
 				'success' => true,
 				'entry' => $updatedEntry->getSummary(),
-				'message' => 'Time entry correction rejected'
+				'message' => $this->l10n->t('Time entry correction rejected')
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Time entry not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::rejectTimeEntryCorrection: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
 			return new JSONResponse([
 				'success' => false,
 				'error' => $e->getMessage()

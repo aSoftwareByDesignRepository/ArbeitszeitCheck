@@ -28,6 +28,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setBreakStartTime(\DateTime|null $breakStartTime)
  * @method \DateTime|null getBreakEndTime()
  * @method void setBreakEndTime(\DateTime|null $breakEndTime)
+ * @method string|null getBreaks()
+ * @method void setBreaks(string|null $breaks)
  * @method string|null getDescription()
  * @method void setDescription(string|null $description)
  * @method string|null getProjectCheckProjectId()
@@ -52,6 +54,7 @@ class TimeEntry extends Entity
 	public const STATUS_ACTIVE = 'active';
 	public const STATUS_COMPLETED = 'completed';
 	public const STATUS_BREAK = 'break';
+	public const STATUS_PAUSED = 'paused';
 	public const STATUS_PENDING_APPROVAL = 'pending_approval';
 	public const STATUS_REJECTED = 'rejected';
 
@@ -69,6 +72,9 @@ class TimeEntry extends Entity
 
 	/** @var \DateTime|null */
 	protected $breakEndTime;
+
+	/** @var string|null */
+	protected $breaks;
 
 	/** @var string|null */
 	protected $description;
@@ -107,6 +113,7 @@ class TimeEntry extends Entity
 		$this->addType('endTime', 'datetime');
 		$this->addType('breakStartTime', 'datetime');
 		$this->addType('breakEndTime', 'datetime');
+		$this->addType('breaks', 'string');
 		$this->addType('description', 'string');
 		$this->addType('projectCheckProjectId', 'string');
 		$this->addType('status', 'string');
@@ -132,28 +139,59 @@ class TimeEntry extends Entity
 		$start = $this->startTime;
 		$end = $this->endTime;
 
-		// Calculate break duration
-		$breakDuration = 0;
-		if ($this->breakStartTime && $this->breakEndTime) {
-			$breakDuration = ($this->breakEndTime->getTimestamp() - $this->breakStartTime->getTimestamp()) / 3600;
+		// Calculate total break duration (from all breaks)
+		$totalBreakDuration = 0;
+		
+		// Add duration from stored breaks (JSON)
+		if ($this->breaks !== null && $this->breaks !== '') {
+			$breaks = json_decode($this->breaks, true) ?? [];
+			foreach ($breaks as $break) {
+				if (isset($break['start']) && isset($break['end'])) {
+					$breakStart = new \DateTime($break['start']);
+					$breakEnd = new \DateTime($break['end']);
+					$totalBreakDuration += ($breakEnd->getTimestamp() - $breakStart->getTimestamp()) / 3600;
+				}
+			}
+		}
+		
+		// Add current active break if exists
+		if ($this->breakStartTime) {
+			$breakEnd = $this->breakEndTime ?? new \DateTime();
+			$totalBreakDuration += ($breakEnd->getTimestamp() - $this->breakStartTime->getTimestamp()) / 3600;
 		}
 
 		$totalDuration = ($end->getTimestamp() - $start->getTimestamp()) / 3600;
-		return max(0, $totalDuration - $breakDuration);
+		return max(0, $totalDuration - $totalBreakDuration);
 	}
 
 	/**
-	 * Get the break duration in hours
+	 * Get the break duration in hours (including all breaks)
 	 *
 	 * @return float
 	 */
 	public function getBreakDurationHours(): float
 	{
-		if (!$this->breakStartTime || !$this->breakEndTime) {
-			return 0.0;
+		$totalBreakHours = 0.0;
+		
+		// Add duration from stored breaks (JSON)
+		if ($this->breaks !== null && $this->breaks !== '') {
+			$breaks = json_decode($this->breaks, true) ?? [];
+			foreach ($breaks as $break) {
+				if (isset($break['start']) && isset($break['end'])) {
+					$start = new \DateTime($break['start']);
+					$end = new \DateTime($break['end']);
+					$totalBreakHours += ($end->getTimestamp() - $start->getTimestamp()) / 3600;
+				}
+			}
 		}
-
-		return ($this->breakEndTime->getTimestamp() - $this->breakStartTime->getTimestamp()) / 3600;
+		
+		// Add current active break if exists
+		if ($this->breakStartTime !== null) {
+			$endTime = $this->breakEndTime ?? new \DateTime();
+			$totalBreakHours += ($endTime->getTimestamp() - $this->breakStartTime->getTimestamp()) / 3600;
+		}
+		
+		return $totalBreakHours;
 	}
 
 	/**

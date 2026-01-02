@@ -9,9 +9,90 @@ declare(strict_types=1);
  * @license AGPL-3.0-or-later
  */
 
-// Script loading is now handled in ComplianceController::violations() using Util::addScript()
-// This replaces the deprecated script() function and follows Nextcloud best practices
-style('arbeitszeitcheck', 'arbeitszeitcheck-main');
+
+/** @var array $_ */
+/** @var \OCP\IL10N $l */
+$l = \OC::$server->getL10N('arbeitszeitcheck');
+
+$violations = $_['violations'] ?? [];
+$total = $_['total'] ?? 0;
 ?>
 
-<div id="arbeitszeitcheck-content"></div>
+<?php include __DIR__ . '/common/navigation.php'; ?>
+
+<div id="app-content">
+    <div id="app-content-wrapper">
+        <div class="section">
+            <div class="section-header">
+                <h2><?php p($l->t('Compliance Violations')); ?></h2>
+                <p><?php p($l->t('See when working time rules were not followed and what needs to be fixed')); ?></p>
+            </div>
+
+            <!-- Filters -->
+            <div class="section-content mb-3">
+                <div class="flex flex--gap">
+                    <input type="date" id="start-date" class="form-input" placeholder="<?php p($l->t('Start Date')); ?>">
+                    <input type="date" id="end-date" class="form-input" placeholder="<?php p($l->t('End Date')); ?>">
+                    <select id="severity-filter" class="form-select">
+                        <option value=""><?php p($l->t('All Severities')); ?></option>
+                        <option value="low"><?php p($l->t('Low')); ?></option>
+                        <option value="medium"><?php p($l->t('Medium')); ?></option>
+                        <option value="high"><?php p($l->t('High')); ?></option>
+                    </select>
+                    <button type="button" id="apply-filters" class="btn btn--primary">
+                        <?php p($l->t('Apply Filters')); ?>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Violations Table -->
+            <div class="table-responsive">
+                <table class="table" id="violations-table">
+                    <thead>
+                        <tr>
+                            <th><?php p($l->t('Problem Type')); ?></th>
+                            <th><?php p($l->t('How Serious')); ?></th>
+                            <th><?php p($l->t('Date')); ?></th>
+                            <th><?php p($l->t('What Happened')); ?></th>
+                            <th><?php p($l->t('Fixed?')); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody id="violations-tbody">
+                        <?php if (empty($violations)): ?>
+                            <tr>
+                                <td colspan="5" class="empty-state">
+                                    <div class="empty-state">
+                                        <h3 class="empty-state__title"><?php p($l->t('No problems found')); ?></h3>
+                                        <p class="empty-state__description">
+                                            <?php p($l->t('Great! No working time rule violations were found for the selected time period.')); ?>
+                                        </p>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($violations as $violation): ?>
+                                <tr>
+                                    <td><?php p($violation['type']); ?></td>
+                                    <td>
+                                        <span class="badge badge--<?php echo $violation['severity'] === 'high' ? 'error' : ($violation['severity'] === 'medium' ? 'warning' : 'primary'); ?>">
+                                            <?php p($violation['severity']); ?>
+                                        </span>
+                                    </td>
+                                    <td><?php p($violation['date'] ?? '-'); ?></td>
+                                    <td><?php p($violation['description'] ?? '-'); ?></td>
+                                    <td>
+                                        <?php if ($violation['resolved']): ?>
+                                            <span class="badge badge--success"><?php p($l->t('Resolved')); ?></span>
+                                        <?php else: ?>
+                                            <span class="badge badge--error"><?php p($l->t('Unresolved')); ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

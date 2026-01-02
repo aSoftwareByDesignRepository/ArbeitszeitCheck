@@ -13,6 +13,7 @@ namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
+use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -28,6 +29,8 @@ use OCP\Util;
  */
 class SettingsController extends Controller
 {
+	use CSPTrait;
+
 	private IUserSession $userSession;
 	private UserSettingsMapper $userSettingsMapper;
 	private AuditLogMapper $auditLogMapper;
@@ -39,13 +42,61 @@ class SettingsController extends Controller
 		IUserSession $userSession,
 		UserSettingsMapper $userSettingsMapper,
 		AuditLogMapper $auditLogMapper,
-		IL10N $l10n
+		IL10N $l10n,
+		CSPService $cspService
 	) {
 		parent::__construct($appName, $request);
 		$this->userSession = $userSession;
 		$this->userSettingsMapper = $userSettingsMapper;
 		$this->auditLogMapper = $auditLogMapper;
 		$this->l10n = $l10n;
+		$this->setCspService($cspService);
+	}
+
+	/**
+	 * Legacy API: Get settings (alias for index)
+	 *
+	 * Legacy endpoint for backward compatibility. Returns settings data as JSON.
+	 *
+	 * @NoAdminRequired
+	 * @return JSONResponse
+	 */
+	public function index_api(): JSONResponse
+	{
+		try {
+			$user = $this->userSession->getUser();
+			if (!$user) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('User not authenticated')
+				], Http::STATUS_UNAUTHORIZED);
+			}
+
+			$userId = $user->getUID();
+			$settings = [];
+
+			// Get all user settings
+			try {
+				// Use getUserSettings method which returns all settings for the user
+				$allSettings = $this->userSettingsMapper->getUserSettings($userId);
+				foreach ($allSettings as $setting) {
+					$settings[$setting->getSettingKey()] = $setting->getSettingValue();
+				}
+			} catch (\Throwable $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->warning('Error getting settings: ' . $e->getMessage(), ['exception' => $e]);
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'settings' => $settings
+			]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in SettingsController::index_api: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $e->getMessage()
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
 	}
 
 	/**
@@ -57,8 +108,25 @@ class SettingsController extends Controller
 	public function index(): TemplateResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
+
+		// Add common CSS files
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+
+		// Add common JavaScript files
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
+		Util::addScript('arbeitszeitcheck', 'common/validation');
 		Util::addScript('arbeitszeitcheck', 'settings');
-		return new TemplateResponse('arbeitszeitcheck', 'personal-settings');
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'personal-settings', [
+			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+		]);
+		return $this->configureCSP($response);
 	}
 
 	/**
@@ -76,13 +144,11 @@ class SettingsController extends Controller
 
 			$userId = $user->getUID();
 			$params = $this->request->getParams();
-			
-			// List of allowed settings keys
+
+			// List of allowed settings keys (only user preferences, not HR/Admin settings)
 			$allowedKeys = [
-				'vacation_days_per_year',
 				'notifications_enabled',
 				'break_reminders_enabled',
-				'default_working_hours_per_day',
 				'auto_break_calculation'
 			];
 
@@ -98,11 +164,9 @@ class SettingsController extends Controller
 
 					// Update setting
 					$value = $params[$key];
-					
+
 					// Validate value based on key type
-					if ($key === 'vacation_days_per_year' || $key === 'default_working_hours_per_day') {
-						$value = (string)max(0, (int)$value);
-					} elseif ($key === 'notifications_enabled' || $key === 'break_reminders_enabled' || $key === 'auto_break_calculation') {
+					if ($key === 'notifications_enabled' || $key === 'break_reminders_enabled' || $key === 'auto_break_calculation') {
 						$value = $value === true || $value === 'true' || $value === '1' ? '1' : '0';
 					} else {
 						$value = (string)$value;
@@ -136,9 +200,15 @@ class SettingsController extends Controller
 				'settings' => $updatedSettings
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in SettingsController::update: ' . $e->getMessage(), ["exception" => $e]);
+			// Check if it's an authentication error
+			$errorMessage = $e->getMessage();
+			if (strpos($errorMessage, 'User not authenticated') !== false) {
+				$errorMessage = $this->l10n->t('User not authenticated');
+			}
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $errorMessage
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -156,12 +226,12 @@ class SettingsController extends Controller
 			if (!$user) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'User not authenticated'
+					'error' => $this->l10n->t('User not authenticated')
 				], Http::STATUS_UNAUTHORIZED);
 			}
 
 			$userId = $user->getUID();
-			
+
 			// Try to get the setting, but handle table not existing gracefully
 			try {
 				$setting = $this->userSettingsMapper->getSetting($userId, 'onboarding_completed');
@@ -203,13 +273,13 @@ class SettingsController extends Controller
 			if (!$user) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'User not authenticated'
+					'error' => $this->l10n->t('User not authenticated')
 				], Http::STATUS_UNAUTHORIZED);
 			}
 
 			$userId = $user->getUID();
 			$completed = $this->request->getParam('completed', true);
-			
+
 			// Try to set the setting, but handle table not existing gracefully
 			try {
 				$this->userSettingsMapper->setSetting($userId, 'onboarding_completed', $completed ? '1' : '0');

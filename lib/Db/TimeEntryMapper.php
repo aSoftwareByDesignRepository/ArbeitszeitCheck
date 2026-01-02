@@ -88,8 +88,8 @@ class TimeEntryMapper extends QBMapper
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->gte('start_time', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
+			->andWhere($qb->expr()->gte('start_time', $qb->createNamedParameter($startDate->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endDate->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
 			->orderBy('start_time', 'ASC');
 
 		return $this->findEntities($qb);
@@ -108,6 +108,42 @@ class TimeEntryMapper extends QBMapper
 			->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
 			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_ACTIVE)))
+			->orderBy('start_time', 'DESC')
+			->setMaxResults(1);
+
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException $e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Find paused or unfinished time entry for today for a user
+	 *
+	 * @param string $userId
+	 * @return TimeEntry|null
+	 */
+	public function findPausedOrUnfinishedTodayByUser(string $userId): ?TimeEntry
+	{
+		$today = new \DateTime();
+		$today->setTime(0, 0, 0);
+		$tomorrow = clone $today;
+		$tomorrow->modify('+1 day');
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->gte('start_time', $qb->createNamedParameter($today->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($tomorrow->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_PAUSED)),
+				$qb->expr()->andX(
+					$qb->expr()->isNull('end_time'),
+					$qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_ACTIVE))
+				)
+			))
 			->orderBy('start_time', 'DESC')
 			->setMaxResults(1);
 
@@ -170,25 +206,14 @@ class TimeEntryMapper extends QBMapper
 	 */
 	public function getTotalHoursByUserAndDateRange(string $userId, \DateTime $startDate, \DateTime $endDate): float
 	{
-		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->createFunction('SUM(' .
-			'CASE ' .
-			'WHEN end_time IS NOT NULL THEN ' .
-				'((UNIX_TIMESTAMP(end_time) - UNIX_TIMESTAMP(start_time)) / 3600) - ' .
-				'COALESCE(((UNIX_TIMESTAMP(break_end_time) - UNIX_TIMESTAMP(break_start_time)) / 3600), 0) ' .
-			'ELSE 0 ' .
-			'END) as total_hours'))
-			->from($this->getTableName())
-			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->gte('start_time', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->in('status', $qb->createNamedParameter([
-				TimeEntry::STATUS_COMPLETED,
-				TimeEntry::STATUS_PENDING_APPROVAL
-			], IQueryBuilder::PARAM_STR_ARRAY)));
-
-		$result = $qb->executeQuery()->fetchOne();
-		return (float)($result ?: 0);
+		$entries = $this->findByUserAndDateRange($userId, $startDate, $endDate);
+		$totalHours = 0.0;
+		foreach ($entries as $entry) {
+			if (in_array($entry->getStatus(), [TimeEntry::STATUS_COMPLETED, TimeEntry::STATUS_PENDING_APPROVAL])) {
+				$totalHours += $entry->getWorkingDurationHours() ?? 0.0;
+			}
+		}
+		return $totalHours;
 	}
 
 	/**
@@ -201,21 +226,14 @@ class TimeEntryMapper extends QBMapper
 	 */
 	public function getTotalBreakHoursByUserAndDateRange(string $userId, \DateTime $startDate, \DateTime $endDate): float
 	{
-		$qb = $this->db->getQueryBuilder();
-		$qb->select($qb->createFunction('SUM(' .
-			'COALESCE(((UNIX_TIMESTAMP(break_end_time) - UNIX_TIMESTAMP(break_start_time)) / 3600), 0)' .
-			') as total_break_hours'))
-			->from($this->getTableName())
-			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->gte('start_time', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->in('status', $qb->createNamedParameter([
-				TimeEntry::STATUS_COMPLETED,
-				TimeEntry::STATUS_PENDING_APPROVAL
-			], IQueryBuilder::PARAM_STR_ARRAY)));
-
-		$result = $qb->executeQuery()->fetchOne();
-		return (float)($result ?: 0);
+		$entries = $this->findByUserAndDateRange($userId, $startDate, $endDate);
+		$totalBreakHours = 0.0;
+		foreach ($entries as $entry) {
+			if (in_array($entry->getStatus(), [TimeEntry::STATUS_COMPLETED, TimeEntry::STATUS_PENDING_APPROVAL])) {
+				$totalBreakHours += $entry->getBreakDurationHours();
+			}
+		}
+		return $totalBreakHours;
 	}
 
 	/**
@@ -259,11 +277,13 @@ class TimeEntryMapper extends QBMapper
 		}
 
 		if (isset($filters['start_date'])) {
-			$qb->andWhere($qb->expr()->gte('te.start_time', $qb->createNamedParameter($filters['start_date'], IQueryBuilder::PARAM_DATE)));
+			$start = $filters['start_date'] instanceof \DateTime ? $filters['start_date']->format('Y-m-d H:i:s') : $filters['start_date'];
+			$qb->andWhere($qb->expr()->gte('te.start_time', $qb->createNamedParameter($start, IQueryBuilder::PARAM_STR)));
 		}
 
 		if (isset($filters['end_date'])) {
-			$qb->andWhere($qb->expr()->lt('te.start_time', $qb->createNamedParameter($filters['end_date'], IQueryBuilder::PARAM_DATE)));
+			$end = $filters['end_date'] instanceof \DateTime ? $filters['end_date']->format('Y-m-d H:i:s') : $filters['end_date'];
+			$qb->andWhere($qb->expr()->lt('te.start_time', $qb->createNamedParameter($end, IQueryBuilder::PARAM_STR)));
 		}
 
 		if (isset($filters['status'])) {
@@ -305,11 +325,13 @@ class TimeEntryMapper extends QBMapper
 		}
 
 		if (isset($filters['start_date'])) {
-			$qb->andWhere($qb->expr()->gte('te.start_time', $qb->createNamedParameter($filters['start_date'], IQueryBuilder::PARAM_DATE)));
+			$start = $filters['start_date'] instanceof \DateTime ? $filters['start_date']->format('Y-m-d H:i:s') : $filters['start_date'];
+			$qb->andWhere($qb->expr()->gte('te.start_time', $qb->createNamedParameter($start, IQueryBuilder::PARAM_STR)));
 		}
 
 		if (isset($filters['end_date'])) {
-			$qb->andWhere($qb->expr()->lt('te.start_time', $qb->createNamedParameter($filters['end_date'], IQueryBuilder::PARAM_DATE)));
+			$end = $filters['end_date'] instanceof \DateTime ? $filters['end_date']->format('Y-m-d H:i:s') : $filters['end_date'];
+			$qb->andWhere($qb->expr()->lt('te.start_time', $qb->createNamedParameter($end, IQueryBuilder::PARAM_STR)));
 		}
 
 		if (isset($filters['status'])) {
@@ -361,8 +383,8 @@ class TimeEntryMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->createFunction('COUNT(DISTINCT user_id)'))
 			->from($this->getTableName())
-			->where($qb->expr()->gte('start_time', $qb->createNamedParameter($startOfDay, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endOfDay, IQueryBuilder::PARAM_DATE)));
+			->where($qb->expr()->gte('start_time', $qb->createNamedParameter($startOfDay->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endOfDay->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)));
 
 		return (int)$qb->executeQuery()->fetchOne();
 	}

@@ -17,6 +17,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
+use OCP\IL10N;
 
 /**
  * ReportController for generating various reports
@@ -25,16 +26,19 @@ class ReportController extends Controller
 {
 	private ReportingService $reportingService;
 	private IUserSession $userSession;
+	private IL10N $l10n;
 
 	public function __construct(
 		string $appName,
 		IRequest $request,
 		ReportingService $reportingService,
-		IUserSession $userSession
+		IUserSession $userSession,
+		IL10N $l10n
 	) {
 		parent::__construct($appName, $request);
 		$this->reportingService = $reportingService;
 		$this->userSession = $userSession;
+		$this->l10n = $l10n;
 	}
 
 	/**
@@ -72,9 +76,15 @@ class ReportController extends Controller
 				'report' => $report
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
+			// Check if it's an authentication error
+			$errorMessage = $e->getMessage();
+			if (strpos($errorMessage, 'User not authenticated') !== false) {
+				$errorMessage = $this->l10n->t('User not authenticated');
+			}
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $errorMessage
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -108,9 +118,15 @@ class ReportController extends Controller
 				'report' => $report
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
+			// Check if it's an authentication error
+			$errorMessage = $e->getMessage();
+			if (strpos($errorMessage, 'User not authenticated') !== false) {
+				$errorMessage = $this->l10n->t('User not authenticated');
+			}
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $errorMessage
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -141,9 +157,15 @@ class ReportController extends Controller
 				'report' => $report
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
+			// Check if it's an authentication error
+			$errorMessage = $e->getMessage();
+			if (strpos($errorMessage, 'User not authenticated') !== false) {
+				$errorMessage = $this->l10n->t('User not authenticated');
+			}
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $errorMessage
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -174,9 +196,15 @@ class ReportController extends Controller
 				'report' => $report
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
+			// Check if it's an authentication error
+			$errorMessage = $e->getMessage();
+			if (strpos($errorMessage, 'User not authenticated') !== false) {
+				$errorMessage = $this->l10n->t('User not authenticated');
+			}
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $errorMessage
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -207,9 +235,15 @@ class ReportController extends Controller
 				'report' => $report
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
+			// Check if it's an authentication error
+			$errorMessage = $e->getMessage();
+			if (strpos($errorMessage, 'User not authenticated') !== false) {
+				$errorMessage = $this->l10n->t('User not authenticated');
+			}
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $errorMessage
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -237,13 +271,13 @@ class ReportController extends Controller
 			} else {
 				// For now, return error - team reports should be accessed via ManagerController
 				// This endpoint can be used by managers who provide user IDs
-				throw new \Exception('User IDs must be provided for team reports');
+				throw new \Exception($this->l10n->t('User IDs must be provided for team reports'));
 			}
 
 			if (empty($teamUserIds)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'No user IDs provided'
+					'error' => $this->l10n->t('No user IDs provided')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -254,9 +288,15 @@ class ReportController extends Controller
 				'report' => $report
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
+			// Check if it's an authentication error
+			$errorMessage = $e->getMessage();
+			if (strpos($errorMessage, 'User not authenticated') !== false) {
+				$errorMessage = $this->l10n->t('User not authenticated');
+			}
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $errorMessage
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}

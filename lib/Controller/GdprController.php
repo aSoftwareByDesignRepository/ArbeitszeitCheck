@@ -65,12 +65,13 @@ class GdprController extends Controller
 	 */
 	public function export(): DataDownloadResponse
 	{
-		$user = $this->userSession->getUser();
-		if (!$user) {
-			throw new \Exception('User not authenticated');
-		}
+		try {
+			$user = $this->userSession->getUser();
+			if (!$user) {
+				throw new \Exception($this->l10n->t('User not authenticated'));
+			}
 
-		$userId = $user->getUID();
+			$userId = $user->getUID();
 
 		// Collect all user data from database
 		$allTimeEntries = $this->timeEntryMapper->findByUser($userId);
@@ -211,15 +212,23 @@ class GdprController extends Controller
 			]
 		];
 
-		$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+			$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-		if ($json === false) {
-			throw new \Exception('Failed to encode data as JSON');
+			if ($json === false) {
+				throw new \Exception($this->l10n->t('Failed to encode data as JSON'));
+			}
+
+			$filename = 'arbeitszeitcheck-gdpr-export-' . $userId . '-' . date('Y-m-d') . '.json';
+
+			return new DataDownloadResponse($json, $filename, 'application/json; charset=utf-8');
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in GdprController::export: ' . $e->getMessage(), ["exception" => $e]);
+			// Return error as JSON file
+			$errorData = ['error' => $e->getMessage()];
+			$errorJson = json_encode($errorData, JSON_PRETTY_PRINT);
+			$filename = 'arbeitszeitcheck-gdpr-export-error-' . date('Y-m-d') . '.json';
+			return new DataDownloadResponse($errorJson, $filename, 'application/json; charset=utf-8');
 		}
-
-		$filename = 'arbeitszeitcheck-gdpr-export-' . $userId . '-' . date('Y-m-d') . '.json';
-
-		return new DataDownloadResponse($json, $filename, 'application/json; charset=utf-8');
 	}
 
 	/**
@@ -233,7 +242,7 @@ class GdprController extends Controller
 		try {
 			$user = $this->userSession->getUser();
 			if (!$user) {
-				throw new \Exception('User not authenticated');
+				throw new \Exception($this->l10n->t('User not authenticated'));
 			}
 
 			$userId = $user->getUID();

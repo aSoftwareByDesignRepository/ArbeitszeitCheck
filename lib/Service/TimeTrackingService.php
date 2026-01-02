@@ -67,6 +67,45 @@ class TimeTrackingService
 			throw new \Exception($this->l10n->t('User is currently on break. End break first.'));
 		}
 
+		// Check if there's a paused or unfinished entry for today that we can resume
+		$pausedEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId);
+		if ($pausedEntry !== null) {
+			// Resume the paused entry
+			$now = new \DateTime();
+			$pausedEntry->setStatus(TimeEntry::STATUS_ACTIVE);
+			$pausedEntry->setUpdatedAt($now);
+			
+			// Update description if provided
+			if ($description !== null) {
+				$pausedEntry->setDescription($description);
+			}
+			
+			// Update project if provided
+			if ($projectCheckProjectId !== null) {
+				$pausedEntry->setProjectCheckProjectId($projectCheckProjectId);
+			}
+
+			$savedEntry = $this->timeEntryMapper->update($pausedEntry);
+
+			// Log the action
+			try {
+				$summary = $savedEntry->getSummary();
+			} catch (\Throwable $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->error('Error getting summary for clock_in (resume) audit log: ' . $e->getMessage(), ["exception" => $e]);
+				$summary = ['id' => $savedEntry->getId(), 'userId' => $userId, 'status' => $savedEntry->getStatus()];
+			}
+			$this->auditLogMapper->logAction(
+				$userId,
+				'clock_in_resume',
+				'time_entry',
+				$savedEntry->getId(),
+				null,
+				$summary
+			);
+
+			return $savedEntry;
+		}
+
 		// Validate ProjectCheck project if provided
 		if ($projectCheckProjectId && !$this->projectCheckService->projectExists($projectCheckProjectId)) {
 			throw new \Exception($this->l10n->t('Selected project does not exist'));
@@ -121,14 +160,15 @@ class TimeTrackingService
 		}
 
 		$now = new \DateTime();
-		$activeEntry->setEndTime($now);
-		$activeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		// Don't set endTime - allow user to resume work later
+		// Only set status to paused so user can continue working later
+		$activeEntry->setStatus(TimeEntry::STATUS_PAUSED);
 		$activeEntry->setUpdatedAt($now);
 
 		$updatedEntry = $this->timeEntryMapper->update($activeEntry);
 
-		// Check compliance rules after clocking out
-		$this->checkComplianceAfterClockOut($updatedEntry);
+		// Note: We don't check compliance after clocking out since the entry is not completed
+		// Compliance will be checked when the entry is actually completed (endTime is set)
 
 		// Log the action
 		try {
@@ -169,12 +209,21 @@ class TimeTrackingService
 			throw new \Exception($this->l10n->t('User is not currently clocked in'));
 		}
 
-		if ($activeEntry->getBreakStartTime() !== null) {
+		// Allow multiple breaks - check if there's an active break
+		if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() === null) {
 			throw new \Exception($this->l10n->t('Break is already started'));
 		}
 
 		$now = new \DateTime();
-		$activeEntry->setBreakStartTime($now);
+		// Clear previous break times if they exist (for new break)
+		if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() !== null) {
+			// Previous break was completed, start new one
+			$activeEntry->setBreakStartTime($now);
+			$activeEntry->setBreakEndTime(null);
+		} else {
+			// First break
+			$activeEntry->setBreakStartTime($now);
+		}
 		$activeEntry->setStatus(TimeEntry::STATUS_BREAK);
 		$activeEntry->setUpdatedAt($now);
 
@@ -265,7 +314,17 @@ class TimeTrackingService
 
 			$currentEntry = $activeEntry ?: $breakEntry;
 
+			// If no active entry, check for paused entry
 			if ($currentEntry === null) {
+				$pausedEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId);
+				if ($pausedEntry !== null && $pausedEntry->getStatus() === TimeEntry::STATUS_PAUSED) {
+					return [
+						'status' => 'paused',
+						'current_entry' => $pausedEntry->getSummary(),
+						'working_today_hours' => $this->getTodayHours($userId),
+						'current_session_duration' => null
+					];
+				}
 				return [
 					'status' => 'clocked_out',
 					'current_entry' => null,
@@ -277,6 +336,37 @@ class TimeTrackingService
 			$now = new \DateTime();
 			$sessionStart = $currentEntry->getStartTime();
 			$sessionDuration = $sessionStart ? ($now->getTimestamp() - $sessionStart->getTimestamp()) : 0;
+			
+			// Subtract all break time from session duration
+			$totalBreakDuration = 0;
+			
+			// Add duration from stored breaks (JSON)
+			$breaksJson = $currentEntry->getBreaks();
+			if ($breaksJson !== null && $breaksJson !== '') {
+				$breaks = json_decode($breaksJson, true) ?? [];
+				foreach ($breaks as $break) {
+					if (isset($break['start']) && isset($break['end'])) {
+						$start = new \DateTime($break['start']);
+						$end = new \DateTime($break['end']);
+						$totalBreakDuration += ($end->getTimestamp() - $start->getTimestamp());
+					}
+				}
+			}
+			
+			// Add current active break if exists
+			$breakStartTime = $currentEntry->getBreakStartTime();
+			$breakEndTime = $currentEntry->getBreakEndTime();
+			
+			if ($breakStartTime !== null) {
+				// If break is active (no end time), subtract time from break start to now
+				$breakEnd = $breakEndTime ?? $now;
+				$totalBreakDuration += ($breakEnd->getTimestamp() - $breakStartTime->getTimestamp());
+			}
+			
+			$sessionDuration -= $totalBreakDuration;
+			
+			// Ensure duration is not negative
+			$sessionDuration = max(0, $sessionDuration);
 
 			// Safely get summary, handling any potential errors
 			$entrySummary = null;

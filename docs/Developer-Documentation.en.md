@@ -27,10 +27,10 @@ This guide is for developers who want to contribute to ArbeitszeitCheck or integ
 ### Technology Stack
 
 - **Backend:** PHP 8.1+ with Nextcloud App Framework
-- **Frontend:** Vue.js 3 with @nextcloud/vue components
+- **Frontend:** Vanilla JavaScript with PHP templates
 - **Database:** MySQL/MariaDB, PostgreSQL, or SQLite
-- **Build Tools:** Webpack, npm
-- **Testing:** PHPUnit, Jest, Vue Test Utils
+- **Build Tools:** None required (vanilla JS)
+- **Testing:** PHPUnit
 
 ### Architecture Pattern
 
@@ -44,10 +44,12 @@ apps/arbeitszeitcheck/
 │   ├── Service/       # Business logic
 │   ├── Db/            # Database entities and mappers
 │   └── BackgroundJob/ # Background jobs
-├── src/               # Frontend Vue.js code
-│   ├── views/         # Page components
-│   ├── components/    # Reusable components
-│   └── styles/        # CSS styles
+├── js/                # Vanilla JavaScript
+│   ├── common/        # Common utilities and components
+│   └── [page].js      # Page-specific JavaScript
+├── css/               # Stylesheets
+│   ├── common/        # Common styles
+│   └── [page].css     # Page-specific styles
 ├── templates/         # PHP templates
 ├── tests/             # Test files
 └── docs/              # Documentation
@@ -133,8 +135,7 @@ php -S localhost:8080
 
 **VS Code:**
 - Install PHP extensions
-- Install Vue.js extensions
-- Configure ESLint and Prettier
+- Configure ESLint and Prettier (optional, for JavaScript)
 
 ---
 
@@ -293,45 +294,78 @@ class TimeEntry extends Entity
 
 ### Frontend Structure
 
-#### Vue Components
+#### PHP Templates
 
-```vue
-<template>
-  <div class="timetracking-example">
-    <NcButton @click="handleClick">
-      {{ $t('arbeitszeitcheck', 'Click me') }}
-    </NcButton>
-  </div>
-</template>
+Templates render data server-side using PHP:
 
-<script>
-import { NcButton } from '@nextcloud/vue'
-import { generateUrl } from '@nextcloud/router'
-import axios from '@nextcloud/axios'
+```php
+<?php
+// templates/example.php
+use OCP\Util;
 
-export default {
-  name: 'ExampleComponent',
-  components: {
-    NcButton
-  },
-  methods: {
-    async handleClick() {
-      try {
-        const response = await axios.get(generateUrl('/apps/arbeitszeitcheck/api/example'))
-        console.log(response.data)
-      } catch (error) {
-        console.error('Error:', error)
-      }
+Util::addScript('arbeitszeitcheck', 'common/utils');
+Util::addScript('arbeitszeitcheck', 'example');
+Util::addStyle('arbeitszeitcheck', 'example');
+?>
+
+<div id="app-content">
+    <?php foreach ($_['items'] as $item): ?>
+        <div class="item-card">
+            <h3><?php p($item['name']); ?></h3>
+            <button type="button" class="button primary" data-item-id="<?php p($item['id']); ?>">
+                <?php p($l->t('Click me')); ?>
+            </button>
+        </div>
+    <?php endforeach; ?>
+</div>
+```
+
+#### Vanilla JavaScript
+
+JavaScript handles interactions and AJAX updates:
+
+```javascript
+// js/example.js
+(function() {
+    'use strict';
+
+    const Utils = window.ArbeitszeitCheckUtils || {};
+    const Messaging = window.ArbeitszeitCheckMessaging || {};
+
+    function init() {
+        bindEvents();
     }
-  }
-}
-</script>
 
-<style scoped>
-.timetracking-example {
-  padding: var(--default-grid-baseline);
-}
-</style>
+    function bindEvents() {
+        const buttons = Utils.$$('.button[data-item-id]');
+        buttons.forEach(btn => {
+            Utils.on(btn, 'click', handleClick);
+        });
+    }
+
+    function handleClick(e) {
+        const itemId = e.target.dataset.itemId;
+        
+        Utils.ajax('/apps/arbeitszeitcheck/api/example/' + itemId, {
+            method: 'GET',
+            onSuccess: function(data) {
+                if (data.success) {
+                    Messaging.showSuccess('Operation successful');
+                }
+            },
+            onError: function(error) {
+                Messaging.showError('Operation failed');
+                console.error('Error:', error);
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
 ```
 
 ---
@@ -431,69 +465,73 @@ try {
 
 ## Frontend Development
 
-### Using Nextcloud Vue Components
+### Using Common JavaScript Utilities
 
-Always use components from `@nextcloud/vue`:
+The app provides common utilities in `js/common/`:
 
-```vue
-<template>
-  <NcAppContent>
-    <NcButton type="primary" @click="save">
-      Save
-    </NcButton>
-  </NcAppContent>
-</template>
+```javascript
+// DOM manipulation
+const element = ArbeitszeitCheckUtils.$('#my-element');
+const elements = ArbeitszeitCheckUtils.$$('.my-class');
 
-<script>
-import { NcAppContent, NcButton } from '@nextcloud/vue'
+// AJAX requests
+ArbeitszeitCheckUtils.ajax('/apps/arbeitszeitcheck/api/endpoint', {
+    method: 'POST',
+    data: { key: 'value' },
+    onSuccess: function(data) {
+        // Handle success
+    },
+    onError: function(error) {
+        // Handle error
+    }
+});
 
-export default {
-  components: {
-    NcAppContent,
-    NcButton
-  }
-}
-</script>
+// Messaging
+ArbeitszeitCheckMessaging.showSuccess('Operation successful');
+ArbeitszeitCheckMessaging.showError('Operation failed');
+
+// Components
+ArbeitszeitCheckComponents.openModal('my-modal-id');
 ```
 
-### CSS Isolation
-
-**Always use scoped styles:**
-
-```vue
-<style scoped>
-.timetracking-component {
-  /* Styles here */
-}
-</style>
-```
+### CSS Organization
 
 **Use BEM naming:**
 ```css
-.timetracking-block {}
-.timetracking-block__element {}
-.timetracking-block__element--modifier {}
+.arbeitszeitcheck-block {}
+.arbeitszeitcheck-block__element {}
+.arbeitszeitcheck-block__element--modifier {}
 ```
 
 **Use CSS variables:**
 ```css
-.timetracking-button {
+.arbeitszeitcheck-button {
   background: var(--color-primary);
   color: var(--color-main-text);
 }
 ```
 
+**Common styles are in `css/common/`:**
+- `base.css` - Base styles and resets
+- `components.css` - Reusable UI components
+- `layout.css` - Grid and layout utilities
+- `utilities.css` - Helper utility classes
+
 ### Internationalization
 
-Use Nextcloud's translation system:
+Use PHP translation in templates:
 
-```vue
-<template>
-  <p>{{ $t('arbeitszeitcheck', 'Hello world') }}</p>
-</template>
+```php
+<?php p($l->t('Hello world')); ?>
 ```
 
 Add translations to `l10n/de.json` and `l10n/en.json`.
+
+For JavaScript, use Nextcloud's translation system if needed:
+```javascript
+// Translations are typically handled server-side in PHP templates
+// For dynamic content, use AJAX to fetch translated strings
+```
 
 ---
 
@@ -528,16 +566,31 @@ composer test
 
 ### JavaScript Tests
 
-```javascript
-import { mount } from '@vue/test-utils'
-import Component from '../Component.vue'
+JavaScript tests can be written using Jest or similar testing frameworks:
 
-describe('Component', () => {
-  it('renders correctly', () => {
-    const wrapper = mount(Component)
-    expect(wrapper.exists()).toBe(true)
-  })
-})
+```javascript
+// tests/js/example.test.js
+describe('Example JavaScript', () => {
+  beforeEach(() => {
+    // Setup DOM
+    document.body.innerHTML = '<div id="test-container"></div>';
+  });
+
+  it('handles click events', () => {
+    const button = document.createElement('button');
+    button.id = 'test-button';
+    document.body.appendChild(button);
+    
+    let clicked = false;
+    button.addEventListener('click', () => {
+      clicked = true;
+    });
+    
+    button.click();
+    expect(clicked).toBe(true);
+  });
+});
+```
 ```
 
 Run tests:
@@ -623,10 +676,12 @@ Before submitting PR:
 
 ### JavaScript Standards
 
-- **ESLint** with strict configuration
-- **Vue 3 Composition API** preferred
+- **ESLint** with strict configuration (optional)
+- **Vanilla JavaScript** - no frameworks required
+- **IIFE pattern** for code isolation
 - **No console.log** in production code
 - **Proper error handling**
+- **Use common utilities** from `js/common/`
 
 ### CSS Standards
 
@@ -696,7 +751,8 @@ $qb->where($qb->expr()->eq('user_id', "'$userId'"));
 ## Resources
 
 - **Nextcloud App Development:** https://docs.nextcloud.com/server/latest/developer_manual/
-- **Vue.js 3 Documentation:** https://vuejs.org/
+- **MDN Web Docs:** https://developer.mozilla.org/
+- **Nextcloud App Framework:** https://docs.nextcloud.com/server/latest/developer_manual/
 - **PHPUnit Documentation:** https://phpunit.de/
 - **Jest Documentation:** https://jestjs.io/
 

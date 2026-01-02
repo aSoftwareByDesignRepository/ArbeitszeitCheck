@@ -17,6 +17,7 @@ use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
+use OCP\IL10N;
 
 /**
  * HealthController
@@ -25,16 +26,19 @@ class HealthController extends Controller
 {
 	private ComplianceService $complianceService;
 	private ProjectCheckIntegrationService $projectCheckService;
+	private IL10N $l10n;
 
 	public function __construct(
 		string $appName,
 		IRequest $request,
 		ComplianceService $complianceService,
-		ProjectCheckIntegrationService $projectCheckService
+		ProjectCheckIntegrationService $projectCheckService,
+		IL10N $l10n
 	) {
 		parent::__construct($appName, $request);
 		$this->complianceService = $complianceService;
 		$this->projectCheckService = $projectCheckService;
+		$this->l10n = $l10n;
 	}
 
 	/**
@@ -93,18 +97,18 @@ class HealthController extends Controller
 			if ($result === '1') {
 				return [
 					'status' => 'healthy',
-					'message' => 'Database connection successful'
+					'message' => $this->l10n->t('Database connection successful')
 				];
 			} else {
 				return [
 					'status' => 'unhealthy',
-					'message' => 'Database query failed'
+					'message' => $this->l10n->t('Database query failed')
 				];
 			}
 		} catch (\Throwable $e) {
 			return [
 				'status' => 'unhealthy',
-				'message' => 'Database error: ' . $e->getMessage()
+				'message' => $this->l10n->t('Database error: %s', [$e->getMessage()])
 			];
 		}
 	}
@@ -121,23 +125,23 @@ class HealthController extends Controller
 			$testDate = new \DateTime('2024-12-25'); // Christmas Day
 			$isHoliday = $this->complianceService->isGermanPublicHoliday($testDate, 'NW');
 
-			if ($isHoliday) {
-				return [
-					'status' => 'healthy',
-					'message' => 'Compliance service working correctly'
-				];
-			} else {
-				return [
-					'status' => 'unhealthy',
-					'message' => 'Compliance service holiday check failed'
-				];
-			}
-		} catch (\Throwable $e) {
+		if ($isHoliday) {
+			return [
+				'status' => 'healthy',
+				'message' => $this->l10n->t('Compliance service working correctly')
+			];
+		} else {
 			return [
 				'status' => 'unhealthy',
-				'message' => 'Compliance service error: ' . $e->getMessage()
+				'message' => $this->l10n->t('Compliance service holiday check failed')
 			];
 		}
+	} catch (\Throwable $e) {
+		return [
+			'status' => 'unhealthy',
+			'message' => $this->l10n->t('Compliance service error: %s', [$e->getMessage()])
+		];
+	}
 	}
 
 	/**
@@ -152,13 +156,13 @@ class HealthController extends Controller
 
 			return [
 				'status' => 'healthy',
-				'message' => $isAvailable ? 'ProjectCheck integration available' : 'ProjectCheck not installed',
+				'message' => $isAvailable ? $this->l10n->t('ProjectCheck integration available') : $this->l10n->t('ProjectCheck not installed'),
 				'available' => $isAvailable
 			];
 		} catch (\Throwable $e) {
 			return [
 				'status' => 'unhealthy',
-				'message' => 'ProjectCheck integration error: ' . $e->getMessage()
+				'message' => $this->l10n->t('ProjectCheck integration error: %s', [$e->getMessage()])
 			];
 		}
 	}

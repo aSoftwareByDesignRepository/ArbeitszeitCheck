@@ -292,6 +292,8 @@ class Version1000Date20241229000000 extends SimpleMigrationStep {
 			$table->setPrimaryKey(['id']);
 			$table->addIndex(['user_id'], 'at_settings_user_idx');
 			$table->addIndex(['user_id', 'setting_key'], 'at_settings_user_key_idx');
+			// Add unique constraint: each user can only have one setting per key
+			$table->addUniqueIndex(['user_id', 'setting_key'], 'at_settings_user_key_unique');
 		}
 
 		// Working time models table (short name: at_models)

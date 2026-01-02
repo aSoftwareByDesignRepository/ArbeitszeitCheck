@@ -12,9 +12,12 @@ return [
 		// Main page routes
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 		['name' => 'page#dashboard', 'url' => '/dashboard', 'verb' => 'GET'],
+		['name' => 'page#timeEntries', 'url' => '/time-entries', 'verb' => 'GET'],
+		['name' => 'page#absences', 'url' => '/absences', 'verb' => 'GET'],
 		['name' => 'page#reports', 'url' => '/reports', 'verb' => 'GET'],
 		['name' => 'page#calendar', 'url' => '/calendar', 'verb' => 'GET'],
 		['name' => 'page#timeline', 'url' => '/timeline', 'verb' => 'GET'],
+		['name' => 'page#settings', 'url' => '/settings', 'verb' => 'GET'],
 
 		// Time tracking routes
 		['name' => 'time_tracking#clockIn', 'url' => '/api/clock/in', 'verb' => 'POST'],
@@ -25,7 +28,7 @@ return [
 		['name' => 'time_tracking#getBreakStatus', 'url' => '/api/break/status', 'verb' => 'GET'],
 
 		// Time entry management routes
-		['name' => 'time_entry#index', 'url' => '/time-entries', 'verb' => 'GET'],
+		['name' => 'time_entry#index_api', 'url' => '/api/time-entries-legacy', 'verb' => 'GET'],
 		['name' => 'time_entry#create', 'url' => '/time-entries/create', 'verb' => 'GET'],
 		['name' => 'time_entry#store', 'url' => '/time-entries', 'verb' => 'POST'],
 		['name' => 'time_entry#show', 'url' => '/time-entries/{id}', 'verb' => 'GET'],
@@ -47,7 +50,7 @@ return [
 		['name' => 'time_entry#requestCorrection', 'url' => '/api/time-entries/{id}/request-correction', 'verb' => 'POST'],
 
 		// Absence management routes
-		['name' => 'absence#index', 'url' => '/absences', 'verb' => 'GET'],
+		['name' => 'absence#index_api', 'url' => '/api/absences-legacy', 'verb' => 'GET'],
 		['name' => 'absence#create', 'url' => '/absences/create', 'verb' => 'GET'],
 		['name' => 'absence#store', 'url' => '/absences', 'verb' => 'POST'],
 		['name' => 'absence#show', 'url' => '/absences/{id}', 'verb' => 'GET'],
@@ -102,7 +105,7 @@ return [
 		['name' => 'report#team', 'url' => '/api/reports/team', 'verb' => 'GET'],
 
 		// Settings routes
-		['name' => 'settings#index', 'url' => '/settings', 'verb' => 'GET'],
+		['name' => 'settings#index_api', 'url' => '/api/settings-legacy', 'verb' => 'GET'],
 		['name' => 'settings#update', 'url' => '/settings', 'verb' => 'POST'],
 
 		// Admin routes

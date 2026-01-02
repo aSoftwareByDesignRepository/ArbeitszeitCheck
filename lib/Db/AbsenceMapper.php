@@ -88,8 +88,8 @@ class AbsenceMapper extends QBMapper
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->orderBy('start_date', 'ASC');
 
 		return $this->findEntities($qb);
@@ -107,8 +107,8 @@ class AbsenceMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
-			->where($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
+			->where($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->orderBy('start_date', 'ASC');
 
 		return $this->findEntities($qb);
@@ -182,8 +182,8 @@ class AbsenceMapper extends QBMapper
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_APPROVED)))
-			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($today, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($today, IQueryBuilder::PARAM_DATE)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($today->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($today->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->orderBy('start_date', 'ASC');
 
 		if ($userId !== null) {
@@ -212,8 +212,8 @@ class AbsenceMapper extends QBMapper
 				->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
 				->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(Absence::TYPE_VACATION)))
 				->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_APPROVED)))
-				->andWhere($qb->expr()->gte('start_date', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
-				->andWhere($qb->expr()->lte('end_date', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)));
+				->andWhere($qb->expr()->gte('start_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->lte('end_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)));
 
 			$result = $qb->executeQuery()->fetchOne();
 			return (float)($result ?: 0);
@@ -242,8 +242,8 @@ class AbsenceMapper extends QBMapper
 				->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
 				->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(Absence::TYPE_SICK_LEAVE)))
 				->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_APPROVED)))
-				->andWhere($qb->expr()->gte('start_date', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
-				->andWhere($qb->expr()->lte('end_date', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)));
+				->andWhere($qb->expr()->gte('start_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->lte('end_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)));
 
 			$result = $qb->executeQuery()->fetchOne();
 			return (float)($result ?: 0);
@@ -272,14 +272,30 @@ class AbsenceMapper extends QBMapper
 				Absence::STATUS_PENDING,
 				Absence::STATUS_APPROVED
 			], IQueryBuilder::PARAM_STR_ARRAY)))
-			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)));
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)));
 
 		if ($excludeId !== null) {
 			$qb->andWhere($qb->expr()->neq('id', $qb->createNamedParameter($excludeId)));
 		}
 
 		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Count all absences for a user
+	 *
+	 * @param string $userId
+	 * @return int
+	 */
+	public function countByUser(string $userId): int
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->createFunction('COUNT(*)'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
+
+		return (int)$qb->executeQuery()->fetchOne();
 	}
 
 	/**
@@ -301,8 +317,8 @@ class AbsenceMapper extends QBMapper
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
 			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter($type)))
 			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_APPROVED)))
-			->andWhere($qb->expr()->gte('start_date', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->lte('end_date', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)));
+			->andWhere($qb->expr()->gte('start_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lte('end_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)));
 
 		return (int)$qb->executeQuery()->fetchOne();
 	}

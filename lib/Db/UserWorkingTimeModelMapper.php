@@ -45,10 +45,10 @@ class UserWorkingTimeModelMapper extends QBMapper
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATE)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($now->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->orX(
 				$qb->expr()->isNull('end_date'),
-				$qb->expr()->gte('end_date', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATE))
+				$qb->expr()->gte('end_date', $qb->createNamedParameter($now->format('Y-m-d'), IQueryBuilder::PARAM_STR))
 			))
 			->orderBy('start_date', 'DESC')
 			->setMaxResults(1);
@@ -74,10 +74,10 @@ class UserWorkingTimeModelMapper extends QBMapper
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($date, IQueryBuilder::PARAM_DATE)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($date->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->orX(
 				$qb->expr()->isNull('end_date'),
-				$qb->expr()->gte('end_date', $qb->createNamedParameter($date, IQueryBuilder::PARAM_DATE))
+				$qb->expr()->gte('end_date', $qb->createNamedParameter($date->format('Y-m-d'), IQueryBuilder::PARAM_STR))
 			))
 			->orderBy('start_date', 'DESC')
 			->setMaxResults(1);
@@ -122,10 +122,10 @@ class UserWorkingTimeModelMapper extends QBMapper
 
 		if ($onlyActive) {
 			$now = new \DateTime();
-			$qb->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATE)))
+			$qb->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($now->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 				->andWhere($qb->expr()->orX(
 					$qb->expr()->isNull('end_date'),
-					$qb->expr()->gte('end_date', $qb->createNamedParameter($now, IQueryBuilder::PARAM_DATE))
+					$qb->expr()->gte('end_date', $qb->createNamedParameter($now->format('Y-m-d'), IQueryBuilder::PARAM_STR))
 				));
 		}
 
@@ -150,10 +150,10 @@ class UserWorkingTimeModelMapper extends QBMapper
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
-			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->orX(
 				$qb->expr()->isNull('end_date'),
-				$qb->expr()->gte('end_date', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE))
+				$qb->expr()->gte('end_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR))
 			));
 
 		if ($excludeId !== null) {

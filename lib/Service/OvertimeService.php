@@ -45,9 +45,10 @@ class OvertimeService
 	 * @param string $userId User ID
 	 * @param \DateTime $startDate Start date
 	 * @param \DateTime $endDate End date
+	 * @param bool $calculateCumulative Whether to calculate cumulative balance
 	 * @return array Overtime data including total hours, required hours, overtime hours, and balance
 	 */
-	public function calculateOvertime(string $userId, \DateTime $startDate, \DateTime $endDate): array
+	public function calculateOvertime(string $userId, \DateTime $startDate, \DateTime $endDate, bool $calculateCumulative = true): array
 	{
 		// Get user's working time model
 		$userModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
@@ -84,7 +85,14 @@ class OvertimeService
 		$overtimeHours = $totalHoursWorked - $requiredHours;
 
 		// Get cumulative overtime balance (from previous periods)
-		$cumulativeBalance = $this->getCumulativeOvertimeBalance($userId, $startDate);
+		$cumulativeBalance = 0.0;
+		if ($calculateCumulative) {
+			try {
+				$cumulativeBalance = $this->getCumulativeOvertimeBalance($userId, $startDate);
+			} catch (\Throwable $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->error('Error calculating cumulative overtime balance: ' . $e->getMessage());
+			}
+		}
 
 		// Calculate new balance
 		$newBalance = $cumulativeBalance + $overtimeHours;
@@ -169,7 +177,7 @@ class OvertimeService
 		$beforeDateCopy = clone $beforeDate;
 		$beforeDateCopy->setTime(0, 0, 0);
 
-		$overtimeData = $this->calculateOvertime($userId, $yearStart, $beforeDateCopy);
+		$overtimeData = $this->calculateOvertime($userId, $yearStart, $beforeDateCopy, false);
 		
 		return $overtimeData['overtime_hours'];
 	}

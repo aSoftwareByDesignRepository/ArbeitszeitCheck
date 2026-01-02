@@ -61,6 +61,7 @@ class AbsenceService
 		$absence->setStartDate($this->parseDate($data['start_date']));
 		$absence->setEndDate($this->parseDate($data['end_date']));
 		$absence->setReason($data['reason'] ?? null);
+		$absence->setSubstituteUserId($data['substitute_user_id'] ?? null);
 		$absence->setStatus(Absence::STATUS_PENDING);
 		$absence->setCreatedAt(new \DateTime());
 		$absence->setUpdatedAt(new \DateTime());

@@ -16,7 +16,9 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
+use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
@@ -25,6 +27,7 @@ use OCP\AppFramework\Services\IAppConfig;
 use OCP\IRequest;
 use OCP\IUserManager;
 use OCP\IUser;
+use OCP\IL10N;
 use OCP\Util;
 
 /**
@@ -32,6 +35,8 @@ use OCP\Util;
  */
 class AdminController extends Controller
 {
+	use CSPTrait;
+
 	private TimeEntryMapper $timeEntryMapper;
 	private ComplianceViolationMapper $violationMapper;
 	private UserWorkingTimeModelMapper $userWorkingTimeModelMapper;
@@ -39,6 +44,7 @@ class AdminController extends Controller
 	private AuditLogMapper $auditLogMapper;
 	private IUserManager $userManager;
 	private IAppConfig $appConfig;
+	private IL10N $l10n;
 
 	public function __construct(
 		string $appName,
@@ -49,7 +55,9 @@ class AdminController extends Controller
 		WorkingTimeModelMapper $workingTimeModelMapper,
 		AuditLogMapper $auditLogMapper,
 		IUserManager $userManager,
-		IAppConfig $appConfig
+		IAppConfig $appConfig,
+		CSPService $cspService,
+		IL10N $l10n
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -59,6 +67,8 @@ class AdminController extends Controller
 		$this->auditLogMapper = $auditLogMapper;
 		$this->userManager = $userManager;
 		$this->appConfig = $appConfig;
+		$this->l10n = $l10n;
+		$this->setCspService($cspService);
 	}
 
 	/**
@@ -68,7 +78,71 @@ class AdminController extends Controller
 	 */
 	public function dashboard(): TemplateResponse
 	{
-		return new TemplateResponse('arbeitszeitcheck', 'admin-dashboard');
+		Util::addTranslations('arbeitszeitcheck');
+
+		// Add common CSS files
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+
+		// Add common JavaScript files
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
+		Util::addScript('arbeitszeitcheck', 'admin-dashboard');
+
+		try {
+			// Get statistics
+			$totalUsers = $this->userManager->countUsersTotal(0, false);
+			if ($totalUsers === false) {
+				$totalUsers = 0;
+			}
+
+			$today = new \DateTime();
+			$activeUsersToday = $this->timeEntryMapper->countDistinctUsersByDate($today);
+			$unresolvedCount = $this->violationMapper->count(['resolved' => false]);
+
+			// Get recent violations
+			$recentViolations = $this->violationMapper->findUnresolved(10);
+			$violationsData = [];
+			foreach ($recentViolations as $violation) {
+				$user = $this->userManager->get($violation->getUserId());
+				$violationsData[] = [
+					'id' => $violation->getId(),
+					'userId' => $violation->getUserId(),
+					'userDisplayName' => $user ? $user->getDisplayName() : $violation->getUserId(),
+					'type' => $violation->getViolationType(),
+					'severity' => $violation->getSeverity(),
+					'date' => $violation->getViolationDate() ? $violation->getViolationDate()->format('Y-m-d') : null,
+					'resolved' => $violation->getResolved()
+				];
+			}
+
+			$response = new TemplateResponse('arbeitszeitcheck', 'admin-dashboard', [
+				'statistics' => [
+					'total_users' => $totalUsers,
+					'active_users_today' => $activeUsersToday,
+					'unresolved_violations' => $unresolvedCount
+				],
+				'recent_violations' => $violationsData,
+				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			]);
+			return $this->configureCSP($response, 'admin');
+		} catch (\Throwable $e) {
+			$response = new TemplateResponse('arbeitszeitcheck', 'admin-dashboard', [
+				'statistics' => [
+					'total_users' => 0,
+					'active_users_today' => 0,
+					'unresolved_violations' => 0
+				],
+				'recent_violations' => [],
+				'error' => $e->getMessage(),
+				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			]);
+			return $this->configureCSP($response, 'admin');
+		}
 	}
 
 	/**
@@ -79,8 +153,58 @@ class AdminController extends Controller
 	public function users(): TemplateResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
+
+		// Add common CSS files
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+
+		// Add common JavaScript files
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
 		Util::addScript('arbeitszeitcheck', 'admin-users');
-		return new TemplateResponse('arbeitszeitcheck', 'admin-users');
+
+		// Get initial users list (first 50)
+		$users = $this->userManager->search('', 50, 0);
+		$usersData = [];
+		foreach ($users as $user) {
+			$userId = $user->getUID();
+			$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
+			$workingTimeModel = null;
+			if ($currentModel) {
+				try {
+					$workingTimeModel = $this->workingTimeModelMapper->find($currentModel->getWorkingTimeModelId());
+				} catch (\Throwable $e) {
+					// Model might have been deleted
+				}
+			}
+
+			$usersData[] = [
+				'userId' => $userId,
+				'displayName' => $user->getDisplayName(),
+				'email' => $user->getEMailAddress(),
+				'enabled' => $user->isEnabled(),
+				'workingTimeModel' => $workingTimeModel ? [
+					'id' => $workingTimeModel->getId(),
+					'name' => $workingTimeModel->getName()
+				] : null
+			];
+		}
+
+		$totalCount = $this->userManager->countUsersTotal(0, false);
+		if ($totalCount === false) {
+			$totalCount = count($usersData);
+		}
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-users', [
+			'users' => $usersData,
+			'total' => $totalCount,
+			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+		]);
+		return $this->configureCSP($response, 'admin');
 	}
 
 	/**
@@ -90,7 +214,38 @@ class AdminController extends Controller
 	 */
 	public function settings(): TemplateResponse
 	{
-		return new TemplateResponse('arbeitszeitcheck', 'admin-settings');
+		Util::addTranslations('arbeitszeitcheck');
+
+		// Add common CSS files
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+
+		// Add common JavaScript files
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
+		Util::addScript('arbeitszeitcheck', 'common/validation');
+		Util::addScript('arbeitszeitcheck', 'admin-settings');
+
+		$settings = [
+			'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
+			'requireBreakJustification' => $this->appConfig->getAppValueString('require_break_justification', '1') === '1',
+			'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
+			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
+			'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
+			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
+			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8')
+		];
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
+			'settings' => $settings,
+			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+		]);
+		return $this->configureCSP($response, 'admin');
 	}
 
 	/**
@@ -101,8 +256,40 @@ class AdminController extends Controller
 	public function workingTimeModels(): TemplateResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
+
+		// Add common CSS files
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+
+		// Add common JavaScript files
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
+		Util::addScript('arbeitszeitcheck', 'common/validation');
 		Util::addScript('arbeitszeitcheck', 'working-time-models');
-		return new TemplateResponse('arbeitszeitcheck', 'working-time-models');
+
+		$models = $this->workingTimeModelMapper->findAll();
+		$modelsData = [];
+		foreach ($models as $model) {
+			$modelsData[] = [
+				'id' => $model->getId(),
+				'name' => $model->getName(),
+				'description' => $model->getDescription(),
+				'type' => $model->getType(),
+				'weeklyHours' => $model->getWeeklyHours(),
+				'dailyHours' => $model->getDailyHours(),
+				'isDefault' => $model->getIsDefault()
+			];
+		}
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'working-time-models', [
+			'models' => $modelsData,
+			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+		]);
+		return $this->configureCSP($response, 'admin');
 	}
 
 	/**
@@ -113,8 +300,54 @@ class AdminController extends Controller
 	public function auditLog(): TemplateResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
+
+		// Add common CSS files
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+
+		// Add common JavaScript files
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
 		Util::addScript('arbeitszeitcheck', 'audit-log-viewer');
-		return new TemplateResponse('arbeitszeitcheck', 'audit-log');
+
+		// Get recent audit logs (last 30 days, first 50)
+		$endDate = new \DateTime();
+		$endDate->setTime(23, 59, 59);
+		$startDate = clone $endDate;
+		$startDate->modify('-30 days');
+		$startDate->setTime(0, 0, 0);
+
+		$logs = $this->auditLogMapper->findByDateRange($startDate, $endDate, null, null, null);
+		$logs = array_slice($logs, 0, 50);
+
+		$logsData = [];
+		foreach ($logs as $log) {
+			$user = $this->userManager->get($log->getUserId());
+			$performedBy = $log->getPerformedBy() ? $this->userManager->get($log->getPerformedBy()) : null;
+
+			$logsData[] = [
+				'id' => $log->getId(),
+				'userId' => $log->getUserId(),
+				'userDisplayName' => $user ? $user->getDisplayName() : $log->getUserId(),
+				'action' => $log->getAction(),
+				'entityType' => $log->getEntityType(),
+				'entityId' => $log->getEntityId(),
+				'performedBy' => $log->getPerformedBy(),
+				'performedByDisplayName' => $performedBy ? $performedBy->getDisplayName() : ($log->getPerformedBy() ?? $log->getUserId()),
+				'createdAt' => ($createdAt = $log->getCreatedAt()) ? $createdAt->format('Y-m-d H:i:s') : null
+			];
+		}
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'audit-log', [
+			'logs' => $logsData,
+			'total' => count($logs),
+			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+		]);
+		return $this->configureCSP($response, 'admin');
 	}
 
 	/**
@@ -188,7 +421,7 @@ class AdminController extends Controller
 						if ($paramKey === 'maxDailyHours' && ((float)$value < 1 || (float)$value > 24)) {
 							return new JSONResponse([
 								'success' => false,
-								'error' => 'Maximum daily hours must be between 1 and 24'
+								'error' => $this->l10n->t('Maximum daily hours must be between 1 and 24')
 							], Http::STATUS_BAD_REQUEST);
 						}
 						if ($paramKey === 'minRestPeriod' && ((float)$value < 1 || (float)$value > 24)) {
@@ -204,7 +437,7 @@ class AdminController extends Controller
 						if (!in_array($value, $validStates)) {
 							return new JSONResponse([
 								'success' => false,
-								'error' => 'Invalid German state code'
+								'error' => $this->l10n->t('Invalid German state code')
 							], Http::STATUS_BAD_REQUEST);
 						}
 						$value = (string)$value;
@@ -220,13 +453,13 @@ class AdminController extends Controller
 			if (empty($updatedSettings)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'No valid settings provided'
+					'error' => $this->l10n->t('No valid settings provided')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
 			return new JSONResponse([
 				'success' => true,
-				'message' => 'Settings updated successfully',
+				'message' => $this->l10n->t('Settings updated successfully'),
 				'settings' => $updatedSettings
 			]);
 		} catch (\Throwable $e) {
@@ -466,10 +699,15 @@ class AdminController extends Controller
 			if ($workingTimeModelId !== null) {
 				try {
 					$this->workingTimeModelMapper->find($workingTimeModelId);
+				} catch (DoesNotExistException $e) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Working time model not found')
+					], Http::STATUS_NOT_FOUND);
 				} catch (\Throwable $e) {
 					return new JSONResponse([
 						'success' => false,
-						'error' => 'Working time model not found'
+						'error' => 'Error validating working time model: ' . $e->getMessage()
 					], Http::STATUS_BAD_REQUEST);
 				}
 			}
@@ -496,10 +734,15 @@ class AdminController extends Controller
 				// Validate
 				$errors = $currentModel->validate();
 				if (!empty($errors)) {
+					// Translate validation errors
+					$translatedErrors = [];
+					foreach ($errors as $field => $message) {
+						$translatedErrors[$field] = $this->l10n->t($message);
+					}
 					return new JSONResponse([
 						'success' => false,
-						'error' => 'Validation failed',
-						'errors' => $errors
+						'error' => $this->l10n->t('Validation failed'),
+						'errors' => $translatedErrors
 					], Http::STATUS_BAD_REQUEST);
 				}
 
@@ -651,10 +894,15 @@ class AdminController extends Controller
 			// Validate
 			$errors = $model->validate();
 			if (!empty($errors)) {
+				// Translate validation errors
+				$translatedErrors = [];
+				foreach ($errors as $field => $message) {
+					$translatedErrors[$field] = $this->l10n->t($message);
+				}
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Validation failed',
-					'errors' => $errors
+					'error' => $this->l10n->t('Validation failed'),
+					'errors' => $translatedErrors
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -743,10 +991,15 @@ class AdminController extends Controller
 			// Validate
 			$errors = $model->validate();
 			if (!empty($errors)) {
+				// Translate validation errors
+				$translatedErrors = [];
+				foreach ($errors as $field => $message) {
+					$translatedErrors[$field] = $this->l10n->t($message);
+				}
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Validation failed',
-					'errors' => $errors
+					'error' => $this->l10n->t('Validation failed'),
+					'errors' => $translatedErrors
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -794,7 +1047,7 @@ class AdminController extends Controller
 			if (!empty($userAssignments)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Cannot delete working time model: ' . count($userAssignments) . ' user(s) are assigned to this model. Please reassign users first.'
+					'error' => $this->l10n->t('Cannot delete working time model: %d user(s) are assigned to this model. Please reassign users first.', [count($userAssignments)])
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -1129,7 +1382,8 @@ class AdminController extends Controller
 				default => $this->exportAsCsv($exportData, $filename)
 			};
 		} catch (\Throwable $e) {
-			throw new \Exception('Failed to export audit logs: ' . $e->getMessage());
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::exportAuditLogs: ' . $e->getMessage(), ["exception" => $e]);
+			throw new \Exception($this->l10n->t('Failed to export audit logs: %s', [$e->getMessage()]));
 		}
 	}
 }

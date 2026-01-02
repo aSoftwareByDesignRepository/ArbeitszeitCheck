@@ -42,6 +42,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setCreatedAt(\DateTime $createdAt)
  * @method \DateTime getUpdatedAt()
  * @method void setUpdatedAt(\DateTime $updatedAt)
+ * @method string|null getSubstituteUserId()
+ * @method void setSubstituteUserId(string|null $substituteUserId)
  */
 class Absence extends Entity
 {
@@ -95,6 +97,9 @@ class Absence extends Entity
 	/** @var \DateTime */
 	protected $updatedAt;
 
+	/** @var string|null */
+	protected $substituteUserId;
+
 	/**
 	 * Absence constructor
 	 */
@@ -112,6 +117,7 @@ class Absence extends Entity
 		$this->addType('approvedAt', 'datetime');
 		$this->addType('createdAt', 'datetime');
 		$this->addType('updatedAt', 'datetime');
+		$this->addType('substituteUserId', 'string');
 	}
 
 	/**
@@ -328,7 +334,8 @@ class Absence extends Entity
 			'approvedBy' => $this->getApprovedBy(),
 			'approvedAt' => $this->getApprovedAt()?->format('c'),
 			'createdAt' => $createdAt ? $createdAt->format('c') : null,
-			'updatedAt' => $updatedAt ? $updatedAt->format('c') : null
+			'updatedAt' => $updatedAt ? $updatedAt->format('c') : null,
+			'substituteUserId' => $this->getSubstituteUserId()
 		];
 	}
 }

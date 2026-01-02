@@ -164,8 +164,8 @@ class ComplianceViolationMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
-			->where($qb->expr()->gte('date', $qb->createNamedParameter($startDate, IQueryBuilder::PARAM_DATE)))
-			->andWhere($qb->expr()->lt('date', $qb->createNamedParameter($endDate, IQueryBuilder::PARAM_DATE)))
+			->where($qb->expr()->gte('date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lt('date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->orderBy('date', 'DESC');
 
 		if ($userId !== null) {
@@ -209,11 +209,13 @@ class ComplianceViolationMapper extends QBMapper
 		}
 
 		if (isset($filters['start_date'])) {
-			$qb->andWhere($qb->expr()->gte('date', $qb->createNamedParameter($filters['start_date'], IQueryBuilder::PARAM_DATE)));
+			$start = $filters['start_date'] instanceof \DateTime ? $filters['start_date']->format('Y-m-d') : $filters['start_date'];
+			$qb->andWhere($qb->expr()->gte('date', $qb->createNamedParameter($start, IQueryBuilder::PARAM_STR)));
 		}
 
 		if (isset($filters['end_date'])) {
-			$qb->andWhere($qb->expr()->lt('date', $qb->createNamedParameter($filters['end_date'], IQueryBuilder::PARAM_DATE)));
+			$end = $filters['end_date'] instanceof \DateTime ? $filters['end_date']->format('Y-m-d') : $filters['end_date'];
+			$qb->andWhere($qb->expr()->lt('date', $qb->createNamedParameter($end, IQueryBuilder::PARAM_STR)));
 		}
 
 		return (int)$qb->executeQuery()->fetchOne();
@@ -243,11 +245,13 @@ class ComplianceViolationMapper extends QBMapper
 		}
 
 		if (isset($filters['start_date'])) {
-			$qb->andWhere($qb->expr()->gte('date', $qb->createNamedParameter($filters['start_date'], IQueryBuilder::PARAM_DATE)));
+			$start = $filters['start_date'] instanceof \DateTime ? $filters['start_date']->format('Y-m-d') : $filters['start_date'];
+			$qb->andWhere($qb->expr()->gte('date', $qb->createNamedParameter($start, IQueryBuilder::PARAM_STR)));
 		}
 
 		if (isset($filters['end_date'])) {
-			$qb->andWhere($qb->expr()->lt('date', $qb->createNamedParameter($filters['end_date'], IQueryBuilder::PARAM_DATE)));
+			$end = $filters['end_date'] instanceof \DateTime ? $filters['end_date']->format('Y-m-d') : $filters['end_date'];
+			$qb->andWhere($qb->expr()->lt('date', $qb->createNamedParameter($end, IQueryBuilder::PARAM_STR)));
 		}
 
 		$results = $qb->executeQuery()->fetchAll();

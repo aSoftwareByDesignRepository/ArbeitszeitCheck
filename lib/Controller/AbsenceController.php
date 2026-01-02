@@ -12,29 +12,48 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
+use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
+use OCP\IUserManager;
+use OCP\IURLGenerator;
+use OCP\IL10N;
 
 /**
  * AbsenceController
  */
 class AbsenceController extends Controller
 {
+	use CSPTrait;
+
 	private AbsenceService $absenceService;
 	private IUserSession $userSession;
+	private IURLGenerator $urlGenerator;
+	private IUserManager $userManager;
+	private IL10N $l10n;
 
 	public function __construct(
 		string $appName,
 		IRequest $request,
 		AbsenceService $absenceService,
-		IUserSession $userSession
+		IUserSession $userSession,
+		IURLGenerator $urlGenerator,
+		IUserManager $userManager,
+		CSPService $cspService,
+		IL10N $l10n
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
 		$this->userSession = $userSession;
+		$this->urlGenerator = $urlGenerator;
+		$this->userManager = $userManager;
+		$this->l10n = $l10n;
+		$this->setCspService($cspService);
 	}
 
 	/**
@@ -49,6 +68,23 @@ class AbsenceController extends Controller
 			throw new \Exception('User not authenticated');
 		}
 		return $user->getUID();
+	}
+
+	/**
+	 * Legacy API: Get absences (alias for index)
+	 *
+	 * Legacy endpoint for backward compatibility. Delegates to the index() method.
+	 *
+	 * @NoAdminRequired
+	 * @param string|null $status Filter by status
+	 * @param string|null $type Filter by type
+	 * @param int|null $limit
+	 * @param int|null $offset
+	 * @return JSONResponse
+	 */
+	public function index_api(?string $status = null, ?string $type = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
+	{
+		return $this->index($status, $type, $limit, $offset);
 	}
 
 	/**
@@ -100,6 +136,96 @@ class AbsenceController extends Controller
 	}
 
 	/**
+	 * Show create absence form page
+	 *
+	 * @NoAdminRequired
+	 * @NoCSRFRequired
+	 * @return TemplateResponse
+	 */
+	public function create(): TemplateResponse
+	{
+		$response = new TemplateResponse(
+			$this->appName,
+			'absences',
+			[
+				'urlGenerator' => $this->urlGenerator,
+				'mode' => 'create',
+				'absence' => null,
+				'absences' => [],
+				'stats' => []
+			]
+		);
+		return $this->configureCSP($response);
+	}
+
+	/**
+	 * Show edit absence form page
+	 *
+	 * @NoAdminRequired
+	 * @NoCSRFRequired
+	 * @param int $id Absence ID
+	 * @return TemplateResponse
+	 */
+	public function edit(int $id): TemplateResponse
+	{
+		try {
+			$userId = $this->getUserId();
+			$absence = $this->absenceService->getAbsence($id, $userId);
+
+			if (!$absence) {
+				// Redirect to absences list if not found
+				$response = new TemplateResponse(
+					$this->appName,
+					'absences',
+					[
+						'urlGenerator' => $this->urlGenerator,
+						'error' => 'Absence not found'
+					],
+					'blank'
+				);
+				return $this->configureCSP($response);
+			}
+
+			$response = new TemplateResponse(
+				$this->appName,
+				'absences',
+				[
+					'urlGenerator' => $this->urlGenerator,
+					'mode' => 'edit',
+					'absence' => $absence,
+					'absences' => [],
+					'stats' => []
+				]
+			);
+			return $this->configureCSP($response);
+		} catch (DoesNotExistException $e) {
+			// Absence not found - redirect to absences list
+			$response = new TemplateResponse(
+				$this->appName,
+				'absences',
+				[
+					'urlGenerator' => $this->urlGenerator,
+					'error' => $this->l10n->t('Absence not found')
+				],
+				'blank'
+			);
+			return $this->configureCSP($response);
+		} catch (\Throwable $e) {
+			// Redirect to absences list on error
+			$response = new TemplateResponse(
+				$this->appName,
+				'absences',
+				[
+					'urlGenerator' => $this->urlGenerator,
+					'error' => $e->getMessage()
+				],
+				'blank'
+			);
+			return $this->configureCSP($response);
+		}
+	}
+
+	/**
 	 * Get absence by ID endpoint
 	 *
 	 * @NoAdminRequired
@@ -115,7 +241,7 @@ class AbsenceController extends Controller
 			if (!$absence) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Absence not found'
+					'error' => $this->l10n->t('Absence not found')
 				], Http::STATUS_NOT_FOUND);
 			}
 
@@ -157,14 +283,15 @@ class AbsenceController extends Controller
 				'type' => $type,
 				'start_date' => is_array($params['start_date'] ?? '') ? (string)reset($params['start_date']) : (string)($params['start_date'] ?? ''),
 				'end_date' => is_array($params['end_date'] ?? '') ? (string)reset($params['end_date']) : (string)($params['end_date'] ?? ''),
-				'reason' => is_array($params['reason'] ?? null) ? (string)reset($params['reason']) : ($params['reason'] ?? null)
+				'reason' => is_array($params['reason'] ?? null) ? (string)reset($params['reason']) : ($params['reason'] ?? null),
+				'substitute_user_id' => is_array($params['substitute_user_id'] ?? null) ? (string)reset($params['substitute_user_id']) : ($params['substitute_user_id'] ?? null)
 			];
 
 			// Validate required fields
 			if (empty($data['type']) || empty($data['start_date']) || empty($data['end_date'])) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Type, start_date, and end_date are required'
+					'error' => $this->l10n->t('Type, start_date, and end_date are required')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -180,6 +307,25 @@ class AbsenceController extends Controller
 				'error' => $e->getMessage()
 			], Http::STATUS_BAD_REQUEST);
 		}
+	}
+
+	/**
+	 * Update absence endpoint (POST method for form submissions)
+	 *
+	 * Handles POST requests for updating absences. Delegates to the update() method.
+	 *
+	 * @NoAdminRequired
+	 * @param int $id Absence ID
+	 * @return JSONResponse
+	 */
+	public function updatePost(int $id): JSONResponse
+	{
+		$params = $this->request->getParams();
+		$start_date = $params['start_date'] ?? null;
+		$end_date = $params['end_date'] ?? null;
+		$reason = $params['reason'] ?? null;
+
+		return $this->update($id, $start_date, $end_date, $reason);
 	}
 
 	/**
@@ -305,6 +451,36 @@ class AbsenceController extends Controller
 	 * @param int|null $year Year for statistics (defaults to current year)
 	 * @return JSONResponse
 	 */
+	public function users(): JSONResponse
+	{
+		try {
+			// Get all users from Nextcloud
+			$users = $this->userManager->search('', null, 0);
+
+			$usersData = [];
+			foreach ($users as $user) {
+				if (!$user->isEnabled()) {
+					continue;
+				}
+				$usersData[] = [
+					'userId' => $user->getUID(),
+					'displayName' => $user->getDisplayName(),
+					'display_name' => $user->getDisplayName()
+				];
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'users' => $usersData
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $e->getMessage()
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	public function stats(?int $year = null): JSONResponse
 	{
 		try {

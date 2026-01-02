@@ -7,6 +7,14 @@
  * @license AGPL-3.0-or-later
  */
 
+// Get URL generator from OC server
+$urlGenerator = \OC::$server->getURLGenerator();
+
+// Get translation object if not available
+if (!isset($l)) {
+    $l = \OC::$server->getL10N('arbeitszeitcheck');
+}
+
 // Get current page to highlight active navigation item
 $currentPage = $_SERVER['REQUEST_URI'] ?? '';
 $isTimeEntries = strpos($currentPage, '/time-entries') !== false;
@@ -20,94 +28,96 @@ $isDashboard = strpos($currentPage, '/dashboard') !== false ||
                (!$isTimeEntries && !$isAbsences && !$isReports && !$isCalendar && !$isTimeline && !$isSettings && 
                 strpos($currentPage, '/apps/arbeitszeitcheck') !== false);
 
-// Get stats for the footer (if available)
-$timeEntryCount = $_['stats']['total_time_entries'] ?? $_['stats']['totalTimeEntries'] ?? 0;
-$absenceCount = $_['stats']['total_absences'] ?? $_['stats']['totalAbsences'] ?? 0;
-
-// Ensure we have valid numbers and provide fallbacks
-$timeEntryCount = is_numeric($timeEntryCount) ? (int)$timeEntryCount : 0;
-$absenceCount = is_numeric($absenceCount) ? (int)$absenceCount : 0;
-
-// If stats are not available, show a loading indicator or default values
-if (!isset($_['stats']) || empty($_['stats'])) {
-    $timeEntryCount = '...';
-    $absenceCount = '...';
-}
+// Stats removed - they don't make sense in the sidebar
 ?>
 
-<div id="arbeitszeitcheck-navigation" role="navigation" aria-label="<?php p($l->t('Main navigation')); ?>">
+<!-- Mobile hamburger menu button -->
+<button class="nav-mobile-toggle" 
+        id="nav-mobile-toggle" 
+        aria-label="<?php p($l->t('Open navigation menu')); ?>" 
+        aria-expanded="false"
+        aria-controls="app-navigation"
+        title="<?php p($l->t('Click to open or close the navigation menu')); ?>">
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+</button>
+
+<!-- Mobile overlay background -->
+<div class="nav-mobile-overlay" id="nav-mobile-overlay" aria-hidden="true"></div>
+
+<div id="app-navigation" role="navigation" aria-label="<?php p($l->t('Main navigation')); ?>">
     <!-- Sidebar Header -->
-    <div class="arbeitszeitcheck-navigation__header">
-        <div class="arbeitszeitcheck-navigation__brand">
-            <div class="arbeitszeitcheck-navigation__icon">
+    <div class="sidebar-header">
+        <div class="app-brand">
+            <div class="app-icon">
                 <i data-lucide="clock" class="lucide-icon"></i>
             </div>
-            <div class="arbeitszeitcheck-navigation__info">
+            <div class="app-info">
                 <h3><?php p($l->t('ArbeitszeitCheck')); ?></h3>
-                <p><?php p($l->t('Time tracking and compliance')); ?></p>
             </div>
         </div>
     </div>
 
     <!-- Navigation Menu -->
-    <ul class="arbeitszeitcheck-navigation__menu">
-        <li class="<?php echo $isDashboard ? 'arbeitszeitcheck-navigation__item--active' : ''; ?>" <?php echo $isDashboard ? 'aria-current="page"' : ''; ?>>
-            <a href="<?php p($_['dashboardUrl'] ?? '/index.php/apps/arbeitszeitcheck/dashboard'); ?>" class="arbeitszeitcheck-navigation__link">
-                <i data-lucide="home" class="lucide-icon"></i>
+    <ul class="nav-menu">
+        <li class="<?php echo $isDashboard ? 'active' : ''; ?>" <?php echo $isDashboard ? 'aria-current="page"' : ''; ?>>
+            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.index')); ?>"
+               title="<?php p($l->t('Dashboard: See your current work status, today\'s hours, and recent time entries')); ?>"
+               aria-label="<?php p($l->t('Go to dashboard to see your work status and today\'s hours')); ?>">
+                <i data-lucide="home" class="lucide-icon" aria-hidden="true"></i>
                 <span><?php p($l->t('Dashboard')); ?></span>
             </a>
         </li>
-        <li class="<?php echo $isTimeEntries ? 'arbeitszeitcheck-navigation__item--active' : ''; ?>" <?php echo $isTimeEntries ? 'aria-current="page"' : ''; ?>>
-            <a href="<?php p($_['timeEntriesUrl'] ?? '/index.php/apps/arbeitszeitcheck/time-entries'); ?>" class="arbeitszeitcheck-navigation__link">
-                <i data-lucide="clock" class="lucide-icon"></i>
+        <li class="<?php echo $isTimeEntries ? 'active' : ''; ?>" <?php echo $isTimeEntries ? 'aria-current="page"' : ''; ?>>
+            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
+               title="<?php p($l->t('Time Entries: View, add, edit, or delete all your working time records')); ?>"
+               aria-label="<?php p($l->t('Go to time entries to see all your working time records')); ?>">
+                <i data-lucide="clock" class="lucide-icon" aria-hidden="true"></i>
                 <span><?php p($l->t('Time Entries')); ?></span>
             </a>
         </li>
-        <li class="<?php echo $isAbsences ? 'arbeitszeitcheck-navigation__item--active' : ''; ?>" <?php echo $isAbsences ? 'aria-current="page"' : ''; ?>>
-            <a href="<?php p($_['absencesUrl'] ?? '/index.php/apps/arbeitszeitcheck/absences'); ?>" class="arbeitszeitcheck-navigation__link">
-                <i data-lucide="calendar-off" class="lucide-icon"></i>
+        <li class="<?php echo $isAbsences ? 'active' : ''; ?>" <?php echo $isAbsences ? 'aria-current="page"' : ''; ?>>
+            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.absences')); ?>"
+               title="<?php p($l->t('Absences: Request and manage vacation days, sick leave, and other time off')); ?>"
+               aria-label="<?php p($l->t('Go to absences to request vacation or sick leave')); ?>">
+                <i data-lucide="calendar-off" class="lucide-icon" aria-hidden="true"></i>
                 <span><?php p($l->t('Absences')); ?></span>
             </a>
         </li>
-        <li class="<?php echo $isReports ? 'arbeitszeitcheck-navigation__item--active' : ''; ?>" <?php echo $isReports ? 'aria-current="page"' : ''; ?>>
-            <a href="<?php p($_['reportsUrl'] ?? '/index.php/apps/arbeitszeitcheck/reports'); ?>" class="arbeitszeitcheck-navigation__link">
-                <i data-lucide="file-text" class="lucide-icon"></i>
+        <li class="<?php echo $isReports ? 'active' : ''; ?>" <?php echo $isReports ? 'aria-current="page"' : ''; ?>>
+            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.reports')); ?>"
+               title="<?php p($l->t('Reports: Create and download reports about your working time')); ?>"
+               aria-label="<?php p($l->t('Go to reports to create and download working time reports')); ?>">
+                <i data-lucide="file-text" class="lucide-icon" aria-hidden="true"></i>
                 <span><?php p($l->t('Reports')); ?></span>
             </a>
         </li>
-        <li class="<?php echo $isCalendar ? 'arbeitszeitcheck-navigation__item--active' : ''; ?>" <?php echo $isCalendar ? 'aria-current="page"' : ''; ?>>
-            <a href="<?php p($_['calendarUrl'] ?? '/index.php/apps/arbeitszeitcheck/calendar'); ?>" class="arbeitszeitcheck-navigation__link">
+        <li class="<?php echo $isCalendar ? 'active' : ''; ?>" <?php echo $isCalendar ? 'aria-current="page"' : ''; ?>>
+            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.calendar')); ?>"
+               title="<?php p($l->t('Calendar: View your working time and absences in a calendar view')); ?>"
+               aria-label="<?php p($l->t('Go to calendar to see your working time in a calendar')); ?>">
                 <i data-lucide="calendar" class="lucide-icon"></i>
                 <span><?php p($l->t('Calendar')); ?></span>
             </a>
         </li>
-        <li class="<?php echo $isTimeline ? 'arbeitszeitcheck-navigation__item--active' : ''; ?>" <?php echo $isTimeline ? 'aria-current="page"' : ''; ?>>
-            <a href="<?php p($_['timelineUrl'] ?? '/index.php/apps/arbeitszeitcheck/timeline'); ?>" class="arbeitszeitcheck-navigation__link">
-                <i data-lucide="activity" class="lucide-icon"></i>
+        <li class="<?php echo $isTimeline ? 'active' : ''; ?>" <?php echo $isTimeline ? 'aria-current="page"' : ''; ?>>
+            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.timeline')); ?>"
+               title="<?php p($l->t('Timeline: See your working time history in chronological order')); ?>"
+               aria-label="<?php p($l->t('Go to timeline to see your working time history')); ?>">
+                <i data-lucide="activity" class="lucide-icon" aria-hidden="true"></i>
                 <span><?php p($l->t('Timeline')); ?></span>
             </a>
         </li>
-        <li class="<?php echo $isSettings ? 'arbeitszeitcheck-navigation__item--active' : ''; ?>" <?php echo $isSettings ? 'aria-current="page"' : ''; ?>>
-            <a href="<?php p($_['settingsUrl'] ?? '/index.php/apps/arbeitszeitcheck/settings'); ?>" class="arbeitszeitcheck-navigation__link">
-                <i data-lucide="settings" class="lucide-icon"></i>
+        <li class="<?php echo $isSettings ? 'active' : ''; ?>" <?php echo $isSettings ? 'aria-current="page"' : ''; ?>>
+            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
+               title="<?php p($l->t('Settings: Change your personal preferences and working time settings')); ?>"
+               aria-label="<?php p($l->t('Go to settings to change your preferences')); ?>">
+                <i data-lucide="settings" class="lucide-icon" aria-hidden="true"></i>
                 <span><?php p($l->t('Settings')); ?></span>
             </a>
         </li>
     </ul>
-
-    <!-- Sidebar Footer -->
-    <div class="arbeitszeitcheck-navigation__footer">
-        <div class="arbeitszeitcheck-navigation__stats">
-            <div class="arbeitszeitcheck-navigation__stat-item">
-                <span class="arbeitszeitcheck-navigation__stat-number"><?php p($timeEntryCount); ?></span>
-                <span class="arbeitszeitcheck-navigation__stat-label"><?php p($l->t('Entries')); ?></span>
-            </div>
-            <div class="arbeitszeitcheck-navigation__stat-item">
-                <span class="arbeitszeitcheck-navigation__stat-number"><?php p($absenceCount); ?></span>
-                <span class="arbeitszeitcheck-navigation__stat-label"><?php p($l->t('Absences')); ?></span>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Initialize Lucide Icons for Navigation -->
@@ -124,7 +134,7 @@ if (!isset($_['stats']) || empty($_['stats'])) {
     };
 
     document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('#arbeitszeitcheck-navigation [data-lucide]').forEach(function(el) {
+        document.querySelectorAll('[data-lucide]').forEach(function(el) {
             const iconName = el.getAttribute('data-lucide');
             if (arbeitszeitcheckNavSvgIcons[iconName]) {
                 el.innerHTML = arbeitszeitcheckNavSvgIcons[iconName];

@@ -22,6 +22,7 @@ use OCA\ArbeitszeitCheck\Service\NotificationService;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\DatevExportService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
+use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\Files\Event\LoadSidebar;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -96,6 +97,11 @@ class Application extends App implements IBootstrap {
 			return new \OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper(
 				$c->query(IDBConnection::class)
 			);
+		});
+
+		// Register CSPService
+		$context->registerService(CSPService::class, function($c) {
+			return new CSPService();
 		});
 
 		// Register ProjectCheckIntegrationService
@@ -188,5 +194,25 @@ class Application extends App implements IBootstrap {
 		$context->injectFn(function (INotificationManager $notificationManager) {
 			$notificationManager->registerNotifierService(Notifier::class);
 		});
+
+		// Load CSS and JS files ONLY on arbeitszeitcheck routes to avoid leaking into other apps
+		try {
+			$request = $this->getContainer()->get(\OCP\IRequest::class);
+			$path = $request->getPathInfo();
+			if (strpos($path, '/apps/arbeitszeitcheck') === 0 || strpos($path, '/index.php/apps/arbeitszeitcheck') === 0) {
+				\OCP\Util::addStyle(self::APP_ID, 'common/base');
+				\OCP\Util::addStyle(self::APP_ID, 'common/components');
+				\OCP\Util::addStyle(self::APP_ID, 'common/layout');
+				\OCP\Util::addStyle(self::APP_ID, 'common/utilities');
+				\OCP\Util::addStyle(self::APP_ID, 'navigation');
+				\OCP\Util::addStyle(self::APP_ID, 'app-vanilla');
+				\OCP\Util::addScript(self::APP_ID, 'common/utils');
+				\OCP\Util::addScript(self::APP_ID, 'common/components');
+				\OCP\Util::addScript(self::APP_ID, 'common/messaging');
+				\OCP\Util::addScript(self::APP_ID, 'common/validation');
+			}
+		} catch (\Throwable $e) {
+			// If request is unavailable, do nothing to keep other apps safe
+		}
 	}
 }

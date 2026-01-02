@@ -18,14 +18,17 @@ use OCP\Util;
 /**
  * LoadSidebarScripts
  */
-class LoadSidebarScripts implements IEventListener {
+class LoadSidebarScripts implements IEventListener
+{
 
 	/**
 	 * @inheritDoc
 	 */
-	public function handle(Event $event): void {
+	public function handle(Event $event): void
+	{
 		// Load scripts and styles when the sidebar is loaded
-		Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		// Note: Cannot use Util::addScript for ES modules in NC32
+		// Script must be loaded in template with type="module"
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
 	}
 }
