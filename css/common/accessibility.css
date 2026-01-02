@@ -1,109 +1,352 @@
 /**
- * Accessibility Styles for ArbeitszeitCheck
- * WCAG 2.1 AAA compliant
- *
+ * Accessibility Styles for ArbeitszeitCheck App
+ * 
+ * WCAG 2.1 AAA compliance styles:
+ * - Focus indicators
+ * - Screen reader utilities
+ * - Skip links
+ * - High contrast mode
+ * - Reduced motion
+ * 
  * @copyright Copyright (c) 2024, Nextcloud GmbH
  * @license AGPL-3.0-or-later
  */
 
-/* Focus Indicators - Visible and High Contrast */
-.arbeitszeitcheck-focusable:focus-visible {
-	outline: 2px solid var(--color-primary-element);
-	outline-offset: 2px;
-	border-radius: var(--border-radius);
+/* ===== FOCUS INDICATORS (WCAG 2.1 AAA requires 2px minimum) ===== */
+
+/* Focus-visible for keyboard navigation (modern browsers) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+.btn:focus-visible,
+.form-input:focus-visible,
+.form-select:focus-visible,
+.form-textarea:focus-visible,
+.nav-link:focus-visible,
+.nav-menu a:focus-visible {
+  outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
+  outline-offset: 2px;
+  /* Note: never use outline: none without replacement */
 }
 
-/* Skip to Content Link (for screen readers) */
-.arbeitszeitcheck-skip-link {
-	position: absolute;
-	top: -40px;
-	left: 0;
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	padding: 8px 16px;
-	text-decoration: none;
-	z-index: 10000;
-	border: 2px solid var(--color-primary-element);
+/* Fallback for older browsers */
+a:focus:not(:focus-visible),
+button:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible) {
+  outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
+  outline-offset: 2px;
 }
 
-.arbeitszeitcheck-skip-link:focus {
-	top: 0;
+/* Ensure focus indicators are visible in all themes */
+@media (prefers-color-scheme: dark) {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline-color: var(--arbeitszeitcheck-color-primary);
+  }
 }
 
-/* Screen Reader Only Text */
-.arbeitszeitcheck-sr-only {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
-	border-width: 0;
+/* ===== SCREEN READER UTILITIES ===== */
+
+/* Screen Reader Only (visually hidden but available to assistive tech) */
+.sr-only,
+.visually-hidden {
+  position: absolute;
+  !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border-width: 0 !important;
 }
 
-/* High Contrast Mode Support */
+/* Screen Reader Only - Focusable (visible when focused) */
+.sr-only-focusable:active,
+.sr-only-focusable:focus,
+.visually-hidden-focusable:active,
+.visually-hidden-focusable:focus {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  clip: auto !important;
+  white-space: normal !important;
+}
+
+/* ===== SKIP LINKS ===== */
+
+/* Skip link is already styled in base.css, but ensure it's accessible */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--arbeitszeitcheck-color-primary);
+  color: var(--arbeitszeitcheck-color-text-inverse);
+  padding: var(--space-2) var(--space-4);
+  text-decoration: none;
+  border-radius: var(--radius-base);
+  z-index: 10000;
+  font-weight: var(--arbeitszeitcheck-font-weight-medium);
+  transition: top 0.2s ease-in-out;
+  min-height: 44px; /* WCAG touch target size */
+  display: flex;
+  align-items: center;
+}
+
+.skip-link:focus {
+  top: 6px;
+  outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
+  outline-offset: 2px;
+}
+
+/* ===== HIGH CONTRAST MODE SUPPORT ===== */
+
 @media (prefers-contrast: high) {
-	.arbeitszeitcheck-sidebar__link {
-		border: 1px solid var(--color-main-text);
-	}
-	
-	.arbeitszeitcheck-sidebar__link--active {
-		border-width: 2px;
-	}
+  /* Increase border visibility */
+  .btn,
+  .form-input,
+  .form-select,
+  .form-textarea {
+    border-width: 2px;
+  }
+
+  /* Ensure navigation links have visible borders */
+  .nav-link,
+  .nav-menu a {
+    border: 1px solid transparent;
+  }
+
+  .nav-link:hover,
+  .nav-menu a:hover {
+    border-color: var(--arbeitszeitcheck-color-text);
+  }
+
+  .nav-link.active,
+  .nav-menu a.active,
+  [aria-current="page"] {
+    border-color: var(--arbeitszeitcheck-color-primary);
+    border-width: 2px;
+  }
+
+  /* Ensure buttons have visible borders */
+  .btn {
+    border: 2px solid var(--arbeitszeitcheck-color-text);
+  }
+
+  /* Increase focus indicator visibility */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline-width: 3px;
+    outline-offset: 3px;
+  }
 }
 
-/* Reduced Motion Support */
+/* ===== REDUCED MOTION SUPPORT ===== */
+
 @media (prefers-reduced-motion: reduce) {
-	*,
-	*::before,
-	*::after {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
-	}
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Keep essential transitions for usability */
+  .skip-link:focus {
+    transition: top 0.01ms !important;
+  }
 }
 
-/* Keyboard Navigation Enhancements */
-.arbeitszeitcheck-keyboard-nav {
-	/* Ensure all interactive elements are keyboard accessible */
+/* ===== TOUCH TARGET SIZE (WCAG 2.5.5 - minimum 44x44px) ===== */
+
+/* Ensure all interactive elements meet minimum touch target size */
+.btn,
+.nav-link,
+.nav-menu a,
+button,
+a[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  min-height: 44px;
+  min-width: 44px;
 }
 
-.arbeitszeitcheck-keyboard-nav a:focus,
-.arbeitszeitcheck-keyboard-nav button:focus,
-.arbeitszeitcheck-keyboard-nav input:focus,
-.arbeitszeitcheck-keyboard-nav select:focus,
-.arbeitszeitcheck-keyboard-nav textarea:focus {
-	outline: 2px solid var(--color-primary-element);
-	outline-offset: 2px;
+/* Small buttons still accessible but can be smaller */
+.btn--sm {
+  min-height: 36px;
+  min-width: 36px;
 }
 
-/* Touch Target Sizes (Minimum 44x44px for mobile) */
-.arbeitszeitcheck-touch-target {
-	min-height: 44px;
-	min-width: 44px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
+/* Ensure sufficient spacing between interactive elements */
+.nav-item + .nav-item,
+.nav-menu li + li {
+  margin-top: var(--space-1); /* Small gap between touch targets */
 }
 
-/* Color Contrast Utilities */
-.arbeitszeitcheck-contrast--high {
-	color: var(--color-main-text);
-	background-color: var(--color-main-background);
+/* ===== FOCUS-WITHIN FOR CONTAINERS ===== */
+
+/* Form groups with focus */
+.form-group:focus-within {
+  outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-base);
 }
 
-/* ARIA Live Regions */
-.arbeitszeitcheck-live-region {
-	position: absolute;
-	left: -10000px;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
+/* Card focus */
+.card:focus-within {
+  outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
+  outline-offset: 2px;
 }
 
-/* Focus Trap for Modals */
-.arbeitszeitcheck-focus-trap {
-	/* Focus trap implementation handled in JavaScript */
+/* ===== ARIA LIVE REGIONS ===== */
+
+/* Ensure live regions are properly styled */
+[role="status"],
+[role="alert"],
+[aria-live] {
+  /* Live regions should be visible but can be styled as needed */
+}
+
+[aria-live="polite"] {
+  /* Polite announcements - less intrusive */
+}
+
+[aria-live="assertive"] {
+  /* Assertive announcements - more prominent */
+}
+
+/* ===== LANDMARK ROLES ===== */
+
+/* Ensure landmarks are properly identified */
+[role="navigation"],
+[role="main"],
+[role="complementary"],
+[role="contentinfo"],
+[role="banner"],
+nav,
+main,
+aside,
+footer,
+header {
+  /* Landmarks should be properly styled */
+}
+
+/* ===== KEYBOARD NAVIGATION ENHANCEMENTS ===== */
+
+/* Ensure focusable elements are visible when focused */
+[tabindex="-1"]:focus {
+  outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Modal focus trap - ensure focus stays within modal */
+.modal[aria-modal="true"]:focus-within {
+  /* Modal should trap focus */
+}
+
+/* ===== COLOR CONTRAST ENHANCEMENTS ===== */
+
+/* Ensure text has sufficient contrast */
+.text-muted,
+.text-secondary {
+  /* Ensure even muted text meets contrast requirements */
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+/* Links should have sufficient contrast */
+a {
+  color: var(--arbeitszeitcheck-color-primary);
+  text-decoration: underline;
+}
+
+a:hover,
+a:focus {
+  color: var(--arbeitszeitcheck-color-primary-dark);
+  text-decoration: underline;
+}
+
+/* ===== FORM ACCESSIBILITY ===== */
+
+/* Required field indicators */
+.form-label .required,
+.form-required {
+  color: var(--arbeitszeitcheck-color-error);
+  font-weight: var(--arbeitszeitcheck-font-weight-bold);
+}
+
+/* Error states should be clearly visible */
+.form-input--error,
+.form-group--error input,
+.form-group--error select,
+.form-group--error textarea {
+  border-color: var(--arbeitszeitcheck-color-error);
+  border-width: 2px;
+}
+
+/* Error messages should be associated */
+.form-error[role="alert"] {
+  color: var(--arbeitszeitcheck-color-error);
+  font-weight: var(--arbeitszeitcheck-font-weight-medium);
+}
+
+/* ===== TABLE ACCESSIBILITY ===== */
+
+/* Ensure tables are accessible */
+table[role="table"] {
+  /* Tables should have proper structure */
+}
+
+th[scope] {
+  /* Table headers should have scope attributes */
+  font-weight: var(--arbeitszeitcheck-font-weight-bold);
+}
+
+/* ===== ICON ACCESSIBILITY ===== */
+
+/* Icon-only buttons should have proper labels */
+.icon-only,
+[aria-label] {
+  /* Icon-only buttons should have aria-label */
+}
+
+/* Decorative icons should be hidden from screen readers */
+.icon-decorative,
+[aria-hidden="true"] {
+  /* Decorative elements should be hidden */
+}
+
+/* ===== RESPONSIVE ACCESSIBILITY ===== */
+
+@media (max-width: 768px) {
+  /* Ensure touch targets remain accessible on mobile */
+  .btn,
+  .nav-link,
+  button,
+  a[role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* Increase spacing between touch targets on mobile */
+  .nav-item + .nav-item,
+  .btn + .btn {
+    margin-top: var(--space-2);
+  }
 }

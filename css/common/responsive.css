@@ -1,0 +1,379 @@
+/**
+ * Responsive Design CSS for ArbeitszeitCheck App
+ * Ensures all pages work properly on mobile devices
+ * Follows projectcheck pattern
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+/* ===== MAIN APP LAYOUT RESPONSIVE ===== */
+
+/* Desktop: Side-by-side layout */
+@media (min-width: 769px) {
+  /* Create flex container when both navigation and content exist */
+  #app,
+  .arbeitszeitcheck-app {
+    display: flex;
+    flex-direction: row;
+    min-height: 100vh;
+    height: auto;
+    overflow: visible;
+  }
+
+  /* If no #app wrapper exists, use body as flex container (with :has support) */
+  @supports selector(:has(*)) {
+    body:has(#app-navigation):has(#app-content):not(:has(#app)) {
+      display: flex;
+      flex-direction: row;
+      min-height: 100vh;
+      height: auto;
+      overflow: visible;
+    }
+  }
+
+  #app-navigation,
+  .arbeitszeitcheck-navigation-wrapper {
+    width: 280px;
+    min-width: 280px;
+    flex-shrink: 0;
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  #app-content,
+  .arbeitszeitcheck-content-wrapper {
+    min-width: 0;
+    overflow-y: scroll;
+    overflow-x: auto;
+    /* Use min-height to ensure it takes at least full viewport height */
+    min-height: 100%;
+    /* Allow height to grow with content */
+    height: auto;
+    /* Ensure content can scroll when it exceeds viewport */
+    align-self: stretch;
+    padding-bottom: 20px;
+  }
+}
+
+/* Mobile: Stacked layout with mobile menu */
+@media (max-width: 768px) {
+  #app,
+  .arbeitszeitcheck-app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* If no #app wrapper exists, use body as flex container (with :has support) */
+  @supports selector(:has(*)) {
+    body:has(#app-navigation):has(#app-content):not(:has(#app)) {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+  }
+
+  /* Navigation is hidden by default, shown via mobile menu */
+  #app-navigation,
+  .arbeitszeitcheck-navigation-wrapper {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 280px;
+    max-width: 85vw;
+    height: 100vh;
+    z-index: 2000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    box-shadow: var(--shadow-xl);
+  }
+
+  #app-navigation.mobile-open,
+  .arbeitszeitcheck-navigation-wrapper.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* Content takes full width on mobile */
+  #app-content,
+  .arbeitszeitcheck-content-wrapper {
+    width: 100%;
+    min-width: 0;
+    padding-top: calc(var(--space-4) + 44px + var(--space-2)); /* Space for mobile menu button */
+    overflow-x: hidden;
+  }
+
+  #app-content-wrapper,
+  .arbeitszeitcheck-content {
+    padding: var(--space-4);
+    max-width: 100%;
+  }
+
+  /* Prevent horizontal scrolling */
+  body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  html {
+    overflow-x: hidden;
+    width: 100%;
+  }
+}
+
+/* ===== PAGE-SPECIFIC RESPONSIVE ADJUSTMENTS ===== */
+
+@media (max-width: 768px) {
+  /* Section adjustments */
+  .section {
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-base);
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding-bottom: var(--space-3);
+  }
+
+  .section-header h2,
+  .section-header h3 {
+    font-size: var(--arbeitszeitcheck-font-size-lg);
+  }
+
+  /* Grid adjustments */
+  .arbeitszeitcheck-dashboard__grid,
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  /* Card adjustments */
+  .arbeitszeitcheck-card,
+  .card {
+    padding: var(--space-4);
+  }
+
+  /* Form adjustments */
+  .form-group {
+    margin-bottom: var(--space-3);
+  }
+
+  /* Button group adjustments */
+  .action-buttons,
+  .btn-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .action-buttons button,
+  .btn-group .btn {
+    width: 100%;
+    margin-bottom: var(--space-2);
+  }
+
+  .action-buttons button:last-child,
+  .btn-group .btn:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Header content adjustments */
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  /* Stat card adjustments */
+  .stat-card {
+    padding: var(--space-4);
+  }
+
+  /* Filter section adjustments */
+  .filter-section {
+    padding: var(--space-4);
+  }
+
+  /* Empty state adjustments */
+  .empty-state {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  /* Table adjustments - ensure horizontal scroll */
+  .table-responsive,
+  .table-container {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+    margin: 0;
+  }
+
+  .table-responsive .table,
+  .table-responsive .arbeitszeitcheck-table,
+  .table-container .table,
+  .table-container .arbeitszeitcheck-table {
+    min-width: 600px;
+  }
+
+  /* Ensure all tables are wrapped in responsive containers */
+  .table:not(.table-responsive .table):not(.table-container .table),
+  .arbeitszeitcheck-table:not(.table-responsive .arbeitszeitcheck-table):not(.table-container .arbeitszeitcheck-table) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Breadcrumb adjustments */
+  .breadcrumb {
+    flex-wrap: wrap;
+    font-size: var(--arbeitszeitcheck-font-size-sm);
+  }
+
+  /* Alert adjustments */
+  .alert {
+    padding: var(--space-3);
+    font-size: var(--arbeitszeitcheck-font-size-sm);
+  }
+
+  /* Modal adjustments - already in components.css but ensure consistency */
+  .modal-backdrop {
+    padding: var(--space-2);
+  }
+
+  /* Toast adjustments */
+  .toast {
+    max-width: calc(100vw - var(--space-8));
+    margin: var(--space-2);
+  }
+}
+
+/* ===== TABLET ADJUSTMENTS ===== */
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  #app-navigation,
+  .arbeitszeitcheck-navigation-wrapper {
+    width: 240px;
+    min-width: 240px;
+  }
+
+  #app-content-wrapper,
+  .arbeitszeitcheck-content {
+    padding: var(--space-6) var(--space-4);
+  }
+}
+
+/* ===== LANDSCAPE MOBILE ADJUSTMENTS ===== */
+
+@media (max-width: 768px) and (orientation: landscape) {
+  #app-content-wrapper,
+  .arbeitszeitcheck-content {
+    padding: var(--space-3);
+  }
+
+  .section {
+    padding: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+}
+
+/* ===== PREVENT HORIZONTAL SCROLLING ===== */
+
+@media (max-width: 768px) {
+  * {
+    max-width: 100%;
+  }
+
+  img,
+  svg,
+  video,
+  iframe {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Ensure containers don't overflow */
+  .container,
+  .container-sm,
+  .container-md,
+  .container-lg,
+  .container-xl,
+  .container-2xl {
+    width: 100%;
+    max-width: 100%;
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  /* Prevent fixed width elements from causing overflow */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* ===== TOUCH TARGET ENHANCEMENTS ===== */
+
+@media (max-width: 768px) {
+  /* Ensure all interactive elements are touch-friendly */
+  button,
+  .btn,
+  a,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Small buttons still accessible */
+  .btn--sm {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  /* Increase spacing between touch targets */
+  .action-buttons button + button,
+  .btn-group .btn + .btn {
+    margin-top: var(--space-2);
+  }
+}
+
+/* ===== PRINT RESPONSIVE ===== */
+
+@media print {
+  #app-navigation,
+  .arbeitszeitcheck-navigation-wrapper,
+  .nav-mobile-toggle,
+  .nav-mobile-overlay {
+    display: none !important;
+  }
+
+  #app-content,
+  .arbeitszeitcheck-content-wrapper {
+    width: 100%;
+    padding: 0;
+  }
+
+  #app-content-wrapper,
+  .arbeitszeitcheck-content {
+    max-width: 100%;
+    padding: 0;
+  }
+}

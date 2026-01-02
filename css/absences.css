@@ -12,19 +12,21 @@
 	position: relative;
 	display: flex;
 	flex-direction: column;
-	height: 100vh;
-	overflow-y: auto;
-	overflow-x: hidden;
+	min-height: 100%;
+	overflow-y: scroll;
+	overflow-x: auto;
+	height: auto;
+	padding-bottom: 20px;
 }
 
 #app-content-wrapper {
-	max-width: 1400px;
 	margin: 0 auto;
 	padding: var(--space-8, 2rem) var(--space-8, 2rem) var(--space-16, 4rem) var(--space-8, 2rem);
 	width: 100%;
 	display: flex;
 	flex-direction: column;
 	min-height: auto;
+	flex-shrink: 0;
 	overflow: visible;
 	background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background, var(--arbeitszeitcheck-color-background)));
 }
@@ -161,7 +163,7 @@
 	background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover, var(--arbeitszeitcheck-color-background-secondary)));
 }
 
-/* Absence Type Badge */
+/* Absence Type Badge - Compatible with all Nextcloud themes */
 .absence-type-badge {
 	display: inline-block;
 	padding: 0.25rem 0.75rem;
@@ -171,21 +173,30 @@
 	text-transform: capitalize;
 	visibility: visible;
 	opacity: 1;
+	/* Use Nextcloud standard variables */
+	background-color: var(--color-background-hover, var(--color-background-dark, #f0f0f0));
+	color: var(--color-main-text, var(--color-text, #000));
 }
 
 .absence-type-badge.type-vacation {
-	background: rgba(46, 204, 113, 0.15);
-	color: #2ecc71;
+	background-color: var(--color-success, #46ba61);
+	color: var(--color-success-text, var(--color-main-background, #ffffff));
+	/* Fallback for themes without success-text */
+	color: var(--color-success-text, var(--color-main-background, #ffffff));
 }
 
 .absence-type-badge.type-sick {
-	background: rgba(231, 76, 60, 0.15);
-	color: #e74c3c;
+	background-color: var(--color-error, #e9322d);
+	color: var(--color-error-text, var(--color-main-background, #ffffff));
+	/* Fallback for themes without error-text */
+	color: var(--color-error-text, var(--color-main-background, #ffffff));
 }
 
 .absence-type-badge.type-other {
-	background: rgba(155, 89, 182, 0.15);
-	color: #9b59b6;
+	background-color: var(--color-primary-element, var(--color-primary, #0082c9));
+	color: var(--color-primary-element-text, var(--color-primary-text, #ffffff));
+	/* Fallback for themes without primary-element-text */
+	color: var(--color-primary-element-text, var(--color-primary-text, #ffffff));
 }
 
 /* Table Cell Styles */

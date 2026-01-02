@@ -1,0 +1,253 @@
+/**
+ * Reports CSS for arbeitszeitcheck app
+ * Matches projectcheck styling
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+/* Main Content Area */
+#app-content {
+	background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background, var(--arbeitszeitcheck-color-background)));
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	min-height: 100%;
+	overflow-y: scroll;
+	overflow-x: auto;
+	height: auto;
+	padding-bottom: 20px;
+}
+
+#app-content-wrapper {
+	margin: 0 auto;
+	padding: var(--space-8, 2rem) var(--space-8, 2rem) var(--space-16, 4rem) var(--space-8, 2rem);
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	min-height: auto;
+	flex-shrink: 0;
+	overflow: visible;
+	background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background, var(--arbeitszeitcheck-color-background)));
+	/* Ensure content can expand beyond viewport - don't use flex: 1 as it constrains height */
+}
+
+/* Section Styling */
+.section {
+	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background, #fff)));
+	border-radius: var(--radius-2xl, 16px);
+	margin-bottom: var(--space-8, 2rem);
+	padding: var(--space-6, 1.5rem);
+	overflow: visible;
+	box-shadow: var(--shadow-base, 0 2px 20px rgba(0, 0, 0, 0.04));
+	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
+	position: relative;
+	height: auto;
+	visibility: visible;
+	opacity: 1;
+	display: block;
+}
+
+.page-header-section {
+	padding: 0;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	margin-bottom: var(--space-8, 2rem);
+}
+
+.page-header-section .header-content {
+	margin-bottom: var(--space-6, 1.5rem);
+}
+
+/* Report Selection Section */
+.report-selection-section {
+	padding: var(--space-4, 1rem) 0;
+	visibility: visible;
+	opacity: 1;
+	display: block;
+	width: 100%;
+}
+
+.report-selection-section h3 {
+	margin: 0 0 var(--space-6, 1.5rem) 0;
+	font-size: 1.5rem;
+	font-weight: 600;
+	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, var(--arbeitszeitcheck-color-text, #000)));
+	visibility: visible;
+	opacity: 1;
+}
+
+/* Report Types Grid */
+.report-types-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: var(--space-6, 1.5rem);
+	width: 100%;
+	visibility: visible;
+	opacity: 1;
+}
+
+/* Report Type Card */
+.report-type-card {
+	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background, #fff)));
+	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
+	border-radius: var(--radius-xl, 12px);
+	padding: var(--space-6, 1.5rem);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	transition: all 0.2s ease;
+	cursor: pointer;
+	box-shadow: var(--shadow-base, 0 2px 8px rgba(0, 0, 0, 0.04));
+	position: relative;
+	overflow: hidden;
+	visibility: visible;
+	opacity: 1;
+	box-sizing: border-box;
+	min-height: 200px;
+}
+
+.report-type-card::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 3px;
+	background: linear-gradient(90deg,
+		var(--arbeitszeitcheck-color-primary, var(--color-primary)) 0%,
+		var(--arbeitszeitcheck-color-primary-hover, var(--color-primary-hover)) 50%,
+		var(--arbeitszeitcheck-color-primary, var(--color-primary)) 100%);
+	opacity: 0;
+	transition: opacity 0.2s ease;
+}
+
+.report-type-card:hover {
+	background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover, var(--arbeitszeitcheck-color-background-secondary)));
+	border-color: var(--arbeitszeitcheck-color-primary, var(--color-primary));
+	transform: translateY(-4px);
+	box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.1));
+}
+
+.report-type-card:hover::before {
+	opacity: 1;
+}
+
+.report-type-icon {
+	font-size: 3rem;
+	margin-bottom: var(--space-4, 1rem);
+	line-height: 1;
+	display: block;
+	visibility: visible;
+	opacity: 1;
+}
+
+.report-type-card h4 {
+	margin: 0 0 var(--space-2, 0.5rem) 0;
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, var(--arbeitszeitcheck-color-text, #000)));
+	visibility: visible;
+	opacity: 1;
+}
+
+.report-type-card p {
+	margin: 0 0 var(--space-4, 1rem) 0;
+	font-size: 0.9rem;
+	color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text-tertiary, #666)));
+	line-height: 1.5;
+	flex: 1;
+	visibility: visible;
+	opacity: 1;
+}
+
+.btn-select-report {
+	background: var(--arbeitszeitcheck-color-primary, var(--color-primary, #0082c9));
+	color: var(--arbeitszeitcheck-color-primary-text, var(--color-primary-text, var(--arbeitszeitcheck-color-white, #fff)));
+	border: 1px solid var(--arbeitszeitcheck-color-primary, var(--color-primary, #0082c9));
+	border-radius: var(--radius-base, 4px);
+	padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
+	font-size: 0.9rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	min-height: 44px;
+	width: 100%;
+	margin-top: auto;
+	display: block;
+	visibility: visible;
+	opacity: 1;
+	box-sizing: border-box;
+}
+
+.btn-select-report:hover {
+	background: var(--arbeitszeitcheck-color-primary-hover, var(--color-primary-hover));
+	border-color: var(--arbeitszeitcheck-color-primary-hover, var(--color-primary-hover));
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md, 0 4px 8px rgba(0, 0, 0, 0.15));
+}
+
+/* Report Parameters Section */
+.report-parameters-section {
+	padding: var(--space-6, 1.5rem) 0;
+	border-top: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+	margin-top: var(--space-8, 2rem);
+}
+
+.report-parameters-section h3 {
+	margin: 0 0 var(--space-6, 1.5rem) 0;
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, var(--arbeitszeitcheck-color-text)));
+}
+
+/* Report Form */
+.report-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6, 1.5rem);
+}
+
+/* Report Preview Section */
+.report-preview-section {
+	padding: var(--space-6, 1.5rem) 0;
+	border-top: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+	margin-top: var(--space-8, 2rem);
+}
+
+.report-preview-section h3 {
+	margin: 0 0 var(--space-6, 1.5rem) 0;
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, var(--arbeitszeitcheck-color-text)));
+}
+
+.report-preview-content {
+	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background, #fff)));
+	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+	border-radius: var(--radius-base, 4px);
+	padding: var(--space-6, 1.5rem);
+	min-height: 200px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	#app-content-wrapper {
+		padding: var(--space-4, 1rem);
+	}
+
+	.section {
+		padding: var(--space-4, 1rem);
+	}
+
+	.report-types-grid {
+		grid-template-columns: 1fr;
+		gap: var(--space-4, 1rem);
+	}
+
+	.report-type-card {
+		padding: var(--space-4, 1rem);
+	}
+}
