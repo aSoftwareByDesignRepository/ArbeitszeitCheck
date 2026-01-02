@@ -1,0 +1,57 @@
+/**
+ * Settings CSS for arbeitszeitcheck app
+ * Matches projectcheck styling
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+#app-content {
+	background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background, var(--arbeitszeitcheck-color-background)));
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+#app-content-wrapper {
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: var(--space-8, 2rem) var(--space-8, 2rem) var(--space-16, 4rem) var(--space-8, 2rem);
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	min-height: auto;
+	overflow: visible;
+	background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background, var(--arbeitszeitcheck-color-background)));
+}
+
+/* Section Styling */
+.section {
+	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background, #fff)));
+	border-radius: var(--radius-2xl, 16px);
+	margin-bottom: var(--space-8, 2rem);
+	padding: var(--space-6, 1.5rem);
+	overflow: visible;
+	box-shadow: var(--shadow-base, 0 2px 20px rgba(0, 0, 0, 0.04));
+	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
+	position: relative;
+	height: auto;
+	visibility: visible;
+	opacity: 1;
+	display: block;
+}
+
+.page-header-section {
+	padding: 0;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	margin-bottom: var(--space-8, 2rem);
+}
+
+.page-header-section .header-content {
+	margin-bottom: var(--space-6, 1.5rem);
+}
