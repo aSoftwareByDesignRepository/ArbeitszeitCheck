@@ -1,5 +1,9 @@
 # Compliance Implementation: Real-Time Checking According to ArbZG
 
+> **Note:** This document describes the **technical implementation** of ArbZG‑related compliance checks in ArbeitszeitCheck.  
+> For a legal‑level overview and consolidated assessment see `ArbZG-Compliance-Analyse.md`.  
+> This document is **not legal advice**.
+
 ## Legal Foundations
 
 ### Working Time Act (ArbZG) - Break Requirements (§4)

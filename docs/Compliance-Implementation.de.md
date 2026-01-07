@@ -1,5 +1,9 @@
 # Compliance-Implementierung: Echtzeit-Prüfung nach ArbZG
 
+> **Hinweis:** Dieses Dokument beschreibt die **technische Umsetzung** der ArbZG‑Compliance in ArbeitszeitCheck.  
+> Für eine juristische Einordnung und eine zusammengefasste Bewertung siehe `ArbZG-Compliance-Analyse.md`.  
+> Dieses Dokument ist **keine Rechtsberatung**.
+
 ## Gesetzliche Grundlagen
 
 ### Arbeitszeitgesetz (ArbZG) - Pausenpflicht (§4)
