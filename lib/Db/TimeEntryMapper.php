@@ -415,4 +415,60 @@ class TimeEntryMapper extends QBMapper
 
 		return $this->findEntities($qb);
 	}
+
+	/**
+	 * Find time entries that overlap with the given time range for a user
+	 * Two entries overlap if they have any time in common
+	 *
+	 * @param string $userId
+	 * @param \DateTime $startTime
+	 * @param \DateTime $endTime
+	 * @param int|null $excludeId Optional entry ID to exclude from results (useful for updates)
+	 * @return TimeEntry[]
+	 */
+	public function findOverlapping(string $userId, \DateTime $startTime, \DateTime $endTime, ?int $excludeId = null): array
+	{
+		// Get all entries for the same day (or overlapping days) for this user
+		$entryDateStart = clone $startTime;
+		$entryDateStart->setTime(0, 0, 0);
+		$entryDateEnd = clone $endTime;
+		$entryDateEnd->setTime(23, 59, 59);
+		
+		// Extend date range to catch entries that might span across day boundaries
+		$entryDateStart->modify('-1 day');
+		$entryDateEnd->modify('+1 day');
+		
+		$allEntries = $this->findByUserAndDateRange($userId, $entryDateStart, $entryDateEnd);
+		
+		// Filter and check for overlaps
+		$overlapping = [];
+		$newStartTs = $startTime->getTimestamp();
+		$newEndTs = $endTime->getTimestamp();
+		
+		foreach ($allEntries as $entry) {
+			// Exclude the entry being updated if provided
+			if ($excludeId !== null && $entry->getId() === $excludeId) {
+				continue;
+			}
+			
+			// Only check completed or pending entries with end times
+			if (!in_array($entry->getStatus(), [TimeEntry::STATUS_COMPLETED, TimeEntry::STATUS_PENDING_APPROVAL])) {
+				continue;
+			}
+			
+			if (!$entry->getStartTime() || !$entry->getEndTime()) {
+				continue;
+			}
+			
+			$entryStartTs = $entry->getStartTime()->getTimestamp();
+			$entryEndTs = $entry->getEndTime()->getTimestamp();
+			
+			// Entries overlap if: new_start < entry_end AND new_end > entry_start
+			if ($newStartTs < $entryEndTs && $newEndTs > $entryStartTs) {
+				$overlapping[] = $entry;
+			}
+		}
+
+		return $overlapping;
+	}
 }

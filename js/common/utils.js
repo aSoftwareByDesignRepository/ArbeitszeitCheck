@@ -242,8 +242,36 @@ const ArbeitszeitCheckUtils = {
   // ===== DATE UTILITIES =====
 
   /**
+   * Format time in 24-hour format (HH:MM or HH:MM:SS)
+   * Always returns 24-hour format regardless of locale settings
+   * 
+   * @param {Date|string} date - Date object or date string
+   * @param {boolean} includeSeconds - Whether to include seconds in output (default: false)
+   * @returns {string} Time in 24-hour format (HH:MM or HH:MM:SS)
+   */
+  formatTime(date, includeSeconds = false) {
+    const d = new Date(date);
+    
+    // Validate date
+    if (isNaN(d.getTime())) {
+      return '00:00' + (includeSeconds ? ':00' : '');
+    }
+    
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    
+    if (includeSeconds) {
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    }
+    
+    return `${hours}:${minutes}`;
+  },
+
+  /**
    * Format date
    * Default format is DD.MM.YYYY for European users
+   * Time is always formatted in 24-hour format (HH:mm)
    */
   formatDate(date, format = 'DD.MM.YYYY') {
     const d = new Date(date);

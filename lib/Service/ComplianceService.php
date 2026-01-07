@@ -493,68 +493,98 @@ class ComplianceService
      */
     public function checkRestPeriodForStartTime(string $userId, \DateTime $startTime, ?int $excludeEntryId = null): array
     {
-        $lastCompletedEntry = $this->getLastCompletedEntry($userId);
-        if (!$lastCompletedEntry || !$lastCompletedEntry->getEndTime()) {
-            return ['valid' => true, 'message' => null]; // No previous entry to check against
-        }
-
-        // Exclude the current entry if updating (to avoid false positives)
-        if ($excludeEntryId !== null && $lastCompletedEntry->getId() === $excludeEntryId) {
-            // Find the second-to-last completed entry
-            $allEntries = $this->timeEntryMapper->findByUser($userId);
-            $lastCompletedEntry = null;
-            foreach ($allEntries as $entry) {
-                if ($entry->getId() === $excludeEntryId) {
-                    continue; // Skip the entry being updated
-                }
-                if ($entry->getStatus() === TimeEntry::STATUS_COMPLETED && $entry->getEndTime() !== null) {
-                    if ($lastCompletedEntry === null || $entry->getEndTime() > $lastCompletedEntry->getEndTime()) {
-                        $lastCompletedEntry = $entry;
-                    }
-                }
+        // Get all completed entries and find the one with the latest end time that is BEFORE the start time
+        $allEntries = $this->timeEntryMapper->findByUser($userId);
+        
+        // Find the most recent completed entry that ended BEFORE the start time
+        $lastCompletedEntry = null;
+        foreach ($allEntries as $entry) {
+            // Skip the entry being updated
+            if ($excludeEntryId !== null && $entry->getId() === $excludeEntryId) {
+                continue;
             }
             
-            if (!$lastCompletedEntry || !$lastCompletedEntry->getEndTime()) {
-                return ['valid' => true, 'message' => null]; // No other previous entry
+            // Only consider completed entries with end time
+            if ($entry->getStatus() !== TimeEntry::STATUS_COMPLETED || !$entry->getEndTime()) {
+                continue;
             }
+            
+            // Only consider entries that ended BEFORE the new start time
+            if ($entry->getEndTime() >= $startTime) {
+                continue;
+            }
+            
+            // Find the entry with the latest end time
+            if ($lastCompletedEntry === null || $entry->getEndTime() > $lastCompletedEntry->getEndTime()) {
+                $lastCompletedEntry = $entry;
+            }
+        }
+        
+        // If no previous entry found, rest period check is not applicable
+        if (!$lastCompletedEntry || !$lastCompletedEntry->getEndTime()) {
+            return ['valid' => true, 'message' => null];
         }
 
         $lastEndTime = $lastCompletedEntry->getEndTime();
         
-        // IMPORTANT: Check if it's the same day
-        // ArbZG §5 (11-hour rest period) applies between different work days, not within the same day
-        // On the same day, multiple work periods are allowed (work interruptions, not separate shifts)
-        $isSameDay = $lastEndTime->format('Y-m-d') === $startTime->format('Y-m-d');
+        // Check if it's the same day
+        $lastEndDate = $lastEndTime->format('Y-m-d');
+        $startDate = $startTime->format('Y-m-d');
         
-        if ($isSameDay) {
+        if ($lastEndDate === $startDate) {
             // Same day: No rest period check required (it's a work interruption, not a new shift)
-            // However, we still need to check if maximum daily hours would be exceeded
-            // This check is done separately in TimeEntry::validate() and TimeTrackingService::clockIn()
+            return ['valid' => true, 'message' => null];
+        }
+        
+        // Check days difference: start date - last end date
+        $lastEndDateObj = new \DateTime($lastEndDate);
+        $lastEndDateObj->setTime(0, 0, 0);
+        $startDateObj = new \DateTime($startDate);
+        $startDateObj->setTime(0, 0, 0);
+        
+        // Calculate difference in days
+        $diff = $startDateObj->diff($lastEndDateObj);
+        $daysDifference = (int)$diff->format('%r%a'); // %r for sign, %a for absolute days
+        
+        // If there's at least one full calendar day in between (difference >= 2), rest period is automatically met
+        if ($daysDifference >= 2) {
+            return ['valid' => true, 'message' => null];
+        }
+        
+        // If difference is negative (shouldn't happen since we filtered entries above)
+        if ($daysDifference < 0) {
             return ['valid' => true, 'message' => null];
         }
 
-        // Different day: Check 11-hour rest period (ArbZG §5)
+        // Consecutive days (difference = 1): Check 11-hour rest period (ArbZG §5)
         $hoursSinceLastEntry = ($startTime->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
 
-        if ($hoursSinceLastEntry < 11) {
-            $earliestStartTime = clone $lastEndTime;
-            $earliestStartTime->modify('+11 hours');
-            $hoursRemaining = ($earliestStartTime->getTimestamp() - $startTime->getTimestamp()) / 3600;
-            
-            return [
-                'valid' => false,
-                'message' => $this->l10n->t(
-                    'Minimum 11-hour rest period required between shifts (ArbZG §5). Your last shift ended at %s. This entry cannot start before %s (%.1f hours required).',
-                    [
-                        $lastEndTime->format('H:i'),
-                        $earliestStartTime->format('Y-m-d H:i'),
-                        max(0, $hoursRemaining)
-                    ]
-                )
-            ];
+        if ($hoursSinceLastEntry >= 11) {
+            // Rest period is met
+            return ['valid' => true, 'message' => null];
         }
-
-        return ['valid' => true, 'message' => null];
+        
+        // Rest period not met - calculate earliest possible start time
+        $earliestStartTime = clone $lastEndTime;
+        $earliestStartTime->modify('+11 hours');
+        $hoursStillNeeded = ($earliestStartTime->getTimestamp() - $startTime->getTimestamp()) / 3600;
+        
+        // Format dates for display
+        $lastEndDateFormatted = $lastEndTime->format('d.m.Y');
+        $earliestStartDateFormatted = $earliestStartTime->format('d.m.Y H:i');
+        
+        return [
+            'valid' => false,
+            'message' => $this->l10n->t(
+                'Minimum 11-hour rest period required between shifts (ArbZG §5). Your last shift ended on %s at %s. This entry cannot start before %s (%.1f hours required).',
+                [
+                    $lastEndDateFormatted,
+                    $lastEndTime->format('H:i'),
+                    $earliestStartDateFormatted,
+                    abs($hoursStillNeeded)
+                ]
+            )
+        ];
     }
 
     /**
@@ -596,6 +626,104 @@ class ComplianceService
         $averageWeeklyHours = $totalHours / $weeksWorked;
 
         return $averageWeeklyHours <= 48;
+    }
+
+    /**
+     * Check 6-month average daily working hours (ArbZG §3)
+     * 
+     * 10-hour days are only allowed if the 6-month average does not exceed 8 hours per day.
+     * 
+     * @param string $userId
+     * @param \DateTime $entryDate The date of the entry to check
+     * @return array Array with 'valid' (bool), 'message' (string|null), 'average' (float), 'limit' (float)
+     */
+    private function checkSixMonthAverage(string $userId, \DateTime $entryDate): array
+    {
+        $sixMonthsAgo = clone $entryDate;
+        $sixMonthsAgo->modify('-6 months');
+        
+        // Get total hours worked in the last 6 months
+        $totalHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange(
+            $userId,
+            $sixMonthsAgo,
+            $entryDate
+        );
+        
+        // Calculate number of working days (excluding weekends and holidays)
+        // For simplicity, we'll use approximate: 6 months = ~130 working days (5 days/week * 26 weeks)
+        // More accurate would be to count actual working days, but this is acceptable for a warning check
+        $approximateWorkingDays = 130;
+        
+        // Calculate average daily working hours
+        $averageDailyHours = $approximateWorkingDays > 0 ? $totalHours / $approximateWorkingDays : 0;
+        
+        $limit = 8.0; // ArbZG §3: 6-month average must not exceed 8 hours/day for 10-hour days to be allowed
+        
+        if ($averageDailyHours > $limit) {
+            return [
+                'valid' => false,
+                'message' => $this->l10n->t(
+                    'Warning: 6-month average working hours (%.2f h/day) exceeds 8 hours/day. 10-hour days are only allowed if the average does not exceed 8 hours (ArbZG §3).',
+                    [$averageDailyHours]
+                ),
+                'average' => $averageDailyHours,
+                'limit' => $limit
+            ];
+        }
+        
+        return [
+            'valid' => true,
+            'message' => null,
+            'average' => $averageDailyHours,
+            'limit' => $limit
+        ];
+    }
+
+    /**
+     * Check weekly hours average over 6 months (ArbZG §3)
+     * 
+     * Average weekly working hours over 6 months must not exceed 48 hours.
+     * 
+     * @param string $userId
+     * @param \DateTime $entryDate The date of the entry to check
+     * @return array Array with 'valid' (bool), 'message' (string|null), 'average' (float), 'limit' (float)
+     */
+    private function checkWeeklyHoursAverage(string $userId, \DateTime $entryDate): array
+    {
+        $sixMonthsAgo = clone $entryDate;
+        $sixMonthsAgo->modify('-6 months');
+        
+        // Get total hours worked in the last 6 months
+        $totalHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange(
+            $userId,
+            $sixMonthsAgo,
+            $entryDate
+        );
+        
+        // Calculate number of weeks (approximately 26 weeks in 6 months)
+        $weeks = 26;
+        $averageWeeklyHours = $weeks > 0 ? $totalHours / $weeks : 0;
+        
+        $limit = 48.0; // ArbZG §3: Average weekly hours must not exceed 48 hours over 6 months
+        
+        if ($averageWeeklyHours > $limit) {
+            return [
+                'valid' => false,
+                'message' => $this->l10n->t(
+                    'Warning: 6-month average weekly working hours (%.2f h/week) exceeds 48 hours/week (ArbZG §3).',
+                    [$averageWeeklyHours]
+                ),
+                'average' => $averageWeeklyHours,
+                'limit' => $limit
+            ];
+        }
+        
+        return [
+            'valid' => true,
+            'message' => null,
+            'average' => $averageWeeklyHours,
+            'limit' => $limit
+        ];
     }
 
     /**
@@ -897,14 +1025,17 @@ class ComplianceService
     {
         $allEntries = $this->timeEntryMapper->findByUser($userId);
         
-        // Find the most recent completed entry
+        // Find the most recent completed entry (by end time)
+        $lastCompletedEntry = null;
         foreach ($allEntries as $entry) {
             if ($entry->getStatus() === TimeEntry::STATUS_COMPLETED && $entry->getEndTime() !== null) {
-                return $entry;
+                if ($lastCompletedEntry === null || $entry->getEndTime() > $lastCompletedEntry->getEndTime()) {
+                    $lastCompletedEntry = $entry;
+                }
             }
         }
         
-        return null;
+        return $lastCompletedEntry;
     }
 
     /**

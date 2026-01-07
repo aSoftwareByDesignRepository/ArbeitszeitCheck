@@ -498,16 +498,48 @@ class TimeEntryController extends Controller
 				}
 			}
 
-			// Calculate and set automatic break if no break was entered (ArbZG §4)
+			// CRITICAL: First calculate automatic breaks (ArbZG §4)
+			// This must happen BEFORE adjusting end time, because breaks affect the working duration
 			if (!$this->timeTrackingService) {
 				try {
 					$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
 				} catch (\Throwable $e) {
-					\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available for automatic break calculation: ' . $e->getMessage());
+					\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available: ' . $e->getMessage());
 				}
 			}
-			if ($this->timeTrackingService) {
+			if ($this->timeTrackingService && $timeEntry->getEndTime() && $timeEntry->getStartTime()) {
+				// First: Calculate and set automatic break if no break was entered (ArbZG §4)
 				$this->timeTrackingService->calculateAndSetAutomaticBreak($timeEntry);
+				
+				// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
+				// This uses the correct break duration for accurate working time calculation
+				$this->timeTrackingService->adjustEndTimeForDailyMaximum($timeEntry);
+				
+				// After adjustment, breaks might need recalculation if end time changed significantly
+				// But this is rare, so we skip it to avoid infinite loops
+			}
+
+			// Check for overlapping entries before saving
+			if ($timeEntry->getStartTime() && $timeEntry->getEndTime()) {
+				$overlapping = $this->timeEntryMapper->findOverlapping(
+					$userId,
+					$timeEntry->getStartTime(),
+					$timeEntry->getEndTime()
+				);
+				
+				if (!empty($overlapping)) {
+					$overlapDetails = [];
+					foreach ($overlapping as $overlapEntry) {
+						$overlapStart = $overlapEntry->getStartTime() ? $overlapEntry->getStartTime()->format('H:i') : '?';
+						$overlapEnd = $overlapEntry->getEndTime() ? $overlapEntry->getEndTime()->format('H:i') : '?';
+						$overlapDetails[] = $overlapStart . ' - ' . $overlapEnd;
+					}
+					$overlapMessage = $this->l10n->t('This time entry overlaps with existing entries: %s', [implode(', ', $overlapDetails)]);
+					return new JSONResponse([
+						'success' => false,
+						'error' => $overlapMessage
+					], Http::STATUS_BAD_REQUEST);
+				}
 			}
 
 			// Validate entry before inserting
@@ -708,16 +740,20 @@ class TimeEntryController extends Controller
 					$entry->setBreaks(null);
 				}
 
-				// Calculate and set automatic break if no break was entered (ArbZG §4)
+				// Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
 				if (!$this->timeTrackingService) {
 					try {
 						$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
 					} catch (\Throwable $e) {
-						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available for automatic break calculation: ' . $e->getMessage());
+						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available: ' . $e->getMessage());
 					}
 				}
-				if ($this->timeTrackingService) {
+				if ($this->timeTrackingService && $entry->getEndTime() && $entry->getStartTime()) {
+					// First: Calculate and set automatic break if no break was entered (ArbZG §4)
 					$this->timeTrackingService->calculateAndSetAutomaticBreak($entry);
+					
+					// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
+					$this->timeTrackingService->adjustEndTimeForDailyMaximum($entry);
 				}
 			}
 			// Old format: date and hours (backward compatibility)
@@ -735,16 +771,20 @@ class TimeEntryController extends Controller
 					}
 				}
 
-				// Calculate and set automatic break if no break was entered (ArbZG §4)
+				// Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
 				if (!$this->timeTrackingService) {
 					try {
 						$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
 					} catch (\Throwable $e) {
-						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available for automatic break calculation: ' . $e->getMessage());
+						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available: ' . $e->getMessage());
 					}
 				}
-				if ($this->timeTrackingService) {
+				if ($this->timeTrackingService && $entry->getEndTime() && $entry->getStartTime()) {
+					// First: Calculate and set automatic break if no break was entered (ArbZG §4)
 					$this->timeTrackingService->calculateAndSetAutomaticBreak($entry);
+					
+					// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
+					$this->timeTrackingService->adjustEndTimeForDailyMaximum($entry);
 				}
 			}
 
@@ -777,16 +817,37 @@ class TimeEntryController extends Controller
 				}
 			}
 
-			// Calculate and set automatic break if no break was entered (ArbZG §4)
-			if (!$this->timeTrackingService) {
-				try {
-					$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
-				} catch (\Throwable $e) {
-					\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available for automatic break calculation: ' . $e->getMessage());
-				}
-			}
-			if ($this->timeTrackingService) {
+			// CRITICAL: First calculate automatic breaks (ArbZG §4), then adjust for daily maximum (ArbZG §3)
+			if ($this->timeTrackingService && $entry->getEndTime() && $entry->getStartTime()) {
+				// First: Calculate and set automatic break if no break was entered (ArbZG §4)
 				$this->timeTrackingService->calculateAndSetAutomaticBreak($entry);
+				
+				// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
+				$this->timeTrackingService->adjustEndTimeForDailyMaximum($entry);
+			}
+
+			// Check for overlapping entries before saving (exclude this entry from overlap check)
+			if ($entry->getStartTime() && $entry->getEndTime()) {
+				$overlapping = $this->timeEntryMapper->findOverlapping(
+					$userId,
+					$entry->getStartTime(),
+					$entry->getEndTime(),
+					$id // Exclude this entry from overlap check
+				);
+				
+				if (!empty($overlapping)) {
+					$overlapDetails = [];
+					foreach ($overlapping as $overlapEntry) {
+						$overlapStart = $overlapEntry->getStartTime() ? $overlapEntry->getStartTime()->format('H:i') : '?';
+						$overlapEnd = $overlapEntry->getEndTime() ? $overlapEntry->getEndTime()->format('H:i') : '?';
+						$overlapDetails[] = $overlapStart . ' - ' . $overlapEnd;
+					}
+					$overlapMessage = $this->l10n->t('This time entry overlaps with existing entries: %s', [implode(', ', $overlapDetails)]);
+					return new JSONResponse([
+						'success' => false,
+						'error' => $overlapMessage
+					], Http::STATUS_BAD_REQUEST);
+				}
 			}
 
 			// Validate entry (automatically adjusts end time to 10h if exceeded)
@@ -1405,6 +1466,7 @@ class TimeEntryController extends Controller
 					$timeEntry->setBreakEndTime(new \DateTime($breakEndTime));
 				}
 
+				// Set all required fields
 				$timeEntry->setDescription($description);
 				$timeEntry->setProjectCheckProjectId($project_check_project_id);
 				$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
@@ -1431,19 +1493,82 @@ class TimeEntryController extends Controller
 					}
 				}
 
-				// Calculate and set automatic break if no break was entered (ArbZG §4)
+				// Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
 				if (!$this->timeTrackingService) {
 					try {
 						$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
 					} catch (\Throwable $e) {
-						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available for automatic break calculation: ' . $e->getMessage());
+						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available: ' . $e->getMessage());
 					}
 				}
-				if ($this->timeTrackingService) {
+				if ($this->timeTrackingService && $timeEntry->getEndTime() && $timeEntry->getStartTime()) {
 					$this->timeTrackingService->calculateAndSetAutomaticBreak($timeEntry);
+					
+					// Check if adjustment is needed and possible
+					$adjusted = $this->timeTrackingService->adjustEndTimeForDailyMaximum($timeEntry);
+					
+					// If adjustment failed (max already reached), check if we need to reject
+					if (!$adjusted && $timeEntry->getIsManualEntry()) {
+						// Calculate if this would exceed the maximum
+						$startTime = $timeEntry->getStartTime();
+						$endTime = $timeEntry->getEndTime();
+						$entryDate = clone $startTime;
+						$entryDate->setTime(0, 0, 0);
+						$entryDateEnd = clone $entryDate;
+						$entryDateEnd->modify('+1 day');
+						
+						$dayEntries = $this->timeEntryMapper->findByUserAndDateRange($userId, $entryDate, $entryDateEnd);
+						$totalWorkingHoursFromPreviousEntries = 0.0;
+						foreach ($dayEntries as $dayEntry) {
+							if ($dayEntry->getStatus() === TimeEntry::STATUS_COMPLETED && $dayEntry->getEndTime() !== null) {
+								if ($dayEntry->getId() !== $timeEntry->getId()) {
+									$totalWorkingHoursFromPreviousEntries += $dayEntry->getWorkingDurationHours() ?? 0.0;
+								}
+							}
+						}
+						
+						$totalDurationSeconds = $endTime->getTimestamp() - $startTime->getTimestamp();
+						$totalDurationHours = $totalDurationSeconds / 3600;
+						$entryBreakHours = $timeEntry->getBreakDurationHours();
+						$entryWorkingHours = max(0, $totalDurationHours - $entryBreakHours);
+						$totalDailyWorkingHours = $totalWorkingHoursFromPreviousEntries + $entryWorkingHours;
+						
+						if ($totalDailyWorkingHours > 10.0) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $this->l10n->t('This time entry would exceed the maximum daily working hours of 10 hours (ArbZG §3). Total daily hours would be %s hours.', [round($totalDailyWorkingHours, 2)]),
+								'errors' => [
+									'endTime' => $this->l10n->t('Maximum daily working hours already reached')
+								]
+							], Http::STATUS_BAD_REQUEST);
+						}
+					}
 				}
 
-				// Validate entry
+				// Check for overlapping entries
+				if ($timeEntry->getStartTime() && $timeEntry->getEndTime()) {
+					$overlapping = $this->timeEntryMapper->findOverlapping(
+						$userId,
+						$timeEntry->getStartTime(),
+						$timeEntry->getEndTime()
+					);
+					
+					if (!empty($overlapping)) {
+						$overlapDetails = [];
+						foreach ($overlapping as $overlapEntry) {
+							$overlapStart = $overlapEntry->getStartTime() ? $overlapEntry->getStartTime()->format('H:i') : '?';
+							$overlapEnd = $overlapEntry->getEndTime() ? $overlapEntry->getEndTime()->format('H:i') : '?';
+							$overlapDetails[] = $overlapStart . ' - ' . $overlapEnd;
+						}
+						$overlapMessage = $this->l10n->t('This time entry overlaps with existing entries: %s', [implode(', ', $overlapDetails)]);
+						return new JSONResponse([
+							'success' => false,
+							'error' => $overlapMessage
+						], Http::STATUS_BAD_REQUEST);
+					}
+				}
+
+				// Validate entry after all adjustments
 				$errors = $timeEntry->validate();
 
 				// Additional compliance validation: check maximum working hours (ArbZG §3)

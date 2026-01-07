@@ -347,9 +347,17 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                         <?php
                                         // For active/paused entries, calculate duration manually
                                         if (!$entry->getEndTime() && $entry->getStartTime()) {
-                                            $now = new \DateTime();
                                             $sessionStart = $entry->getStartTime();
-                                            $sessionDuration = $sessionStart ? ($now->getTimestamp() - $sessionStart->getTimestamp()) : 0;
+                                            
+                                            // For paused entries, calculate duration from start to when it was paused (updatedAt)
+                                            // For active/break entries, calculate from start to now
+                                            if ($entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_PAUSED && $entry->getUpdatedAt()) {
+                                                $sessionEnd = $entry->getUpdatedAt();
+                                            } else {
+                                                $sessionEnd = new \DateTime();
+                                            }
+                                            
+                                            $sessionDuration = $sessionStart ? ($sessionEnd->getTimestamp() - $sessionStart->getTimestamp()) : 0;
 
                                             // Subtract break time
                                             $totalBreakDurationHours = $entry->getBreakDurationHours();
@@ -358,9 +366,19 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                             $sessionDuration = max(0, $sessionDuration);
 
                                             $workingHours = $sessionDuration / 3600;
+                                            
+                                            // IMPORTANT: Limit to maximum daily working hours (ArbZG §3: max 10 hours per day)
+                                            // This prevents unrealistic values for paused entries that weren't properly clocked out
+                                            $maxWorkingHours = 10.0;
+                                            $workingHours = min($workingHours, $maxWorkingHours);
+                                            
                                             p(round($workingHours, 2)); ?> h
                                         <?php } else {
-                                            p(round($entry->getWorkingDurationHours() ?? 0, 2)); ?> h
+                                            $workingHours = $entry->getWorkingDurationHours() ?? 0;
+                                            // Also limit completed entries to max for display (should already be enforced)
+                                            $maxWorkingHours = 10.0;
+                                            $workingHours = min($workingHours, $maxWorkingHours);
+                                            p(round($workingHours, 2)); ?> h
                                         <?php } ?>
                                     </td>
                                     <td>

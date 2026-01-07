@@ -82,6 +82,11 @@
                         let isOnBreak = (currentStatus === 'break');
                         let isClockedIn = (currentStatus === 'active' || currentStatus === 'break');
                         let lastStatusCheck = new Date().getTime();
+                        // Initialize working today hours from initial status (includes completed entries + current session)
+                        let workingTodayHours = 0.0;
+                        if (status.working_today_hours !== null && status.working_today_hours !== undefined) {
+                            workingTodayHours = parseFloat(status.working_today_hours) || 0.0;
+                        }
                         const STATUS_CHECK_INTERVAL = 5000; // Check status every 5 seconds
 
                         // Clear any existing timer
@@ -112,6 +117,11 @@
                                             
                                             isOnBreak = (newStatus === 'break');
                                             isClockedIn = (newStatus === 'active' || newStatus === 'break');
+                                            
+                                            // Update working today hours from backend (includes completed entries + current session)
+                                            if (response.status.working_today_hours !== null && response.status.working_today_hours !== undefined) {
+                                                workingTodayHours = parseFloat(response.status.working_today_hours) || 0.0;
+                                            }
                                             
                                             // CRITICAL: Stop timer if user clocked out or paused
                                             if (wasClockedIn && !isClockedIn) {
@@ -186,14 +196,31 @@
                             
                             // Warning for maximum working hours (ArbZG §3: max 10 hours)
                             // Show visual warning when approaching/exceeding 10 hours
-                            const workingHours = workingSeconds / 3600;
+                            // IMPORTANT: Check TOTAL daily working hours (previous entries + current session)
+                            // not just the current session hours
+                            const currentSessionHours = workingSeconds / 3600;
                             const maxWorkingHours = 10; // ArbZG §3 maximum
+                            
+                            // Calculate total daily working hours
+                            // Note: workingTodayHours from status API already includes the current session
+                            // if it's active, so we use it directly. If status check hasn't run yet,
+                            // we calculate it manually from current session hours.
+                            let totalDailyHours;
+                            if (workingTodayHours > 0) {
+                                // Use the backend value which is more accurate
+                                // It includes all completed entries + current session duration
+                                totalDailyHours = workingTodayHours;
+                            } else {
+                                // Fallback: use only current session if status hasn't been fetched yet
+                                // This is conservative and will trigger once status is fetched
+                                totalDailyHours = currentSessionHours;
+                            }
                             
                             // Remove previous warning classes
                             timerEl.classList.remove('timer-warning', 'timer-error');
                             
-                            if (workingHours >= maxWorkingHours) {
-                                // Exceeded 10 hours - show error state
+                            if (totalDailyHours >= maxWorkingHours) {
+                                // Exceeded 10 hours TOTAL for the day - show error state
                                 timerEl.classList.add('timer-error');
                                 if (sessionTimerEl) {
                                     sessionTimerEl.classList.add('timer-exceeded');
@@ -213,29 +240,25 @@
                                     // Show critical notification
                                     if (window.OC && OC.Notification) {
                                         const criticalMsg = (window.t && window.t('arbeitszeitcheck', 
-                                            'CRITICAL: Maximum working hours (10h) exceeded! Automatically clocking out to comply with German labor law (ArbZG §3).')) ||
-                                            'CRITICAL: Maximum working hours (10h) exceeded! Automatically clocking out to comply with German labor law (ArbZG §3).';
+                                            'CRITICAL: Maximum daily working hours (10h) exceeded! Automatically clocking out to comply with German labor law (ArbZG §3).')) ||
+                                            'CRITICAL: Maximum daily working hours (10h) exceeded! Automatically clocking out to comply with German labor law (ArbZG §3).';
                                         OC.Notification.showTemporary(criticalMsg, { 
                                             type: 'error', 
                                             timeout: 20000 
                                         });
                                     }
                                     
-                                    // Automatically clock out after a short delay to show the notification
+                                    // Automatically complete the entry (set endTime and mark as completed)
+                                    // Instead of just clocking out, we complete it to enforce the 10h limit
+                                    // The backend getStatus() will automatically complete entries at 10h
+                                    // So we just reload to trigger the backend check
                                     setTimeout(() => {
-                                        this.clockOut()
-                                            .then(() => {
-                                                // Reload page to show updated status
-                                                window.location.reload();
-                                            })
-                                            .catch(error => {
-                                                console.error('Error during automatic clock-out:', error);
-                                                // Still reload to show error state
-                                                window.location.reload();
-                                            });
+                                        // Reload to trigger backend automatic completion
+                                        // The backend will automatically set endTime and STATUS_COMPLETED
+                                        window.location.reload();
                                     }, 2000); // 2 second delay to show notification
                                 }
-                            } else if (workingHours >= 8) {
+                            } else if (totalDailyHours >= 8) {
                                 // Approaching 10 hours (8+ hours) - show warning state
                                 timerEl.classList.add('timer-warning');
                                 if (sessionTimerEl) {
@@ -759,28 +782,43 @@
             this.setLoadingState(true);
 
             // Make the API call
-            console.log('API Call:', { url, method, data, options });
             return fetch(url, options)
-                .then(response => {
-                    console.log('API Response:', { status: response.status, statusText: response.statusText, url: response.url });
+                .then(async response => {
                     // Check if response is JSON
                     const contentType = response.headers.get('content-type');
+                    let result;
+                    
                     if (contentType && contentType.includes('application/json')) {
-                        return response.json();
+                        result = await response.json();
                     } else {
-                        return response.text().then(text => {
-                            try {
-                                return JSON.parse(text);
-                            } catch (e) {
-                                return { success: response.ok, error: text || 'Unknown error' };
-                            }
-                        });
+                        const text = await response.text();
+                        try {
+                            result = JSON.parse(text);
+                        } catch (e) {
+                            result = { success: response.ok, error: text || 'Unknown error' };
+                        }
                     }
+                    
+                    // Check if HTTP response indicates error
+                    if (!response.ok) {
+                        // HTTP error status (400, 500, etc.)
+                        if (!result.success && result.error) {
+                            // Error message already in result
+                        } else if (!result.error) {
+                            // No error message, create one from status
+                            result.error = result.message || `HTTP ${response.status}: ${response.statusText}`;
+                        }
+                        result.success = false;
+                    }
+                    
+                    // Attach response to result for error handling
+                    result._response = response;
+                    return result;
                 })
                 .then(result => {
                     this.setLoadingState(false);
 
-                    if (result.success !== false) {
+                    if (result.success !== false && result._response?.ok !== false) {
                         // Success
                         if (reloadOnSuccess) {
                             // Small delay to show success feedback
@@ -801,32 +839,33 @@
                         // Ensure error message is a plain string (not a translation key)
                         errorMsg = String(errorMsg);
                         
-                        this.showError(errorMsg);
-                        throw new Error(errorMsg);
+                        // Create error object with response data
+                        const error = new Error(errorMsg);
+                        error.response = result;
+                        throw error;
                     }
                 })
                 .catch(error => {
                     this.setLoadingState(false);
                     
-                    // Get error message from error object
-                    let errorMsg = error.message;
-                    
-                    // If error has a response with error data, use that
-                    if (error.response && error.response.error) {
-                        errorMsg = error.response.error;
-                    } else if (error.error) {
-                        errorMsg = error.error;
+                    // If error already has response data, keep it
+                    if (!error.response) {
+                        // Try to extract error message from error object
+                        let errorMsg = error.message;
+                        
+                        if (error.error) {
+                            errorMsg = error.error;
+                        }
+                        
+                        // If still no error message, use fallback
+                        if (!errorMsg) {
+                            errorMsg = this.config.l10n?.error || 'An error occurred';
+                        }
+                        
+                        error.message = String(errorMsg);
                     }
                     
-                    // If still no error message, use fallback
-                    if (!errorMsg) {
-                        errorMsg = this.config.l10n?.error || 'An error occurred';
-                    }
-                    
-                    // Ensure error message is a plain string (not a translation key)
-                    errorMsg = String(errorMsg);
-                    
-                    this.showError(errorMsg);
+                    // Don't show error here - let the caller handle it
                     throw error;
                 });
         },
@@ -899,6 +938,7 @@
 
         /**
          * Format date for display
+         * Always uses 24-hour format for time (HH:MM)
          */
         formatDate: function(dateString, includeTime = false) {
             const date = new Date(dateString);
@@ -909,9 +949,15 @@
             const formatted = `${day}.${month}.${year}`;
             
             if (includeTime) {
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-                return `${formatted} ${hours}:${minutes}`;
+                // Use central utility function for 24-hour time format
+                const formatTime = (window.ArbeitszeitCheckUtils && window.ArbeitszeitCheckUtils.formatTime) || 
+                    ((date) => {
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        return `${hours}:${minutes}`;
+                    });
+                const timeStr = formatTime(date);
+                return `${formatted} ${timeStr}`;
             }
             return formatted;
         },
@@ -1174,12 +1220,13 @@
             const startDate = startTime ? new Date(startTime) : null;
             const endDate = endTime ? new Date(endTime) : null;
             
-            // Format time in 24-hour format (HH:MM) for German locale
-            const formatTime = (date) => {
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-                return `${hours}:${minutes}`;
-            };
+            // Format time in 24-hour format (HH:MM) using central utility function
+            const formatTime = (window.ArbeitszeitCheckUtils && window.ArbeitszeitCheckUtils.formatTime) || 
+                ((date) => {
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    return `${hours}:${minutes}`;
+                });
             
             const startTimeStr = startDate ? formatTime(startDate) : '-';
             const endTimeStr = endDate ? formatTime(endDate) : '-';
@@ -1796,12 +1843,13 @@
                         const breakHours = Math.floor(breakDuration / 3600);
                         const breakMinutes = Math.floor((breakDuration % 3600) / 60);
                         
-                        // Format time in 24-hour format (HH:MM) for German locale
-                        const formatTime = (date) => {
-                            const hours = String(date.getHours()).padStart(2, '0');
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            return `${hours}:${minutes}`;
-                        };
+                        // Format time in 24-hour format (HH:MM) using central utility function
+                        const formatTime = (window.ArbeitszeitCheckUtils && window.ArbeitszeitCheckUtils.formatTime) || 
+                            ((date) => {
+                                const hours = String(date.getHours()).padStart(2, '0');
+                                const minutes = String(date.getMinutes()).padStart(2, '0');
+                                return `${hours}:${minutes}`;
+                            });
                         const start = startTime ? formatTime(new Date(startTime)) : '-';
                         const end = endTime ? formatTime(new Date(endTime)) : '-';
                         

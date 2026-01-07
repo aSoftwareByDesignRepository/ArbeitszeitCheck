@@ -299,20 +299,40 @@ class TimeEntry extends Entity
 		}
 
 		// Validate status
-		$validStatuses = [
-			self::STATUS_ACTIVE,
-			self::STATUS_COMPLETED,
-			self::STATUS_BREAK,
-			self::STATUS_PENDING_APPROVAL,
-			self::STATUS_REJECTED
-		];
-		if (!in_array($this->status, $validStatuses)) {
-			$errors['status'] = 'Invalid status';
+		$currentStatus = $this->getStatus();
+		if ($currentStatus === null || $currentStatus === '') {
+			// Status is required
+			$errors['status'] = 'Status is required';
+		} else {
+			$validStatuses = [
+				self::STATUS_ACTIVE,
+				self::STATUS_COMPLETED,
+				self::STATUS_BREAK,
+				self::STATUS_PAUSED,
+				self::STATUS_PENDING_APPROVAL,
+				self::STATUS_REJECTED
+			];
+			if (!in_array($currentStatus, $validStatuses, true)) {
+				$errors['status'] = 'Invalid status';
+			}
 		}
 
 		// Validate end time is after start time
-		if ($this->endTime && $this->startTime && $this->endTime <= $this->startTime) {
-			$errors['endTime'] = 'End time must be after start time';
+		if ($this->endTime && $this->startTime) {
+			$startDate = $this->startTime->format('Y-m-d');
+			$endDate = $this->endTime->format('Y-m-d');
+			$timeDiff = $this->endTime->getTimestamp() - $this->startTime->getTimestamp();
+			
+			if ($endDate === $startDate) {
+				// Same day: end time must be after start time (or equal, which means 0 hours - allowed)
+				if ($timeDiff < 0) {
+					$errors['endTime'] = 'End time must be after start time';
+				}
+			} elseif ($endDate < $startDate) {
+				// End date before start date - not allowed
+				$errors['endTime'] = 'End date cannot be before start date';
+			}
+			// If end date is after start date (next day), that's allowed (night shift)
 		}
 
 		// Validate break times
@@ -372,39 +392,12 @@ class TimeEntry extends Entity
 			$errors['justification'] = 'Justification is required for manual time entries';
 		}
 
-		// Validate maximum working hours (ArbZG §3: max 10 hours per day)
-		// Check working duration (excluding breaks) - this is the actual work time
-		// AUTOMATIC LIMIT: Automatically adjust end time to exactly 10 hours if exceeded
-		if ($this->endTime && $this->startTime) {
-			$workingHours = $this->getWorkingDurationHours();
-			if ($workingHours !== null && $workingHours > 10) {
-				// Automatically adjust end time to exactly 10 hours working time
-				$maxWorkingHours = 10.0;
-				$breakDurationHours = $this->getBreakDurationHours();
-				$maxTotalHours = $maxWorkingHours + $breakDurationHours;
-				
-				// Calculate new end time
-				$startTime = clone $this->startTime;
-				$adjustedEndTime = clone $startTime;
-				$adjustedEndTime->modify('+' . round($maxTotalHours * 3600) . ' seconds');
-				
-				// Set adjusted end time
-				$this->setEndTime($adjustedEndTime);
-				
-				// Log the automatic adjustment
-				\OCP\Log\logger('arbeitszeitcheck')->info('Time entry automatically limited to 10 hours working time', [
-					'user_id' => $this->userId,
-					'original_working_hours' => round($workingHours, 2),
-					'adjusted_working_hours' => $maxWorkingHours,
-					'original_end_time' => $this->endTime ? $this->endTime->format('c') : null,
-					'adjusted_end_time' => $adjustedEndTime->format('c'),
-					'break_duration_hours' => round($breakDurationHours, 2)
-				]);
-				
-				// Note: We don't add an error here because we automatically fixed it
-				// The adjusted time entry will now be valid
-			}
-		}
+		// NOTE: Maximum daily working hours validation (ArbZG §3: max 10 hours per day) is NOT done here
+		// because this method only sees a single entry and cannot check the total daily working hours
+		// across multiple entries. The daily maximum check MUST be done in TimeTrackingService::adjustEndTimeForDailyMaximum()
+		// which has access to all entries of the day and is called BEFORE this validate() method.
+		// This ensures compliance with ArbZG §3 which requires checking the TOTAL daily working time,
+		// not just individual entries.
 
 		return $errors;
 	}

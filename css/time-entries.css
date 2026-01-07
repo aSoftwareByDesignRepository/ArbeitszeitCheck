@@ -373,3 +373,119 @@
         width: 100%;
     }
 }
+
+/* Time Input Group - Custom 24-hour format selectors */
+.time-input-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+    background-color: var(--arbeitszeitcheck-color-form-background, var(--color-main-background, #fff));
+    border: 1px solid var(--arbeitszeitcheck-color-form-border, var(--color-border, #ddd));
+    border-radius: var(--radius-base, 8px);
+    padding: var(--space-1, 0.25rem) var(--space-3, 0.75rem);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.time-input-group:focus-within {
+    border-color: var(--arbeitszeitcheck-color-form-border-focus, var(--color-primary-element, #0082c9));
+    box-shadow: 0 0 0 3px var(--arbeitszeitcheck-color-primary-light, rgba(0, 130, 201, 0.1));
+    outline: none;
+}
+
+.time-input-group .time-hour,
+.time-input-group .time-minute {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: var(--space-2, 0.5rem) var(--space-6, 1.5rem) var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    text-align: center;
+    font-family: var(--arbeitszeitcheck-font-family-mono, 'Courier New', 'Consolas', 'Monaco', monospace);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--arbeitszeitcheck-font-size-base, 1rem);
+    font-weight: var(--arbeitszeitcheck-font-weight-medium, 500);
+    color: var(--arbeitszeitcheck-color-text, var(--color-main-text, #000));
+    background-color: transparent;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right var(--space-2, 0.5rem) center;
+    background-repeat: no-repeat;
+    background-size: 1em 1em;
+    transition: background-color 0.15s ease-in-out;
+    height: auto;
+    line-height: 1.5;
+}
+
+.time-input-group .time-hour:hover,
+.time-input-group .time-minute:hover {
+    background-color: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover, #f5f5f5));
+}
+
+.time-input-group .time-hour:focus,
+.time-input-group .time-minute:focus {
+    background-color: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover, #f5f5f5));
+    outline: none;
+}
+
+.time-input-group .time-hour::-ms-expand,
+.time-input-group .time-minute::-ms-expand {
+    display: none;
+}
+
+.time-input-group .time-hour option,
+.time-input-group .time-minute option {
+    padding: var(--space-2, 0.5rem);
+    text-align: center;
+    font-family: var(--arbeitszeitcheck-font-family-mono, 'Courier New', 'Consolas', 'Monaco', monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+.time-separator {
+    font-size: var(--arbeitszeitcheck-font-size-xl, 1.25rem);
+    font-weight: var(--arbeitszeitcheck-font-weight-bold, 700);
+    color: var(--arbeitszeitcheck-color-text-secondary, var(--color-text-maxcontrast, #666));
+    margin: 0;
+    line-height: 1;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.time-input-group input[type="hidden"] {
+    display: none;
+}
+
+/* Error state for time input group */
+.time-input-group.error,
+.time-input-group.form-input--error {
+    border-color: var(--arbeitszeitcheck-color-form-border-error, var(--color-error, #e9322d));
+}
+
+.time-input-group.error:focus-within,
+.time-input-group.form-input--error:focus-within {
+    border-color: var(--arbeitszeitcheck-color-form-border-error, var(--color-error, #e9322d));
+    box-shadow: 0 0 0 3px var(--arbeitszeitcheck-color-error-light, rgba(233, 50, 45, 0.1));
+}
+
+/* Responsive adjustments for time input group */
+@media (max-width: 768px) {
+    .time-input-group {
+        gap: var(--space-1, 0.25rem);
+        padding: var(--space-1, 0.25rem) var(--space-2, 0.5rem);
+    }
+    
+    .time-input-group .time-hour,
+    .time-input-group .time-minute {
+        padding: var(--space-2, 0.5rem) var(--space-5, 1.25rem) var(--space-2, 0.5rem) var(--space-2, 0.5rem);
+        font-size: 0.95rem;
+    }
+    
+    .time-separator {
+        font-size: var(--arbeitszeitcheck-font-size-lg, 1.125rem);
+        margin: 0 var(--space-1, 0.25rem);
+    }
+}
