@@ -269,9 +269,13 @@
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
+  gap: var(--space-2, 0.5rem);
+  margin-bottom: var(--space-6, 1.5rem);
   position: relative;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
 }
 
 .form-group--horizontal {
@@ -289,7 +293,8 @@
   color: var(--arbeitszeitcheck-color-form-label);
   line-height: var(--arbeitszeitcheck-line-height-normal);
   display: block;
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2, 0.5rem);
+  margin-top: 0;
 }
 
 .form-label--required::after,
@@ -488,11 +493,12 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   flex-shrink: 0;
 }
 
-/* Break Entry Styling */
+/* Break Entry Styling - Base styles, can be overridden in page-specific CSS */
 .break-entry {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-4, 1rem);
 }
 
+.break-entry:last-child,
 .break-entry:last-of-type {
   margin-bottom: 0;
 }
@@ -612,7 +618,9 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 .setting-hint {
   font-size: var(--arbeitszeitcheck-font-size-sm);
   color: var(--arbeitszeitcheck-color-form-help);
-  margin-top: var(--space-1);
+  margin-top: var(--space-2, 0.5rem);
+  margin-bottom: 0;
+  line-height: var(--arbeitszeitcheck-line-height-relaxed, 1.6);
 }
 
 .form-group--error .form-label {

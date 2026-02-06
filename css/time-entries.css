@@ -297,6 +297,14 @@
     margin-bottom: var(--space-4, 1rem);
 }
 
+.form-grid:last-child {
+    margin-bottom: 0;
+}
+
+.form-grid .form-group {
+    margin-bottom: 0;
+}
+
 .form-grid--2 {
     grid-template-columns: repeat(2, 1fr);
 }
@@ -487,5 +495,138 @@
     .time-separator {
         font-size: var(--arbeitszeitcheck-font-size-lg, 1.125rem);
         margin: 0 var(--space-1, 0.25rem);
+    }
+}
+
+/* Break requirement indicator */
+.break-requirement-indicator {
+    margin-top: var(--space-2, 0.5rem);
+    padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    background: var(--arbeitszeitcheck-color-background-info, var(--color-background-dark, #f8f9fa));
+    border: 1px solid var(--arbeitszeitcheck-color-border-info, var(--color-border, #ddd));
+    border-radius: var(--radius-lg, 8px);
+    opacity: 0;
+    animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+.break-requirement-indicator small {
+    color: var(--arbeitszeitcheck-color-text-secondary, var(--color-text-maxcontrast, #666));
+    font-weight: var(--arbeitszeitcheck-font-weight-medium, 500);
+}
+
+/* Break entry styling - Specific to time entries page */
+.break-entry {
+    margin-bottom: var(--space-4, 1rem);
+    padding: var(--space-3, 0.75rem);
+    border-radius: var(--radius-lg, 8px);
+}
+
+.break-entry:last-child,
+.break-entry:last-of-type {
+    margin-bottom: 0;
+}
+
+/* Auto-generated break styling */
+.break-entry[data-auto-break] {
+    background: var(--arbeitszeitcheck-color-background-success-light, rgba(40, 167, 69, 0.05));
+    border: 1px solid var(--arbeitszeitcheck-color-success-light, rgba(40, 167, 69, 0.2));
+    border-radius: var(--radius-lg, 8px);
+    padding: var(--space-3, 0.75rem);
+    margin-bottom: var(--space-4, 1rem);
+}
+
+.break-entry[data-auto-break] .form-label {
+    color: var(--arbeitszeitcheck-color-success, var(--color-success, #28a745));
+}
+
+.auto-break-indicator {
+    font-style: italic;
+    opacity: 0.8;
+}
+
+.auto-break-note {
+    margin-top: var(--space-2, 0.5rem);
+    margin-bottom: 0;
+    padding-top: var(--space-2, 0.5rem);
+    color: var(--arbeitszeitcheck-color-text-secondary, var(--color-text-maxcontrast, #666));
+}
+
+.auto-break-note small {
+    font-size: 0.85em;
+}
+
+/* Auto-break toggle */
+.auto-break-toggle {
+    margin-top: var(--space-4, 1rem);
+    margin-bottom: var(--space-4, 1rem);
+    padding: var(--space-4, 1rem);
+    background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, #fff));
+    border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
+    border-radius: var(--radius-lg, 8px);
+}
+
+.auto-break-toggle .form-help {
+    margin-top: var(--space-2, 0.5rem);
+    margin-bottom: 0;
+}
+
+.form-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3, 0.75rem);
+    cursor: pointer;
+    user-select: none;
+}
+
+.form-toggle input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
+    border-radius: 24px;
+    transition: background-color 0.3s ease;
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.form-toggle input[type="checkbox"]:checked + .toggle-slider {
+    background: var(--arbeitszeitcheck-color-success, var(--color-success, #28a745));
+}
+
+.form-toggle input[type="checkbox"]:checked + .toggle-slider::before {
+    transform: translateX(20px);
+}
+
+.toggle-label {
+    font-weight: var(--arbeitszeitcheck-font-weight-medium, 500);
+    color: var(--arbeitszeitcheck-color-text-primary, var(--color-text-maxcontrast, #333));
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }

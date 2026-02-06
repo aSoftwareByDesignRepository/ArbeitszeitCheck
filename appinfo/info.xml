@@ -43,8 +43,8 @@
 	<repository>https://github.com/nextcloud/arbeitszeitcheck.git</repository>
 
 	<dependencies>
-		<!-- Compatible with Nextcloud 27, 28, 29 and future versions -->
-		<nextcloud min-version="27" max-version="29"/>
+		<!-- Compatible with Nextcloud 32, 33, 34, 35, 36 (current and future releases) -->
+		<nextcloud min-version="32" max-version="36"/>
 	</dependencies>
 
 	<optional-dependencies>

@@ -1460,10 +1460,58 @@ class TimeEntryController extends Controller
 				$timeEntry->setStartTime(new \DateTime($startTime));
 				$timeEntry->setEndTime(new \DateTime($endTime));
 
-				// Set break times if provided
-				if ($breakStartTime && $breakEndTime) {
+				// Handle breaks: prefer breaks JSON (multiple breaks) over single break fields
+				$breaksJson = $params['breaks'] ?? null;
+				if ($breaksJson) {
+					// Validate and set breaks JSON (multiple breaks)
+					$breaks = json_decode($breaksJson, true);
+					if (is_array($breaks) && !empty($breaks)) {
+						// Filter out breaks shorter than 15 minutes (ArbZG §4)
+						$validBreaks = [];
+						foreach ($breaks as $break) {
+							if (isset($break['start']) && isset($break['end'])) {
+								try {
+									$breakStart = new \DateTime($break['start']);
+									$breakEnd = new \DateTime($break['end']);
+									$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
+									$minBreakDurationSeconds = 900; // 15 minutes
+
+									// Only include breaks that are at least 15 minutes
+									if ($breakDurationSeconds >= $minBreakDurationSeconds) {
+										$validBreaks[] = [
+											'start' => $breakStart->format('c'),
+											'end' => $breakEnd->format('c')
+										];
+									}
+								} catch (\Exception $e) {
+									// Skip invalid break times
+								}
+							}
+						}
+
+						if (!empty($validBreaks)) {
+							$timeEntry->setBreaks(json_encode($validBreaks));
+							// Clear single break fields when using breaks JSON
+							$timeEntry->setBreakStartTime(null);
+							$timeEntry->setBreakEndTime(null);
+						} else {
+							// No valid breaks, clear everything
+							$timeEntry->setBreaks(null);
+							$timeEntry->setBreakStartTime(null);
+							$timeEntry->setBreakEndTime(null);
+						}
+					} else {
+						// Invalid breaks JSON, clear everything
+						$timeEntry->setBreaks(null);
+						$timeEntry->setBreakStartTime(null);
+						$timeEntry->setBreakEndTime(null);
+					}
+				} elseif ($breakStartTime && $breakEndTime) {
+					// Fallback to single break fields (backward compatibility)
 					$timeEntry->setBreakStartTime(new \DateTime($breakStartTime));
 					$timeEntry->setBreakEndTime(new \DateTime($breakEndTime));
+					// Clear breaks JSON when using single break fields
+					$timeEntry->setBreaks(null);
 				}
 
 				// Set all required fields
