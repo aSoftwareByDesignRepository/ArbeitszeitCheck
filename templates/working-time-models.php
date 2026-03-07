@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
-$l = \OC::$server->getL10N('arbeitszeitcheck');
+$l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $models = $_['models'] ?? [];
 ?>
@@ -38,16 +38,16 @@ $models = $_['models'] ?? [];
             </div>
 
             <!-- Models Table -->
-            <div class="table-container">
-                <table class="table table--hover" id="models-table">
+            <div class="table-container" role="region" aria-label="<?php p($l->t('Working time models')); ?>">
+                <table class="table table--hover" id="models-table" role="table" aria-label="<?php p($l->t('Working time models')); ?>">
                 <thead>
                     <tr>
-                        <th><?php p($l->t('Name')); ?></th>
-                        <th><?php p($l->t('Type')); ?></th>
-                        <th><?php p($l->t('Weekly Hours')); ?></th>
-                        <th><?php p($l->t('Daily Hours')); ?></th>
-                        <th><?php p($l->t('Default')); ?></th>
-                        <th><?php p($l->t('Actions')); ?></th>
+                        <th scope="col"><?php p($l->t('Name')); ?></th>
+                        <th scope="col"><?php p($l->t('Type')); ?></th>
+                        <th scope="col"><?php p($l->t('Weekly Hours')); ?></th>
+                        <th scope="col"><?php p($l->t('Daily Hours')); ?></th>
+                        <th scope="col"><?php p($l->t('Default')); ?></th>
+                        <th scope="col"><?php p($l->t('Actions')); ?></th>
                     </tr>
                 </thead>
                 <tbody id="models-tbody">

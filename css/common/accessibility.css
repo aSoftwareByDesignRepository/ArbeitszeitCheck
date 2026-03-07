@@ -12,34 +12,54 @@
  * @license AGPL-3.0-or-later
  */
 
-/* ===== FOCUS INDICATORS (WCAG 2.1 AAA requires 2px minimum) ===== */
+/* ===== FOCUS INDICATORS (WCAG 2.1 AA 2.4.7 – Focus Visible) ===== */
 
-/* Focus-visible for keyboard navigation (modern browsers) */
+/* Focus-visible for keyboard navigation (WCAG 2.1 AA 2.4.7): 2px outline, 2px offset */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-[tabindex]:focus-visible,
+[tabindex="0"]:focus-visible,
 .btn:focus-visible,
 .form-input:focus-visible,
 .form-select:focus-visible,
 .form-textarea:focus-visible,
+.form-checkbox input:focus-visible,
+.form-radio input:focus-visible,
 .nav-link:focus-visible,
-.nav-menu a:focus-visible {
-  outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
+.nav-menu a:focus-visible,
+.header__nav-link:focus-visible,
+.breadcrumb a:focus-visible,
+.btn-nav:focus-visible,
+.btn-close:focus-visible,
+.card-actions .btn:focus-visible,
+.form-actions .btn:focus-visible,
+.form-actions a:focus-visible {
+  outline: 2px solid var(--arbeitszeitcheck-color-primary);
   outline-offset: 2px;
-  /* Note: never use outline: none without replacement */
 }
 
-/* Fallback for older browsers */
+/* Remove outline on mouse click only; keyboard keeps visible focus (WCAG 2.4.7) */
 a:focus:not(:focus-visible),
 button:focus:not(:focus-visible),
 input:focus:not(:focus-visible),
 select:focus:not(:focus-visible),
 textarea:focus:not(:focus-visible) {
-  outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
-  outline-offset: 2px;
+  outline: none;
+}
+
+/* Fallback: when :focus-visible not supported, all focus gets outline so keyboard users aren't lost */
+@supports not selector(:focus-visible) {
+  a:focus,
+  button:focus,
+  input:focus,
+  select:focus,
+  textarea:focus,
+  [tabindex="0"]:focus {
+    outline: 2px solid var(--arbeitszeitcheck-color-primary);
+    outline-offset: 2px;
+  }
 }
 
 /* Ensure focus indicators are visible in all themes */
@@ -58,8 +78,7 @@ textarea:focus:not(:focus-visible) {
 /* Screen Reader Only (visually hidden but available to assistive tech) */
 .sr-only,
 .visually-hidden {
-  position: absolute;
-  !important;
+  position: absolute !important;
   width: 1px !important;
   height: 1px !important;
   padding: 0 !important;
@@ -260,24 +279,23 @@ header {
   /* Modal should trap focus */
 }
 
-/* ===== COLOR CONTRAST ENHANCEMENTS ===== */
+/* ===== COLOR CONTRAST ENHANCEMENTS (WCAG 2.1 AA) ===== */
 
-/* Ensure text has sufficient contrast */
-.text-muted,
-.text-secondary {
-  /* Ensure even muted text meets contrast requirements */
+/* Ensure text has sufficient contrast - scoped to app content only */
+#app-content-wrapper .text-muted,
+#app-content-wrapper .text-secondary {
   color: var(--arbeitszeitcheck-color-text-secondary);
 }
 
-/* Links should have sufficient contrast */
-a {
+/* Links: sufficient contrast, scoped to app so we don't override Nextcloud UI */
+#app-content-wrapper a:not(.btn) {
   color: var(--arbeitszeitcheck-color-primary);
   text-decoration: underline;
 }
 
-a:hover,
-a:focus {
-  color: var(--arbeitszeitcheck-color-primary-dark);
+#app-content-wrapper a:not(.btn):hover,
+#app-content-wrapper a:not(.btn):focus {
+  color: var(--arbeitszeitcheck-color-primary-hover);
   text-decoration: underline;
 }
 

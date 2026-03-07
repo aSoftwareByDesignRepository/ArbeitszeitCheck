@@ -11,6 +11,13 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Service;
 
+/**
+ * CSP nonce manager: Nextcloud does not expose an OCP interface for the nonce manager.
+ * We use the internal class intentionally; migrate to OCP once available.
+ *
+ * @see https://github.com/nextcloud/server/issues (IContentSecurityPolicyNonceManager)
+ */
+use OC\Security\CSP\ContentSecurityPolicyNonceManager;
 use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\TemplateResponse;
 
@@ -19,6 +26,10 @@ use OCP\AppFramework\Http\TemplateResponse;
  */
 class CSPService
 {
+	public function __construct(
+		private readonly ContentSecurityPolicyNonceManager $nonceManager,
+	) {
+	}
     /**
      * Base policy shared by all contexts.
      * 
@@ -102,7 +113,7 @@ class CSPService
     {
         // Expose nonce to templates that use inline tags
         $params = $response->getParams();
-        $params['cspNonce'] = \OC::$server->getContentSecurityPolicyNonceManager()->getNonce();
+        $params['cspNonce'] = $this->nonceManager->getNonce();
         $response->setParams($params);
 
         // Get the appropriate policy for this context

@@ -43,8 +43,8 @@ php occ app:enable arbeitszeitcheck
 
 Unterstützte Umgebungen:
 
-- **Nextcloud** 27, 28, 29 (und kommende LTS‑Versionen)  
-- **PHP** 8.1+  
+- **Nextcloud** 32, 33, 34, 35, 36  
+- **PHP** 8.1–8.4  
 - Datenbanken: MySQL/MariaDB, PostgreSQL, SQLite (für kleinere Installationen)  
 
 ### Dokumentation

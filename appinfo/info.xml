@@ -31,7 +31,7 @@
 
 	<version>1.1.1</version>
 	<licence>agpl</licence>
-	<author>Alexander Mähl</author>
+	<author mail="github@example.com" homepage="https://github.com/nextcloud/arbeitszeitcheck">Alexander Mähl</author>
 
 	<namespace>ArbeitszeitCheck</namespace>
 
@@ -52,6 +52,10 @@
 		<app min-version="2.0.0">projectcheck</app>
 	</optional-dependencies>
 
+	<screenshots>
+		<screenshot>screenshots/dashboard.png</screenshot>
+	</screenshots>
+
 	<navigations>
 		<navigation>
 			<name>ArbeitszeitCheck</name>
@@ -60,13 +64,6 @@
 			<order>15</order>
 		</navigation>
 	</navigations>
-
-	<screenshots>
-		<screenshot>screenshots/dashboard.png</screenshot>
-		<screenshot>screenshots/time-tracking.png</screenshot>
-		<screenshot>screenshots/compliance.png</screenshot>
-		<screenshot>screenshots/reports.png</screenshot>
-	</screenshots>
 
 	<keywords>
 		<keyword>time tracking</keyword>
@@ -101,8 +98,8 @@
 	</release>
 
 	<settings>
-		<admin>ArbeitszeitCheck\Settings\AdminSettings</admin>
-		<personal>ArbeitszeitCheck\Settings\PersonalSettings</personal>
+		<admin>OCA\ArbeitszeitCheck\Settings\AdminSettings</admin>
+		<personal>OCA\ArbeitszeitCheck\Settings\PersonalSettings</personal>
 	</settings>
 
 	<background-jobs>

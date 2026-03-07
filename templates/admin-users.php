@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
-$l = \OC::$server->getL10N('arbeitszeitcheck');
+$l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $users = $_['users'] ?? [];
 $total = $_['total'] ?? 0;
@@ -39,15 +39,15 @@ $total = $_['total'] ?? 0;
                 </div>
 
                 <!-- Users Table -->
-                <div class="table-responsive">
-                    <table class="table" id="users-table">
+                <div class="table-responsive" role="region" aria-label="<?php p($l->t('Employees list')); ?>">
+                    <table class="table" id="users-table" role="table" aria-label="<?php p($l->t('Employees list')); ?>">
                         <thead>
                             <tr>
-                                <th><?php p($l->t('Employee Name')); ?></th>
-                                <th><?php p($l->t('Email Address')); ?></th>
-                                <th><?php p($l->t('Work Schedule')); ?></th>
-                                <th><?php p($l->t('Status')); ?></th>
-                                <th><?php p($l->t('Actions')); ?></th>
+                                <th scope="col"><?php p($l->t('Employee Name')); ?></th>
+                                <th scope="col"><?php p($l->t('Email Address')); ?></th>
+                                <th scope="col"><?php p($l->t('Work Schedule')); ?></th>
+                                <th scope="col"><?php p($l->t('Status')); ?></th>
+                                <th scope="col"><?php p($l->t('Actions')); ?></th>
                             </tr>
                         </thead>
                         <tbody id="users-tbody">

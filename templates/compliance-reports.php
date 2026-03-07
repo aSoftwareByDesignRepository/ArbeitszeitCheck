@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
-$l = \OC::$server->getL10N('arbeitszeitcheck');
+$l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $reportData = $_['reportData'] ?? [];
 $startDate = $_['startDate'] ?? date('Y-m-d', strtotime('-30 days'));
@@ -51,12 +51,12 @@ $endDate = $_['endDate'] ?? date('Y-m-d');
                     <div class="section-header">
                         <h3><?php p($l->t('Violations by Type')); ?></h3>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table">
+                    <div class="table-responsive" role="region" aria-label="<?php p($l->t('Violations by type')); ?>">
+                        <table class="table" role="table" aria-label="<?php p($l->t('Violations by type')); ?>">
                             <thead>
                                 <tr>
-                                    <th><?php p($l->t('Type')); ?></th>
-                                    <th><?php p($l->t('Count')); ?></th>
+                                    <th scope="col"><?php p($l->t('Type')); ?></th>
+                                    <th scope="col"><?php p($l->t('Count')); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -79,19 +79,19 @@ $endDate = $_['endDate'] ?? date('Y-m-d');
                         <h3><?php p($l->t('Problems by How Serious')); ?></h3>
                         <p><?php p($l->t('See how serious the problems were')); ?></p>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table">
+                    <div class="table-responsive" role="region" aria-label="<?php p($l->t('Problems by how serious')); ?>">
+                        <table class="table" role="table" aria-label="<?php p($l->t('Problems by how serious')); ?>">
                             <thead>
                                 <tr>
-                                    <th><?php p($l->t('Severity')); ?></th>
-                                    <th><?php p($l->t('Count')); ?></th>
+                                    <th scope="col"><?php p($l->t('Severity')); ?></th>
+                                    <th scope="col"><?php p($l->t('Count')); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($reportData['by_severity'] as $severity => $count): ?>
                                     <tr>
                                         <td>
-                                            <span class="badge badge--<?php echo $severity === 'high' ? 'error' : ($severity === 'medium' ? 'warning' : 'primary'); ?>">
+                                            <span class="badge badge--<?php p($severity === 'high' ? 'error' : ($severity === 'medium' ? 'warning' : 'primary')); ?>">
                                                 <?php p($severity); ?>
                                             </span>
                                         </td>

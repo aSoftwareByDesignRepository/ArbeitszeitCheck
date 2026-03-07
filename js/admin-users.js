@@ -63,7 +63,7 @@
         if (!tbody) return;
 
         // Show loading
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'Loading…') : 'Loading…') + '</td></tr>';
 
         const url = '/apps/arbeitszeitcheck/api/admin/users' + (search ? '?search=' + encodeURIComponent(search) : '');
         
@@ -73,13 +73,13 @@
                 if (data.success && data.users) {
                     renderUsers(data.users);
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Error loading users</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'Error loading users') : 'Error loading users') + '</td></tr>';
                 }
             },
             onError: function(error) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Error loading users</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'Error loading users') : 'Error loading users') + '</td></tr>';
                 if (Messaging && Messaging.showError) {
-                    Messaging.showError('Failed to load users. Please try again.');
+                    Messaging.showError(window.t ? window.t('arbeitszeitcheck', 'Failed to load users. Please try again.') : 'Failed to load users. Please try again.');
                 }
             }
         });
@@ -93,7 +93,7 @@
         if (!tbody) return;
 
         if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">No users found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'No users found') : 'No users found') + '</td></tr>';
             return;
         }
 
@@ -219,13 +219,15 @@
                 </div>
                 <div class="form-group">
                     <label for="user-start-date" class="form-label">${startDateLabel}</label>
-                    <input type="date" id="user-start-date" name="startDate" class="form-input" 
-                           value="${user.workingTimeModelStartDate || ''}">
+                    <input type="text" id="user-start-date" name="startDate" class="form-input datepicker-input" 
+                           placeholder="dd.mm.yyyy" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10"
+                           value="${(user.workingTimeModelStartDate && convertISOToEuropean(user.workingTimeModelStartDate)) || ''}">
                 </div>
                 <div class="form-group">
                     <label for="user-end-date" class="form-label">${endDateLabel}</label>
-                    <input type="date" id="user-end-date" name="endDate" class="form-input" 
-                           value="${user.workingTimeModelEndDate || ''}">
+                    <input type="text" id="user-end-date" name="endDate" class="form-input datepicker-input" 
+                           placeholder="dd.mm.yyyy" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10"
+                           value="${(user.workingTimeModelEndDate && convertISOToEuropean(user.workingTimeModelEndDate)) || ''}">
                     <p class="form-help">Leave empty if the assignment has no end date</p>
                 </div>
                 <div class="form-actions">
@@ -251,6 +253,15 @@
 
         Components.openModal('edit-user-modal');
 
+        // Init datepickers on dynamically added inputs
+        const dp = window.ArbeitszeitCheckDatepicker;
+        if (dp && dp.initializeDatepicker) {
+            const startEl = document.getElementById('user-start-date');
+            const endEl = document.getElementById('user-end-date');
+            if (startEl) dp.initializeDatepicker(startEl, {});
+            if (endEl) dp.initializeDatepicker(endEl, {});
+        }
+
         // Handle form submission
         const form = document.getElementById('edit-user-form');
         if (form) {
@@ -272,13 +283,21 @@
     /**
      * Handle update user form submission
      */
+    function convertISOToEuropean(s) {
+        if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const p = s.split('-');
+        return p[2] + '.' + p[1] + '.' + p[0];
+    }
+
     function handleUpdateUser(form, userId) {
         const formData = new FormData(form);
+        const dp = window.ArbeitszeitCheckDatepicker;
+        const toISO = dp ? dp.convertEuropeanToISO : function(s) { return s; };
         const data = {
             workingTimeModelId: formData.get('workingTimeModelId') ? parseInt(formData.get('workingTimeModelId')) : null,
             vacationDaysPerYear: formData.get('vacationDaysPerYear') ? parseInt(formData.get('vacationDaysPerYear')) : null,
-            startDate: formData.get('startDate') || null,
-            endDate: formData.get('endDate') || null
+            startDate: toISO(formData.get('startDate') || '') || null,
+            endDate: toISO(formData.get('endDate') || '') || null
         };
 
         Utils.ajax('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model', {

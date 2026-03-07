@@ -24,7 +24,9 @@ const ArbeitszeitCheckUtils = {
   },
 
   /**
-   * Create element with attributes
+   * Create element with attributes.
+   * SECURITY: When using innerHTML, only pass pre-escaped or trusted markup.
+   * For user/API data use textContent or escapeHtml() first.
    */
   createElement(tag, attributes = {}, content = '') {
     const element = document.createElement(tag);
@@ -169,9 +171,11 @@ const ArbeitszeitCheckUtils = {
       onError = null
     } = options;
 
+    const requestToken = (typeof OC !== 'undefined' && OC.requestToken) ||
+      (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || '';
     const defaultHeaders = {
       'Content-Type': 'application/json',
-      'requesttoken': OC.requestToken
+      'requesttoken': requestToken
     };
 
     const config = {
@@ -187,12 +191,17 @@ const ArbeitszeitCheckUtils = {
       }
     }
 
-    return fetch(OC.generateUrl(url), config)
-      .then(response => {
+    return fetch(typeof OC !== 'undefined' ? OC.generateUrl(url) : url, config)
+      .then(async response => {
+        const data = await response.json().catch(() => null);
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const err = new Error(data?.error || `HTTP error! status: ${response.status}`);
+          err.error = data?.error || err.message;
+          err.status = response.status;
+          err.data = data;
+          throw err;
         }
-        return response.json();
+        return data;
       })
       .then(data => {
         if (onSuccess) {

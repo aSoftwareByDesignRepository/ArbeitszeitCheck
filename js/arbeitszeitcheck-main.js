@@ -5,6 +5,18 @@
 (function(window, OC) {
     'use strict';
 
+    /** Escape string for safe use in HTML (prevents XSS when injecting API/user data into innerHTML) */
+    function escapeHtml(text) {
+        if (text == null) return '';
+        const s = String(text);
+        if (typeof window.ArbeitszeitCheckUtils !== 'undefined' && window.ArbeitszeitCheckUtils.escapeHtml) {
+            return window.ArbeitszeitCheckUtils.escapeHtml(s);
+        }
+        const div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+    }
+
     // Main application object
     const ArbeitszeitCheck = {
         config: window.ArbeitszeitCheck || {},
@@ -19,6 +31,8 @@
                 return;
             }
             this.initialized = true;
+            // Refresh config from window (inline script may run after main script)
+            this.config = (typeof window !== 'undefined' && window.ArbeitszeitCheck) ? window.ArbeitszeitCheck : (this.config || {});
 
             const initPage = () => {
                 this.initTimer();
@@ -451,11 +465,13 @@
             const applyFilterBtn = document.getElementById('btn-apply-filter');
             if (applyFilterBtn) {
                 applyFilterBtn.addEventListener('click', () => {
-                    const startDate = document.getElementById('filter-start-date')?.value;
-                    const endDate = document.getElementById('filter-end-date')?.value;
+                    const dp = window.ArbeitszeitCheckDatepicker;
+                    const toISO = dp ? dp.convertEuropeanToISO : function (s) { return s; };
+                    const startDate = toISO(document.getElementById('filter-start-date')?.value || '');
+                    const endDate = toISO(document.getElementById('filter-end-date')?.value || '');
                     const status = document.getElementById('filter-status')?.value;
                     
-                    // Build query string
+                    // Build query string (API expects yyyy-mm-dd)
                     const params = new URLSearchParams();
                     if (startDate) params.append('start_date', startDate);
                     if (endDate) params.append('end_date', endDate);
@@ -581,6 +597,24 @@
          * Initialize absences page functionality
          */
         initAbsences: function() {
+            // Show success toast when redirected with ?created=1 or ?updated=1 (no JSON as success message)
+            const params = new URLSearchParams(window.location.search);
+            const created = params.get('created');
+            const updated = params.get('updated');
+            if (created === '1' || updated === '1') {
+                const msg = created === '1'
+                    ? (window.t && window.t('arbeitszeitcheck', 'Absence request submitted successfully')) || 'Absence request submitted successfully'
+                    : (window.t && window.t('arbeitszeitcheck', 'Absence request updated')) || 'Absence request updated';
+                if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
+                    window.OC.Notification.showTemporary(msg, { type: 'success' });
+                }
+                params.delete('created');
+                params.delete('updated');
+                const qs = params.toString();
+                const cleanUrl = window.location.pathname + (qs ? '?' + qs : '');
+                window.history.replaceState({}, '', cleanUrl);
+            }
+
             // Request Absence button
             const requestAbsenceBtn = document.getElementById('btn-request-absence');
             const requestFirstAbsenceBtn = document.getElementById('btn-request-first-absence');
@@ -600,22 +634,14 @@
                 }
             }
 
-            // Filter button - toggle filter section (if it exists)
+            // Filter button - toggle filter section (only when both exist)
             const filterBtn = document.getElementById('btn-filter');
             const filterSection = document.getElementById('filter-section');
-            
-            if (filterBtn) {
-                if (filterSection) {
-                    filterBtn.addEventListener('click', () => {
-                        const isVisible = filterSection.style.display !== 'none';
-                        filterSection.style.display = isVisible ? 'none' : 'block';
-                    });
-                } else {
-                    // Filter section doesn't exist yet, just show a message or do nothing
-                    filterBtn.addEventListener('click', () => {
-                        console.log('Filter functionality not yet implemented');
-                    });
-                }
+            if (filterBtn && filterSection) {
+                filterBtn.addEventListener('click', () => {
+                    const isVisible = filterSection.style.display !== 'none';
+                    filterSection.style.display = isVisible ? 'none' : 'block';
+                });
             }
 
             // Edit buttons in table rows (for pending absences)
@@ -744,6 +770,18 @@
         },
 
         /**
+         * Get CSRF request token (from OC.requestToken or DOM fallback)
+         * @returns {string} The request token for CSRF protection
+         */
+        getRequestToken: function() {
+            if (typeof OC !== 'undefined' && OC.requestToken) {
+                return OC.requestToken;
+            }
+            const head = document.querySelector('head');
+            return (head && head.getAttribute('data-requesttoken')) || '';
+        },
+
+        /**
          * Generic API call helper
          * @param {string} endpoint - API endpoint URL
          * @param {string} method - HTTP method (GET, POST, PUT, DELETE)
@@ -751,31 +789,33 @@
          * @param {boolean} reloadOnSuccess - Whether to reload page on success (default: true)
          */
         callApi: function(endpoint, method = 'POST', data = null, reloadOnSuccess = true) {
-            // Build full URL
-            // If endpoint already starts with /apps/, use it directly
-            // Otherwise, use OC.generateUrl to build the URL
+            // Build full URL: absolute paths (from linkToRoute) or OC.generateUrl for app-relative
             let url;
             if (endpoint.startsWith('http')) {
                 url = endpoint;
-            } else if (endpoint.startsWith('/apps/')) {
-                // Already a full path, use it directly
+            } else if (endpoint.startsWith('/')) {
+                // Absolute path from linkToRoute - use as is
                 url = endpoint;
             } else {
                 url = OC.generateUrl(endpoint);
             }
 
-            // Build request options
+            // Build request options (requesttoken required for CSRF)
+            const requestToken = this.getRequestToken();
             const options = {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
-                    'requesttoken': OC.requestToken || ''
+                    'requesttoken': requestToken
                 }
             };
 
-            // Add body for POST/PUT requests
+            // Add body for POST/PUT requests; include requesttoken in body so Nextcloud finds it in decoded JSON (post)
             if (data !== null && (method === 'POST' || method === 'PUT')) {
-                options.body = JSON.stringify(data);
+                const bodyData = typeof data === 'object' && data !== null && !Array.isArray(data)
+                    ? { ...data, requesttoken: requestToken }
+                    : data;
+                options.body = JSON.stringify(bodyData);
             }
 
             // Show loading state
@@ -1016,9 +1056,10 @@
                 const abs = Array.isArray(absences) ? absences : [];
                 this.renderTimeline(container, entries, abs);
             }).catch((error) => {
+                const errMsg = error && error.message ? escapeHtml(error.message) : (this.config.l10n?.error || 'An error occurred');
                 container.innerHTML = `
                     <div class="timeline-error">
-                        <p>${this.config.l10n?.error || 'An error occurred'}: ${error.message || 'Unknown error'}</p>
+                        <p>${escapeHtml(this.config.l10n?.error || 'An error occurred')}: ${errMsg}</p>
                     </div>
                 `;
             });
@@ -1026,14 +1067,21 @@
 
         /**
          * Fetch timeline data from API
+         * @param {string} url - Route path (e.g. from linkToRoute) or full URL if already containing protocol
+         * @param {Record<string,string>} [queryParams] - Optional query params (e.g. { start_date: '2025-01-01', end_date: '2025-01-31', limit: '500' })
          */
-        fetchTimelineData: function(url) {
-            const fullUrl = OC.generateUrl(url);
+        fetchTimelineData: function(url, queryParams) {
+            // PHP linkToRoute() returns a path like /index.php/apps/...; use as-is. Only use OC.generateUrl for paths without leading slash.
+            let fullUrl = (url.indexOf('http') === 0 || url.indexOf('//') === 0) ? url : (url.charAt(0) === '/' ? url : (typeof OC !== 'undefined' && OC.generateUrl ? OC.generateUrl(url) : url));
+            if (queryParams && Object.keys(queryParams).length > 0) {
+                const sep = fullUrl.indexOf('?') >= 0 ? '&' : '?';
+                fullUrl += sep + new URLSearchParams(queryParams).toString();
+            }
             return fetch(fullUrl, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'requesttoken': OC.requestToken || ''
+                    'requesttoken': this.getRequestToken()
                 },
                 credentials: 'same-origin'
             })
@@ -1063,7 +1111,10 @@
                 return [];
             })
             .catch(error => {
-                // Silently return empty array on error
+                // Rethrow so calendar can show error; timeline and other callers may expect array, so only rethrow when used with queryParams (calendar usage)
+                if (queryParams && Object.keys(queryParams).length > 0) {
+                    throw error;
+                }
                 return [];
             });
         },
@@ -1259,15 +1310,36 @@
                     <div class="timeline-item-icon">⏱</div>
                     <div class="timeline-item-content">
                         <div class="timeline-item-header">
-                            <span class="timeline-item-time">${startTimeStr} - ${endTimeStr}</span>
-                            <span class="timeline-item-duration">${durationStr}</span>
+                            <span class="timeline-item-time">${escapeHtml(startTimeStr)} - ${escapeHtml(endTimeStr)}</span>
+                            <span class="timeline-item-duration">${escapeHtml(durationStr)}</span>
                         </div>
                         <div class="timeline-item-status">
-                            <span class="badge badge--${status === 'completed' ? 'success' : status === 'active' ? 'primary' : 'warning'}">${statusLabel}</span>
+                            <span class="badge badge--${status === 'completed' ? 'success' : status === 'active' ? 'primary' : 'warning'}">${escapeHtml(statusLabel)}</span>
                         </div>
                     </div>
                 </div>
             `;
+        },
+
+        /**
+         * Get translated label for absence type (same keys as PHP form/tables)
+         */
+        getAbsenceTypeLabel: function(type) {
+            const key = (type || '').toLowerCase();
+            const map = {
+                vacation: 'Vacation',
+                holiday: 'Vacation',
+                sick: 'Sick Leave',
+                sick_leave: 'Sick Leave',
+                personal_leave: 'Personal Leave',
+                parental_leave: 'Parental Leave',
+                special_leave: 'Special Leave',
+                unpaid_leave: 'Unpaid Leave',
+                home_office: 'Home Office',
+                business_trip: 'Business Trip'
+            };
+            const labelKey = map[key] || 'Absence';
+            return (window.t && window.t('arbeitszeitcheck', labelKey)) || labelKey;
         },
 
         /**
@@ -1278,7 +1350,8 @@
             const endDate = absence.end_date || absence.endDate;
             const type = absence.type || 'unknown';
             const status = absence.status || 'pending';
-            
+            const translatedType = this.getAbsenceTypeLabel(type);
+
             const start = startDate ? new Date(startDate) : null;
             const end = endDate ? new Date(endDate) : null;
             
@@ -1310,43 +1383,32 @@
                 ? formatDate(start)
                 : `${formatDate(start)} - ${formatDate(end)}`;
 
-            // Translate absence type
-            let translatedType = type;
-            if (window.t && window.t('arbeitszeitcheck', type)) {
-                translatedType = window.t('arbeitszeitcheck', type);
-            } else {
-                // Fallback: try common variations
-                const typeLower = type.toLowerCase();
-                if (typeLower === 'vacation' || typeLower === 'holiday') {
-                    translatedType = (window.t && window.t('arbeitszeitcheck', 'Vacation')) || 'Vacation';
-                } else if (typeLower === 'sick' || typeLower === 'sick_leave' || typeLower === 'sick leave') {
-                    translatedType = (window.t && window.t('arbeitszeitcheck', 'Sick Leave')) || 'Sick Leave';
-                } else {
-                    // Capitalize first letter as fallback
-                    translatedType = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
-                }
-            }
-
             // Translate status
             let statusLabel = status;
             if (status === 'approved') {
                 statusLabel = this.config.l10n?.statusApproved || 'Approved';
             } else if (status === 'rejected') {
                 statusLabel = this.config.l10n?.statusRejected || 'Rejected';
+            } else if (status === 'substitute_pending') {
+                statusLabel = this.config.l10n?.statusSubstitutePending || 'Awaiting substitute approval';
+            } else if (status === 'substitute_declined') {
+                statusLabel = this.config.l10n?.statusSubstituteDeclined || 'Declined by substitute';
             } else if (status === 'pending') {
-                statusLabel = this.config.l10n?.statusPending || 'Pending';
+                statusLabel = this.config.l10n?.statusPending || 'Awaiting manager approval';
             }
+
+            const badgeClass = status === 'approved' ? 'success' : status === 'rejected' || status === 'substitute_declined' ? 'error' : 'warning';
 
             return `
                 <div class="timeline-item timeline-item--absence">
                     <div class="timeline-item-icon">📅</div>
                     <div class="timeline-item-content">
                         <div class="timeline-item-header">
-                            <span class="timeline-item-type">${translatedType}</span>
-                            <span class="timeline-item-date">${dateStr}</span>
+                            <span class="timeline-item-type">${escapeHtml(translatedType)}</span>
+                            <span class="timeline-item-date">${escapeHtml(dateStr)}</span>
                         </div>
                         <div class="timeline-item-status">
-                            <span class="badge badge--${status === 'approved' ? 'success' : status === 'rejected' ? 'error' : 'warning'}">${statusLabel}</span>
+                            <span class="badge badge--${badgeClass}">${escapeHtml(statusLabel)}</span>
                         </div>
                     </div>
                 </div>
@@ -1357,10 +1419,11 @@
          * Initialize calendar page
          */
         initCalendar: function() {
+            const monthStr = this.config.currentMonth || new Date().toISOString().slice(0, 7);
             this.calendarData = {
                 timeEntries: [],
                 absences: [],
-                currentDate: new Date(this.config.currentMonth + '-01'),
+                currentDate: new Date(monthStr + '-01'),
                 currentView: this.config.currentView || 'month'
             };
 
@@ -1390,34 +1453,83 @@
             if (closePanelBtn) {
                 closePanelBtn.addEventListener('click', () => this.closeDayDetailsPanel());
             }
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    const panel = document.getElementById('day-details-panel');
+                    if (panel && panel.style.display === 'block') {
+                        this.closeDayDetailsPanel();
+                    }
+                }
+            });
 
             // Load calendar data
             this.loadCalendarData();
         },
 
         /**
-         * Load calendar data from API
+         * Load calendar data from API for the currently displayed period (month or week)
          */
         loadCalendarData: function() {
-            const timeEntriesUrl = this.config.apiUrl?.calendar || '/apps/arbeitszeitcheck/api/time-entries';
-            const absencesUrl = this.config.apiUrl?.absences || '/apps/arbeitszeitcheck/api/absences';
+            // Use runtime config so apiUrl is set even when main script ran before calendar inline script
+            const apiUrl = (typeof window !== 'undefined' && window.ArbeitszeitCheck && window.ArbeitszeitCheck.apiUrl) || this.config.apiUrl || {};
+            const timeEntriesPath = apiUrl.calendar || '/apps/arbeitszeitcheck/api/time-entries';
+            const absencesPath = apiUrl.absences || '/apps/arbeitszeitcheck/api/absences';
+
+            const d = this.calendarData.currentDate;
+            const year = d.getFullYear();
+            const month = d.getMonth();
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const startDate = firstDay.toISOString().split('T')[0];
+            const endDate = lastDay.toISOString().split('T')[0];
+
+            const monthViewEl = document.getElementById('calendar-month-view');
+            const weekViewEl = document.getElementById('calendar-week-view');
+            const l10n = (typeof window !== 'undefined' && window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n) || this.config.l10n || {};
+            const loadingHtml = `
+                <div class="calendar-loading" role="status" aria-live="polite">
+                    <div class="loading-spinner" aria-hidden="true"></div>
+                    <p>${escapeHtml(l10n.loadingCalendar || 'Loading calendar...')}</p>
+                </div>
+            `;
+            if (this.calendarData.currentView === 'month') {
+                if (monthViewEl) {
+                    monthViewEl.innerHTML = loadingHtml;
+                    monthViewEl.style.display = '';
+                }
+                if (weekViewEl) weekViewEl.style.display = 'none';
+            } else {
+                if (weekViewEl) {
+                    weekViewEl.innerHTML = loadingHtml;
+                    weekViewEl.style.display = '';
+                }
+                if (monthViewEl) monthViewEl.style.display = 'none';
+            }
+
+            const timeEntriesParams = { start_date: startDate, end_date: endDate, limit: '500' };
+            const absencesParams = { limit: '500' };
 
             Promise.all([
-                this.fetchTimelineData(timeEntriesUrl),
-                this.fetchTimelineData(absencesUrl)
+                this.fetchTimelineData(timeEntriesPath, timeEntriesParams),
+                this.fetchTimelineData(absencesPath, absencesParams)
             ]).then(([timeEntries, absences]) => {
-                this.calendarData.timeEntries = timeEntries || [];
-                this.calendarData.absences = absences || [];
+                this.calendarData.timeEntries = Array.isArray(timeEntries) ? timeEntries : [];
+                this.calendarData.absences = Array.isArray(absences) ? absences : [];
                 this.renderCalendar();
             }).catch((error) => {
                 const container = document.getElementById('calendar-month-view');
                 if (container) {
+                    const l10n = (typeof window !== 'undefined' && window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n) || this.config.l10n || {};
+                    const errMsg = error && error.message ? escapeHtml(error.message) : '';
                     container.innerHTML = `
-                        <div class="calendar-error">
-                            <p>${this.config.l10n?.error || 'An error occurred'}: ${error.message}</p>
+                        <div class="calendar-error" role="alert">
+                            <p>${escapeHtml(l10n.error || 'An error occurred')}${errMsg ? ': ' + errMsg : ''}</p>
                         </div>
                     `;
+                    container.style.display = '';
                 }
+                const weekContainer = document.getElementById('calendar-week-view');
+                if (weekContainer) weekContainer.style.display = 'none';
             });
         },
 
@@ -1510,38 +1622,31 @@
                     }
                     
                     // Add status indicator
-                    if (status === 'pending') {
+                    if (status === 'pending' || status === 'substitute_pending') {
                         absenceIndicator += ' ⏳';
                     } else if (status === 'approved') {
                         absenceIndicator += ' ✓';
-                    } else if (status === 'rejected') {
+                    } else if (status === 'rejected' || status === 'substitute_declined') {
                         absenceIndicator += ' ✗';
                     }
                     
-                    // Get absence type label for tooltip
-                    let typeLabel = type;
-                    if (window.t && window.t('arbeitszeitcheck', type)) {
-                        typeLabel = window.t('arbeitszeitcheck', type);
-                    } else if (type === 'vacation' || type === 'holiday') {
-                        typeLabel = (window.t && window.t('arbeitszeitcheck', 'Vacation')) || 'Vacation';
-                    } else if (type === 'sick' || type === 'sick_leave') {
-                        typeLabel = (window.t && window.t('arbeitszeitcheck', 'Sick Leave')) || 'Sick Leave';
-                    }
-                    dayContent += `<div class="calendar-day-absence" title="${typeLabel}">${absenceIndicator}</div>`;
+                    const typeLabel = this.getAbsenceTypeLabel(type);
+                    dayContent += `<div class="calendar-day-absence" title="${escapeHtml(typeLabel)}">${absenceIndicator}</div>`;
                 }
                 
                 // Show entry count if multiple entries
                 if (dayData.entries.length > 1) {
                     dayContent += `<div class="calendar-day-entry-count" title="${dayData.entries.length} ${this.config.l10n?.timeEntries || 'entries'}">${dayData.entries.length}×</div>`;
                 }
-                
-                html += `<div class="${classes.join(' ')}" data-date="${dateKey}">${dayContent}</div>`;
+                const dayAriaLabel = this.getDayCellAriaLabel(dateKey, dayData);
+                html += `<div class="${classes.join(' ')}" data-date="${dateKey}" role="button" tabindex="0" aria-label="${escapeHtml(dayAriaLabel)}">${dayContent}</div>`;
             }
 
             html += '</div></div>';
 
-            // Add month summary
+            // Add month summary and optional empty state
             const monthSummary = this.calculateMonthSummary(year, month);
+            const isEmptyMonth = monthSummary.totalHours === 0 && monthSummary.absenceDays === 0;
             html += `
                 <div class="calendar-month-summary">
                     <div class="summary-item">
@@ -1557,15 +1662,23 @@
                         <span class="summary-value">${monthSummary.absenceDays}</span>
                     </div>
                 </div>
+                ${isEmptyMonth ? `<p class="calendar-empty-hint" role="status">${escapeHtml(this.config.l10n?.noEntriesThisMonth || 'No time entries or absences for this month.')}</p>` : ''}
             `;
 
             container.innerHTML = html;
 
-            // Add click handlers to days
+            // Add click and keyboard handlers to days
             container.querySelectorAll('.calendar-day[data-date]').forEach(dayEl => {
-                dayEl.addEventListener('click', () => {
+                const openDay = () => {
                     const date = dayEl.dataset.date;
-                    this.showDayDetails(date);
+                    if (date) this.showDayDetails(date);
+                };
+                dayEl.addEventListener('click', openDay);
+                dayEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openDay();
+                    }
                 });
             });
         },
@@ -1638,11 +1751,23 @@
             html += '</div>';
             container.innerHTML = html;
 
-            // Add click handlers
+            // Add click and keyboard handlers
             container.querySelectorAll('.calendar-week-day[data-date]').forEach(dayEl => {
-                dayEl.addEventListener('click', () => {
+                const openDay = () => {
                     const date = dayEl.dataset.date;
-                    this.showDayDetails(date);
+                    if (date) this.showDayDetails(date);
+                };
+                dayEl.setAttribute('role', 'button');
+                dayEl.setAttribute('tabindex', '0');
+                const dateKey = dayEl.dataset.date;
+                const dayData = this.getDayData(dateKey);
+                dayEl.setAttribute('aria-label', this.getDayCellAriaLabel(dateKey, dayData));
+                dayEl.addEventListener('click', openDay);
+                dayEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openDay();
+                    }
                 });
             });
         },
@@ -1675,11 +1800,17 @@
                 return dateKey >= start && dateKey <= end;
             });
 
-            // Calculate total hours
+            // Calculate total hours (API returns workingDurationHours/durationHours in hours; legacy duration/working_duration in seconds)
             let totalHours = 0;
             dayEntries.forEach(entry => {
-                const duration = entry.duration || entry.working_duration || 0;
-                totalHours += duration / 3600;
+                if (entry.workingDurationHours != null && !isNaN(entry.workingDurationHours)) {
+                    totalHours += Number(entry.workingDurationHours);
+                } else if (entry.durationHours != null && !isNaN(entry.durationHours)) {
+                    totalHours += Number(entry.durationHours);
+                } else {
+                    const sec = entry.duration || entry.working_duration || 0;
+                    totalHours += Number(sec) / 3600;
+                }
             });
 
             return {
@@ -1695,7 +1826,27 @@
         },
 
         /**
-         * Navigate calendar (prev/next month or week)
+         * Build accessible label for a day cell (for aria-label)
+         */
+        getDayCellAriaLabel: function(dateKey, dayData) {
+            const d = new Date(dateKey);
+            const day = d.getDate();
+            const months = this.config.l10n?.months || [];
+            const monthName = months[d.getMonth()] || (d.getMonth() + 1);
+            const year = d.getFullYear();
+            let label = `${day} ${monthName} ${year}`;
+            if (dayData.isToday) label += ', ' + (this.config.l10n?.today || 'Today');
+            if (dayData.hours > 0) label += ', ' + dayData.hours.toFixed(1) + ' ' + (this.config.l10n?.hours || 'hours');
+            if (dayData.hasAbsence && dayData.absences.length > 0) {
+                const typeLabel = this.getAbsenceTypeLabel(dayData.absences[0].type || 'absence');
+                label += ', ' + typeLabel;
+            }
+            label += '. ' + (this.config.l10n?.clickForDetails || 'Click for details');
+            return label;
+        },
+
+        /**
+         * Navigate calendar (prev/next month or week). Reloads data for the new period.
          */
         navigateCalendar: function(direction) {
             const currentDate = new Date(this.calendarData.currentDate);
@@ -1705,25 +1856,15 @@
                 currentDate.setDate(currentDate.getDate() + (direction * 7));
             }
             this.calendarData.currentDate = currentDate;
-            this.renderCalendar();
+            this.loadCalendarData();
         },
 
         /**
-         * Go to today - navigate to current month/week and highlight today
+         * Go to today - navigate to current month/week and reload data for that month
          */
         goToToday: function() {
-            const today = new Date();
-            this.calendarData.currentDate = today;
-            
-            // Update URL to reflect current month and reload to sync with backend
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const monthKey = `${year}-${month}`;
-            
-            // Reload page with current month parameter to sync with backend
-            const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.set('month', monthKey);
-            window.location.href = currentUrl.toString();
+            this.calendarData.currentDate = new Date();
+            this.loadCalendarData();
         },
 
         /**
@@ -1740,13 +1881,25 @@
             if (view === 'month') {
                 if (monthView) monthView.style.display = 'block';
                 if (weekView) weekView.style.display = 'none';
-                if (monthBtn) monthBtn.classList.add('active');
-                if (weekBtn) weekBtn.classList.remove('active');
+                if (monthBtn) {
+                    monthBtn.classList.add('active');
+                    monthBtn.setAttribute('aria-pressed', 'true');
+                }
+                if (weekBtn) {
+                    weekBtn.classList.remove('active');
+                    weekBtn.setAttribute('aria-pressed', 'false');
+                }
             } else {
                 if (monthView) monthView.style.display = 'none';
                 if (weekView) weekView.style.display = 'block';
-                if (monthBtn) monthBtn.classList.remove('active');
-                if (weekBtn) weekBtn.classList.add('active');
+                if (monthBtn) {
+                    monthBtn.classList.remove('active');
+                    monthBtn.setAttribute('aria-pressed', 'false');
+                }
+                if (weekBtn) {
+                    weekBtn.classList.add('active');
+                    weekBtn.setAttribute('aria-pressed', 'true');
+                }
             }
 
             this.renderCalendar();
@@ -1836,10 +1989,12 @@
                     dayData.entries.forEach(entry => {
                         const startTime = entry.start_time || entry.startTime;
                         const endTime = entry.end_time || entry.endTime;
-                        const duration = entry.duration || entry.working_duration || 0;
-                        const breakDuration = entry.break_duration || 0;
-                        const hours = Math.floor(duration / 3600);
-                        const minutes = Math.floor((duration % 3600) / 60);
+                        const durationSec = (entry.workingDurationHours != null ? Number(entry.workingDurationHours) * 3600 : null)
+                            || (entry.durationHours != null ? Number(entry.durationHours) * 3600 : null)
+                            || entry.duration || entry.working_duration || 0;
+                        const breakDuration = entry.breakDurationHours != null ? Number(entry.breakDurationHours) * 3600 : (entry.break_duration || 0);
+                        const hours = Math.floor(durationSec / 3600);
+                        const minutes = Math.floor((durationSec % 3600) / 60);
                         const breakHours = Math.floor(breakDuration / 3600);
                         const breakMinutes = Math.floor((breakDuration % 3600) / 60);
                         
@@ -1867,24 +2022,8 @@
                     const absencesLabel = this.config.l10n?.absences || 'Absences';
                     html += `<div class="day-details-section"><h4>${absencesLabel}</h4><ul>`;
                     dayData.absences.forEach(absence => {
-                        const type = absence.type || 'absence';
-                        // Translate common absence types
-                        let translatedType = type;
-                        if (window.t && window.t('arbeitszeitcheck', type)) {
-                            translatedType = window.t('arbeitszeitcheck', type);
-                        } else {
-                            // Fallback: try common variations
-                            const typeLower = type.toLowerCase();
-                            if (typeLower === 'vacation' || typeLower === 'holiday') {
-                                translatedType = (window.t && window.t('arbeitszeitcheck', 'Vacation')) || 'Vacation';
-                            } else if (typeLower === 'sick' || typeLower === 'sick_leave' || typeLower === 'sick leave') {
-                                translatedType = (window.t && window.t('arbeitszeitcheck', 'Sick Leave')) || 'Sick Leave';
-                            } else {
-                                // Capitalize first letter as fallback
-                                translatedType = type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
-                            }
-                        }
-                        html += `<li>${translatedType}</li>`;
+                        const translatedType = this.getAbsenceTypeLabel(absence.type || 'absence');
+                        html += `<li>${escapeHtml(translatedType)}</li>`;
                     });
                     html += '</ul></div>';
                 }

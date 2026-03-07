@@ -18,16 +18,20 @@ use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
+use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
+use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
+use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IGroup;
-use OCP\IGroupManager;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
+use OCP\IL10N;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -53,14 +57,23 @@ class ManagerControllerTest extends TestCase
 	/** @var IUserSession|\PHPUnit\Framework\MockObject\MockObject */
 	private $userSession;
 
-	/** @var IGroupManager|\PHPUnit\Framework\MockObject\MockObject */
-	private $groupManager;
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
 
 	/** @var IUserManager|\PHPUnit\Framework\MockObject\MockObject */
 	private $userManager;
 
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
+
+	/** @var TeamResolverService|\PHPUnit\Framework\MockObject\MockObject */
+	private $teamResolver;
+
+	/** @var CSPService|\PHPUnit\Framework\MockObject\MockObject */
+	private $cspService;
+
+	/** @var IL10N|\PHPUnit\Framework\MockObject\MockObject */
+	private $l10n;
 
 	protected function setUp(): void
 	{
@@ -70,9 +83,14 @@ class ManagerControllerTest extends TestCase
 		$this->timeTrackingService = $this->createMock(TimeTrackingService::class);
 		$this->complianceService = $this->createMock(ComplianceService::class);
 		$this->absenceMapper = $this->createMock(AbsenceMapper::class);
+		$this->teamResolver = $this->createMock(TeamResolverService::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->userSession = $this->createMock(IUserSession::class);
-		$this->groupManager = $this->createMock(IGroupManager::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->cspService = $this->createMock(CSPService::class);
+		$this->cspService->method('applyPolicyWithNonce')->willReturnCallback(static fn ($response) => $response);
+		$this->l10n = $this->createMock(IL10N::class);
+		$this->l10n->method('t')->willReturnCallback(fn ($s) => $s);
 		$this->request = $this->createMock(IRequest::class);
 
 		$this->controller = new ManagerController(
@@ -82,22 +100,52 @@ class ManagerControllerTest extends TestCase
 			$this->timeTrackingService,
 			$this->complianceService,
 			$this->absenceMapper,
+			$this->teamResolver,
+			$this->permissionService,
 			$this->userSession,
-			$this->groupManager,
-			$this->userManager
+			$this->userManager,
+			$this->cspService,
+			$this->l10n
 		);
 	}
 
 	/**
-	 * Test dashboard returns template
+	 * Test dashboard returns template when user has team or is admin
 	 */
 	public function testDashboardReturnsTemplate(): void
 	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$employee = $this->createMock(IUser::class);
+		$employee->method('getDisplayName')->willReturn('Employee One');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canAccessManagerDashboard')->with('manager1')->willReturn(true);
+		$this->teamResolver->method('getTeamMemberIds')->with('manager1')->willReturn(['employee1']);
+		$this->userManager->method('get')->with('employee1')->willReturn($employee);
+		$this->timeTrackingService->method('getTodayHours')->willReturn(0.0);
+		$this->timeTrackingService->method('getStatus')->willReturn(['status' => 'clocked_out']);
+		$this->absenceService->method('getAbsencesByUser')->willReturn([]);
+
 		$response = $this->controller->dashboard();
 
 		$this->assertInstanceOf(TemplateResponse::class, $response);
-		$this->assertEquals('arbeitszeitcheck', $response->getTemplateName());
-		$this->assertEquals('manager-dashboard', $response->getRenderAs());
+		$this->assertEquals('arbeitszeitcheck', $response->getApp());
+		$this->assertEquals('manager-dashboard', $response->getTemplateName());
+	}
+
+	/**
+	 * Test dashboard redirects non-managers (no team, not admin)
+	 */
+	public function testDashboardRedirectsNonManagers(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('employee1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canAccessManagerDashboard')->with('employee1')->willReturn(false);
+
+		$response = $this->controller->dashboard();
+
+		$this->assertInstanceOf(\OCP\AppFramework\Http\RedirectResponse::class, $response);
 	}
 
 	/**
@@ -117,8 +165,8 @@ class ManagerControllerTest extends TestCase
 		$group->method('getUsers')->willReturn([$teamMember]);
 
 		$this->userSession->method('getUser')->willReturn($user);
-		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([$teamMemberId]);
+		$this->userManager->method('get')->with($teamMemberId)->willReturn($teamMember);
 		$this->userManager->method('getDisplayName')->with($teamMemberId)->willReturn('Employee One');
 
 		$this->timeTrackingService->method('getTodayHours')->willReturn(8.0);
@@ -160,8 +208,7 @@ class ManagerControllerTest extends TestCase
 		$user->method('getUID')->willReturn($managerId);
 
 		$this->userSession->method('getUser')->willReturn($user);
-		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([]);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([]);
 
 		$response = $this->controller->getTeamOverview();
 		$data = $response->getData();
@@ -188,8 +235,7 @@ class ManagerControllerTest extends TestCase
 		$group->method('getUsers')->willReturn([$teamMember]);
 
 		$this->userSession->method('getUser')->willReturn($user);
-		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([$teamMemberId]);
 		$this->userManager->method('getDisplayName')->willReturn('Employee One');
 
 		$absence = $this->createMock(Absence::class);
@@ -249,7 +295,7 @@ class ManagerControllerTest extends TestCase
 
 		$this->userSession->method('getUser')->willReturn($user);
 		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([$teamMemberId]);
 		$this->userManager->method('getDisplayName')->willReturn('Employee One');
 
 		$absence = $this->createMock(Absence::class);
@@ -288,7 +334,7 @@ class ManagerControllerTest extends TestCase
 
 		$this->userSession->method('getUser')->willReturn($user);
 		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([$teamMemberId]);
 
 		$this->complianceService->method('getComplianceStatus')
 			->willReturn([
@@ -324,7 +370,7 @@ class ManagerControllerTest extends TestCase
 
 		$this->userSession->method('getUser')->willReturn($user);
 		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([$teamMemberId]);
 		$this->userManager->method('getDisplayName')->willReturn('Employee One');
 
 		$this->timeTrackingService->method('getTodayHours')->willReturn(8.0);
@@ -339,11 +385,12 @@ class ManagerControllerTest extends TestCase
 	}
 
 	/**
-	 * Test approveAbsence approves absence
+	 * Test approveAbsence approves absence when employee is in manager's team
 	 */
 	public function testApproveAbsenceApprovesAbsence(): void
 	{
 		$managerId = 'manager1';
+		$employeeId = 'employee1';
 		$absenceId = 1;
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn($managerId);
@@ -351,8 +398,17 @@ class ManagerControllerTest extends TestCase
 		$this->userSession->method('getUser')->willReturn($user);
 
 		$absence = $this->createMock(Absence::class);
+		$absence->method('getUserId')->willReturn($employeeId);
 		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
 
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($managerId, $employeeId)
+			->willReturn(true);
 		$this->absenceService->expects($this->once())
 			->method('approveAbsence')
 			->with($absenceId, $managerId, 'Approved')
@@ -366,11 +422,12 @@ class ManagerControllerTest extends TestCase
 	}
 
 	/**
-	 * Test rejectAbsence rejects absence
+	 * Test rejectAbsence rejects absence when employee is in manager's team
 	 */
 	public function testRejectAbsenceRejectsAbsence(): void
 	{
 		$managerId = 'manager1';
+		$employeeId = 'employee1';
 		$absenceId = 1;
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn($managerId);
@@ -378,8 +435,17 @@ class ManagerControllerTest extends TestCase
 		$this->userSession->method('getUser')->willReturn($user);
 
 		$absence = $this->createMock(Absence::class);
+		$absence->method('getUserId')->willReturn($employeeId);
 		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
 
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($managerId, $employeeId)
+			->willReturn(true);
 		$this->absenceService->expects($this->once())
 			->method('rejectAbsence')
 			->with($absenceId, $managerId, 'Not enough vacation days')
@@ -390,6 +456,124 @@ class ManagerControllerTest extends TestCase
 
 		$this->assertTrue($data['success']);
 		$this->assertArrayHasKey('absence', $data);
+	}
+
+	/**
+	 * Test approveAbsence returns 403 when employee is not in manager's team
+	 */
+	public function testApproveAbsenceReturns403WhenEmployeeNotInTeam(): void
+	{
+		$managerId = 'manager1';
+		$employeeId = 'otheruser';
+		$absenceId = 1;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$absence = $this->createMock(Absence::class);
+		$absence->method('getUserId')->willReturn($employeeId);
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($managerId, $employeeId)
+			->willReturn(false);
+		$this->absenceService->expects($this->never())->method('approveAbsence');
+
+		$response = $this->controller->approveAbsence($absenceId, 'Approved');
+		$data = $response->getData();
+
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($data['success']);
+		$this->assertArrayHasKey('error', $data);
+	}
+
+	/**
+	 * Test rejectAbsence returns 403 when employee is not in manager's team
+	 */
+	public function testRejectAbsenceReturns403WhenEmployeeNotInTeam(): void
+	{
+		$managerId = 'manager1';
+		$employeeId = 'otheruser';
+		$absenceId = 1;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$absence = $this->createMock(Absence::class);
+		$absence->method('getUserId')->willReturn($employeeId);
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($managerId, $employeeId)
+			->willReturn(false);
+		$this->absenceService->expects($this->never())->method('rejectAbsence');
+
+		$response = $this->controller->rejectAbsence($absenceId, 'Rejected');
+		$data = $response->getData();
+
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($data['success']);
+		$this->assertArrayHasKey('error', $data);
+	}
+
+	/**
+	 * Test approveAbsence returns 404 when absence does not exist
+	 */
+	public function testApproveAbsenceReturns404WhenAbsenceNotFound(): void
+	{
+		$managerId = 'manager1';
+		$absenceId = 999;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willThrowException(new DoesNotExistException('Absence not found'));
+		$this->teamResolver->expects($this->never())->method('getTeamMemberIds');
+		$this->absenceService->expects($this->never())->method('approveAbsence');
+
+		$response = $this->controller->approveAbsence($absenceId, 'Approved');
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+	}
+
+	/**
+	 * Test rejectAbsence returns 404 when absence does not exist
+	 */
+	public function testRejectAbsenceReturns404WhenAbsenceNotFound(): void
+	{
+		$managerId = 'manager1';
+		$absenceId = 999;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willThrowException(new DoesNotExistException('Absence not found'));
+		$this->teamResolver->expects($this->never())->method('getTeamMemberIds');
+		$this->absenceService->expects($this->never())->method('rejectAbsence');
+
+		$response = $this->controller->rejectAbsence($absenceId, 'Rejected');
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
 	}
 
 	/**
@@ -410,14 +594,15 @@ class ManagerControllerTest extends TestCase
 		$group->method('getUsers')->willReturn([$teamMember]);
 
 		$this->userSession->method('getUser')->willReturn($user);
-		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->permissionService->method('canManageEmployee')->with($managerId, $teamMemberId)->willReturn(true);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([$teamMemberId]);
 
 		$entry = $this->createMock(TimeEntry::class);
 		$entry->method('getStatus')->willReturn(TimeEntry::STATUS_PENDING_APPROVAL);
 		$entry->method('getUserId')->willReturn($teamMemberId);
 		$entry->method('getJustification')->willReturn(json_encode(['justification' => 'Correction']));
 		$entry->method('setStatus')->willReturnSelf();
+		$entry->method('setApprovedByUserId')->willReturnSelf();
 		$entry->method('setApprovedBy')->willReturnSelf();
 		$entry->method('setApprovedAt')->willReturnSelf();
 		$entry->method('setUpdatedAt')->willReturnSelf();
@@ -426,6 +611,8 @@ class ManagerControllerTest extends TestCase
 
 		$updatedEntry = $this->createMock(TimeEntry::class);
 		$updatedEntry->method('getSummary')->willReturn(['id' => $entryId]);
+		$updatedEntry->method('getStatus')->willReturn(TimeEntry::STATUS_COMPLETED);
+		$updatedEntry->method('getEndTime')->willReturn(new \DateTime());
 
 		$timeEntryMapper = $this->createMock(TimeEntryMapper::class);
 		$timeEntryMapper->method('find')->with($entryId)->willReturn($entry);
@@ -447,10 +634,15 @@ class ManagerControllerTest extends TestCase
 				if ($class === \OCA\ArbeitszeitCheck\Service\NotificationService::class) {
 					return $notificationService;
 				}
+				if ($class === \OCP\IConfig::class) {
+					$config = $this->createMock(\OCP\IConfig::class);
+					$config->method('getAppValue')->willReturn('1');
+					return $config;
+				}
 				return null;
 			});
 
-		$auditLogMapper->expects($this->once())->method('create');
+		$auditLogMapper->expects($this->once())->method('logAction');
 		$notificationService->expects($this->once())->method('notifyTimeEntryCorrectionApproved');
 
 		$response = $this->controller->approveTimeEntryCorrection($entryId, 'Approved');
@@ -501,15 +693,8 @@ class ManagerControllerTest extends TestCase
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn($managerId);
 
-		$teamMember = $this->createMock(IUser::class);
-		$teamMember->method('getUID')->willReturn('employee1');
-
-		$group = $this->createMock(IGroup::class);
-		$group->method('getUsers')->willReturn([$teamMember]);
-
 		$this->userSession->method('getUser')->willReturn($user);
-		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->permissionService->method('canManageEmployee')->with($managerId, $otherUserId)->willReturn(false);
 
 		$entry = $this->createMock(TimeEntry::class);
 		$entry->method('getStatus')->willReturn(TimeEntry::STATUS_PENDING_APPROVAL);
@@ -547,8 +732,8 @@ class ManagerControllerTest extends TestCase
 		$group->method('getUsers')->willReturn([$teamMember]);
 
 		$this->userSession->method('getUser')->willReturn($user);
-		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->permissionService->method('canManageEmployee')->with($managerId, $teamMemberId)->willReturn(true);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([$teamMemberId]);
 
 		$entry = $this->createMock(TimeEntry::class);
 		$entry->method('getStatus')->willReturn(TimeEntry::STATUS_PENDING_APPROVAL);
@@ -594,7 +779,7 @@ class ManagerControllerTest extends TestCase
 				return null;
 			});
 
-		$auditLogMapper->expects($this->once())->method('create');
+		$auditLogMapper->expects($this->once())->method('logAction');
 		$notificationService->expects($this->once())->method('notifyTimeEntryCorrectionRejected');
 
 		$response = $this->controller->rejectTimeEntryCorrection($entryId, 'Invalid correction');
@@ -623,7 +808,7 @@ class ManagerControllerTest extends TestCase
 
 		$this->userSession->method('getUser')->willReturn($user);
 		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([$teamMemberId]);
 		$this->userManager->method('getDisplayName')->willReturn('Employee One');
 
 		$absence = $this->createMock(Absence::class);
@@ -657,8 +842,7 @@ class ManagerControllerTest extends TestCase
 		$user->method('getUID')->willReturn($managerId);
 
 		$this->userSession->method('getUser')->willReturn($user);
-		$this->userManager->method('get')->with($managerId)->willReturn($user);
-		$this->groupManager->method('getUserGroups')->with($user)->willReturn([]);
+		$this->teamResolver->method('getTeamMemberIds')->with($managerId)->willReturn([]);
 
 		$response = $this->controller->getTeamAbsenceCalendar();
 		$data = $response->getData();

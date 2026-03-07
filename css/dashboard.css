@@ -16,13 +16,14 @@
     overflow-y: scroll;
     overflow-x: auto;
     height: auto;
-    padding-bottom: 20px;
+    padding-bottom: var(--space-12);
 }
 
 #app-content-wrapper {
     margin: 0 auto;
-    padding: var(--space-8, 2rem) var(--space-8, 2rem) var(--space-16, 4rem) var(--space-8, 2rem);
+    padding: var(--space-8) var(--space-6) var(--space-16) var(--space-6);
     width: 100%;
+    max-width: 1200px;
     display: flex;
     flex-direction: column;
     min-height: auto;
@@ -31,12 +32,12 @@
     background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background, var(--arbeitszeitcheck-color-background)));
 }
 
-/* Section Styling - Matching ProjectCheck */
+/* Section Styling - Clear, easy-to-identify blocks (WCAG 2.1 AA friendly) */
 .section {
     background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background, #fff)));
     border-radius: var(--radius-2xl, 16px);
-    margin-bottom: var(--space-8, 2rem);
-    padding: var(--space-6, 1.5rem);
+    margin-bottom: var(--space-10);
+    padding: var(--space-8);
     overflow: visible;
     box-shadow: var(--shadow-base, 0 2px 20px rgba(0, 0, 0, 0.04));
     border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
@@ -47,70 +48,87 @@
     display: block;
 }
 
-.section:first-child {
-    margin-top: 0;
+.section:last-child {
+    margin-bottom: 0;
 }
 
+/* Page header: one clear title + short description */
 .page-header-section {
     padding: 0;
     background: transparent;
     border: none;
     box-shadow: none;
-    margin-bottom: var(--space-8, 2rem);
+    margin-bottom: var(--space-10);
 }
 
 .page-header-section .header-content {
-    margin-bottom: var(--space-6, 1.5rem);
+    margin-bottom: 0;
 }
 
-/* Section Header */
+.page-header-section .header-text h2 {
+    font-size: var(--arbeitszeitcheck-font-size-3xl);
+    font-weight: var(--arbeitszeitcheck-font-weight-bold);
+    margin: 0 0 var(--space-2) 0;
+    color: var(--arbeitszeitcheck-color-text);
+}
+
+.page-header-section .header-text p {
+    font-size: var(--arbeitszeitcheck-font-size-lg);
+    color: var(--arbeitszeitcheck-color-text-secondary);
+    margin: 0;
+    line-height: var(--arbeitszeitcheck-line-height-relaxed);
+}
+
+/* Section Header - Clear visual separation (easy to identify sections) */
 .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-6, 1.5rem);
-    padding-bottom: var(--space-4, 1rem);
-    border-bottom: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-4);
+    border-bottom: 2px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
     visibility: visible;
     opacity: 1;
 }
 
 .section-header h3 {
     margin: 0;
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-size: var(--arbeitszeitcheck-font-size-2xl);
+    font-weight: var(--arbeitszeitcheck-font-weight-semibold);
     color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, var(--arbeitszeitcheck-color-text, #000)));
     visibility: visible;
     opacity: 1;
 }
 
 .section-header p {
-    margin: 0.25rem 0 0 0;
-    font-size: 0.9rem;
+    margin: var(--space-1) 0 0 0;
+    font-size: var(--arbeitszeitcheck-font-size-base);
     color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text-tertiary, #666)));
     visibility: visible;
     opacity: 1;
 }
 
-/* Dashboard Grid */
+/* Dashboard Grid - Clear spacing between cards */
 .arbeitszeitcheck-dashboard__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: var(--space-6, 1.5rem);
-    margin-bottom: var(--space-8, 2rem);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: var(--space-8);
+    margin-bottom: 0;
     visibility: visible;
     opacity: 1;
     width: 100%;
 }
 
-/* Cards - Use common card styles, add dashboard-specific overrides if needed */
+/* Cards - Clear boundaries, comfortable padding (simple UX) */
 .card {
     background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background, #fff)));
     border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
     border-radius: var(--radius-xl, 12px);
-    padding: var(--space-6, 1.5rem);
+    padding: var(--space-6);
     box-shadow: var(--shadow-base, 0 2px 8px rgba(0, 0, 0, 0.04));
-    transition: all 0.2s ease;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
     visibility: visible;
     opacity: 1;
     box-sizing: border-box;
@@ -118,7 +136,12 @@
 
 .card:hover {
     box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
-    transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .card:hover {
+        transform: translateY(-2px);
+    }
 }
 
 .card-header {
@@ -142,6 +165,22 @@
     gap: var(--space-4, 1rem);
     visibility: visible;
     opacity: 1;
+}
+
+/* Welcome message: step list — clear spacing, no inline styles (WCAG, maintainability) */
+.welcome-steps {
+    margin: var(--space-4) 0;
+    padding-left: var(--space-6);
+    list-style: decimal;
+}
+
+.welcome-steps li {
+    margin-bottom: var(--space-2);
+    line-height: var(--arbeitszeitcheck-line-height-relaxed);
+}
+
+.welcome-steps li:last-child {
+    margin-bottom: 0;
 }
 
 /* ===== Current Status Card (Dashboard) ===== */
@@ -296,12 +335,14 @@
 
 .dashboard-status-card .card-actions {
     justify-content: flex-start;
-    gap: var(--space-3, 0.75rem);
+    gap: var(--space-3);
     flex-wrap: wrap;
 }
 
+/* Touch targets: buttons at least 44px (WCAG 2.5.5) */
 .dashboard-status-card .card-actions .btn {
     flex: 1 1 160px;
+    min-height: 44px;
 }
 
 /* Stat Items */
@@ -419,28 +460,33 @@
     margin: var(--space-2, 0.5rem) 0;
 }
 
-/* Responsive */
+/* Responsive - Clear layout on small screens */
 @media (max-width: 768px) {
     #app-content-wrapper {
-        padding: var(--space-4, 1rem);
+        padding: var(--space-4);
     }
 
     .section {
-        padding: var(--space-4, 1rem);
+        padding: var(--space-5);
+        margin-bottom: var(--space-8);
     }
 
     .arbeitszeitcheck-dashboard__grid {
         grid-template-columns: 1fr;
-        gap: var(--space-4, 1rem);
+        gap: var(--space-6);
     }
 
     .section-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: var(--space-4, 1rem);
+        gap: var(--space-3);
     }
 
     .dashboard-status-card__header {
         align-items: center;
+    }
+
+    .page-header-section .header-text h2 {
+        font-size: var(--arbeitszeitcheck-font-size-2xl);
     }
 }

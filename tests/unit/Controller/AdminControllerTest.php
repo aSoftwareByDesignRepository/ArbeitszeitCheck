@@ -17,12 +17,14 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
+use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
-use OCP\IConfig;
+use OCP\AppFramework\Services\IAppConfig;
 use OCP\IRequest;
+use OCP\IL10N;
 use OCP\IUser;
 use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
@@ -53,8 +55,8 @@ class AdminControllerTest extends TestCase
 	/** @var IUserManager|\PHPUnit\Framework\MockObject\MockObject */
 	private $userManager;
 
-	/** @var IConfig|\PHPUnit\Framework\MockObject\MockObject */
-	private $config;
+	/** @var IAppConfig|\PHPUnit\Framework\MockObject\MockObject */
+	private $appConfig;
 
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
@@ -69,8 +71,11 @@ class AdminControllerTest extends TestCase
 		$this->workingTimeModelMapper = $this->createMock(WorkingTimeModelMapper::class);
 		$this->auditLogMapper = $this->createMock(AuditLogMapper::class);
 		$this->userManager = $this->createMock(IUserManager::class);
-		$this->config = $this->createMock(IConfig::class);
+		$this->appConfig = $this->createMock(IAppConfig::class);
 		$this->request = $this->createMock(IRequest::class);
+		$cspService = $this->createMock(CSPService::class);
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnCallback(fn ($s) => $s);
 
 		$this->controller = new AdminController(
 			'arbeitszeitcheck',
@@ -81,7 +86,9 @@ class AdminControllerTest extends TestCase
 			$this->workingTimeModelMapper,
 			$this->auditLogMapper,
 			$this->userManager,
-			$this->config
+			$this->appConfig,
+			$cspService,
+			$l10n
 		);
 	}
 
@@ -150,8 +157,8 @@ class AdminControllerTest extends TestCase
 	 */
 	public function testGetAdminSettingsReturnsSettings(): void
 	{
-		$this->config->method('getAppValue')
-			->willReturnCallback(function ($app, $key, $default) {
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function (string $key, string $default = '') {
 				$values = [
 					'auto_compliance_check' => '1',
 					'require_break_justification' => '1',
@@ -185,11 +192,11 @@ class AdminControllerTest extends TestCase
 				'germanState' => 'BY'
 			]);
 
-		$this->config->expects($this->exactly(2))
-			->method('setAppValue')
+		$this->appConfig->expects($this->exactly(2))
+			->method('setAppValueString')
 			->withConsecutive(
-				['arbeitszeitcheck', 'max_daily_hours', '9.5'],
-				['arbeitszeitcheck', 'german_state', 'BY']
+				['max_daily_hours', '9.5'],
+				['german_state', 'BY']
 			);
 
 		$response = $this->controller->updateAdminSettings();
@@ -778,8 +785,8 @@ class AdminControllerTest extends TestCase
 	 */
 	public function testGetAdminSettingsHandlesException(): void
 	{
-		$this->config->expects($this->once())
-			->method('getAppValue')
+		$this->appConfig->expects($this->once())
+			->method('getAppValueString')
 			->willThrowException(new \Exception('Config error'));
 
 		$response = $this->controller->getAdminSettings();

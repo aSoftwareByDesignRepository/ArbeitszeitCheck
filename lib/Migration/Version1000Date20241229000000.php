@@ -332,14 +332,14 @@ class Version1000Date20241229000000 extends SimpleMigrationStep {
 			$table->addColumn('break_rules', Types::TEXT, [
 				'notnull' => false,
 			]);
-		$table->addColumn('overtime_rules', Types::TEXT, [
-			'notnull' => false,
-		]);
-		$table->addColumn('is_default', Types::BOOLEAN, [
-			'notnull' => false,
-			'default' => false,
-		]);
-		$table->addColumn('created_at', Types::DATETIME, [
+			$table->addColumn('overtime_rules', Types::TEXT, [
+				'notnull' => false,
+			]);
+			$table->addColumn('is_default', Types::BOOLEAN, [
+				'notnull' => false,
+				'default' => false,
+			]);
+			$table->addColumn('created_at', Types::DATETIME, [
 				'notnull' => true,
 			]);
 			$table->addColumn('updated_at', Types::DATETIME, [

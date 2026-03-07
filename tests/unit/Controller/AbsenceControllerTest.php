@@ -13,12 +13,19 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
 use OCA\ArbeitszeitCheck\Controller\AbsenceController;
 use OCA\ArbeitszeitCheck\Db\Absence;
+use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
+use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\IL10N;
 use OCP\IRequest;
+use OCP\IURLGenerator;
 use OCP\IUser;
+use OCP\IUserManager;
 use OCP\IUserSession;
+use OCP\AppFramework\Db\DoesNotExistException;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -38,19 +45,50 @@ class AbsenceControllerTest extends TestCase
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
 
+	/** @var AbsenceMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $absenceMapper;
+
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
+
+	/** @var IURLGenerator|\PHPUnit\Framework\MockObject\MockObject */
+	private $urlGenerator;
+
+	/** @var IUserManager|\PHPUnit\Framework\MockObject\MockObject */
+	private $userManager;
+
+	/** @var CSPService|\PHPUnit\Framework\MockObject\MockObject */
+	private $cspService;
+
+	/** @var IL10N|\PHPUnit\Framework\MockObject\MockObject */
+	private $l10n;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
 
 		$this->absenceService = $this->createMock(AbsenceService::class);
+		$this->absenceMapper = $this->createMock(AbsenceMapper::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->userSession = $this->createMock(IUserSession::class);
+		$this->urlGenerator = $this->createMock(IURLGenerator::class);
+		$this->userManager = $this->createMock(IUserManager::class);
+		$this->cspService = $this->createMock(CSPService::class);
+		$this->l10n = $this->createMock(IL10N::class);
+		$this->l10n->method('t')->willReturnCallback(fn ($s) => $s);
 		$this->request = $this->createMock(IRequest::class);
 
 		$this->controller = new AbsenceController(
 			'arbeitszeitcheck',
 			$this->request,
 			$this->absenceService,
-			$this->userSession
+			$this->absenceMapper,
+			$this->permissionService,
+			$this->userSession,
+			$this->urlGenerator,
+			$this->userManager,
+			$this->cspService,
+			$this->l10n
 		);
 	}
 
@@ -277,20 +315,30 @@ class AbsenceControllerTest extends TestCase
 	}
 
 	/**
-	 * Test approve approves absence
+	 * Test approve approves absence when current user can manage the absence owner
 	 */
 	public function testApproveApprovesAbsence(): void
 	{
-		$userId = 'testuser';
+		$userId = 'manager1';
 		$absenceId = 1;
+		$employeeId = 'employee1';
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn($userId);
 
 		$this->userSession->method('getUser')->willReturn($user);
 
 		$absence = $this->createMock(Absence::class);
+		$absence->method('getUserId')->willReturn($employeeId);
 		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
 
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($userId, $employeeId)
+			->willReturn(true);
 		$this->absenceService->expects($this->once())
 			->method('approveAbsence')
 			->with($absenceId, $userId, 'Approved')
@@ -304,20 +352,30 @@ class AbsenceControllerTest extends TestCase
 	}
 
 	/**
-	 * Test reject rejects absence
+	 * Test reject rejects absence when current user can manage the absence owner
 	 */
 	public function testRejectRejectsAbsence(): void
 	{
-		$userId = 'testuser';
+		$userId = 'manager1';
 		$absenceId = 1;
+		$employeeId = 'employee1';
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn($userId);
 
 		$this->userSession->method('getUser')->willReturn($user);
 
 		$absence = $this->createMock(Absence::class);
+		$absence->method('getUserId')->willReturn($employeeId);
 		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
 
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($userId, $employeeId)
+			->willReturn(true);
 		$this->absenceService->expects($this->once())
 			->method('rejectAbsence')
 			->with($absenceId, $userId, 'Not enough vacation days')
@@ -328,6 +386,124 @@ class AbsenceControllerTest extends TestCase
 
 		$this->assertTrue($data['success']);
 		$this->assertArrayHasKey('absence', $data);
+	}
+
+	/**
+	 * Test approve returns 403 when current user cannot manage the absence owner
+	 */
+	public function testApproveReturns403WhenUserCannotManageEmployee(): void
+	{
+		$userId = 'otheruser';
+		$absenceId = 1;
+		$employeeId = 'employee1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$absence = $this->createMock(Absence::class);
+		$absence->method('getUserId')->willReturn($employeeId);
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($userId, $employeeId)
+			->willReturn(false);
+		$this->absenceService->expects($this->never())->method('approveAbsence');
+
+		$response = $this->controller->approve($absenceId, 'Approved');
+		$data = $response->getData();
+
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($data['success']);
+		$this->assertArrayHasKey('error', $data);
+	}
+
+	/**
+	 * Test reject returns 403 when current user cannot manage the absence owner
+	 */
+	public function testRejectReturns403WhenUserCannotManageEmployee(): void
+	{
+		$userId = 'otheruser';
+		$absenceId = 1;
+		$employeeId = 'employee1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$absence = $this->createMock(Absence::class);
+		$absence->method('getUserId')->willReturn($employeeId);
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($userId, $employeeId)
+			->willReturn(false);
+		$this->absenceService->expects($this->never())->method('rejectAbsence');
+
+		$response = $this->controller->reject($absenceId, 'Rejected');
+		$data = $response->getData();
+
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($data['success']);
+		$this->assertArrayHasKey('error', $data);
+	}
+
+	/**
+	 * Test approve returns 404 when absence does not exist
+	 */
+	public function testApproveReturns404WhenAbsenceNotFound(): void
+	{
+		$userId = 'manager1';
+		$absenceId = 999;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willThrowException(new DoesNotExistException('Absence not found'));
+		$this->permissionService->expects($this->never())->method('canManageEmployee');
+		$this->absenceService->expects($this->never())->method('approveAbsence');
+
+		$response = $this->controller->approve($absenceId, 'Approved');
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+	}
+
+	/**
+	 * Test reject returns 404 when absence does not exist
+	 */
+	public function testRejectReturns404WhenAbsenceNotFound(): void
+	{
+		$userId = 'manager1';
+		$absenceId = 999;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willThrowException(new DoesNotExistException('Absence not found'));
+		$this->permissionService->expects($this->never())->method('canManageEmployee');
+		$this->absenceService->expects($this->never())->method('rejectAbsence');
+
+		$response = $this->controller->reject($absenceId, 'Rejected');
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
 	}
 
 	/**

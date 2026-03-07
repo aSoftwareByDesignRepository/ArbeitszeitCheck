@@ -321,6 +321,22 @@
 	width: 16px;
 	height: 16px;
 	border-radius: 4px;
+	flex-shrink: 0;
+}
+
+.legend-color--entry {
+	background: transparent;
+	border-left: 4px solid var(--arbeitszeitcheck-color-primary, var(--color-primary));
+}
+
+.legend-color--absence {
+	background: transparent;
+	border-left: 4px solid var(--arbeitszeitcheck-color-warning, var(--color-warning));
+}
+
+.legend-color--today {
+	background: rgba(0, 130, 201, 0.15);
+	border: 2px solid var(--arbeitszeitcheck-color-primary, var(--color-primary));
 }
 
 .legend-label {
@@ -454,6 +470,7 @@
 	.day-details-panel {
 		width: 100%;
 	}
+}
 
 /* Calendar Month Summary */
 .calendar-month-summary {
@@ -486,6 +503,15 @@
 	font-weight: 600;
 	color: var(--arbeitszeitcheck-color-primary, var(--color-primary));
 }
+
+.calendar-empty-hint {
+	margin-top: var(--space-4, 1rem);
+	text-align: center;
+	font-size: 0.95rem;
+	color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast));
+}
+
+/* .page-description styled in common/app-layout.css */
 
 .calendar-day-entry-count {
 	font-size: 0.65rem;

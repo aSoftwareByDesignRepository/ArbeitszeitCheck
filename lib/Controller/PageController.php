@@ -21,7 +21,9 @@ use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\IConfig;
 use OCP\IRequest;
+use OCP\IURLGenerator;
 use OCP\IUserSession;
 use OCP\IGroupManager;
 use OCP\IL10N;
@@ -41,6 +43,8 @@ class PageController extends Controller
 	private AbsenceMapper $absenceMapper;
 	private IUserSession $userSession;
 	private IGroupManager $groupManager;
+	private IURLGenerator $urlGenerator;
+	private IConfig $config;
 	private IL10N $l10n;
 
 	/**
@@ -67,6 +71,8 @@ class PageController extends Controller
 		AbsenceMapper $absenceMapper,
 		IUserSession $userSession,
 		IGroupManager $groupManager,
+		IURLGenerator $urlGenerator,
+		IConfig $config,
 		CSPService $cspService,
 		IL10N $l10n
 	) {
@@ -78,6 +84,8 @@ class PageController extends Controller
 		$this->absenceMapper = $absenceMapper;
 		$this->userSession = $userSession;
 		$this->groupManager = $groupManager;
+		$this->urlGenerator = $urlGenerator;
+		$this->config = $config;
 		$this->l10n = $l10n;
 		$this->setCspService($cspService);
 	}
@@ -142,8 +150,8 @@ class PageController extends Controller
 					'total_time_entries' => $timeEntryCount,
 					'total_absences' => $absenceCount,
 				],
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'dashboard', $params);
@@ -161,8 +169,8 @@ class PageController extends Controller
 				'isFirstTimeUser' => true,
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
 				'error' => $errorMessage,
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -185,9 +193,8 @@ class PageController extends Controller
 			$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
 			
 			// Get compliance configuration for frontend validation
-			$appConfig = \OC::$server->get(\OCP\IConfig::class);
-			$maxDailyHours = (float)$appConfig->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
-			$complianceStrictMode = $appConfig->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
+			$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+			$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
 			
 			$params = [
 				'entries' => $entries,
@@ -202,8 +209,8 @@ class PageController extends Controller
 				],
 				'maxDailyHours' => $maxDailyHours,
 				'complianceStrictMode' => $complianceStrictMode,
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'time-entries', $params);
@@ -218,8 +225,8 @@ class PageController extends Controller
 				'entries' => [],
 				'error' => $errorMessage,
 				'stats' => ['total_time_entries' => 0, 'entries_this_month' => 0, 'total_hours' => 0],
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -237,9 +244,41 @@ class PageController extends Controller
 
 		try {
 			$userId = $this->getUserId();
-		$absences = $this->absenceMapper->findByUser($userId);
 
-		// Get stats for sidebar
+		// Read filter params (query string: start_date, end_date, status)
+		$startDateParam = $this->request->getParam('start_date');
+		$endDateParam = $this->request->getParam('end_date');
+		$statusParam = $this->request->getParam('status');
+
+		$filters = [];
+		$filterStartDt = null;
+		$filterEndDt = null;
+		if (!empty($startDateParam) && !empty($endDateParam)) {
+			try {
+				$filterStartDt = new \DateTime($startDateParam);
+				$filterEndDt = new \DateTime($endDateParam);
+				$filters['date_range'] = ['start' => $filterStartDt, 'end' => $filterEndDt];
+			} catch (\Throwable $e) {
+				// ignore invalid dates
+			}
+		}
+		if (!empty($statusParam) && in_array($statusParam, ['pending', 'approved', 'rejected', 'substitute_pending', 'substitute_declined'], true)) {
+			$filters['status'] = $statusParam;
+		}
+
+		if (!empty($filters)) {
+			$absences = $this->absenceService->getAbsencesByUser($userId, $filters);
+			// Service uses either date_range or status; if we had both, apply status filter in PHP
+			if (isset($filters['date_range']) && isset($filters['status'])) {
+				$absences = array_values(array_filter($absences, function ($a) use ($filters) {
+					return $a->getStatus() === $filters['status'];
+				}));
+			}
+		} else {
+			$absences = $this->absenceMapper->findByUser($userId);
+		}
+
+		// Get stats for sidebar (always from full list for consistent sidebar numbers)
 		$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
 		$absenceCount = $this->absenceMapper->countByUser($userId);
 
@@ -248,14 +287,21 @@ class PageController extends Controller
 		$vacationStats = $this->absenceService->getVacationStats($userId, $currentYear);
 		$vacationDaysRemaining = $vacationStats['remaining'] ?? 25;
 
+		// Current filter values for the form (European format for date inputs)
+		$filterStartDate = $filterStartDt ? $filterStartDt->format('d.m.Y') : '';
+		$filterEndDate = $filterEndDt ? $filterEndDt->format('d.m.Y') : '';
+
 		$params = [
 			'absences' => $absences,
+			'filterStartDate' => $filterStartDate,
+			'filterEndDate' => $filterEndDate,
+			'filterStatus' => $statusParam ?? '',
 			'stats' => [
 				'total_time_entries' => $timeEntryCount,
 				'total_absences' => $absenceCount,
 				'vacation_days_remaining' => $vacationDaysRemaining,
 				'pending_requests' => count(array_filter($absences, function($absence) {
-					return $absence->getStatus() === 'pending';
+					return in_array($absence->getStatus(), ['pending', 'substitute_pending'], true);
 				})),
 				'days_taken_this_year' => array_reduce($absences, function($sum, $absence) {
 					if ($absence->getStartDate() && $absence->getStartDate()->format('Y') === date('Y') && $absence->getStatus() === 'approved') {
@@ -264,8 +310,8 @@ class PageController extends Controller
 					return $sum;
 				}, 0)
 			],
-			'urlGenerator' => \OC::$server->getURLGenerator(),
-			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			'urlGenerator' => $this->urlGenerator,
+			'l' => $this->l10n,
 		];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'absences', $params);
@@ -278,10 +324,13 @@ class PageController extends Controller
 			}
 			$response = new TemplateResponse('arbeitszeitcheck', 'absences', [
 				'absences' => [],
+				'filterStartDate' => '',
+				'filterEndDate' => '',
+				'filterStatus' => '',
 				'error' => $errorMessage,
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0, 'vacation_days_remaining' => 0, 'pending_requests' => 0, 'days_taken_this_year' => 0],
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -326,8 +375,8 @@ class PageController extends Controller
 				],
 				'isAdmin' => $isAdmin,
 				'isManager' => $isManager,
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'reports', $params);
@@ -343,8 +392,8 @@ class PageController extends Controller
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
 				'isAdmin' => false,
 				'isManager' => false,
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -381,8 +430,8 @@ class PageController extends Controller
 					'total_time_entries' => $timeEntryCount,
 					'total_absences' => $absenceCount,
 				],
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'calendar', $params);
@@ -396,8 +445,8 @@ class PageController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'calendar', [
 				'error' => $errorMessage,
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -425,8 +474,8 @@ class PageController extends Controller
 				'total_time_entries' => $timeEntryCount,
 				'total_absences' => $absenceCount,
 			],
-			'urlGenerator' => \OC::$server->getURLGenerator(),
-			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			'urlGenerator' => $this->urlGenerator,
+			'l' => $this->l10n,
 		];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'timeline', $params);
@@ -440,8 +489,8 @@ class PageController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'timeline', [
 				'error' => $errorMessage,
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -469,8 +518,8 @@ class PageController extends Controller
 				'total_time_entries' => $timeEntryCount,
 				'total_absences' => $absenceCount,
 			],
-			'urlGenerator' => \OC::$server->getURLGenerator(),
-			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			'urlGenerator' => $this->urlGenerator,
+			'l' => $this->l10n,
 		];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'settings', $params);
@@ -484,8 +533,8 @@ class PageController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'settings', [
 				'error' => $errorMessage,
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
-				'urlGenerator' => \OC::$server->getURLGenerator(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}

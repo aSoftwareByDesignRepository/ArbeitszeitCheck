@@ -168,6 +168,33 @@ class AbsenceMapper extends QBMapper
 	}
 
 	/**
+	 * Find absences where the given user is substitute and approval is pending
+	 *
+	 * @param string $substituteUserId User ID of the substitute
+	 * @param int|null $limit
+	 * @param int|null $offset
+	 * @return Absence[]
+	 */
+	public function findSubstitutePendingForUser(string $substituteUserId, ?int $limit = null, ?int $offset = null): array
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('substitute_user_id', $qb->createNamedParameter($substituteUserId)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_SUBSTITUTE_PENDING)))
+			->orderBy('start_date', 'ASC');
+
+		if ($limit !== null) {
+			$qb->setMaxResults($limit);
+		}
+		if ($offset !== null) {
+			$qb->setFirstResult($offset);
+		}
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Find active absences (currently ongoing)
 	 *
 	 * @param string|null $userId Optional user filter
@@ -191,6 +218,35 @@ class AbsenceMapper extends QBMapper
 		}
 
 		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Delete all absences for a user (used on user deletion)
+	 *
+	 * @param string $userId
+	 * @return int Number of deleted rows
+	 */
+	public function deleteByUser(string $userId): int
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
+		return $qb->executeStatement();
+	}
+
+	/**
+	 * Clear substitute_user_id when the substitute user is deleted
+	 *
+	 * @param string $substituteUserId
+	 * @return int Number of updated rows
+	 */
+	public function clearSubstituteForUser(string $substituteUserId): int
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('substitute_user_id', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+			->where($qb->expr()->eq('substitute_user_id', $qb->createNamedParameter($substituteUserId)));
+		return $qb->executeStatement();
 	}
 
 	/**
@@ -270,6 +326,7 @@ class AbsenceMapper extends QBMapper
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
 			->andWhere($qb->expr()->in('status', $qb->createNamedParameter([
 				Absence::STATUS_PENDING,
+				Absence::STATUS_SUBSTITUTE_PENDING,
 				Absence::STATUS_APPROVED
 			], IQueryBuilder::PARAM_STR_ARRAY)))
 			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))

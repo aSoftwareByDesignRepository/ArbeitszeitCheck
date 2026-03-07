@@ -46,10 +46,20 @@
         const form = e.target;
         const formData = Utils.serializeForm(form);
 
-        // Convert checkboxes to boolean
+        // Normalize requireSubstituteTypes[] to requireSubstituteTypes array for backend
+        if (formData['requireSubstituteTypes[]'] !== undefined) {
+            formData.requireSubstituteTypes = Array.isArray(formData['requireSubstituteTypes[]'])
+                ? formData['requireSubstituteTypes[]']
+                : [formData['requireSubstituteTypes[]']];
+            delete formData['requireSubstituteTypes[]'];
+        }
+
+        // Convert checkboxes to boolean (unchecked = not in form, so default false)
         formData.autoComplianceCheck = formData.autoComplianceCheck === 'on' || formData.autoComplianceCheck === true;
         formData.requireBreakJustification = formData.requireBreakJustification === 'on' || formData.requireBreakJustification === true;
         formData.enableViolationNotifications = formData.enableViolationNotifications === 'on' || formData.enableViolationNotifications === true;
+        formData.sendIcalApprovedAbsences = formData.sendIcalApprovedAbsences === 'on' || formData.sendIcalApprovedAbsences === true;
+        formData.sendIcalToSubstitute = formData.sendIcalToSubstitute === 'on' || formData.sendIcalToSubstitute === true;
 
         // Convert numbers
         formData.maxDailyHours = parseFloat(formData.maxDailyHours);

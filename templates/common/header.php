@@ -13,7 +13,7 @@ if (!defined('OCP\AppFramework\App::class')) {
 }
 
 // Get the current user and app context
-$user = \OC::$server->getUserSession()->getUser();
+$user = \OCP\Server::get(\OCP\IUserSession::class)->getUser();
 $appName = 'arbeitszeitcheck';
 $currentPage = isset($currentPage) ? $currentPage : 'dashboard';
 
@@ -36,7 +36,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
         <nav class="header__navigation" role="navigation" aria-label="<?php p($l->t('Main navigation')); ?>">
             <ul class="header__nav-list">
                 <li class="header__nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.dashboard')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.dashboard')); ?>"
                         class="header__nav-link <?php echo ($currentPage === 'dashboard') ? 'header__nav-link--active' : ''; ?>"
                         title="<?php p($l->t('Dashboard')); ?>">
                         <span class="header__nav-icon" aria-hidden="true">📊</span>
@@ -45,7 +45,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
                         class="header__nav-link <?php echo ($currentPage === 'time-entries') ? 'header__nav-link--active' : ''; ?>"
                         title="<?php p($l->t('Time Entries')); ?>">
                         <span class="header__nav-icon" aria-hidden="true">⏱️</span>
@@ -54,7 +54,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.absences')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.absences')); ?>"
                         class="header__nav-link <?php echo ($currentPage === 'absences') ? 'header__nav-link--active' : ''; ?>"
                         title="<?php p($l->t('Absences')); ?>">
                         <span class="header__nav-icon" aria-hidden="true">🏖️</span>
@@ -63,7 +63,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.reports')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.reports')); ?>"
                         class="header__nav-link <?php echo ($currentPage === 'reports') ? 'header__nav-link--active' : ''; ?>"
                         title="<?php p($l->t('Reports')); ?>">
                         <span class="header__nav-icon" aria-hidden="true">📈</span>
@@ -72,16 +72,16 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.calendar')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.calendar')); ?>"
                         class="header__nav-link <?php echo ($currentPage === 'calendar') ? 'header__nav-link--active' : ''; ?>"
                         title="<?php p($l->t('Calendar')); ?>">
-                        <span class="header__nav-icon">📅</span>
+                        <span class="header__nav-icon" aria-hidden="true">📅</span>
                         <span class="header__nav-text"><?php p($l->t('Calendar')); ?></span>
                     </a>
                 </li>
 
                 <li class="header__nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
                         class="header__nav-link <?php echo ($currentPage === 'settings') ? 'header__nav-link--active' : ''; ?>"
                         title="<?php p($l->t('Settings')); ?>">
                         <span class="header__nav-icon" aria-hidden="true">⚙️</span>
@@ -121,7 +121,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                     title="<?php p($l->t('User menu')); ?>">
                     <span class="header__user-avatar">
                         <?php if ($user): ?>
-                            <img src="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('core.avatar.getAvatar', ['userId' => $user->getUID(), 'size' => 32])); ?>"
+                            <img src="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('core.avatar.getAvatar', ['userId' => $user->getUID(), 'size' => 32])); ?>"
                                 alt="<?php p($user->getDisplayName()); ?>"
                                 class="header__user-avatar-image">
                         <?php else: ?>
@@ -134,22 +134,22 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                     <span class="header__user-arrow">▼</span>
                 </button>
 
-                <div class="header__user-dropdown" style="display: none;">
+                <div class="header__user-dropdown" aria-label="<?php p($l->t('User menu')); ?>" aria-hidden="true" style="display: none;">
                     <ul class="header__user-dropdown-list">
                         <?php if ($user): ?>
                             <li class="header__user-dropdown-item">
-                                <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
+                                <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
                                     class="header__user-dropdown-link">
-                                    <span class="header__user-dropdown-icon">👤</span>
+                                    <span class="header__user-dropdown-icon" aria-hidden="true">👤</span>
                                     <span class="header__user-dropdown-text"><?php p($l->t('Personal Settings')); ?></span>
                                 </a>
                             </li>
 
-                            <?php if (\OC::$server->getGroupManager()->isAdmin($user->getUID())): ?>
+                            <?php if (\OCP\Server::get(\OCP\IGroupManager::class)->isAdmin($user->getUID())): ?>
                                 <li class="header__user-dropdown-item">
-                                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.admin.dashboard')); ?>"
+                                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.dashboard')); ?>"
                                         class="header__user-dropdown-link">
-                                        <span class="header__user-dropdown-icon">🔧</span>
+                                        <span class="header__user-dropdown-icon" aria-hidden="true">🔧</span>
                                         <span class="header__user-dropdown-text"><?php p($l->t('Admin Dashboard')); ?></span>
                                     </a>
                                 </li>
@@ -158,17 +158,17 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                             <li class="header__user-dropdown-divider"></li>
 
                             <li class="header__user-dropdown-item">
-                                <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('core.login.logout')); ?>"
+                                <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('core.login.logout')); ?>"
                                     class="header__user-dropdown-link header__user-dropdown-link--logout">
-                                    <span class="header__user-dropdown-icon">🚪</span>
+                                    <span class="header__user-dropdown-icon" aria-hidden="true">🚪</span>
                                     <span class="header__user-dropdown-text"><?php p($l->t('Logout')); ?></span>
                                 </a>
                             </li>
                         <?php else: ?>
                             <li class="header__user-dropdown-item">
-                                <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('core.login.showLoginForm')); ?>"
+                                <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('core.login.showLoginForm')); ?>"
                                     class="header__user-dropdown-link">
-                                    <span class="header__user-dropdown-icon">🔑</span>
+                                    <span class="header__user-dropdown-icon" aria-hidden="true">🔑</span>
                                     <span class="header__user-dropdown-text"><?php p($l->t('Login')); ?></span>
                                 </a>
                             </li>
@@ -199,11 +199,11 @@ $currentUrl = $_SERVER['REQUEST_URI'];
     </div>
 
     <!-- Mobile Navigation -->
-    <div class="header__mobile-nav" style="display: none;">
+    <div class="header__mobile-nav" aria-hidden="true" style="display: none;">
         <nav class="header__mobile-navigation" role="navigation" aria-label="<?php p($l->t('Mobile navigation')); ?>">
             <ul class="header__mobile-nav-list">
                 <li class="header__mobile-nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.dashboard')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.dashboard')); ?>"
                         class="header__mobile-nav-link <?php echo ($currentPage === 'dashboard') ? 'header__mobile-nav-link--active' : ''; ?>">
                         <span class="header__mobile-nav-icon">📊</span>
                         <span class="header__mobile-nav-text"><?php p($l->t('Dashboard')); ?></span>
@@ -211,7 +211,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__mobile-nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
                         class="header__mobile-nav-link <?php echo ($currentPage === 'time-entries') ? 'header__mobile-nav-link--active' : ''; ?>">
                         <span class="header__mobile-nav-icon">⏱️</span>
                         <span class="header__mobile-nav-text"><?php p($l->t('Time Entries')); ?></span>
@@ -219,7 +219,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__mobile-nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.absences')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.absences')); ?>"
                         class="header__mobile-nav-link <?php echo ($currentPage === 'absences') ? 'header__mobile-nav-link--active' : ''; ?>">
                         <span class="header__mobile-nav-icon">🏖️</span>
                         <span class="header__mobile-nav-text"><?php p($l->t('Absences')); ?></span>
@@ -227,7 +227,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__mobile-nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.reports')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.reports')); ?>"
                         class="header__mobile-nav-link <?php echo ($currentPage === 'reports') ? 'header__mobile-nav-link--active' : ''; ?>">
                         <span class="header__mobile-nav-icon">📈</span>
                         <span class="header__mobile-nav-text"><?php p($l->t('Reports')); ?></span>
@@ -235,7 +235,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__mobile-nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.calendar')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.calendar')); ?>"
                         class="header__mobile-nav-link <?php echo ($currentPage === 'calendar') ? 'header__mobile-nav-link--active' : ''; ?>">
                         <span class="header__mobile-nav-icon">📅</span>
                         <span class="header__mobile-nav-text"><?php p($l->t('Calendar')); ?></span>
@@ -243,7 +243,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 </li>
 
                 <li class="header__mobile-nav-item">
-                    <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
+                    <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
                         class="header__mobile-nav-link <?php echo ($currentPage === 'settings') ? 'header__mobile-nav-link--active' : ''; ?>">
                         <span class="header__mobile-nav-icon">⚙️</span>
                         <span class="header__mobile-nav-text"><?php p($l->t('Settings')); ?></span>
@@ -289,8 +289,24 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 const isExpanded = this.getAttribute('aria-expanded') === 'true';
                 this.setAttribute('aria-expanded', !isExpanded);
                 mobileNav.style.display = isExpanded ? 'none' : 'block';
+                mobileNav.setAttribute('aria-hidden', isExpanded ? 'true' : 'false');
             });
         }
+
+        // Escape key closes user dropdown and mobile nav (keyboard a11y)
+        document.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape') return;
+            if (userDropdown && userDropdown.style.display === 'block') {
+                userDropdown.style.display = 'none';
+                userDropdown.setAttribute('aria-hidden', 'true');
+                if (userBtn) userBtn.setAttribute('aria-expanded', 'false');
+            }
+            if (mobileNav && mobileNav.style.display === 'block') {
+                mobileNav.style.display = 'none';
+                mobileNav.setAttribute('aria-hidden', 'true');
+                if (mobileToggle) mobileToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
 
         // User dropdown toggle
         if (userBtn && userDropdown) {
@@ -298,6 +314,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                 const isExpanded = this.getAttribute('aria-expanded') === 'true';
                 this.setAttribute('aria-expanded', !isExpanded);
                 userDropdown.style.display = isExpanded ? 'none' : 'block';
+                userDropdown.setAttribute('aria-hidden', isExpanded ? 'true' : 'false');
             });
         }
 
@@ -305,6 +322,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
         document.addEventListener('click', function(event) {
             if (userDropdown && userBtn && !header.contains(event.target)) {
                 userDropdown.style.display = 'none';
+                userDropdown.setAttribute('aria-hidden', 'true');
                 userBtn.setAttribute('aria-expanded', 'false');
             }
         });

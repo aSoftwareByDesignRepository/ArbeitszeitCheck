@@ -20,6 +20,7 @@ Util::addStyle('arbeitszeitcheck', 'common/typography');
 Util::addStyle('arbeitszeitcheck', 'common/base');
 Util::addStyle('arbeitszeitcheck', 'common/components');
 Util::addStyle('arbeitszeitcheck', 'common/layout');
+Util::addStyle('arbeitszeitcheck', 'common/app-layout');
 Util::addStyle('arbeitszeitcheck', 'common/utilities');
 Util::addStyle('arbeitszeitcheck', 'common/responsive');
 Util::addStyle('arbeitszeitcheck', 'common/accessibility');
@@ -28,7 +29,7 @@ Util::addStyle('arbeitszeitcheck', 'timeline');
 Util::addScript('arbeitszeitcheck', 'common/utils');
 Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 
-$urlGenerator = $_['urlGenerator'] ?? \OC::$server->getURLGenerator();
+$urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -37,7 +38,7 @@ $urlGenerator = $_['urlGenerator'] ?? \OC::$server->getURLGenerator();
     <div id="app-content-wrapper">
         <!-- Breadcrumb Navigation -->
         <div class="breadcrumb-container">
-            <nav class="breadcrumb" aria-label="Breadcrumb">
+            <nav class="breadcrumb" aria-label="<?php p($l->t('Breadcrumb')); ?>">
                 <ol>
                     <li><a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.index')); ?>"><?php p($l->t('Dashboard')); ?></a></li>
                     <li aria-current="page"><?php p($l->t('Timeline')); ?></li>
@@ -46,10 +47,10 @@ $urlGenerator = $_['urlGenerator'] ?? \OC::$server->getURLGenerator();
         </div>
 
         <!-- Page Header -->
-        <div class="section page-header-section">
+        <header class="section page-header-section" aria-labelledby="timeline-page-title">
             <div class="header-content">
                 <div class="header-text">
-                    <h2><?php p($l->t('Timeline')); ?></h2>
+                    <h2 id="timeline-page-title"><?php p($l->t('Timeline')); ?></h2>
                     <p><?php p($l->t('View your working time history in chronological order')); ?></p>
                 </div>
                 <div class="header-actions">
@@ -58,17 +59,17 @@ $urlGenerator = $_['urlGenerator'] ?? \OC::$server->getURLGenerator();
                     </button>
                 </div>
             </div>
-        </div>
+        </header>
 
         <!-- Timeline Content -->
-        <div class="section">
+        <section class="section" aria-label="<?php p($l->t('Timeline of working time')); ?>">
             <div id="timeline-container" class="timeline-container">
                 <div class="timeline-loading">
                     <div class="loading-spinner"></div>
                     <p><?php p($l->t('Loading timeline...')); ?></p>
                 </div>
             </div>
-        </div>
+        </section>
     </div>
 </div>
 

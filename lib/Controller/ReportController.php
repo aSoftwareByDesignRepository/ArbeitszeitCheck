@@ -12,9 +12,11 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Service\ReportingService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -26,6 +28,7 @@ use OCP\IL10N;
 class ReportController extends Controller
 {
 	private ReportingService $reportingService;
+	private PermissionService $permissionService;
 	private IUserSession $userSession;
 	private IL10N $l10n;
 
@@ -33,13 +36,28 @@ class ReportController extends Controller
 		string $appName,
 		IRequest $request,
 		ReportingService $reportingService,
+		PermissionService $permissionService,
 		IUserSession $userSession,
 		IL10N $l10n
 	) {
 		parent::__construct($appName, $request);
 		$this->reportingService = $reportingService;
+		$this->permissionService = $permissionService;
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
+	}
+
+	/**
+	 * Ensure current user may access reports for the given target user.
+	 * Allowed: own user, team members (manager), or admin.
+	 */
+	private function ensureCanAccessUserReport(string $currentUserId, string $targetUserId): void
+	{
+		if ($this->permissionService->canViewUserReport($currentUserId, $targetUserId)) {
+			return;
+		}
+		$this->permissionService->logPermissionDenied($currentUserId, 'view_report', 'report', $targetUserId);
+		throw new \Exception($this->l10n->t('Access denied. You can only view reports for yourself or your team members.'));
 	}
 
 	/**
@@ -64,12 +82,15 @@ class ReportController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function daily(?string $date = null, ?string $userId = null): JSONResponse
 	{
 		try {
-			$reportDate = $date ? new \DateTime($date) : new \DateTime();
-			$reportUserId = $userId ?? $this->getUserId();
+			$currentUserId = $this->getUserId();
+			$reportUserId = $userId ?? $currentUserId;
+			$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
 
+			$reportDate = $date ? new \DateTime($date) : new \DateTime();
 			$report = $this->reportingService->generateDailyReport($reportDate, $reportUserId);
 
 			return new JSONResponse([
@@ -78,15 +99,15 @@ class ReportController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
 			$errorMessage = $e->getMessage();
 			if (strpos($errorMessage, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
 			}
+			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
-			], Http::STATUS_BAD_REQUEST);
+			], $status);
 		}
 	}
 
@@ -98,6 +119,7 @@ class ReportController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function weekly(?string $weekStart = null, ?string $userId = null): JSONResponse
 	{
 		try {
@@ -110,7 +132,9 @@ class ReportController extends Controller
 			}
 			$weekStartDate->setTime(0, 0, 0);
 
-			$reportUserId = $userId ?? $this->getUserId();
+			$currentUserId = $this->getUserId();
+			$reportUserId = $userId ?? $currentUserId;
+			$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
 
 			$report = $this->reportingService->generateWeeklyReport($weekStartDate, $reportUserId);
 
@@ -125,10 +149,11 @@ class ReportController extends Controller
 			if (strpos($errorMessage, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
 			}
+			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
-			], Http::STATUS_BAD_REQUEST);
+			], $status);
 		}
 	}
 
@@ -140,6 +165,7 @@ class ReportController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function monthly(?string $month = null, ?string $userId = null): JSONResponse
 	{
 		try {
@@ -149,7 +175,9 @@ class ReportController extends Controller
 				$monthDate = new \DateTime();
 			}
 
-			$reportUserId = $userId ?? $this->getUserId();
+			$currentUserId = $this->getUserId();
+			$reportUserId = $userId ?? $currentUserId;
+			$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
 
 			$report = $this->reportingService->generateMonthlyReport($monthDate, $reportUserId);
 
@@ -164,10 +192,11 @@ class ReportController extends Controller
 			if (strpos($errorMessage, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
 			}
+			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
-			], Http::STATUS_BAD_REQUEST);
+			], $status);
 		}
 	}
 
@@ -180,6 +209,7 @@ class ReportController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function overtime(?string $startDate = null, ?string $endDate = null, ?string $userId = null): JSONResponse
 	{
 		try {
@@ -188,7 +218,9 @@ class ReportController extends Controller
 			$start->setTime(0, 0, 0);
 			$end->setTime(23, 59, 59);
 
-			$reportUserId = $userId ?? $this->getUserId();
+			$currentUserId = $this->getUserId();
+			$reportUserId = $userId ?? $currentUserId;
+			$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
 
 			$report = $this->reportingService->generateOvertimeReport($start, $end, $reportUserId);
 
@@ -203,10 +235,11 @@ class ReportController extends Controller
 			if (strpos($errorMessage, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
 			}
+			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
-			], Http::STATUS_BAD_REQUEST);
+			], $status);
 		}
 	}
 
@@ -219,15 +252,18 @@ class ReportController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function absence(?string $startDate = null, ?string $endDate = null, ?string $userId = null): JSONResponse
 	{
 		try {
+			$currentUserId = $this->getUserId();
+			$reportUserId = $userId ?? $currentUserId;
+			$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
+
 			$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-1 year');
 			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
 			$start->setTime(0, 0, 0);
 			$end->setTime(23, 59, 59);
-
-			$reportUserId = $userId ?? $this->getUserId();
 
 			$report = $this->reportingService->generateAbsenceReport($start, $end, $reportUserId);
 
@@ -242,10 +278,11 @@ class ReportController extends Controller
 			if (strpos($errorMessage, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
 			}
+			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
-			], Http::STATUS_BAD_REQUEST);
+			], $status);
 		}
 	}
 
@@ -258,6 +295,7 @@ class ReportController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function team(?string $startDate = null, ?string $endDate = null, ?string $userIds = null): JSONResponse
 	{
 		try {
@@ -266,12 +304,10 @@ class ReportController extends Controller
 			$start->setTime(0, 0, 0);
 			$end->setTime(23, 59, 59);
 
-			// If userIds provided, use them; otherwise get manager's team
+			// If userIds provided, use them; otherwise require manager's team (handled elsewhere)
 			if ($userIds) {
 				$teamUserIds = array_filter(array_map('trim', explode(',', $userIds)));
 			} else {
-				// For now, return error - team reports should be accessed via ManagerController
-				// This endpoint can be used by managers who provide user IDs
 				throw new \Exception($this->l10n->t('User IDs must be provided for team reports'));
 			}
 
@@ -282,6 +318,15 @@ class ReportController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
+			// Security: current user may view report only for self or users they can manage
+			$currentUserId = $this->getUserId();
+			foreach ($teamUserIds as $uid) {
+				if (!$this->permissionService->canViewUserReport($currentUserId, $uid)) {
+					$this->permissionService->logPermissionDenied($currentUserId, 'view_team_report', 'report', $uid);
+					throw new \Exception($this->l10n->t('Access denied. You can only view reports for yourself or your team members.'));
+				}
+			}
+
 			$report = $this->reportingService->generateTeamReport($teamUserIds, $start, $end);
 
 			return new JSONResponse([
@@ -290,15 +335,15 @@ class ReportController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
 			$errorMessage = $e->getMessage();
 			if (strpos($errorMessage, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
 			}
+			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
-			], Http::STATUS_BAD_REQUEST);
+			], $status);
 		}
 	}
 }

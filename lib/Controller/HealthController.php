@@ -18,6 +18,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\IDBConnection;
 use OCP\IRequest;
 use OCP\IL10N;
 
@@ -26,21 +27,15 @@ use OCP\IL10N;
  */
 class HealthController extends Controller
 {
-	private ComplianceService $complianceService;
-	private ProjectCheckIntegrationService $projectCheckService;
-	private IL10N $l10n;
-
 	public function __construct(
 		string $appName,
 		IRequest $request,
-		ComplianceService $complianceService,
-		ProjectCheckIntegrationService $projectCheckService,
-		IL10N $l10n
+		private readonly ComplianceService $complianceService,
+		private readonly ProjectCheckIntegrationService $projectCheckService,
+		private readonly IDBConnection $db,
+		private readonly IL10N $l10n,
 	) {
 		parent::__construct($appName, $request);
-		$this->complianceService = $complianceService;
-		$this->projectCheckService = $projectCheckService;
-		$this->l10n = $l10n;
 	}
 
 	/**
@@ -89,10 +84,8 @@ class HealthController extends Controller
 	private function checkDatabase(): array
 	{
 		try {
-			$db = \OC::$server->getDatabaseConnection();
-
 			// Test basic query
-			$query = $db->getQueryBuilder();
+			$query = $this->db->getQueryBuilder();
 			$query->select('1');
 			$result = $query->executeQuery()->fetchOne();
 

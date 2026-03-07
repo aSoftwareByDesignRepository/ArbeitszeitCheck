@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * Routes for the arbeitszeitcheck app
  *
@@ -64,10 +66,10 @@ return [
 		['name' => 'absence#stats', 'url' => '/api/absences/stats', 'verb' => 'GET'],
 		['name' => 'absence#users', 'url' => '/api/users', 'verb' => 'GET'],
 		['name' => 'absence#index', 'url' => '/api/absences', 'verb' => 'GET'],
-		['name' => 'absence#store', 'url' => '/api/absences', 'verb' => 'POST'],
-		['name' => 'absence#show', 'url' => '/api/absences/{id}', 'verb' => 'GET'],
-		['name' => 'absence#update', 'url' => '/api/absences/{id}', 'verb' => 'PUT'],
-		['name' => 'absence#delete', 'url' => '/api/absences/{id}', 'verb' => 'DELETE'],
+		['name' => 'absence#apiStore', 'url' => '/api/absences', 'verb' => 'POST'],
+		['name' => 'absence#apiShow', 'url' => '/api/absences/{id}', 'verb' => 'GET'],
+		['name' => 'absence#apiUpdate', 'url' => '/api/absences/{id}', 'verb' => 'PUT'],
+		['name' => 'absence#apiDelete', 'url' => '/api/absences/{id}', 'verb' => 'DELETE'],
 		['name' => 'absence#approve', 'url' => '/api/absences/{id}/approve', 'verb' => 'POST'],
 		['name' => 'absence#reject', 'url' => '/api/absences/{id}/reject', 'verb' => 'POST'],
 
@@ -83,6 +85,12 @@ return [
 		['name' => 'manager#approveTimeEntryCorrection', 'url' => '/api/manager/time-entries/{timeEntryId}/approve-correction', 'verb' => 'POST'],
 		['name' => 'manager#rejectTimeEntryCorrection', 'url' => '/api/manager/time-entries/{timeEntryId}/reject-correction', 'verb' => 'POST'],
 		['name' => 'manager#getPendingTimeEntryCorrections', 'url' => '/api/manager/pending-time-entry-corrections', 'verb' => 'GET'],
+
+		// Substitute (Vertretungs-Freigabe) routes
+		['name' => 'substitute#index', 'url' => '/substitution-requests', 'verb' => 'GET'],
+		['name' => 'substitute#getPending', 'url' => '/api/substitution-requests', 'verb' => 'GET'],
+		['name' => 'substitute#approve', 'url' => '/api/substitution-requests/{absenceId}/approve', 'verb' => 'POST'],
+		['name' => 'substitute#decline', 'url' => '/api/substitution-requests/{absenceId}/decline', 'verb' => 'POST'],
 
 		// Compliance routes
 		['name' => 'compliance#dashboard', 'url' => '/compliance', 'verb' => 'GET'],
@@ -130,6 +138,21 @@ return [
 		['name' => 'admin#updateWorkingTimeModel', 'url' => '/api/admin/working-time-models/{id}', 'verb' => 'PUT'],
 		['name' => 'admin#deleteWorkingTimeModel', 'url' => '/api/admin/working-time-models/{id}', 'verb' => 'DELETE'],
 		['name' => 'admin#exportUsers', 'url' => '/api/admin/users/export', 'verb' => 'GET'],
+
+		// Admin teams (app-owned teams/departments)
+		['name' => 'admin#teams', 'url' => '/admin/teams', 'verb' => 'GET'],
+		['name' => 'admin#getTeams', 'url' => '/api/admin/teams', 'verb' => 'GET'],
+		['name' => 'admin#createTeam', 'url' => '/api/admin/teams', 'verb' => 'POST'],
+		['name' => 'admin#updateTeam', 'url' => '/api/admin/teams/{id}', 'verb' => 'PUT'],
+		['name' => 'admin#deleteTeam', 'url' => '/api/admin/teams/{id}', 'verb' => 'DELETE'],
+		['name' => 'admin#getTeamMembers', 'url' => '/api/admin/teams/{id}/members', 'verb' => 'GET'],
+		['name' => 'admin#addTeamMember', 'url' => '/api/admin/teams/{id}/members', 'verb' => 'POST'],
+		['name' => 'admin#removeTeamMember', 'url' => '/api/admin/teams/{id}/members/{userId}', 'verb' => 'DELETE'],
+		['name' => 'admin#getTeamManagers', 'url' => '/api/admin/teams/{id}/managers', 'verb' => 'GET'],
+		['name' => 'admin#addTeamManager', 'url' => '/api/admin/teams/{id}/managers', 'verb' => 'POST'],
+		['name' => 'admin#removeTeamManager', 'url' => '/api/admin/teams/{id}/managers/{userId}', 'verb' => 'DELETE'],
+		['name' => 'admin#getTeamsUseAppTeams', 'url' => '/api/admin/teams/config/use-app-teams', 'verb' => 'GET'],
+		['name' => 'admin#setTeamsUseAppTeams', 'url' => '/api/admin/teams/config/use-app-teams', 'verb' => 'PUT'],
 
 		// Export routes
 		['name' => 'export#timeEntries', 'url' => '/export/time-entries', 'verb' => 'GET'],

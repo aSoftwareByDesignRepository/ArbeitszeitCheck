@@ -57,6 +57,49 @@ class Notifier implements INotifier {
 				);
 				break;
 
+			case 'substitution_request':
+				$employeeName = $parameters['employee_display_name'] ?? 'unknown';
+				$startDate = $parameters['start_date'] ?? null;
+				$endDate = $parameters['end_date'] ?? null;
+				$days = $parameters['days'] ?? 0;
+				$message = $l->t('%s has asked you to be their substitute from %s to %s (%d day(s)). Please approve or decline.', [
+					$employeeName,
+					$startDate ?? '?',
+					$endDate ?? '?',
+					(int)$days
+				]);
+				$notification->setParsedSubject(
+					$l->t('Substitution request')
+				)->setParsedMessage($message);
+				break;
+
+			case 'substitute_approved':
+				$substituteName = $parameters['substitute_display_name'] ?? 'unknown';
+				$startDate = $parameters['start_date'] ?? null;
+				$endDate = $parameters['end_date'] ?? null;
+				$notification->setParsedSubject(
+					$l->t('Substitute approved')
+				)->setParsedMessage(
+					$l->t('%s has approved your substitution request (%s – %s). It is now awaiting manager approval.', [
+						$substituteName,
+						$startDate ?? '?',
+						$endDate ?? '?'
+					])
+				);
+				break;
+
+			case 'substitute_declined':
+				$substituteName = $parameters['substitute_display_name'] ?? 'unknown';
+				$reason = $parameters['reason'] ?? null;
+				$message = $l->t('%s has declined your substitution request.', [$substituteName]);
+				if ($reason) {
+					$message .= ' ' . $l->t('Reason: %s', [$reason]);
+				}
+				$notification->setParsedSubject(
+					$l->t('Substitute declined')
+				)->setParsedMessage($message);
+				break;
+
 			case 'absence_approved':
 				$absenceType = $parameters['type'] ?? 'vacation';
 				$days = $parameters['days'] ?? 0;

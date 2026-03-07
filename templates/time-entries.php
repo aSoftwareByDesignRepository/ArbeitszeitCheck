@@ -21,6 +21,7 @@ Util::addStyle('arbeitszeitcheck', 'common/typography');
 Util::addStyle('arbeitszeitcheck', 'common/base');
 Util::addStyle('arbeitszeitcheck', 'common/components');
 Util::addStyle('arbeitszeitcheck', 'common/layout');
+Util::addStyle('arbeitszeitcheck', 'common/app-layout');
 Util::addStyle('arbeitszeitcheck', 'common/utilities');
 Util::addStyle('arbeitszeitcheck', 'common/responsive');
 Util::addStyle('arbeitszeitcheck', 'common/accessibility');
@@ -28,12 +29,13 @@ Util::addStyle('arbeitszeitcheck', 'navigation');
 Util::addStyle('arbeitszeitcheck', 'time-entries');
 Util::addStyle('arbeitszeitcheck', 'time-entry-form-accessibility');
 Util::addScript('arbeitszeitcheck', 'common/utils');
+Util::addScript('arbeitszeitcheck', 'common/datepicker');
 Util::addScript('arbeitszeitcheck', 'common/validation');
 Util::addScript('arbeitszeitcheck', 'time-entry-form-accessibility');
 Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 
 $entries = $_['entries'] ?? [];
-$urlGenerator = $_['urlGenerator'] ?? \OC::$server->getURLGenerator();
+$urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $stats = $_['stats'] ?? [];
 $mode = $_['mode'] ?? 'list'; // 'list', 'create', 'edit'
 $entry = $_['entry'] ?? null;
@@ -46,7 +48,7 @@ $error = $_['error'] ?? null;
     <div id="app-content-wrapper">
         <!-- Breadcrumb Navigation -->
         <div class="breadcrumb-container">
-            <nav class="breadcrumb" aria-label="Breadcrumb">
+            <nav class="breadcrumb" aria-label="<?php p($l->t('Breadcrumb')); ?>">
                 <ol>
                     <li><a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.index')); ?>"><?php p($l->t('Dashboard')); ?></a></li>
                     <li aria-current="page"><?php p($l->t('Time Entries')); ?></li>
@@ -55,10 +57,10 @@ $error = $_['error'] ?? null;
         </div>
 
         <!-- Page Header -->
-        <div class="section page-header-section">
+        <header class="section page-header-section" aria-labelledby="time-entries-page-title">
             <div class="header-content">
                 <div class="header-text">
-                    <h2><?php
+                    <h2 id="time-entries-page-title"><?php
                         if ($mode === 'create') {
                             p($l->t('Add Time Entry'));
                         } elseif ($mode === 'edit') {
@@ -120,11 +122,11 @@ $error = $_['error'] ?? null;
                     </div>
                 </div>
             <?php endif; ?>
-        </div>
+        </header>
 
         <?php if ($mode === 'create' || $mode === 'edit'): ?>
             <!-- Create/Edit Form -->
-            <div class="section">
+            <section class="section" aria-label="<?php p($l->t('Time entry form')); ?>">
                 <?php if ($error): ?>
                     <div class="alert alert--error">
                         <p><?php p($error); ?></p>
@@ -141,9 +143,9 @@ $error = $_['error'] ?? null;
                           aria-label="<?php p($l->t('Time Entry Form')); ?>"
                           aria-describedby="form-description">
                         <p id="form-description" class="sr-only">
-                            <?php echo $mode === 'create' 
+                            <?php p($mode === 'create'
                                 ? $l->t('Use this form to record when you worked. Fill in the date, start time, end time, and optionally break times. The form will automatically check compliance with German labor law requirements.')
-                                : $l->t('Use this form to edit your time entry. The form will automatically check compliance with German labor law requirements.'); ?>
+                                : $l->t('Use this form to edit your time entry. The form will automatically check compliance with German labor law requirements.')); ?>
                         </p>
 
                         <!-- Real-time Summary Section -->
@@ -179,10 +181,10 @@ $error = $_['error'] ?? null;
                                         <input type="text"
                                             id="entry-date"
                                             name="date"
-                                            class="form-input"
+                                            class="form-input datepicker-input"
                                             pattern="\d{2}\.\d{2}\.\d{4}"
                                             placeholder="dd.mm.yyyy"
-                                            value="<?php echo $entry ? $entry->getStartTime()->format('d.m.Y') : date('d.m.Y'); ?>"
+                                            value="<?php p($entry ? $entry->getStartTime()->format('d.m.Y') : date('d.m.Y')); ?>"
                                             aria-labelledby="entry-date-label"
                                             aria-describedby="entry-date-help entry-date-error"
                                             aria-required="true"
@@ -228,8 +230,8 @@ $error = $_['error'] ?? null;
                                                 aria-label="<?php p($l->t('Start hour')); ?>"
                                                 aria-required="true">
                                             <?php for ($h = 0; $h < 24; $h++): ?>
-                                                <option value="<?php echo sprintf('%02d', $h); ?>" <?php echo sprintf('%02d', $h) === $startHour ? 'selected' : ''; ?>>
-                                                    <?php echo sprintf('%02d', $h); ?>
+                                                <option value="<?php p(sprintf('%02d', $h)); ?>" <?php p(sprintf('%02d', $h) === $startHour ? 'selected' : ''); ?>>
+                                                    <?php p(sprintf('%02d', $h)); ?>
                                                 </option>
                                             <?php endfor; ?>
                                         </select>
@@ -241,15 +243,15 @@ $error = $_['error'] ?? null;
                                                 aria-label="<?php p($l->t('Start minute')); ?>"
                                                 aria-required="true">
                                             <?php for ($m = 0; $m < 60; $m += 1): ?>
-                                                <option value="<?php echo sprintf('%02d', $m); ?>" <?php echo sprintf('%02d', $m) === $startMinute ? 'selected' : ''; ?>>
-                                                    <?php echo sprintf('%02d', $m); ?>
+                                                <option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $startMinute ? 'selected' : ''); ?>>
+                                                    <?php p(sprintf('%02d', $m)); ?>
                                                 </option>
                                             <?php endfor; ?>
                                         </select>
                                         <input type="hidden" 
                                                id="entry-start-time" 
                                                name="startTime" 
-                                               value="<?php echo htmlspecialchars($startTimeValue); ?>" 
+                                               value="<?php p($startTimeValue); ?>" 
                                                required
                                                aria-invalid="false">
                                     </div>
@@ -284,8 +286,8 @@ $error = $_['error'] ?? null;
                                                 aria-label="<?php p($l->t('End hour')); ?>"
                                                 aria-required="true">
                                             <?php for ($h = 0; $h < 24; $h++): ?>
-                                                <option value="<?php echo sprintf('%02d', $h); ?>" <?php echo sprintf('%02d', $h) === $endHour ? 'selected' : ''; ?>>
-                                                    <?php echo sprintf('%02d', $h); ?>
+                                                <option value="<?php p(sprintf('%02d', $h)); ?>" <?php p(sprintf('%02d', $h) === $endHour ? 'selected' : ''); ?>>
+                                                    <?php p(sprintf('%02d', $h)); ?>
                                                 </option>
                                             <?php endfor; ?>
                                         </select>
@@ -297,15 +299,15 @@ $error = $_['error'] ?? null;
                                                 aria-label="<?php p($l->t('End minute')); ?>"
                                                 aria-required="true">
                                             <?php for ($m = 0; $m < 60; $m += 1): ?>
-                                                <option value="<?php echo sprintf('%02d', $m); ?>" <?php echo sprintf('%02d', $m) === $endMinute ? 'selected' : ''; ?>>
-                                                    <?php echo sprintf('%02d', $m); ?>
+                                                <option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $endMinute ? 'selected' : ''); ?>>
+                                                    <?php p(sprintf('%02d', $m)); ?>
                                                 </option>
                                             <?php endfor; ?>
                                         </select>
                                         <input type="hidden" 
                                                id="entry-end-time" 
                                                name="endTime" 
-                                               value="<?php echo htmlspecialchars($endTimeValue); ?>" 
+                                               value="<?php p($endTimeValue); ?>" 
                                                required
                                                aria-invalid="false">
                                     </div>
@@ -390,7 +392,7 @@ $error = $_['error'] ?? null;
 
                                 foreach ($existingBreaks as $index => $break):
                                 ?>
-                                    <div class="break-entry" data-break-index="<?php echo $index; ?>">
+                                    <div class="break-entry" data-break-index="<?php p((string)$index); ?>">
                                         <div class="form-grid form-grid--2">
                                             <div class="form-group">
                                                 <label class="form-label">
@@ -404,25 +406,25 @@ $error = $_['error'] ?? null;
                                                 $breakStartHour = $breakStartParts[0] ?? '';
                                                 $breakStartMinute = $breakStartParts[1] ?? '';
                                                 ?>
-                                                <div class="time-input-group" data-time-input="break-start-<?php echo $index; ?>">
-                                                    <select class="form-input time-hour break-start-time-hour" data-break-index="<?php echo $index; ?>" aria-label="<?php p($l->t('Break start hour')); ?>">
+                                                <div class="time-input-group" data-time-input="break-start-<?php p((string)$index); ?>">
+                                                    <select class="form-input time-hour break-start-time-hour" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break start hour')); ?>">
                                                         <option value="">--</option>
                                                         <?php for ($h = 0; $h < 24; $h++): ?>
-                                                            <option value="<?php echo sprintf('%02d', $h); ?>" <?php echo sprintf('%02d', $h) === $breakStartHour ? 'selected' : ''; ?>>
-                                                                <?php echo sprintf('%02d', $h); ?>
+                                                            <option value="<?php p(sprintf('%02d', $h)); ?>" <?php p(sprintf('%02d', $h) === $breakStartHour ? 'selected' : ''); ?>>
+                                                                <?php p(sprintf('%02d', $h)); ?>
                                                             </option>
                                                         <?php endfor; ?>
                                                     </select>
                                                     <span class="time-separator">:</span>
-                                                    <select class="form-input time-minute break-start-time-minute" data-break-index="<?php echo $index; ?>" aria-label="<?php p($l->t('Break start minute')); ?>">
+                                                    <select class="form-input time-minute break-start-time-minute" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break start minute')); ?>">
                                                         <option value="">--</option>
                                                         <?php for ($m = 0; $m < 60; $m += 1): ?>
-                                                            <option value="<?php echo sprintf('%02d', $m); ?>" <?php echo sprintf('%02d', $m) === $breakStartMinute ? 'selected' : ''; ?>>
-                                                                <?php echo sprintf('%02d', $m); ?>
+                                                            <option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $breakStartMinute ? 'selected' : ''); ?>>
+                                                                <?php p(sprintf('%02d', $m)); ?>
                                                             </option>
                                                         <?php endfor; ?>
                                                     </select>
-                                                    <input type="hidden" class="break-start-time" data-break-index="<?php echo $index; ?>" name="breaks[<?php echo $index; ?>][start]" value="<?php echo htmlspecialchars($breakStartValue); ?>">
+                                                    <input type="hidden" class="break-start-time" data-break-index="<?php p((string)$index); ?>" name="breaks[<?php p((string)$index); ?>][start]" value="<?php p($breakStartValue); ?>">
                                                 </div>
                                                 <p class="form-help"><?php p($l->t('Optional: When did your break start? Use automatic breaks for legal compliance.')); ?></p>
                                             </div>
@@ -440,28 +442,28 @@ $error = $_['error'] ?? null;
                                                     $breakEndHour = $breakEndParts[0] ?? '';
                                                     $breakEndMinute = $breakEndParts[1] ?? '';
                                                     ?>
-                                                    <div class="time-input-group" data-time-input="break-end-<?php echo $index; ?>">
-                                                        <select class="form-input time-hour break-end-time-hour" data-break-index="<?php echo $index; ?>" aria-label="<?php p($l->t('Break end hour')); ?>">
+                                                    <div class="time-input-group" data-time-input="break-end-<?php p((string)$index); ?>">
+                                                        <select class="form-input time-hour break-end-time-hour" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break end hour')); ?>">
                                                             <option value="">--</option>
                                                             <?php for ($h = 0; $h < 24; $h++): ?>
-                                                                <option value="<?php echo sprintf('%02d', $h); ?>" <?php echo sprintf('%02d', $h) === $breakEndHour ? 'selected' : ''; ?>>
-                                                                    <?php echo sprintf('%02d', $h); ?>
+                                                                <option value="<?php p(sprintf('%02d', $h)); ?>" <?php p(sprintf('%02d', $h) === $breakEndHour ? 'selected' : ''); ?>>
+                                                                    <?php p(sprintf('%02d', $h)); ?>
                                                                 </option>
                                                             <?php endfor; ?>
                                                         </select>
                                                         <span class="time-separator">:</span>
-                                                        <select class="form-input time-minute break-end-time-minute" data-break-index="<?php echo $index; ?>" aria-label="<?php p($l->t('Break end minute')); ?>">
+                                                        <select class="form-input time-minute break-end-time-minute" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break end minute')); ?>">
                                                             <option value="">--</option>
                                                             <?php for ($m = 0; $m < 60; $m += 1): ?>
-                                                                <option value="<?php echo sprintf('%02d', $m); ?>" <?php echo sprintf('%02d', $m) === $breakEndMinute ? 'selected' : ''; ?>>
-                                                                    <?php echo sprintf('%02d', $m); ?>
+<option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $breakEndMinute ? 'selected' : ''); ?>>
+                                                                <?php p(sprintf('%02d', $m)); ?>
                                                                 </option>
                                                             <?php endfor; ?>
                                                         </select>
-                                                        <input type="hidden" class="break-end-time" data-break-index="<?php echo $index; ?>" name="breaks[<?php echo $index; ?>][end]" value="<?php echo htmlspecialchars($breakEndValue); ?>">
+                                                        <input type="hidden" class="break-end-time" data-break-index="<?php p((string)$index); ?>" name="breaks[<?php p((string)$index); ?>][end]" value="<?php p($breakEndValue); ?>">
                                                     </div>
                                                     <?php if ($index > 0): ?>
-                                                        <button type="button" class="btn btn--sm btn--danger btn-remove-break" data-break-index="<?php echo $index; ?>" title="<?php p($l->t('Remove break')); ?>">
+                                                        <button type="button" class="btn btn--sm btn--danger btn-remove-break" data-break-index="<?php p((string)$index); ?>" title="<?php p($l->t('Remove break')); ?>">
                                                             <?php p($l->t('Remove')); ?>
                                                         </button>
                                                     <?php endif; ?>
@@ -495,7 +497,7 @@ $error = $_['error'] ?? null;
                                     rows="6"
                                     aria-labelledby="entry-description-label"
                                     aria-describedby="entry-description-help"
-                                    placeholder="<?php p($l->t('Optional: Add notes or details about this work period (e.g., project work, meetings, tasks)')); ?>"><?php echo $entry ? htmlspecialchars($entry->getDescription() ?? '') : ''; ?></textarea>
+                                    placeholder="<?php p($l->t('Optional: Add notes or details about this work period (e.g., project work, meetings, tasks)')); ?>"><?php p($entry ? ($entry->getDescription() ?? '') : ''); ?></textarea>
                                 <p id="entry-description-help" class="form-help">
                                     <?php p($l->t('Optional: Add notes or details about this work period (e.g., project work, meetings, tasks)')); ?>
                                 </p>
@@ -507,12 +509,12 @@ $error = $_['error'] ?? null;
                                     id="submit-button"
                                     class="btn btn--primary btn--lg"
                                     aria-describedby="submit-button-help">
-                                <?php echo $mode === 'create' ? $l->t('Create Entry') : $l->t('Update Entry'); ?>
+                                <?php p($mode === 'create' ? $l->t('Create Entry') : $l->t('Update Entry')); ?>
                             </button>
                             <span id="submit-button-help" class="sr-only">
-                                <?php echo $mode === 'create' 
+                                <?php p($mode === 'create'
                                     ? $l->t('Click to save your time entry. The form will be validated before saving.')
-                                    : $l->t('Click to update your time entry. The form will be validated before saving.'); ?>
+                                    : $l->t('Click to update your time entry. The form will be validated before saving.')); ?>
                             </span>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>" 
                                class="btn btn--secondary btn--lg"
@@ -522,18 +524,19 @@ $error = $_['error'] ?? null;
                         </div>
                     </form>
                 </div>
-            </div>
+            </section>
         <?php else: ?>
+            <section class="section" aria-label="<?php p($l->t('Time entries list')); ?>" role="region">
             <!-- Filter Section (initially hidden) -->
             <div id="filter-section" class="section filter-section" style="display: none;">
                 <div class="form">
                     <div class="form-group">
                         <label for="filter-start-date" class="form-label"><?php p($l->t('Start Date')); ?></label>
-                        <input type="date" id="filter-start-date" name="start_date" class="form-input">
+                        <input type="text" id="filter-start-date" name="start_date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
                     </div>
                     <div class="form-group">
                         <label for="filter-end-date" class="form-label"><?php p($l->t('End Date')); ?></label>
-                        <input type="date" id="filter-end-date" name="end_date" class="form-input">
+                        <input type="text" id="filter-end-date" name="end_date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
                     </div>
                     <div class="form-group">
                         <label for="filter-status" class="form-label"><?php p($l->t('Status')); ?></label>
@@ -554,18 +557,18 @@ $error = $_['error'] ?? null;
             <!-- Time Entries Table -->
             <div class="section">
                 <div class="table-container">
-                    <table class="table table--hover" id="time-entries-table">
+                    <table class="table table--hover" id="time-entries-table" role="table" aria-label="<?php p($l->t('Time entries list')); ?>">
                         <thead>
                             <tr>
-                                <th><?php p($l->t('Date')); ?></th>
-                                <th><?php p($l->t('Start Time')); ?></th>
-                                <th><?php p($l->t('End Time')); ?></th>
-                                <th><?php p($l->t('Duration')); ?></th>
-                                <th><?php p($l->t('Break')); ?></th>
-                                <th><?php p($l->t('Working Hours')); ?></th>
-                                <th><?php p($l->t('Description')); ?></th>
-                                <th><?php p($l->t('Status')); ?></th>
-                                <th><?php p($l->t('Actions')); ?></th>
+                                <th scope="col"><?php p($l->t('Date')); ?></th>
+                                <th scope="col"><?php p($l->t('Start Time')); ?></th>
+                                <th scope="col"><?php p($l->t('End Time')); ?></th>
+                                <th scope="col"><?php p($l->t('Duration')); ?></th>
+                                <th scope="col"><?php p($l->t('Break')); ?></th>
+                                <th scope="col"><?php p($l->t('Working Hours')); ?></th>
+                                <th scope="col"><?php p($l->t('Description')); ?></th>
+                                <th scope="col"><?php p($l->t('Status')); ?></th>
+                                <th scope="col"><?php p($l->t('Actions')); ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -634,19 +637,17 @@ $error = $_['error'] ?? null;
                                             }
 
                                             if (!empty($breakTimes)) {
-                                                // Show break times with duration
+                                                // Show break times with duration (all dynamic output escaped)
                                                 $breakDuration = round($entry->getBreakDurationHours() ?? 0, 2);
-                                                echo '<div title="' . htmlspecialchars(implode(', ', $breakTimes)) . '">';
-                                                echo htmlspecialchars(implode(', ', $breakTimes));
-                                                echo ' <span class="text-muted">(' . $breakDuration . ' h)</span>';
-                                                echo '</div>';
+                                                $breakTimesStr = implode(', ', $breakTimes);
+                                                ?><div title="<?php p($breakTimesStr); ?>"><?php p($breakTimesStr); ?> <span class="text-muted">(<?php p($breakDuration . ' h'); ?>)</span></div><?php
                                             } else {
                                                 // Only show duration if no times available
                                                 $breakDuration = round($entry->getBreakDurationHours() ?? 0, 2);
                                                 if ($breakDuration > 0) {
-                                                    echo $breakDuration . ' h';
+                                                    p($breakDuration . ' h');
                                                 } else {
-                                                    echo '-';
+                                                    p('-');
                                                 }
                                             }
                                             ?>
@@ -697,12 +698,12 @@ $error = $_['error'] ?? null;
                                         </td>
                                         <td>
                                             <span class="badge badge--<?php
-                                                                        echo match ($entry->getStatus()) {
+                                                                        p(match ($entry->getStatus()) {
                                                                             'completed' => 'success',
                                                                             'active' => 'primary',
                                                                             'pending_approval' => 'warning',
                                                                             default => 'secondary'
-                                                                        };
+                                                                        });
                                                                         ?>">
                                                 <?php
                                                 $statusKey = $entry->getStatus();
@@ -710,6 +711,9 @@ $error = $_['error'] ?? null;
                                                     'completed' => $l->t('Completed'),
                                                     'active' => $l->t('Active'),
                                                     'pending_approval' => $l->t('Pending Approval'),
+                                                    'break' => $l->t('Break'),
+                                                    'paused' => $l->t('Paused'),
+                                                    'rejected' => $l->t('Rejected'),
                                                     default => $statusKey
                                                 };
                                                 p($statusLabel);
@@ -799,6 +803,7 @@ $error = $_['error'] ?? null;
                     </div>
                 <?php endif; ?>
             </div>
+            </section>
         <?php endif; ?>
     </div>
 </div>
@@ -834,6 +839,11 @@ $error = $_['error'] ?? null;
         delete: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.time_entry.apiDelete', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>.replace('__ID__', ''),
         export: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.timeEntries'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
     };
+
+    // Escape HTML for safe injection (XSS prevention)
+    const _escapeHtml = (typeof window.ArbeitszeitCheckUtils !== 'undefined' && window.ArbeitszeitCheckUtils.escapeHtml)
+        ? window.ArbeitszeitCheckUtils.escapeHtml
+        : function(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 
     // Handle form submission for create/edit
     <?php if ($mode === 'create' || $mode === 'edit'): ?>
@@ -1397,7 +1407,7 @@ $error = $_['error'] ?? null;
                     const errorContainer = document.getElementById('entry-date-error');
                     if (errorContainer) {
                     errorContainer.style.display = 'block';
-                    errorContainer.innerHTML = `<div class="form-error" role="alert"><span class="form-error__icon" aria-hidden="true">⚠️</span><div class="form-error__content"><strong>${message}</strong></div></div>`;
+                    errorContainer.innerHTML = `<div class="form-error" role="alert"><span class="form-error__icon" aria-hidden="true">⚠️</span><div class="form-error__content"><strong>${_escapeHtml(String(message))}</strong></div></div>`;
                 }
                 if (this.dateInput) {
                     this.dateInput.setAttribute('aria-invalid', 'true');
@@ -2086,7 +2096,7 @@ $error = $_['error'] ?? null;
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'requesttoken': OC.requestToken || ''
+                            'requesttoken': (typeof OC !== 'undefined' && OC.requestToken) || (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || ''
                         },
                         body: JSON.stringify(data),
                         signal: controller.signal

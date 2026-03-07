@@ -14,16 +14,20 @@ namespace OCA\ArbeitszeitCheck\AppInfo;
 use OCA\ArbeitszeitCheck\Capabilities;
 use OCA\ArbeitszeitCheck\Listener\LoadSidebarScripts;
 use OCA\ArbeitszeitCheck\Listener\CSPListener;
+use OCA\ArbeitszeitCheck\Listener\UserDeletedListener;
 use OCA\ArbeitszeitCheck\Notification\Notifier;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\AbsenceIcalMailService;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\DatevExportService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\Files\Event\LoadSidebar;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -32,6 +36,7 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\IDBConnection;
 use OCP\Notification\IManager as INotificationManager;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
+use OCP\User\Events\UserDeletedEvent;
 
 /**
  * Class Application
@@ -58,6 +63,7 @@ class Application extends App implements IBootstrap {
 		// Register event listeners
 		$context->registerEventListener(LoadSidebar::class, LoadSidebarScripts::class);
 		$context->registerEventListener(AddContentSecurityPolicyEvent::class, CSPListener::class);
+		$context->registerEventListener(UserDeletedEvent::class, UserDeletedListener::class);
 
 		// Register mappers
 		$context->registerService(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class, function($c) {
@@ -102,9 +108,27 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\TeamMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\TeamMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\TeamMemberMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\TeamMemberMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\TeamManagerMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\TeamManagerMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+
 		// Register CSPService
 		$context->registerService(CSPService::class, function($c) {
-			return new CSPService();
+			return new CSPService(
+				$c->query(\OC\Security\CSP\ContentSecurityPolicyNonceManager::class)
+			);
 		});
 
 		// Register ProjectCheckIntegrationService
@@ -112,7 +136,8 @@ class Application extends App implements IBootstrap {
 			return new ProjectCheckIntegrationService(
 				$c->query(\OCP\App\IAppManager::class),
 				$c->query(IDBConnection::class),
-				$c->query(\OCP\IL10N::class)
+				$c->query(\OCP\IL10N::class),
+				$c->query(\Psr\Log\LoggerInterface::class)
 			);
 		});
 
@@ -123,7 +148,18 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
 				$c->query(ProjectCheckIntegrationService::class),
+				$c->query(ComplianceService::class),
 				$c->query(\OCP\IL10N::class)
+			);
+		});
+
+		$context->registerService(AbsenceIcalMailService::class, function($c) {
+			return new AbsenceIcalMailService(
+				$c->query(\OCP\Mail\IMailer::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IL10N::class),
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\Psr\Log\LoggerInterface::class)
 			);
 		});
 
@@ -132,8 +168,11 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\IL10N::class),
-				$c->query(NotificationService::class)
+				$c->query(NotificationService::class),
+				$c->query(AbsenceIcalMailService::class)
 			);
 		});
 
@@ -183,6 +222,25 @@ class Application extends App implements IBootstrap {
 				$c->query(OvertimeService::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\IL10N::class)
+			);
+		});
+
+		$context->registerService(TeamResolverService::class, function($c) {
+			return new TeamResolverService(
+				$c->query(\OCP\IGroupManager::class),
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TeamMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TeamMemberMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TeamManagerMapper::class)
+			);
+		});
+
+		$context->registerService(PermissionService::class, function($c) {
+			return new PermissionService(
+				$c->query(\OCP\IGroupManager::class),
+				$c->query(TeamResolverService::class),
+				$c->query(\Psr\Log\LoggerInterface::class)
 			);
 		});
 

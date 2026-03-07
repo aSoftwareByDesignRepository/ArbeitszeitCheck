@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
-$l = \OC::$server->getL10N('arbeitszeitcheck');
+$l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $logs = $_['logs'] ?? [];
 $total = $_['total'] ?? 0;
@@ -31,8 +31,8 @@ $total = $_['total'] ?? 0;
             <!-- Filters -->
             <div class="section-content mb-3">
                 <div class="flex flex--gap">
-                    <input type="date" id="start-date" class="form-input" placeholder="<?php p($l->t('Start Date')); ?>">
-                    <input type="date" id="end-date" class="form-input" placeholder="<?php p($l->t('End Date')); ?>">
+                    <input type="text" id="start-date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
+                    <input type="text" id="end-date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
                     <input type="text" id="user-filter" class="form-input" placeholder="<?php p($l->t('User ID')); ?>">
                     <select id="action-filter" class="form-select">
                         <option value=""><?php p($l->t('All Actions')); ?></option>
@@ -50,15 +50,15 @@ $total = $_['total'] ?? 0;
             </div>
 
             <!-- Audit Log Table -->
-            <div class="table-responsive">
-                <table class="table" id="audit-log-table">
+            <div class="table-responsive" role="region" aria-label="<?php p($l->t('Audit log')); ?>">
+                <table class="table" id="audit-log-table" role="table" aria-label="<?php p($l->t('Audit log')); ?>">
                     <thead>
                         <tr>
-                            <th><?php p($l->t('Date and Time')); ?></th>
-                            <th><?php p($l->t('Employee')); ?></th>
-                            <th><?php p($l->t('What They Did')); ?></th>
-                            <th><?php p($l->t('What Was Changed')); ?></th>
-                            <th><?php p($l->t('Who Did It')); ?></th>
+                            <th scope="col"><?php p($l->t('Date and Time')); ?></th>
+                            <th scope="col"><?php p($l->t('Employee')); ?></th>
+                            <th scope="col"><?php p($l->t('What They Did')); ?></th>
+                            <th scope="col"><?php p($l->t('What Was Changed')); ?></th>
+                            <th scope="col"><?php p($l->t('Who Did It')); ?></th>
                         </tr>
                     </thead>
                     <tbody id="audit-log-tbody">

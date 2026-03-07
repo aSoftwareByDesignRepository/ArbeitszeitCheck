@@ -4,11 +4,9 @@ on:
   push:
     paths:
       - "apps/arbeitszeitcheck/**"
-      - ".github/workflows/arbeitszeitcheck-tests.yml"
   pull_request:
     paths:
       - "apps/arbeitszeitcheck/**"
-      - ".github/workflows/arbeitszeitcheck-tests.yml"
 
 jobs:
   php-tests:
@@ -62,7 +60,7 @@ jobs:
           cache-dependency-path: apps/arbeitszeitcheck/package-lock.json
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run ESLint
         run: npm run lint
@@ -93,7 +91,7 @@ jobs:
           cache-dependency-path: apps/arbeitszeitcheck/package-lock.json
 
       - name: Install JavaScript dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run accessibility tests
         run: npm run test:a11y

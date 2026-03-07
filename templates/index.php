@@ -13,8 +13,8 @@ declare(strict_types=1);
 /** @var \OCP\IURLGenerator $urlGenerator */
 
 
-$urlGenerator = \OC::$server->getURLGenerator();
-$l = \OC::$server->getL10N('arbeitszeitcheck');
+$urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
+$l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $status = $_['status'] ?? [];
 $overtime = $_['overtime'] ?? [];
@@ -116,14 +116,14 @@ $content = '';
                 <div class="arbeitszeitcheck-section recent-entries-section">
                     <h3><?php p($l->t('Recent Entries')); ?></h3>
                     <div class="table-responsive">
-                        <table class="arbeitszeitcheck-table">
+                        <table class="arbeitszeitcheck-table" role="table" aria-label="<?php p($l->t('Recent time entries')); ?>">
                             <thead>
                                 <tr>
-                                    <th><?php p($l->t('Date')); ?></th>
-                                    <th><?php p($l->t('Start')); ?></th>
-                                    <th><?php p($l->t('End')); ?></th>
-                                    <th><?php p($l->t('Duration')); ?></th>
-                                    <th><?php p($l->t('Status')); ?></th>
+                                    <th scope="col"><?php p($l->t('Date')); ?></th>
+                                    <th scope="col"><?php p($l->t('Start')); ?></th>
+                                    <th scope="col"><?php p($l->t('End')); ?></th>
+                                    <th scope="col"><?php p($l->t('Duration')); ?></th>
+                                    <th scope="col"><?php p($l->t('Status')); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -152,9 +152,23 @@ $content = '';
                                                 'completed' => 'success',
                                                 'active' => 'primary',
                                                 'pending_approval' => 'warning',
+                                                'break' => 'primary',
+                                                'paused' => 'secondary',
+                                                'rejected' => 'error',
                                                 default => 'secondary'
                                             };
-                                        ?>"><?php p($entry->getStatus()); ?></span></td>
+                                        ?>"><?php
+                                            $entryStatusKey = $entry->getStatus();
+                                            p(match($entryStatusKey) {
+                                                'completed' => $l->t('Completed'),
+                                                'active' => $l->t('Active'),
+                                                'pending_approval' => $l->t('Pending Approval'),
+                                                'break' => $l->t('Break'),
+                                                'paused' => $l->t('Paused'),
+                                                'rejected' => $l->t('Rejected'),
+                                                default => $entryStatusKey
+                                            });
+                                        ?></span></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 <?php if (empty($_['recentEntries'])): ?>
@@ -172,14 +186,14 @@ $content = '';
                     <h2><?php p($l->t('Time Entries')); ?></h2>
                 </div>
                 <div class="table-responsive">
-                    <table class="arbeitszeitcheck-table">
+                    <table class="arbeitszeitcheck-table" role="table" aria-label="<?php p($l->t('Time entries list')); ?>">
                         <thead>
                             <tr>
-                                <th><?php p($l->t('Date')); ?></th>
-                                <th><?php p($l->t('Start')); ?></th>
-                                <th><?php p($l->t('End')); ?></th>
-                                <th><?php p($l->t('Duration')); ?></th>
-                                <th><?php p($l->t('Status')); ?></th>
+                                <th scope="col"><?php p($l->t('Date')); ?></th>
+                                <th scope="col"><?php p($l->t('Start')); ?></th>
+                                <th scope="col"><?php p($l->t('End')); ?></th>
+                                <th scope="col"><?php p($l->t('Duration')); ?></th>
+                                <th scope="col"><?php p($l->t('Status')); ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -217,22 +231,44 @@ $content = '';
                     <h2><?php p($l->t('Absences')); ?></h2>
                 </div>
                 <div class="table-responsive">
-                    <table class="arbeitszeitcheck-table">
+                    <table class="arbeitszeitcheck-table" role="table" aria-label="<?php p($l->t('Absence requests list')); ?>">
                         <thead>
                             <tr>
-                                <th><?php p($l->t('Type')); ?></th>
-                                <th><?php p($l->t('Start Date')); ?></th>
-                                <th><?php p($l->t('End Date')); ?></th>
-                                <th><?php p($l->t('Status')); ?></th>
+                                <th scope="col"><?php p($l->t('Type')); ?></th>
+                                <th scope="col"><?php p($l->t('Start Date')); ?></th>
+                                <th scope="col"><?php p($l->t('End Date')); ?></th>
+                                <th scope="col"><?php p($l->t('Status')); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($_['absences'] ?? [] as $absence): ?>
                                 <tr>
-                                    <td><?php p($absence->getType()); ?></td>
+                                    <td><?php
+                                        $typeKey = $absence->getType();
+                                        $typeLabel = match($typeKey) {
+                                            'vacation' => $l->t('Vacation'),
+                                            'sick', 'sick_leave' => $l->t('Sick Leave'),
+                                            'personal_leave' => $l->t('Personal Leave'),
+                                            'parental_leave' => $l->t('Parental Leave'),
+                                            'special_leave' => $l->t('Special Leave'),
+                                            'unpaid_leave' => $l->t('Unpaid Leave'),
+                                            'home_office' => $l->t('Home Office'),
+                                            'business_trip' => $l->t('Business Trip'),
+                                            default => $l->t('Absence')
+                                        };
+                                        p($typeLabel);
+                                    ?></td>
                                     <td><?php p($absence->getStartDate()->format('d.m.Y')); ?></td>
                                     <td><?php p($absence->getEndDate()->format('d.m.Y')); ?></td>
-                                    <td><span class="badge"><?php p($absence->getStatus()); ?></span></td>
+                                    <td><span class="badge"><?php
+                                        $statusKey = $absence->getStatus();
+                                        p(match($statusKey) {
+                                            'approved' => $l->t('Approved'),
+                                            'pending' => $l->t('Pending'),
+                                            'rejected' => $l->t('Rejected'),
+                                            default => $l->t(ucfirst($statusKey))
+                                        });
+                                    ?></span></td>
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (empty($_['absences'])): ?>
@@ -250,7 +286,7 @@ $content = '';
                 </div>
                 <div class="arbeitszeitcheck-card">
                     <p><?php p($l->t('ArbeitszeitCheck version:')); ?> 1.0.1</p>
-                    <p><?php p($l->t('User:')); ?> <?php p(\OC::$server->getUserSession()->getUser()->getDisplayName()); ?> (<?php p(\OC::$server->getUserSession()->getUser()->getUID()); ?>)</p>
+                    <p><?php p($l->t('User:')); ?> <?php $user = \OCP\Server::get(\OCP\IUserSession::class)->getUser(); p($user ? $user->getDisplayName() : ''); ?> (<?php p($user ? $user->getUID() : ''); ?>)</p>
                 </div>
 
             <?php else: ?>

@@ -328,18 +328,23 @@
 /* ===== TOUCH TARGET ENHANCEMENTS ===== */
 
 @media (max-width: 768px) {
-  /* Ensure all interactive elements are touch-friendly */
+  /* Ensure interactive elements have touch-friendly targets (WCAG 2.5.5) */
   button,
   .btn,
   a,
   input[type="button"],
   input[type="submit"],
   input[type="reset"],
-  input[type="checkbox"],
-  input[type="radio"],
   select {
     min-height: 44px;
     min-width: 44px;
+  }
+
+  /* Checkbox/radio: touch target is the label; keep control size normal */
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 24px;
+    min-width: 24px;
   }
 
   /* Small buttons still accessible */

@@ -19,6 +19,7 @@ use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
@@ -61,8 +62,10 @@ class GdprController extends Controller
 
 	/**
 	 * Export all user data for GDPR compliance (Art. 15 GDPR - Right to access)
+	 * NoCSRFRequired: GET download is often opened via direct link (e.g. from settings); user must be logged in.
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function export(): DataDownloadResponse
 	{
 		try {
@@ -236,6 +239,7 @@ class GdprController extends Controller
 	 * Note: This respects legal retention periods (2 years minimum for time records per German labor law)
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function delete(): JSONResponse
 	{
 		try {

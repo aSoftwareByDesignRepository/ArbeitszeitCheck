@@ -1365,40 +1365,34 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   line-height: var(--arbeitszeitcheck-line-height-none, 1);
   border-radius: var(--radius-full, 9999px);
   white-space: nowrap;
-  /* Use Nextcloud standard variables with fallbacks */
-  background-color: var(--color-background-hover, var(--color-background-dark, #f0f0f0));
-  color: var(--color-main-text, var(--color-text, #000));
+  /* Nextcloud theme variables only (no hex fallbacks for theme compatibility) */
+  background-color: var(--color-background-hover);
+  color: var(--color-main-text);
 }
 
 .badge--primary {
-  background-color: var(--color-primary-element, var(--color-primary, #0082c9));
-  color: var(--color-primary-element-text, var(--color-primary-text, #ffffff));
+  background-color: var(--color-primary-element);
+  color: var(--color-primary-element-text);
 }
 
 .badge--secondary {
-  background-color: var(--color-background-hover, var(--color-background-dark, #f0f0f0));
-  color: var(--color-text-maxcontrast, var(--color-text, #666));
+  background-color: var(--color-background-hover);
+  color: var(--color-text-maxcontrast);
 }
 
 .badge--success {
-  background-color: var(--color-success, #46ba61);
-  color: var(--color-success-text, #ffffff);
-  /* Fallback for themes without success-text */
-  color: var(--color-success-text, var(--color-main-background, #ffffff));
+  background-color: var(--color-success);
+  color: var(--color-success-text);
 }
 
 .badge--warning {
-  background-color: var(--color-warning, #eca700);
-  color: var(--color-warning-text, #ffffff);
-  /* Fallback for themes without warning-text */
-  color: var(--color-warning-text, var(--color-main-background, #ffffff));
+  background-color: var(--color-warning);
+  color: var(--color-warning-text);
 }
 
 .badge--error {
-  background-color: var(--color-error, #e9322d);
-  color: var(--color-error-text, #ffffff);
-  /* Fallback for themes without error-text */
-  color: var(--color-error-text, var(--color-main-background, #ffffff));
+  background-color: var(--color-error);
+  color: var(--color-error-text);
 }
 
 /* Avatar */
@@ -1484,6 +1478,51 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 .tooltip:hover::before {
   opacity: 1;
   visibility: visible;
+}
+
+/* ===== APP CONTENT LAYOUT (clear sections, simple UX) ===== */
+
+/* Main content wrapper: readable line length, clear padding */
+#app-content-wrapper {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Content section: clearly separated blocks for easy scanning */
+#app-content-wrapper .section {
+  margin-bottom: var(--space-10);
+  padding: var(--space-8);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--arbeitszeitcheck-color-border);
+  background-color: var(--arbeitszeitcheck-color-background-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+#app-content-wrapper .section:last-child {
+  margin-bottom: 0;
+}
+
+/* Section header: obvious title + optional description */
+#app-content-wrapper .section-header {
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--arbeitszeitcheck-color-border);
+}
+
+#app-content-wrapper .section-header h2,
+#app-content-wrapper .section-header h3 {
+  font-size: var(--arbeitszeitcheck-font-size-2xl);
+  font-weight: var(--arbeitszeitcheck-font-weight-semibold);
+  color: var(--arbeitszeitcheck-color-text);
+  margin: 0 0 var(--space-2) 0;
+}
+
+#app-content-wrapper .section-header p {
+  font-size: var(--arbeitszeitcheck-font-size-base);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+  margin: 0;
+  line-height: var(--arbeitszeitcheck-line-height-relaxed);
 }
 
 /* ===== BREADCRUMBS ===== */
@@ -1665,4 +1704,377 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   .empty-state {
     padding: var(--space-8) var(--space-4);
   }
+}
+
+/* ===== PENDING APPROVALS (MANAGER DASHBOARD) ===== */
+.pending-approvals-list {
+  margin-top: var(--space-4);
+}
+
+.pending-approvals-loading {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+.pending-approvals-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pending-approval-card {
+  background: var(--arbeitszeitcheck-color-background-card, var(--color-main-background));
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+  border-radius: var(--radius-base);
+  padding: var(--space-4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.pending-approval-card__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.pending-approval-card__title {
+  margin: 0;
+  font-size: var(--arbeitszeitcheck-font-size-base);
+  flex: 1 1 100%;
+}
+
+.pending-approval-card__meta {
+  margin: 0;
+  font-size: var(--arbeitszeitcheck-font-size-sm);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+  flex: 1 1 100%;
+}
+
+.pending-approval-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex: 1 1 100%;
+  margin-top: var(--space-2);
+}
+
+.pending-approval-card__meta--small {
+  font-size: var(--arbeitszeitcheck-font-size-xs, 0.8125rem);
+}
+
+.pending-approval-card__reason {
+  margin: 0;
+  font-size: var(--arbeitszeitcheck-font-size-sm);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+  flex: 1 1 100%;
+}
+
+@media (min-width: 640px) {
+  .pending-approval-card__title { flex: 1 1 auto; }
+  .pending-approval-card__meta { flex: 0 0 auto; }
+  .pending-approval-card__actions { flex: 0 0 auto; margin-top: 0; }
+}
+
+/* Manager dashboard: tabs */
+.pending-approvals-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+}
+
+.pending-approvals-tab {
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: var(--arbeitszeitcheck-font-size-base);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+  cursor: pointer;
+  margin-bottom: -1px;
+  border-radius: 0;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.pending-approvals-tab:hover {
+  color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
+}
+
+.pending-approvals-tab--active {
+  color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
+  border-bottom-color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
+  font-weight: 600;
+}
+
+.pending-approvals-tab:focus-visible {
+  outline: 2px solid var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
+  outline-offset: 2px;
+}
+
+.pending-approvals-panel {
+  padding-top: var(--space-2);
+}
+
+.pending-approvals-panel--hidden {
+  display: none;
+}
+
+/* Manager dashboard: layout & stats */
+.manager-dashboard__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.manager-dashboard__header {
+  margin-bottom: 0;
+}
+
+.manager-dashboard__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 var(--space-2);
+}
+
+.manager-dashboard__subtitle {
+  margin: 0;
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+.manager-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4);
+}
+
+.manager-stat-card {
+  min-width: 0;
+}
+
+/* Team compliance */
+.team-compliance-content {
+  margin-top: var(--space-4);
+}
+
+.team-compliance-loading {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+.team-compliance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.team-compliance-stat {
+  background: var(--arbeitszeitcheck-color-background-card, var(--color-main-background));
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+  border-radius: var(--radius-base);
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.team-compliance-stat__value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.team-compliance-stat__label {
+  display: block;
+  font-size: var(--arbeitszeitcheck-font-size-sm);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+  margin-top: var(--space-1);
+}
+
+.team-compliance-stat--ok .team-compliance-stat__value {
+  color: var(--color-success, #2fb344);
+}
+
+.team-compliance-stat--warning .team-compliance-stat__value {
+  color: var(--color-warning, #eca700);
+}
+
+.team-compliance-stat--error .team-compliance-stat__value {
+  color: var(--color-error, #e9322d);
+}
+
+.team-compliance-stat--info .team-compliance-stat__value {
+  color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
+}
+
+.team-compliance-stat--has-issues {
+  border-color: var(--color-warning, #eca700);
+}
+
+.team-compliance-stat.team-compliance-stat--error.team-compliance-stat--has-issues {
+  border-color: var(--color-error, #e9322d);
+}
+
+.team-compliance-note {
+  margin: 0;
+  font-size: var(--arbeitszeitcheck-font-size-sm);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+.team-compliance-note--success {
+  color: var(--color-success, #2fb344);
+}
+
+.team-compliance-empty {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+/* Reject modal */
+.reject-modal-desc {
+  margin: 0 0 var(--space-3);
+}
+
+.reject-modal-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+  border-radius: var(--radius-base);
+  font-family: inherit;
+  font-size: var(--arbeitszeitcheck-font-size-base);
+  margin-bottom: var(--space-4);
+  resize: vertical;
+}
+
+.reject-modal-textarea:focus {
+  outline: 2px solid var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
+  outline-offset: 2px;
+}
+
+.reject-modal-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* Section spacing */
+.manager-dashboard .section {
+  margin-bottom: var(--space-6);
+}
+
+.manager-dashboard .section:last-child {
+  margin-bottom: 0;
+}
+
+.manager-dashboard .section-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-1);
+}
+
+.manager-dashboard .section-header .section__desc {
+  margin: 0;
+  font-size: var(--arbeitszeitcheck-font-size-sm);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+@media (min-width: 640px) {
+  .manager-dashboard__title {
+    font-size: 2rem;
+  }
+}
+
+/* ===== SUBSTITUTION REQUESTS (Vertretungs-Freigabe) ===== */
+.substitution-requests-page .substitution-requests__header {
+  margin-bottom: var(--space-6);
+}
+
+.substitution-requests__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 var(--space-2);
+}
+
+.substitution-requests__desc {
+  margin: 0;
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+.substitution-requests-content {
+  margin-top: var(--space-4);
+}
+
+.substitution-requests-loading {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+.substitution-requests-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.substitution-request-card {
+  background: var(--arbeitszeitcheck-color-background-card, var(--color-main-background));
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+  border-radius: var(--radius-base);
+  padding: var(--space-4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.substitution-request-card__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.substitution-request-card__title {
+  margin: 0;
+  font-size: var(--arbeitszeitcheck-font-size-base);
+  flex: 1 1 100%;
+}
+
+.substitution-request-card__meta {
+  margin: 0;
+  font-size: var(--arbeitszeitcheck-font-size-sm);
+  color: var(--arbeitszeitcheck-color-text-secondary);
+  flex: 1 1 100%;
+}
+
+.substitution-request-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex: 1 1 100%;
+  margin-top: var(--space-2);
+}
+
+.substitution-requests-empty {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+.substitution-requests-empty p {
+  margin: 0 0 var(--space-2);
+}
+
+.substitution-requests-empty__hint {
+  font-size: var(--arbeitszeitcheck-font-size-sm);
+}
+
+@media (min-width: 640px) {
+  .substitution-request-card__title { flex: 1 1 auto; }
+  .substitution-request-card__meta { flex: 0 0 auto; }
+  .substitution-request-card__actions { flex: 0 0 auto; margin-top: 0; }
+  .substitution-requests__title { font-size: 2rem; }
 }

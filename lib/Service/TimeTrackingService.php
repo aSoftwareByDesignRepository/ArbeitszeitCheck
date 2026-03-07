@@ -28,6 +28,7 @@ class TimeTrackingService
 	private ComplianceViolationMapper $violationMapper;
 	private AuditLogMapper $auditLogMapper;
 	private ProjectCheckIntegrationService $projectCheckService;
+	private ComplianceService $complianceService;
 	private IL10N $l10n;
 
 	public function __construct(
@@ -35,12 +36,14 @@ class TimeTrackingService
 		ComplianceViolationMapper $violationMapper,
 		AuditLogMapper $auditLogMapper,
 		ProjectCheckIntegrationService $projectCheckService,
+		ComplianceService $complianceService,
 		IL10N $l10n
 	) {
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->violationMapper = $violationMapper;
 		$this->auditLogMapper = $auditLogMapper;
 		$this->projectCheckService = $projectCheckService;
+		$this->complianceService = $complianceService;
 		$this->l10n = $l10n;
 	}
 
@@ -670,8 +673,7 @@ class TimeTrackingService
 	 */
 	private function checkComplianceBeforeClockIn(string $userId): void
 	{
-		$complianceService = \OCP\Server::get(ComplianceService::class);
-		$issues = $complianceService->checkComplianceBeforeClockIn($userId);
+		$issues = $this->complianceService->checkComplianceBeforeClockIn($userId);
 
 		if (!empty($issues)) {
 			$criticalIssues = array_filter($issues, fn($issue) => $issue['severity'] === 'error');
@@ -689,8 +691,7 @@ class TimeTrackingService
 	 */
 	private function checkComplianceAfterClockOut(TimeEntry $timeEntry): void
 	{
-		$complianceService = \OCP\Server::get(ComplianceService::class);
-		$complianceService->checkComplianceAfterClockOut($timeEntry);
+		$this->complianceService->checkComplianceAfterClockOut($timeEntry);
 	}
 
 	/**

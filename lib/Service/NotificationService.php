@@ -68,6 +68,112 @@ class NotificationService
 	}
 
 	/**
+	 * Send a substitution request notification to the substitute
+	 *
+	 * @param string $substituteUserId User ID of the substitute
+	 * @param string $employeeUserId User ID of the employee requesting absence
+	 * @param array $absenceData Absence data
+	 * @return void
+	 */
+	public function notifySubstitutionRequest(string $substituteUserId, string $employeeUserId, array $absenceData): void
+	{
+		$employee = $this->userManager->get($employeeUserId);
+		$employeeName = $employee ? $employee->getDisplayName() : $employeeUserId;
+
+		$notification = $this->notificationManager->createNotification();
+		$notification->setApp('arbeitszeitcheck')
+			->setUser($substituteUserId)
+			->setDateTime(new \DateTime())
+			->setObject('absence_substitution', (string)($absenceData['id'] ?? ''))
+			->setSubject('substitution_request', [
+				'absence_id' => $absenceData['id'] ?? null,
+				'employee_user_id' => $employeeUserId,
+				'employee_display_name' => $employeeName,
+				'start_date' => $absenceData['start_date'] ?? null,
+				'end_date' => $absenceData['end_date'] ?? null,
+				'type' => $absenceData['type'] ?? 'vacation',
+				'days' => $absenceData['days'] ?? 0
+			])
+			->setMessage('substitution_request', [
+				'employee_display_name' => $employeeName,
+				'start_date' => $absenceData['start_date'] ?? null,
+				'end_date' => $absenceData['end_date'] ?? null,
+				'days' => $absenceData['days'] ?? 0
+			]);
+
+		$this->notificationManager->notify($notification);
+	}
+
+	/**
+	 * Notify employee that substitute approved the absence
+	 *
+	 * @param string $employeeUserId User ID of the employee
+	 * @param string $substituteUserId User ID of the substitute
+	 * @param array $absenceData Absence data
+	 * @return void
+	 */
+	public function notifySubstituteApproved(string $employeeUserId, string $substituteUserId, array $absenceData): void
+	{
+		$substitute = $this->userManager->get($substituteUserId);
+		$substituteName = $substitute ? $substitute->getDisplayName() : $substituteUserId;
+
+		$notification = $this->notificationManager->createNotification();
+		$notification->setApp('arbeitszeitcheck')
+			->setUser($employeeUserId)
+			->setDateTime(new \DateTime())
+			->setObject('absence', (string)($absenceData['id'] ?? ''))
+			->setSubject('substitute_approved', [
+				'absence_id' => $absenceData['id'] ?? null,
+				'substitute_user_id' => $substituteUserId,
+				'substitute_display_name' => $substituteName,
+				'start_date' => $absenceData['start_date'] ?? null,
+				'end_date' => $absenceData['end_date'] ?? null
+			])
+			->setMessage('substitute_approved', [
+				'substitute_display_name' => $substituteName,
+				'start_date' => $absenceData['start_date'] ?? null,
+				'end_date' => $absenceData['end_date'] ?? null
+			]);
+
+		$this->notificationManager->notify($notification);
+	}
+
+	/**
+	 * Notify employee that substitute declined the absence
+	 *
+	 * @param string $employeeUserId User ID of the employee
+	 * @param string $substituteUserId User ID of the substitute
+	 * @param array $absenceData Absence data
+	 * @param string|null $comment Decline comment
+	 * @return void
+	 */
+	public function notifySubstituteDeclined(string $employeeUserId, string $substituteUserId, array $absenceData, ?string $comment = null): void
+	{
+		$substitute = $this->userManager->get($substituteUserId);
+		$substituteName = $substitute ? $substitute->getDisplayName() : $substituteUserId;
+
+		$notification = $this->notificationManager->createNotification();
+		$notification->setApp('arbeitszeitcheck')
+			->setUser($employeeUserId)
+			->setDateTime(new \DateTime())
+			->setObject('absence', (string)($absenceData['id'] ?? ''))
+			->setSubject('substitute_declined', [
+				'absence_id' => $absenceData['id'] ?? null,
+				'substitute_user_id' => $substituteUserId,
+				'substitute_display_name' => $substituteName,
+				'start_date' => $absenceData['start_date'] ?? null,
+				'end_date' => $absenceData['end_date'] ?? null,
+				'reason' => $comment
+			])
+			->setMessage('substitute_declined', [
+				'substitute_display_name' => $substituteName,
+				'reason' => $comment ?? $this->l10n->t('No reason provided')
+			]);
+
+		$this->notificationManager->notify($notification);
+	}
+
+	/**
 	 * Send an absence approval notification
 	 *
 	 * @param string $userId User ID to notify

@@ -11,14 +11,17 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -34,6 +37,8 @@ class AbsenceController extends Controller
 	use CSPTrait;
 
 	private AbsenceService $absenceService;
+	private AbsenceMapper $absenceMapper;
+	private PermissionService $permissionService;
 	private IUserSession $userSession;
 	private IURLGenerator $urlGenerator;
 	private IUserManager $userManager;
@@ -43,6 +48,8 @@ class AbsenceController extends Controller
 		string $appName,
 		IRequest $request,
 		AbsenceService $absenceService,
+		AbsenceMapper $absenceMapper,
+		PermissionService $permissionService,
 		IUserSession $userSession,
 		IURLGenerator $urlGenerator,
 		IUserManager $userManager,
@@ -51,11 +58,26 @@ class AbsenceController extends Controller
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
+		$this->absenceMapper = $absenceMapper;
+		$this->permissionService = $permissionService;
 		$this->userSession = $userSession;
 		$this->urlGenerator = $urlGenerator;
 		$this->userManager = $userManager;
 		$this->l10n = $l10n;
 		$this->setCspService($cspService);
+	}
+
+	/**
+	 * Whether the request expects a JSON response (AJAX/API).
+	 * When false, success responses use redirect instead of JSON so the user never sees raw JSON.
+	 *
+	 * @return bool
+	 */
+	private function wantsJson(): bool
+	{
+		$accept = $this->request->getHeader('Accept');
+		$contentType = $this->request->getHeader('Content-Type');
+		return str_contains($accept, 'application/json') || str_contains($contentType, 'application/json');
 	}
 
 	/**
@@ -70,6 +92,64 @@ class AbsenceController extends Controller
 			throw new \Exception('User not authenticated');
 		}
 		return $user->getUID();
+	}
+
+	/**
+	 * API: Create absence (delegates to store)
+	 *
+	 * @return JSONResponse
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function apiStore(): JSONResponse
+	{
+		return $this->store();
+	}
+
+	/**
+	 * API: Get absence by ID (delegates to show)
+	 *
+	 * @param int $id Absence ID
+	 * @return JSONResponse
+	 */
+	#[NoAdminRequired]
+	public function apiShow(int $id): JSONResponse
+	{
+		return $this->show($id);
+	}
+
+	/**
+	 * API: Update absence (delegates to update)
+	 *
+	 * @param int $id Absence ID
+	 * @return JSONResponse
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function apiUpdate(int $id): JSONResponse
+	{
+		$params = $this->request->getParams();
+		$sub = $params['substitute_user_id'] ?? null;
+		return $this->update(
+			$id,
+			$params['start_date'] ?? null,
+			$params['end_date'] ?? null,
+			$params['reason'] ?? null,
+			$sub !== null ? (string)$sub : null
+		);
+	}
+
+	/**
+	 * API: Delete absence (delegates to delete)
+	 *
+	 * @param int $id Absence ID
+	 * @return JSONResponse
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function apiDelete(int $id): JSONResponse
+	{
+		return $this->delete($id);
 	}
 
 	/**
@@ -148,6 +228,7 @@ class AbsenceController extends Controller
 	#[NoCSRFRequired]
 	public function create(): TemplateResponse
 	{
+		$userId = $this->getUserId();
 		$response = new TemplateResponse(
 			$this->appName,
 			'absences',
@@ -156,7 +237,10 @@ class AbsenceController extends Controller
 				'mode' => 'create',
 				'absence' => null,
 				'absences' => [],
-				'stats' => []
+				'stats' => [],
+				'currentUserId' => $userId,
+				'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
+				'l' => $this->l10n,
 			]
 		);
 		return $this->configureCSP($response);
@@ -183,13 +267,15 @@ class AbsenceController extends Controller
 					'absences',
 					[
 						'urlGenerator' => $this->urlGenerator,
-						'error' => 'Absence not found'
+						'error' => 'Absence not found',
+						'l' => $this->l10n,
 					],
 					'blank'
 				);
 				return $this->configureCSP($response);
 			}
 
+			$userId = $this->getUserId();
 			$response = new TemplateResponse(
 				$this->appName,
 				'absences',
@@ -198,7 +284,10 @@ class AbsenceController extends Controller
 					'mode' => 'edit',
 					'absence' => $absence,
 					'absences' => [],
-					'stats' => []
+					'stats' => [],
+					'currentUserId' => $userId,
+					'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
+					'l' => $this->l10n,
 				]
 			);
 			return $this->configureCSP($response);
@@ -209,7 +298,8 @@ class AbsenceController extends Controller
 				'absences',
 				[
 					'urlGenerator' => $this->urlGenerator,
-					'error' => $this->l10n->t('Absence not found')
+					'error' => $this->l10n->t('Absence not found'),
+					'l' => $this->l10n,
 				],
 				'blank'
 			);
@@ -221,7 +311,8 @@ class AbsenceController extends Controller
 				'absences',
 				[
 					'urlGenerator' => $this->urlGenerator,
-					'error' => $e->getMessage()
+					'error' => $e->getMessage(),
+					'l' => $this->l10n,
 				],
 				'blank'
 			);
@@ -264,10 +355,14 @@ class AbsenceController extends Controller
 	/**
 	 * Create absence endpoint
 	 *
-	 * @return JSONResponse
+	 * NoCSRFRequired: JSON POST body is not decoded before CSRF check, so requesttoken in body/header is not seen. Session still required.
+	 * When request does not expect JSON (e.g. form POST without JS), returns redirect so the user never sees raw JSON.
+	 *
+	 * @return JSONResponse|RedirectResponse
 	 */
 	#[NoAdminRequired]
-	public function store(): JSONResponse
+	#[NoCSRFRequired]
+	public function store(): JSONResponse|RedirectResponse
 	{
 		try {
 			$userId = $this->getUserId();
@@ -301,6 +396,10 @@ class AbsenceController extends Controller
 
 			$absence = $this->absenceService->createAbsence($data, $userId);
 
+			if (!$this->wantsJson()) {
+				$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.page.absences') . '?created=1';
+				return new RedirectResponse($url, Http::STATUS_SEE_OTHER);
+			}
 			return new JSONResponse([
 				'success' => true,
 				'absence' => $absence->getSummary()
@@ -316,33 +415,39 @@ class AbsenceController extends Controller
 	/**
 	 * Update absence endpoint (POST method for form submissions)
 	 *
-	 * Handles POST requests for updating absences. Delegates to the update() method.
+	 * NoCSRFRequired: same as store(); JSON body not decoded before CSRF check.
 	 *
 	 * @param int $id Absence ID
-	 * @return JSONResponse
+	 * @return JSONResponse|RedirectResponse
 	 */
 	#[NoAdminRequired]
-	public function updatePost(int $id): JSONResponse
+	#[NoCSRFRequired]
+	public function updatePost(int $id): JSONResponse|RedirectResponse
 	{
 		$params = $this->request->getParams();
 		$start_date = $params['start_date'] ?? null;
 		$end_date = $params['end_date'] ?? null;
 		$reason = $params['reason'] ?? null;
+		$substitute_user_id = isset($params['substitute_user_id']) ? (string)$params['substitute_user_id'] : null;
 
-		return $this->update($id, $start_date, $end_date, $reason);
+		return $this->update($id, $start_date, $end_date, $reason, $substitute_user_id);
 	}
 
 	/**
 	 * Update absence endpoint
 	 *
+	 * When request does not expect JSON, returns redirect so the user never sees raw JSON.
+	 *
 	 * @param int $id Absence ID
 	 * @param string|null $start_date New start date
 	 * @param string|null $end_date New end date
 	 * @param string|null $reason New reason
-	 * @return JSONResponse
+	 * @param string|null $substitute_user_id New substitute user ID (empty to clear)
+	 * @return JSONResponse|RedirectResponse
 	 */
 	#[NoAdminRequired]
-	public function update(int $id, ?string $start_date = null, ?string $end_date = null, ?string $reason = null): JSONResponse
+	#[NoCSRFRequired]
+	public function update(int $id, ?string $start_date = null, ?string $end_date = null, ?string $reason = null, ?string $substitute_user_id = null): JSONResponse|RedirectResponse
 	{
 		try {
 			$userId = $this->getUserId();
@@ -357,9 +462,16 @@ class AbsenceController extends Controller
 			if ($reason !== null) {
 				$data['reason'] = $reason;
 			}
+			if ($substitute_user_id !== null) {
+				$data['substitute_user_id'] = $substitute_user_id === '' ? null : $substitute_user_id;
+			}
 
 			$absence = $this->absenceService->updateAbsence($id, $data, $userId);
 
+			if (!$this->wantsJson()) {
+				$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.page.absences') . '?updated=1';
+				return new RedirectResponse($url, Http::STATUS_SEE_OTHER);
+			}
 			return new JSONResponse([
 				'success' => true,
 				'absence' => $absence->getSummary()
@@ -379,6 +491,7 @@ class AbsenceController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function delete(int $id): JSONResponse
 	{
 		try {
@@ -397,23 +510,38 @@ class AbsenceController extends Controller
 	}
 
 	/**
-	 * Approve absence endpoint
+	 * Approve absence endpoint.
+	 * Only users who can manage the absence owner (same-group team) may approve.
 	 *
 	 * @param int $id Absence ID
 	 * @param string|null $comment Approval comment
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function approve(int $id, ?string $comment = null): JSONResponse
 	{
 		try {
 			$userId = $this->getUserId();
+			$absence = $this->absenceMapper->find($id);
+			if (!$this->permissionService->canManageEmployee($userId, $absence->getUserId())) {
+				$this->permissionService->logPermissionDenied($userId, 'approve_absence', 'absence', (string) $id);
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Access denied. You can only approve absences for members of your team.')
+				], Http::STATUS_FORBIDDEN);
+			}
 			$absence = $this->absenceService->approveAbsence($id, $userId, $comment);
 
 			return new JSONResponse([
 				'success' => true,
 				'absence' => $absence->getSummary()
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Absence not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
@@ -423,23 +551,38 @@ class AbsenceController extends Controller
 	}
 
 	/**
-	 * Reject absence endpoint
+	 * Reject absence endpoint.
+	 * Only users who can manage the absence owner (same-group team) may reject.
 	 *
 	 * @param int $id Absence ID
 	 * @param string|null $comment Rejection comment
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function reject(int $id, ?string $comment = null): JSONResponse
 	{
 		try {
 			$userId = $this->getUserId();
+			$absence = $this->absenceMapper->find($id);
+			if (!$this->permissionService->canManageEmployee($userId, $absence->getUserId())) {
+				$this->permissionService->logPermissionDenied($userId, 'reject_absence', 'absence', (string) $id);
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Access denied. You can only reject absences for members of your team.')
+				], Http::STATUS_FORBIDDEN);
+			}
 			$absence = $this->absenceService->rejectAbsence($id, $userId, $comment);
 
 			return new JSONResponse([
 				'success' => true,
 				'absence' => $absence->getSummary()
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Absence not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
@@ -454,11 +597,12 @@ class AbsenceController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function users(): JSONResponse
 	{
 		try {
-			// Get all users from Nextcloud
-			$users = $this->userManager->search('', null, 0);
+			// Get users from Nextcloud (limit 500; null limit can return 0 in some backends)
+			$users = $this->userManager->search('', 500, 0);
 
 			$usersData = [];
 			foreach ($users as $user) {

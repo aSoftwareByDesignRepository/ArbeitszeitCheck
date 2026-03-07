@@ -21,7 +21,7 @@
 #time-entry-form .form-select:focus-visible,
 #time-entry-form .form-textarea:focus-visible,
 #time-entry-form .time-input-group select:focus-visible {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -32,7 +32,7 @@
 #time-entry-form input:focus:not(:focus-visible),
 #time-entry-form select:focus:not(:focus-visible),
 #time-entry-form textarea:focus:not(:focus-visible) {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: 2px;
 }
 
@@ -66,41 +66,41 @@
 
 /* Ensure error messages have high contrast */
 #time-entry-form .form-error {
-  color: var(--color-error, #e9322d);
-  background-color: var(--color-error-background, #ffe6e6);
-  border: 1px solid var(--color-error, #e9322d);
+  color: var(--color-error);
+  background-color: var(--color-background-dark);
+  border: 1px solid var(--color-error);
 }
 
 #time-entry-form .form-error__title {
   font-weight: 600;
-  color: var(--color-error, #e9322d);
+  color: var(--color-error);
 }
 
 /* Success messages */
 #time-entry-form .form-success {
-  color: var(--color-success, #0082c9);
-  background-color: var(--color-success-background, #e6f4ff);
-  border: 1px solid var(--color-success, #0082c9);
+  color: var(--color-main-text);
+  background-color: var(--color-background-dark);
+  border: 1px solid var(--color-success);
 }
 
 /* Warning messages */
 #time-entry-form .form-warning {
-  color: var(--color-warning, #ff8800);
-  background-color: var(--color-warning-background, #fff4e6);
-  border: 1px solid var(--color-warning, #ff8800);
+  color: var(--color-main-text);
+  background-color: var(--color-background-dark);
+  border: 1px solid var(--color-warning);
 }
 
 /* ===== NO COLOR-ONLY INFORMATION ===== */
 
 /* Ensure error states use icons + text, not just color */
 #time-entry-form .form-input--error {
-  border-color: var(--color-error, #e9322d);
+  border-color: var(--color-error);
   border-width: 2px;
 }
 
 #time-entry-form .form-input--error::before {
   content: "⚠ ";
-  color: var(--color-error, #e9322d);
+  color: var(--color-error);
   font-weight: bold;
   margin-right: 4px;
 }
@@ -244,19 +244,19 @@
 
 #time-entry-form #time-summary,
 #time-entry-form .time-summary-card {
-  background-color: var(--color-main-background, #ffffff);
-  border: 1px solid var(--color-border, #ddd);
+  background-color: var(--color-main-background);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 16px;
   margin: 16px 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px var(--color-border);
 }
 
 #time-entry-form .time-summary-title {
   margin: 0 0 12px 0;
   font-size: 1.1em;
   font-weight: 600;
-  color: var(--color-main-text, #000);
+  color: var(--color-main-text);
 }
 
 #time-entry-form #time-summary .summary-row,
@@ -265,7 +265,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid var(--color-border, #eee);
+  border-bottom: 1px solid var(--color-border);
 }
 
 #time-entry-form #time-summary .summary-row:last-child,
@@ -276,13 +276,13 @@
 #time-entry-form #time-summary .summary-label,
 #time-entry-form .time-summary-card .summary-label {
   font-weight: 500;
-  color: var(--color-main-text, #000);
+  color: var(--color-main-text);
 }
 
 #time-entry-form #time-summary .summary-value,
 #time-entry-form .time-summary-card .summary-value {
   font-weight: 600;
-  color: var(--color-main-text, #000);
+  color: var(--color-main-text);
   font-size: 1.1em;
 }
 
@@ -297,21 +297,21 @@
 }
 
 #time-entry-form .compliance-status.compliant {
-  background-color: #e6f4e6;
-  color: #2d5016;
-  border: 1px solid #4caf50;
+  background-color: var(--color-background-dark);
+  color: var(--color-main-text);
+  border: 1px solid var(--color-success);
 }
 
 #time-entry-form .compliance-status.warning {
-  background-color: #fff4e6;
-  color: #8b4513;
-  border: 1px solid #ff9800;
+  background-color: var(--color-background-dark);
+  color: var(--color-main-text);
+  border: 1px solid var(--color-warning);
 }
 
 #time-entry-form .compliance-status.violation {
-  background-color: #ffe6e6;
-  color: #8b0000;
-  border: 1px solid #e9322d;
+  background-color: var(--color-background-dark);
+  color: var(--color-main-text);
+  border: 1px solid var(--color-error);
 }
 
 /* Warning messages */
@@ -351,8 +351,8 @@
   position: absolute;
   top: -40px;
   left: 0;
-  background: var(--color-primary-element, #0082c9);
-  color: var(--color-main-background, #ffffff);
+  background: var(--color-primary-element);
+  color: var(--color-primary-element-text);
   padding: 8px 16px;
   text-decoration: none;
   z-index: 100;

@@ -18,7 +18,9 @@ use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IConfig;
 use OCP\IL10N;
+use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -44,6 +46,12 @@ class AbsenceServiceTest extends TestCase
 	/** @var NotificationService|\PHPUnit\Framework\MockObject\MockObject */
 	private $notificationService;
 
+	/** @var IConfig|\PHPUnit\Framework\MockObject\MockObject */
+	private $config;
+
+	/** @var IUserManager|\PHPUnit\Framework\MockObject\MockObject */
+	private $userManager;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -51,10 +59,12 @@ class AbsenceServiceTest extends TestCase
 		$this->absenceMapper = $this->createMock(AbsenceMapper::class);
 		$this->auditLogMapper = $this->createMock(AuditLogMapper::class);
 		$this->userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$this->config = $this->createMock(IConfig::class);
+		$this->config->method('getAppValue')->with('arbeitszeitcheck', 'require_substitute_types', '[]')->willReturn('[]');
+		$this->userManager = $this->createMock(IUserManager::class);
 		$this->l10n = $this->createMock(IL10N::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
 
-		// Setup l10n mock to return translation keys
 		$this->l10n->method('t')
 			->willReturnCallback(function ($text) {
 				return $text;
@@ -64,6 +74,8 @@ class AbsenceServiceTest extends TestCase
 			$this->absenceMapper,
 			$this->auditLogMapper,
 			$this->userSettingsMapper,
+			$this->config,
+			$this->userManager,
 			$this->l10n,
 			$this->notificationService
 		);
@@ -85,7 +97,7 @@ class AbsenceServiceTest extends TestCase
 		// Mock no overlapping absences
 		$this->absenceMapper->expects($this->once())
 			->method('findOverlapping')
-			->with($userId, $this->isInstanceOf(\DateTime::class), $this->isInstanceOf(\DateTime::class))
+			->with($userId, $this->isInstanceOf(\DateTime::class), $this->isInstanceOf(\DateTime::class), $this->anything())
 			->willReturn([]);
 
 		// Mock absence creation
@@ -164,7 +176,7 @@ class AbsenceServiceTest extends TestCase
 		$existingAbsence = $this->createMock(Absence::class);
 		$this->absenceMapper->expects($this->once())
 			->method('findOverlapping')
-			->with($userId, $this->isInstanceOf(\DateTime::class), $this->isInstanceOf(\DateTime::class))
+			->with($userId, $this->isInstanceOf(\DateTime::class), $this->isInstanceOf(\DateTime::class), $this->anything())
 			->willReturn([$existingAbsence]);
 
 		$this->expectException(\Exception::class);
@@ -631,5 +643,185 @@ class AbsenceServiceTest extends TestCase
 		$this->assertIsArray($result);
 		$this->assertCount(1, $result);
 		$this->assertSame($pendingAbsence, $result[0]);
+	}
+
+	/**
+	 * Test substitute approves absence (Vertretungs-Freigabe)
+	 */
+	public function testApproveBySubstitute(): void
+	{
+		$absenceId = 123;
+		$substituteUserId = 'substitute1';
+		$employeeUserId = 'employee1';
+
+		$absence = $this->getMockBuilder(Absence::class)
+			->addMethods(['getStatus', 'getSubstituteUserId', 'getUserId', 'getId', 'getType', 'getStartDate', 'getEndDate', 'getDays', 'setStatus', 'setApproverComment'])
+			->onlyMethods(['getSummary'])
+			->getMock();
+		$absence->method('getStatus')->willReturn(Absence::STATUS_SUBSTITUTE_PENDING);
+		$absence->method('getSubstituteUserId')->willReturn($substituteUserId);
+		$absence->method('getUserId')->willReturn($employeeUserId);
+		$absence->method('getId')->willReturn($absenceId);
+		$absence->method('getType')->willReturn(Absence::TYPE_VACATION);
+		$absence->method('getStartDate')->willReturn(new \DateTime('2024-06-01'));
+		$absence->method('getEndDate')->willReturn(new \DateTime('2024-06-05'));
+		$absence->method('getDays')->willReturn(5);
+		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+
+		$absence->expects($this->once())
+			->method('setStatus')
+			->with(Absence::STATUS_PENDING);
+
+		$this->absenceMapper->expects($this->once())
+			->method('update')
+			->with($absence)
+			->willReturn($absence);
+
+		$this->auditLogMapper->expects($this->once())
+			->method('logAction')
+			->with($substituteUserId, 'absence_substitute_approved', 'absence', $absenceId, $this->isType('array'), $this->isType('array'), $substituteUserId);
+
+		$this->notificationService->expects($this->once())
+			->method('notifySubstituteApproved')
+			->with($employeeUserId, $substituteUserId, $this->isType('array'));
+
+		$result = $this->service->approveBySubstitute($absenceId, $substituteUserId);
+
+		$this->assertSame($absence, $result);
+	}
+
+	/**
+	 * Test approveBySubstitute rejects when wrong substitute
+	 */
+	public function testApproveBySubstituteRejectsWrongSubstitute(): void
+	{
+		$absenceId = 123;
+		$wrongSubstituteId = 'wrong_substitute';
+
+		$absence = $this->getMockBuilder(Absence::class)
+			->addMethods(['getStatus', 'getSubstituteUserId'])
+			->getMock();
+		$absence->method('getStatus')->willReturn(Absence::STATUS_SUBSTITUTE_PENDING);
+		$absence->method('getSubstituteUserId')->willReturn('designated_substitute');
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('You are not the designated substitute for this absence');
+
+		$this->service->approveBySubstitute($absenceId, $wrongSubstituteId);
+	}
+
+	/**
+	 * Test approveBySubstitute rejects when status is not substitute_pending
+	 */
+	public function testApproveBySubstituteRejectsWrongStatus(): void
+	{
+		$absenceId = 123;
+		$substituteUserId = 'substitute1';
+
+		$absence = $this->getMockBuilder(Absence::class)
+			->addMethods(['getStatus', 'getSubstituteUserId'])
+			->getMock();
+		$absence->method('getStatus')->willReturn(Absence::STATUS_PENDING);
+		$absence->method('getSubstituteUserId')->willReturn($substituteUserId);
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('Absence is not awaiting substitute approval');
+
+		$this->service->approveBySubstitute($absenceId, $substituteUserId);
+	}
+
+	/**
+	 * Test substitute declines absence
+	 */
+	public function testDeclineBySubstitute(): void
+	{
+		$absenceId = 123;
+		$substituteUserId = 'substitute1';
+		$employeeUserId = 'employee1';
+		$comment = 'I cannot cover these dates';
+
+		$absence = $this->getMockBuilder(Absence::class)
+			->addMethods(['getStatus', 'getSubstituteUserId', 'getUserId', 'getId', 'getType', 'getStartDate', 'getEndDate', 'getDays', 'setStatus', 'setApproverComment'])
+			->onlyMethods(['getSummary'])
+			->getMock();
+		$absence->method('getStatus')->willReturn(Absence::STATUS_SUBSTITUTE_PENDING);
+		$absence->method('getSubstituteUserId')->willReturn($substituteUserId);
+		$absence->method('getUserId')->willReturn($employeeUserId);
+		$absence->method('getId')->willReturn($absenceId);
+		$absence->method('getType')->willReturn(Absence::TYPE_VACATION);
+		$absence->method('getStartDate')->willReturn(new \DateTime('2024-06-01'));
+		$absence->method('getEndDate')->willReturn(new \DateTime('2024-06-05'));
+		$absence->method('getDays')->willReturn(5);
+		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+
+		$absence->expects($this->once())
+			->method('setStatus')
+			->with(Absence::STATUS_SUBSTITUTE_DECLINED);
+
+		$absence->expects($this->once())
+			->method('setApproverComment')
+			->with($comment);
+
+		$this->absenceMapper->expects($this->once())
+			->method('update')
+			->with($absence)
+			->willReturn($absence);
+
+		$this->auditLogMapper->expects($this->once())
+			->method('logAction')
+			->with($substituteUserId, 'absence_substitute_declined', 'absence', $absenceId, $this->isType('array'), $this->isType('array'), $substituteUserId);
+
+		$this->notificationService->expects($this->once())
+			->method('notifySubstituteDeclined')
+			->with($employeeUserId, $substituteUserId, $this->isType('array'));
+
+		$result = $this->service->declineBySubstitute($absenceId, $substituteUserId, $comment);
+
+		$this->assertSame($absence, $result);
+	}
+
+	/**
+	 * Test declineBySubstitute rejects when wrong substitute
+	 */
+	public function testDeclineBySubstituteRejectsWrongSubstitute(): void
+	{
+		$absenceId = 123;
+		$wrongSubstituteId = 'wrong_substitute';
+
+		$absence = $this->getMockBuilder(Absence::class)
+			->addMethods(['getStatus', 'getSubstituteUserId'])
+			->getMock();
+		$absence->method('getStatus')->willReturn(Absence::STATUS_SUBSTITUTE_PENDING);
+		$absence->method('getSubstituteUserId')->willReturn('designated_substitute');
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('You are not the designated substitute for this absence');
+
+		$this->service->declineBySubstitute($absenceId, $wrongSubstituteId, 'comment');
 	}
 }

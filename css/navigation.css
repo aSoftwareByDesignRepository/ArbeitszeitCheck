@@ -52,6 +52,15 @@
     z-index: 2;
 }
 
+/* Section divider (before Manager / responsibilities) */
+.nav-section-divider {
+    height: 1px;
+    margin: 0.75rem 1rem;
+    padding: 0;
+    background: var(--color-border, rgba(127, 127, 127, 0.2));
+    list-style: none;
+}
+
 /* Navigation Menu */
 .nav-menu {
     margin: 0;
@@ -88,8 +97,18 @@
 .nav-menu a:hover {
     background-color: var(--color-background-hover, var(--color-background-dark, rgba(127, 127, 127, 0.1)));
     color: var(--color-main-text);
-    /* Subtle movement on hover - works with all themes */
-    transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .nav-menu a:hover {
+        transform: translateX(2px);
+    }
+}
+
+/* Keyboard focus: clear ring (WCAG 2.1 AA) */
+.nav-menu a:focus-visible {
+    outline: 2px solid var(--color-primary-element, var(--color-primary, #0082c9));
+    outline-offset: 2px;
 }
 
 .nav-menu li.active a,
@@ -274,7 +293,7 @@
     background-color: var(--arbeitszeitcheck-color-background-secondary);
 }
 
-.nav-mobile-toggle:focus {
+.nav-mobile-toggle:focus-visible {
     outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
     outline-offset: 2px;
 }

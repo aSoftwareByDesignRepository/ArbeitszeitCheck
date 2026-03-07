@@ -77,12 +77,12 @@
   --arbeitszeitcheck-color-background-elevated: var(--color-main-background, var(--arbeitszeitcheck-color-white));
   --arbeitszeitcheck-color-background-overlay: rgba(0, 0, 0, 0.5);
 
-  /* Text Colors */
+  /* Text Colors (WCAG 2.1 AA: normal text ≥4.5:1 contrast on background) */
   --arbeitszeitcheck-color-text: var(--color-main-text, var(--arbeitszeitcheck-color-gray-900));
   --arbeitszeitcheck-color-text-secondary: var(--arbeitszeitcheck-color-gray-700);
-  --arbeitszeitcheck-color-text-tertiary: var(--arbeitszeitcheck-color-gray-500);
+  --arbeitszeitcheck-color-text-tertiary: var(--arbeitszeitcheck-color-gray-600);
   --arbeitszeitcheck-color-text-inverse: var(--arbeitszeitcheck-color-white);
-  --arbeitszeitcheck-color-text-muted: var(--arbeitszeitcheck-color-gray-400);
+  --arbeitszeitcheck-color-text-muted: var(--arbeitszeitcheck-color-gray-500);
 
   /* Border Colors */
   --arbeitszeitcheck-color-border: var(--color-border, var(--arbeitszeitcheck-color-gray-200));

@@ -16,6 +16,10 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
+use OCA\ArbeitszeitCheck\Db\Team;
+use OCA\ArbeitszeitCheck\Db\TeamMapper;
+use OCA\ArbeitszeitCheck\Db\TeamMemberMapper;
+use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -46,6 +50,9 @@ class AdminController extends Controller
 	private IUserManager $userManager;
 	private IAppConfig $appConfig;
 	private IL10N $l10n;
+	private TeamMapper $teamMapper;
+	private TeamMemberMapper $teamMemberMapper;
+	private TeamManagerMapper $teamManagerMapper;
 
 	public function __construct(
 		string $appName,
@@ -57,6 +64,9 @@ class AdminController extends Controller
 		AuditLogMapper $auditLogMapper,
 		IUserManager $userManager,
 		IAppConfig $appConfig,
+		TeamMapper $teamMapper,
+		TeamMemberMapper $teamMemberMapper,
+		TeamManagerMapper $teamManagerMapper,
 		CSPService $cspService,
 		IL10N $l10n
 	) {
@@ -68,12 +78,15 @@ class AdminController extends Controller
 		$this->auditLogMapper = $auditLogMapper;
 		$this->userManager = $userManager;
 		$this->appConfig = $appConfig;
+		$this->teamMapper = $teamMapper;
+		$this->teamMemberMapper = $teamMemberMapper;
+		$this->teamManagerMapper = $teamManagerMapper;
 		$this->l10n = $l10n;
 		$this->setCspService($cspService);
 	}
 
 	/**
-	 * Admin dashboard page
+	 * Admin dashboard page (admin-only by default; no NoAdminRequired)
 	 *
 	 */
 	#[NoCSRFRequired]
@@ -128,7 +141,7 @@ class AdminController extends Controller
 					'unresolved_violations' => $unresolvedCount
 				],
 				'recent_violations' => $violationsData,
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response, 'admin');
 		} catch (\Throwable $e) {
@@ -140,14 +153,14 @@ class AdminController extends Controller
 				],
 				'recent_violations' => [],
 				'error' => $e->getMessage(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response, 'admin');
 		}
 	}
 
 	/**
-	 * Admin users management page
+	 * Admin users management page (admin-only by default)
 	 *
 	 */
 	#[NoCSRFRequired]
@@ -164,6 +177,7 @@ class AdminController extends Controller
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/datepicker');
 		Util::addScript('arbeitszeitcheck', 'common/components');
 		Util::addScript('arbeitszeitcheck', 'common/messaging');
 		Util::addScript('arbeitszeitcheck', 'admin-users');
@@ -203,13 +217,13 @@ class AdminController extends Controller
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-users', [
 			'users' => $usersData,
 			'total' => $totalCount,
-			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			'l' => $this->l10n,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
 
 	/**
-	 * Admin settings page
+	 * Admin settings page (admin-only by default)
 	 *
 	 */
 	#[NoCSRFRequired]
@@ -231,10 +245,18 @@ class AdminController extends Controller
 		Util::addScript('arbeitszeitcheck', 'common/validation');
 		Util::addScript('arbeitszeitcheck', 'admin-settings');
 
+		$requireSubstituteJson = $this->appConfig->getAppValueString('require_substitute_types', '[]');
+		$requireSubstituteTypes = json_decode($requireSubstituteJson, true);
+		if (!is_array($requireSubstituteTypes)) {
+			$requireSubstituteTypes = [];
+		}
 		$settings = [
 			'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
 			'requireBreakJustification' => $this->appConfig->getAppValueString('require_break_justification', '1') === '1',
 			'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+			'requireSubstituteTypes' => $requireSubstituteTypes,
+			'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
+			'sendIcalToSubstitute' => $this->appConfig->getAppValueString('send_ical_to_substitute', '0') === '1',
 			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
 			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
 			'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
@@ -244,13 +266,13 @@ class AdminController extends Controller
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
 			'settings' => $settings,
-			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			'l' => $this->l10n,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
 
 	/**
-	 * Admin working time models management page
+	 * Admin working time models management page (admin-only by default)
 	 *
 	 */
 	#[NoCSRFRequired]
@@ -288,13 +310,13 @@ class AdminController extends Controller
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'working-time-models', [
 			'models' => $modelsData,
-			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			'l' => $this->l10n,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
 
 	/**
-	 * Admin audit log viewer page
+	 * Admin audit log viewer page (admin-only by default)
 	 *
 	 */
 	#[NoCSRFRequired]
@@ -311,6 +333,7 @@ class AdminController extends Controller
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/datepicker');
 		Util::addScript('arbeitszeitcheck', 'common/components');
 		Util::addScript('arbeitszeitcheck', 'common/messaging');
 		Util::addScript('arbeitszeitcheck', 'audit-log-viewer');
@@ -346,13 +369,13 @@ class AdminController extends Controller
 		$response = new TemplateResponse('arbeitszeitcheck', 'audit-log', [
 			'logs' => $logsData,
 			'total' => count($logs),
-			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			'l' => $this->l10n,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
 
 	/**
-	 * Get admin settings
+	 * Get admin settings (admin-only by default)
 	 *
 	 * @return JSONResponse
 	 */
@@ -360,10 +383,18 @@ class AdminController extends Controller
 	public function getAdminSettings(): JSONResponse
 	{
 		try {
+			$requireSubstituteJson = $this->appConfig->getAppValueString('require_substitute_types', '[]');
+			$requireSubstituteTypes = json_decode($requireSubstituteJson, true);
+			if (!is_array($requireSubstituteTypes)) {
+				$requireSubstituteTypes = [];
+			}
 			$settings = [
 				'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
 				'requireBreakJustification' => $this->appConfig->getAppValueString('require_break_justification', '1') === '1',
 				'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+				'requireSubstituteTypes' => $requireSubstituteTypes,
+				'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
+				'sendIcalToSubstitute' => $this->appConfig->getAppValueString('send_ical_to_substitute', '0') === '1',
 				'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
 				'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
 				'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
@@ -384,7 +415,7 @@ class AdminController extends Controller
 	}
 
 	/**
-	 * Update admin settings
+	 * Update admin settings (admin-only by default)
 	 *
 	 * @return JSONResponse
 	 */
@@ -401,6 +432,9 @@ class AdminController extends Controller
 				'complianceStrictMode' => 'compliance_strict_mode',
 				'requireBreakJustification' => 'require_break_justification',
 				'enableViolationNotifications' => 'enable_violation_notifications',
+				'requireSubstituteTypes' => 'require_substitute_types',
+				'sendIcalApprovedAbsences' => 'send_ical_approved_absences',
+				'sendIcalToSubstitute' => 'send_ical_to_substitute',
 				'maxDailyHours' => 'max_daily_hours',
 				'minRestPeriod' => 'min_rest_period',
 				'germanState' => 'german_state',
@@ -416,7 +450,7 @@ class AdminController extends Controller
 					$value = $params[$paramKey];
 
 					// Validate and convert value based on type
-					if ($paramKey === 'autoComplianceCheck' || $paramKey === 'realtimeComplianceCheck' || $paramKey === 'complianceStrictMode' || $paramKey === 'requireBreakJustification' || $paramKey === 'enableViolationNotifications') {
+					if ($paramKey === 'autoComplianceCheck' || $paramKey === 'realtimeComplianceCheck' || $paramKey === 'complianceStrictMode' || $paramKey === 'requireBreakJustification' || $paramKey === 'enableViolationNotifications' || $paramKey === 'sendIcalApprovedAbsences' || $paramKey === 'sendIcalToSubstitute') {
 						$value = ($value === true || $value === 'true' || $value === '1') ? '1' : '0';
 					} elseif ($paramKey === 'maxDailyHours' || $paramKey === 'minRestPeriod' || $paramKey === 'defaultWorkingHours') {
 						$value = (string)max(0, (float)$value);
@@ -444,6 +478,16 @@ class AdminController extends Controller
 							], Http::STATUS_BAD_REQUEST);
 						}
 						$value = (string)$value;
+					} elseif ($paramKey === 'requireSubstituteTypes') {
+						$validTypes = ['vacation', 'sick_leave', 'personal_leave', 'parental_leave', 'special_leave', 'unpaid_leave', 'home_office', 'business_trip'];
+						$arr = is_array($value) ? $value : (is_string($value) ? json_decode($value, true) : []);
+						if (!is_array($arr)) {
+							$arr = [];
+						}
+						$arr = array_values(array_unique(array_filter($arr, function ($t) use ($validTypes) {
+							return in_array((string)$t, $validTypes, true);
+						})));
+						$value = json_encode($arr);
 					} else {
 						$value = (string)$value;
 					}
@@ -474,7 +518,7 @@ class AdminController extends Controller
 	}
 
 	/**
-	 * Get admin dashboard statistics
+	 * Get admin dashboard statistics (admin-only by default)
 	 *
 	 * @return JSONResponse
 	 */
@@ -792,7 +836,7 @@ class AdminController extends Controller
 	}
 
 	/**
-	 * Get all available working time models
+	 * Get all available working time models (admin-only by default)
 	 *
 	 * @return JSONResponse
 	 */
@@ -1386,5 +1430,254 @@ class AdminController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::exportAuditLogs: ' . $e->getMessage(), ["exception" => $e]);
 			throw new \Exception($this->l10n->t('Failed to export audit logs: %s', [$e->getMessage()]));
 		}
+	}
+
+	// ---------- Admin Teams (app-owned teams/departments) ----------
+
+	#[NoCSRFRequired]
+	public function teams(): TemplateResponse
+	{
+		Util::addTranslations('arbeitszeitcheck');
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'common/accessibility');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'admin-teams');
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
+		Util::addScript('arbeitszeitcheck', 'admin-teams');
+
+		$urlGenerator = \OCP\Server::get(\OCP\IURLGenerator::class);
+		$l = \OCP\Util::getL10N('arbeitszeitcheck');
+		return new TemplateResponse('arbeitszeitcheck', 'admin-teams', [
+			'urlGenerator' => $urlGenerator,
+			'l' => $l,
+		]);
+	}
+
+	public function getTeams(): JSONResponse
+	{
+		try {
+			$teams = $this->teamMapper->findAll();
+			$tree = $this->buildTeamTree($teams, null);
+			return new JSONResponse(['success' => true, 'teams' => $tree]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::getTeams: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/** @param Team[] $teams */
+	private function buildTeamTree(array $teams, ?int $parentId): array
+	{
+		$out = [];
+		foreach ($teams as $team) {
+			if ($team->getParentId() !== $parentId) {
+				continue;
+			}
+			$node = $team->getSummary();
+			$node['children'] = $this->buildTeamTree($teams, $team->getId());
+			$out[] = $node;
+		}
+		return $out;
+	}
+
+	public function createTeam(): JSONResponse
+	{
+		try {
+			$params = $this->request->getParams();
+			$name = trim((string)($params['name'] ?? ''));
+			$parentId = isset($params['parentId']) ? (int)$params['parentId'] : null;
+			if ($parentId === 0) {
+				$parentId = null;
+			}
+			$sortOrder = isset($params['sortOrder']) ? (int)$params['sortOrder'] : 0;
+			if ($name === '') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team name is required')], Http::STATUS_BAD_REQUEST);
+			}
+			$team = new Team();
+			$team->setName($name);
+			$team->setParentId($parentId);
+			$team->setSortOrder($sortOrder);
+			$team->setCreatedAt(new \DateTime());
+			$inserted = $this->teamMapper->insert($team);
+			return new JSONResponse(['success' => true, 'team' => $inserted->getSummary()], Http::STATUS_CREATED);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::createTeam: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	public function updateTeam(int $id): JSONResponse
+	{
+		try {
+			$params = $this->request->getParams();
+			$team = $this->teamMapper->find($id);
+			$name = trim((string)($params['name'] ?? ''));
+			$parentId = isset($params['parentId']) ? (int)$params['parentId'] : null;
+			if ($parentId === 0) {
+				$parentId = null;
+			}
+			$sortOrder = isset($params['sortOrder']) ? (int)$params['sortOrder'] : 0;
+			if ($name === '') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team name is required')], Http::STATUS_BAD_REQUEST);
+			}
+			if ($parentId === $id) {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('A team cannot be its own parent')], Http::STATUS_BAD_REQUEST);
+			}
+			$team->setName($name);
+			$team->setParentId($parentId);
+			$team->setSortOrder($sortOrder);
+			$this->teamMapper->update($team);
+			return new JSONResponse(['success' => true, 'team' => $team->getSummary()]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::updateTeam: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	public function deleteTeam(int $id): JSONResponse
+	{
+		try {
+			$team = $this->teamMapper->find($id);
+			$this->teamMemberMapper->deleteByTeamId($id);
+			$this->teamManagerMapper->deleteByTeamId($id);
+			$this->teamMapper->delete($team);
+			return new JSONResponse(['success' => true]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::deleteTeam: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	public function getTeamMembers(int $id): JSONResponse
+	{
+		try {
+			$this->teamMapper->find($id);
+			$members = $this->teamMemberMapper->findByTeamId($id);
+			$list = [];
+			foreach ($members as $m) {
+				$u = $this->userManager->get($m->getUserId());
+				$list[] = ['userId' => $m->getUserId(), 'displayName' => $u ? $u->getDisplayName() : $m->getUserId()];
+			}
+			return new JSONResponse(['success' => true, 'members' => $list]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	public function addTeamMember(int $id): JSONResponse
+	{
+		try {
+			$userId = (string)($this->request->getParams()['userId'] ?? '');
+			if ($userId === '') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User is required')], Http::STATUS_BAD_REQUEST);
+			}
+			$this->teamMapper->find($id);
+			if ($this->userManager->get($userId) === null) {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User not found')], Http::STATUS_BAD_REQUEST);
+			}
+			$existing = $this->teamMemberMapper->findByTeamId($id);
+			foreach ($existing as $m) {
+				if ($m->getUserId() === $userId) {
+					return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User is already a member of this team')], Http::STATUS_BAD_REQUEST);
+				}
+			}
+			$this->teamMemberMapper->addMember($id, $userId);
+			$u = $this->userManager->get($userId);
+			return new JSONResponse(['success' => true, 'member' => ['userId' => $userId, 'displayName' => $u ? $u->getDisplayName() : $userId]]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::addTeamMember: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	public function removeTeamMember(int $id, string $userId): JSONResponse
+	{
+		try {
+			$this->teamMapper->find($id);
+			$this->teamMemberMapper->removeMember($id, $userId);
+			return new JSONResponse(['success' => true]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	public function getTeamManagers(int $id): JSONResponse
+	{
+		try {
+			$this->teamMapper->find($id);
+			$managers = $this->teamManagerMapper->findByTeamId($id);
+			$list = [];
+			foreach ($managers as $m) {
+				$u = $this->userManager->get($m->getUserId());
+				$list[] = ['userId' => $m->getUserId(), 'displayName' => $u ? $u->getDisplayName() : $m->getUserId()];
+			}
+			return new JSONResponse(['success' => true, 'managers' => $list]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	public function addTeamManager(int $id, string $userId): JSONResponse
+	{
+		try {
+			$userId = (string)($this->request->getParams()['userId'] ?? '');
+			if ($userId === '') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User is required')], Http::STATUS_BAD_REQUEST);
+			}
+			$this->teamMapper->find($id);
+			if ($this->userManager->get($userId) === null) {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User not found')], Http::STATUS_BAD_REQUEST);
+			}
+			$existing = $this->teamManagerMapper->findByTeamId($id);
+			foreach ($existing as $m) {
+				if ($m->getUserId() === $userId) {
+					return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User is already a manager of this team')], Http::STATUS_BAD_REQUEST);
+				}
+			}
+			$this->teamManagerMapper->addManager($id, $userId);
+			$u = $this->userManager->get($userId);
+			return new JSONResponse(['success' => true, 'manager' => ['userId' => $userId, 'displayName' => $u ? $u->getDisplayName() : $userId]]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::addTeamManager: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	public function removeTeamManager(int $id, string $userId): JSONResponse
+	{
+		try {
+			$this->teamMapper->find($id);
+			$this->teamManagerMapper->removeManager($id, $userId);
+			return new JSONResponse(['success' => true]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	public function getTeamsUseAppTeams(): JSONResponse
+	{
+		$use = $this->appConfig->getAppValueString('use_app_teams', '0') === '1';
+		return new JSONResponse(['success' => true, 'useAppTeams' => $use]);
+	}
+
+	public function setTeamsUseAppTeams(): JSONResponse
+	{
+		$params = $this->request->getParams();
+		$use = !empty($params['useAppTeams']);
+		$this->appConfig->setAppValueString('use_app_teams', $use ? '1' : '0');
+		return new JSONResponse(['success' => true, 'useAppTeams' => $use]);
 	}
 }

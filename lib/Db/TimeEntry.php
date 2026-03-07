@@ -46,6 +46,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setUpdatedAt(\DateTime $updatedAt)
  * @method int|null getApprovedBy()
  * @method void setApprovedBy(int|null $approvedBy)
+ * @method string|null getApprovedByUserId()
+ * @method void setApprovedByUserId(string|null $approvedByUserId)
  * @method \DateTime|null getApprovedAt()
  * @method void setApprovedAt(\DateTime|null $approvedAt)
  */
@@ -100,6 +102,9 @@ class TimeEntry extends Entity
 	/** @var int|null */
 	protected $approvedBy;
 
+	/** @var string|null Manager user ID (Nextcloud UID is string, not int) */
+	protected $approvedByUserId;
+
 	/** @var \DateTime|null */
 	protected $approvedAt;
 
@@ -122,6 +127,7 @@ class TimeEntry extends Entity
 		$this->addType('createdAt', 'datetime');
 		$this->addType('updatedAt', 'datetime');
 		$this->addType('approvedBy', 'integer');
+		$this->addType('approvedByUserId', 'string');
 		$this->addType('approvedAt', 'datetime');
 	}
 
@@ -448,6 +454,7 @@ class TimeEntry extends Entity
 			'createdAt' => $createdAt ? $createdAt->format('c') : null,
 			'updatedAt' => $updatedAt ? $updatedAt->format('c') : null,
 			'approvedBy' => $this->getApprovedBy(),
+			'approvedByUserId' => $this->getApprovedByUserId(),
 			'approvedAt' => $this->getApprovedAt()?->format('c')
 		];
 	}

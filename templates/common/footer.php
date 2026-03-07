@@ -13,9 +13,9 @@ if (!defined('OCP\AppFramework\App::class')) {
 }
 
 // Get the current user and app context
-$user = \OC::$server->getUserSession()->getUser();
+$user = \OCP\Server::get(\OCP\IUserSession::class)->getUser();
 $appName = 'arbeitszeitcheck';
-$appVersion = \OC::$server->getAppManager()->getAppVersion($appName);
+$appVersion = \OCP\Server::get(\OCP\App\IAppManager::class)->getAppVersion($appName);
 $currentYear = date('Y');
 ?>
 <footer class="footer" role="contentinfo">
@@ -45,31 +45,31 @@ $currentYear = date('Y');
                     <h3 class="footer__section-title"><?php p($l->t('Quick Links')); ?></h3>
                     <ul class="footer__link-list">
                         <li class="footer__link-item">
-                            <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.dashboard')); ?>"
+                            <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.dashboard')); ?>"
                                 class="footer__link">
                                 <?php p($l->t('Dashboard')); ?>
                             </a>
                         </li>
                         <li class="footer__link-item">
-                            <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
+                            <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
                                 class="footer__link">
                                 <?php p($l->t('Time Entries')); ?>
                             </a>
                         </li>
                         <li class="footer__link-item">
-                            <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.absences')); ?>"
+                            <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.absences')); ?>"
                                 class="footer__link">
                                 <?php p($l->t('Absences')); ?>
                             </a>
                         </li>
                         <li class="footer__link-item">
-                            <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.reports')); ?>"
+                            <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.reports')); ?>"
                                 class="footer__link">
                                 <?php p($l->t('Reports')); ?>
                             </a>
                         </li>
                         <li class="footer__link-item">
-                            <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
+                            <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
                                 class="footer__link">
                                 <?php p($l->t('Settings')); ?>
                             </a>
@@ -82,28 +82,34 @@ $currentYear = date('Y');
                     <h3 class="footer__section-title"><?php p($l->t('Features')); ?></h3>
                     <ul class="footer__link-list">
                         <li class="footer__link-item">
-                            <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.compliance.dashboard')); ?>"
+                            <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.compliance.dashboard')); ?>"
                                 class="footer__link">
                                 <?php p($l->t('Compliance Dashboard')); ?>
                             </a>
                         </li>
                         <li class="footer__link-item">
-                            <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.calendar')); ?>"
+                            <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.calendar')); ?>"
                                 class="footer__link">
                                 <?php p($l->t('Calendar View')); ?>
                             </a>
                         </li>
-                        <?php if ($user && \OC::$server->getGroupManager()->isAdmin($user->getUID())): ?>
+                        <?php if ($user && \OCP\Server::get(\OCP\IGroupManager::class)->isAdmin($user->getUID())): ?>
                             <li class="footer__link-item">
-                                <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.admin.dashboard')); ?>"
+                                <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.dashboard')); ?>"
                                     class="footer__link">
                                     <?php p($l->t('Admin Dashboard')); ?>
                                 </a>
                             </li>
                             <li class="footer__link-item">
-                                <a href="<?php print_unescaped(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.admin.auditLog')); ?>"
+                                <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.auditLog')); ?>"
                                     class="footer__link">
                                     <?php p($l->t('Audit Log')); ?>
+                                </a>
+                            </li>
+                            <li class="footer__link-item">
+                                <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.teams')); ?>"
+                                    class="footer__link">
+                                    <?php p($l->t('Teams &amp; Departments')); ?>
                                 </a>
                             </li>
                         <?php endif; ?>

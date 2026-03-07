@@ -57,6 +57,8 @@ class Absence extends Entity
 	public const TYPE_BUSINESS_TRIP = 'business_trip';
 
 	public const STATUS_PENDING = 'pending';
+	public const STATUS_SUBSTITUTE_PENDING = 'substitute_pending';
+	public const STATUS_SUBSTITUTE_DECLINED = 'substitute_declined';
 	public const STATUS_APPROVED = 'approved';
 	public const STATUS_REJECTED = 'rejected';
 	public const STATUS_CANCELLED = 'cancelled';
@@ -132,14 +134,17 @@ class Absence extends Entity
 		$end = clone $this->endDate;
 		$workingDays = 0;
 
-		// German public holidays (simplified - would need full implementation)
-		$germanHolidays = $this->getGermanPublicHolidays((int)$start->format('Y'));
+		$startYear = (int)$start->format('Y');
+		$endYear = (int)$end->format('Y');
+		$germanHolidays = $this->getGermanPublicHolidays($startYear);
+		if ($endYear !== $startYear) {
+			$germanHolidays = array_merge($germanHolidays, $this->getGermanPublicHolidays($endYear));
+		}
 
 		while ($start <= $end) {
-			// Skip weekends
-			if ($start->format('N') < 6) { // Monday to Friday
+			// Skip weekends (1=Mon .. 5=Fri, 6=Sat, 7=Sun)
+			if ($start->format('N') < 6) {
 				$dateString = $start->format('Y-m-d');
-				// Skip public holidays
 				if (!isset($germanHolidays[$dateString])) {
 					$workingDays++;
 				}
@@ -147,42 +152,42 @@ class Absence extends Entity
 			$start->modify('+1 day');
 		}
 
-		return $workingDays;
+		return (float)$workingDays;
 	}
 
 	/**
-	 * Get German public holidays for a given year (simplified)
-	 * In production, this should use a proper holiday calculation library
+	 * Get German public holidays for a given year.
+	 * Uses PHP easter_days() for movable feasts (Easter-based).
 	 *
 	 * @param int $year
-	 * @return array
+	 * @return array<string, string> date string (Y-m-d) => name
 	 */
 	private function getGermanPublicHolidays(int $year): array
 	{
-		// This is a simplified implementation
-		// In production, use a proper library like yasumi/yasumi
 		$holidays = [];
 
 		// New Year's Day
 		$holidays[$year . '-01-01'] = 'New Year\'s Day';
 
-		// Good Friday (simplified - actual calculation needed)
-		$holidays[$year . '-04-07'] = 'Good Friday';
+		// Easter-based: PHP easter_days($year) = days after March 21
+		$easterDays = easter_days($year);
+		$march21 = new \DateTime($year . '-03-21');
+		$easter = clone $march21;
+		$easter->modify('+' . $easterDays . ' days');
 
-		// Easter Monday (simplified)
-		$holidays[$year . '-04-10'] = 'Easter Monday';
+		$easter->modify('-2 days');
+		$holidays[$easter->format('Y-m-d')] = 'Good Friday';
+		$easter->modify('+3 days'); // Easter Monday
+		$holidays[$easter->format('Y-m-d')] = 'Easter Monday';
+		$easter->modify('+38 days'); // Ascension (39 days after Easter Sunday)
+		$holidays[$easter->format('Y-m-d')] = 'Ascension Day';
+		$easter->modify('+11 days'); // Whit Monday
+		$holidays[$easter->format('Y-m-d')] = 'Whit Monday';
+		$easter->modify('+10 days'); // Corpus Christi (Thursday after Trinity)
+		$holidays[$easter->format('Y-m-d')] = 'Corpus Christi';
 
 		// Labour Day
 		$holidays[$year . '-05-01'] = 'Labour Day';
-
-		// Ascension Day (simplified)
-		$holidays[$year . '-05-18'] = 'Ascension Day';
-
-		// Whit Monday (simplified)
-		$holidays[$year . '-05-29'] = 'Whit Monday';
-
-		// Corpus Christi (simplified)
-		$holidays[$year . '-06-08'] = 'Corpus Christi';
 
 		// German Unity Day
 		$holidays[$year . '-10-03'] = 'German Unity Day';
@@ -193,10 +198,8 @@ class Absence extends Entity
 		// All Saints' Day
 		$holidays[$year . '-11-01'] = 'All Saints\' Day';
 
-		// Christmas Day
+		// Christmas
 		$holidays[$year . '-12-25'] = 'Christmas Day';
-
-		// Second Christmas Day
 		$holidays[$year . '-12-26'] = 'Second Christmas Day';
 
 		return $holidays;
@@ -282,6 +285,8 @@ class Absence extends Entity
 		// Validate status
 		$validStatuses = [
 			self::STATUS_PENDING,
+			self::STATUS_SUBSTITUTE_PENDING,
+			self::STATUS_SUBSTITUTE_DECLINED,
 			self::STATUS_APPROVED,
 			self::STATUS_REJECTED,
 			self::STATUS_CANCELLED

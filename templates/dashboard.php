@@ -21,6 +21,7 @@ Util::addStyle('arbeitszeitcheck', 'common/typography');
 Util::addStyle('arbeitszeitcheck', 'common/base');
 Util::addStyle('arbeitszeitcheck', 'common/components');
 Util::addStyle('arbeitszeitcheck', 'common/layout');
+Util::addStyle('arbeitszeitcheck', 'common/app-layout');
 Util::addStyle('arbeitszeitcheck', 'common/utilities');
 Util::addStyle('arbeitszeitcheck', 'common/responsive');
 Util::addStyle('arbeitszeitcheck', 'common/accessibility');
@@ -32,7 +33,7 @@ Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 $status = $_['status'] ?? [];
 $overtime = $_['overtime'] ?? [];
 $recentEntries = $_['recentEntries'] ?? [];
-$urlGenerator = $_['urlGenerator'] ?? \OC::$server->getURLGenerator();
+$urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 
 // Current session duration calculation for display
 $currentSessionDuration = $status['current_session_duration'] ?? 0;
@@ -65,7 +66,7 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
     <div id="app-content-wrapper">
         <!-- Breadcrumb Navigation -->
         <div class="breadcrumb-container">
-            <nav class="breadcrumb" aria-label="Breadcrumb">
+            <nav class="breadcrumb" aria-label="<?php p($l->t('Breadcrumb')); ?>">
                 <ol>
                     <li aria-current="page"><?php p($l->t('Dashboard')); ?></li>
                 </ol>
@@ -96,17 +97,17 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                         <p class="alert-message">
                             <?php p($l->t('This app helps you record your work time and follow German labor law. Here\'s how to get started:')); ?>
                         </p>
-                        <ol style="margin: var(--space-4) 0; padding-left: var(--space-6);">
-                            <li style="margin-bottom: var(--space-2);">
+                        <ol class="welcome-steps">
+                            <li>
                                 <?php p($l->t('Click the "Clock In" button below when you start work')); ?>
                             </li>
-                            <li style="margin-bottom: var(--space-2);">
+                            <li>
                                 <?php p($l->t('Click "Clock Out" when you finish work')); ?>
                             </li>
-                            <li style="margin-bottom: var(--space-2);">
+                            <li>
                                 <?php p($l->t('The system will automatically track your hours and remind you to take breaks')); ?>
                             </li>
-                            <li style="margin-bottom: var(--space-2);">
+                            <li>
                                 <?php p($l->t('You can also add time entries manually or request vacation days in the "Absences" section')); ?>
                             </li>
                         </ol>
@@ -131,7 +132,7 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
         <?php endif; ?>
 
         <!-- Dashboard Grid -->
-        <div class="section">
+        <section class="section" aria-labelledby="dashboard-status-heading" aria-label="<?php p($l->t('Current status and today\'s stats')); ?>">
             <div class="arbeitszeitcheck-dashboard__grid">
                 <!-- Status Card -->
                 <?php
@@ -156,7 +157,7 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                 if (!empty($status['current_entry']['startTime'])) {
                     try {
                         // Get user timezone
-                        $userTimezone = \OC::$server->get(\OCP\IDateTimeZone::class)->getTimeZone();
+                        $userTimezone = \OCP\Server::get(\OCP\IDateTimeZone::class)->getTimeZone();
                         $startTime = new \DateTime($status['current_entry']['startTime']);
                         $startTime->setTimezone($userTimezone);
                         $startedAt = $startTime->format('H:i');
@@ -169,7 +170,7 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                     <div class="dashboard-status-card__header">
                         <div class="dashboard-status-card__title">
                             <span class="dashboard-status-card__icon" aria-hidden="true"><?php p($statusIcon); ?></span>
-                            <h3 class="card-title"><?php p($l->t('Current Status')); ?></h3>
+                            <h3 id="dashboard-status-heading" class="card-title"><?php p($l->t('Current Status')); ?></h3>
                         </div>
                         <div class="badge badge--<?php p($statusBadgeVariant); ?>">
                             <?php p($statusLabel); ?>
@@ -187,7 +188,7 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                             <?php
                                             try {
                                                 // Get user timezone
-                                                $userTimezone = \OC::$server->get(\OCP\IDateTimeZone::class)->getTimeZone();
+                                                $userTimezone = \OCP\Server::get(\OCP\IDateTimeZone::class)->getTimeZone();
                                                 $breakStartTime->setTimezone($userTimezone);
                                                 p($l->t('Break started at')); ?> <?php p($breakStartTime->format('H:i'));
                                                                                 } catch (\Throwable $e) {
@@ -283,29 +284,29 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
         <!-- Recent Entries Section -->
-        <div class="section">
+        <section class="section" aria-labelledby="recent-entries-heading">
             <div class="section-header">
-                <h3><?php p($l->t('Recent Entries')); ?></h3>
+                <h3 id="recent-entries-heading"><?php p($l->t('Recent Entries')); ?></h3>
                 <a href="<?php print_unescaped($urlGenerator->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
                     class="btn btn--secondary">
                     <?php p($l->t('View All')); ?>
                 </a>
             </div>
 
-            <div class="table-container">
-                <table class="table table--hover">
+            <div class="table-container" role="region" aria-label="<?php p($l->t('Recent time entries')); ?>">
+                <table class="table table--hover" role="table" aria-label="<?php p($l->t('Recent time entries')); ?>">
                     <thead>
                         <tr>
-                            <th><?php p($l->t('Date')); ?></th>
-                            <th><?php p($l->t('Start')); ?></th>
-                            <th><?php p($l->t('End')); ?></th>
-                            <th><?php p($l->t('Duration')); ?></th>
-                            <th><?php p($l->t('Break')); ?></th>
-                            <th><?php p($l->t('Status')); ?></th>
-                            <th><?php p($l->t('Actions')); ?></th>
+                            <th scope="col"><?php p($l->t('Date')); ?></th>
+                            <th scope="col"><?php p($l->t('Start')); ?></th>
+                            <th scope="col"><?php p($l->t('End')); ?></th>
+                            <th scope="col"><?php p($l->t('Duration')); ?></th>
+                            <th scope="col"><?php p($l->t('Break')); ?></th>
+                            <th scope="col"><?php p($l->t('Status')); ?></th>
+                            <th scope="col"><?php p($l->t('Actions')); ?></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -313,7 +314,7 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                             <?php
                             // Get user timezone once for all entries
                             try {
-                                $userTimezone = \OC::$server->get(\OCP\IDateTimeZone::class)->getTimeZone();
+                                $userTimezone = \OCP\Server::get(\OCP\IDateTimeZone::class)->getTimeZone();
                             } catch (\Throwable $e) {
                                 $userTimezone = new \DateTimeZone(date_default_timezone_get());
                             }
@@ -422,31 +423,29 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                         }
 
                                         if (!empty($breakTimes)) {
-                                            // Show break times with duration
+                                            // Show break times with duration (all dynamic output escaped)
                                             $breakDuration = round($entry->getBreakDurationHours() ?? 0, 2);
-                                            echo '<div title="' . htmlspecialchars(implode(', ', $breakTimes)) . '">';
-                                            echo htmlspecialchars(implode(', ', $breakTimes));
-                                            echo ' <span class="text-muted">(' . $breakDuration . ' h)</span>';
-                                            echo '</div>';
+                                            $breakTimesStr = implode(', ', $breakTimes);
+                                            ?><div title="<?php p($breakTimesStr); ?>"><?php p($breakTimesStr); ?> <span class="text-muted">(<?php p($breakDuration . ' h'); ?>)</span></div><?php
                                         } else {
                                             // Only show duration if no times available
                                             $breakDuration = round($entry->getBreakDurationHours() ?? 0, 2);
                                             if ($breakDuration > 0) {
-                                                echo $breakDuration . ' h';
+                                                p($breakDuration . ' h');
                                             } else {
-                                                echo '-';
+                                                p('-');
                                             }
                                         }
                                         ?>
                                     </td>
                                     <td>
                                         <span class="badge badge--<?php
-                                                                    echo match ($entry->getStatus()) {
+                                                                    p(match ($entry->getStatus()) {
                                                                         'completed' => 'success',
                                                                         'active' => 'primary',
                                                                         'pending_approval' => 'warning',
                                                                         default => 'secondary'
-                                                                    };
+                                                                    });
                                                                     ?>">
                                             <?php
                                             $statusKey = $entry->getStatus();
@@ -454,6 +453,9 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                                 'completed' => $l->t('Completed'),
                                                 'active' => $l->t('Active'),
                                                 'pending_approval' => $l->t('Pending Approval'),
+                                                'break' => $l->t('Break'),
+                                                'paused' => $l->t('Paused'),
+                                                'rejected' => $l->t('Rejected'),
                                                 default => $statusKey
                                             };
                                             p($statusLabel);
@@ -513,9 +515,8 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
     </div>
-</div>
 </div>
 
 <!-- Initialize JavaScript -->

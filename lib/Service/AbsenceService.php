@@ -16,7 +16,9 @@ use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IConfig;
 use OCP\IL10N;
+use OCP\IUserManager;
 
 /**
  * Absence service for absence management business logic
@@ -26,21 +28,30 @@ class AbsenceService
 	private AbsenceMapper $absenceMapper;
 	private AuditLogMapper $auditLogMapper;
 	private UserSettingsMapper $userSettingsMapper;
+	private IConfig $config;
+	private IUserManager $userManager;
 	private IL10N $l10n;
 	private ?NotificationService $notificationService;
+	private ?AbsenceIcalMailService $absenceIcalMailService;
 
 	public function __construct(
 		AbsenceMapper $absenceMapper,
 		AuditLogMapper $auditLogMapper,
 		UserSettingsMapper $userSettingsMapper,
+		IConfig $config,
+		IUserManager $userManager,
 		IL10N $l10n,
-		?NotificationService $notificationService = null
+		?NotificationService $notificationService = null,
+		?AbsenceIcalMailService $absenceIcalMailService = null
 	) {
 		$this->absenceMapper = $absenceMapper;
 		$this->auditLogMapper = $auditLogMapper;
 		$this->userSettingsMapper = $userSettingsMapper;
+		$this->config = $config;
+		$this->userManager = $userManager;
 		$this->l10n = $l10n;
 		$this->notificationService = $notificationService;
+		$this->absenceIcalMailService = $absenceIcalMailService;
 	}
 
 	/**
@@ -61,8 +72,10 @@ class AbsenceService
 		$absence->setStartDate($this->parseDate($data['start_date']));
 		$absence->setEndDate($this->parseDate($data['end_date']));
 		$absence->setReason($data['reason'] ?? null);
-		$absence->setSubstituteUserId($data['substitute_user_id'] ?? null);
-		$absence->setStatus(Absence::STATUS_PENDING);
+		$substituteUserId = isset($data['substitute_user_id']) ? trim((string)$data['substitute_user_id']) : null;
+		$absence->setSubstituteUserId($substituteUserId ?: null);
+		// If substitute is selected: wait for substitute approval first (Vertretungs-Freigabe)
+		$absence->setStatus($substituteUserId ? Absence::STATUS_SUBSTITUTE_PENDING : Absence::STATUS_PENDING);
 		$absence->setCreatedAt(new \DateTime());
 		$absence->setUpdatedAt(new \DateTime());
 
@@ -71,6 +84,23 @@ class AbsenceService
 		$absence->setDays($workingDays);
 
 		$savedAbsence = $this->absenceMapper->insert($absence);
+
+		// Notify substitute when they need to approve (Vertretungs-Freigabe)
+		if ($substituteUserId && $this->notificationService) {
+			$startDate = $savedAbsence->getStartDate();
+			$endDate = $savedAbsence->getEndDate();
+			$this->notificationService->notifySubstitutionRequest(
+				$substituteUserId,
+				$userId,
+				[
+					'id' => $savedAbsence->getId(),
+					'type' => $savedAbsence->getType(),
+					'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
+					'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
+					'days' => $savedAbsence->getDays()
+				]
+			);
+		}
 
 		// Log the action
 		$this->auditLogMapper->logAction(
@@ -126,8 +156,8 @@ class AbsenceService
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
 
-		// Check if absence can be updated (only pending absences can be modified)
-		if ($absence->getStatus() !== Absence::STATUS_PENDING) {
+		// Check if absence can be updated (pending or substitute_pending can be modified by owner)
+		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING], true)) {
 			throw new \Exception($this->l10n->t('Only pending absences can be updated'));
 		}
 
@@ -143,18 +173,25 @@ class AbsenceService
 		if (isset($data['reason'])) {
 			$absence->setReason($data['reason']);
 		}
+		if (array_key_exists('substitute_user_id', $data)) {
+			$absence->setSubstituteUserId($data['substitute_user_id'] ? (string)$data['substitute_user_id'] : null);
+		}
 
 		$startDate = $absence->getStartDate();
 		$endDate = $absence->getEndDate();
 		if (!$startDate || !$endDate) {
 			throw new \Exception($this->l10n->t('Start date and end date are required'));
 		}
-		$this->validateAbsenceData([
+		$validateData = [
 			'type' => $absence->getType(),
 			'start_date' => $startDate->format('Y-m-d'),
 			'end_date' => $endDate->format('Y-m-d'),
-			'reason' => $absence->getReason()
-		], $userId);
+			'reason' => $absence->getReason(),
+		];
+		if (array_key_exists('substitute_user_id', $data)) {
+			$validateData['substitute_user_id'] = $data['substitute_user_id'];
+		}
+		$this->validateAbsenceData($validateData, $userId, $id);
 
 		// Recalculate working days
 		$workingDays = $absence->calculateWorkingDays();
@@ -190,8 +227,8 @@ class AbsenceService
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
 
-		// Check if absence can be deleted (only pending absences can be deleted)
-		if ($absence->getStatus() !== Absence::STATUS_PENDING) {
+		// Check if absence can be deleted (pending or substitute_pending can be deleted by owner)
+		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING], true)) {
 			throw new \Exception($this->l10n->t('Only pending absences can be deleted'));
 		}
 
@@ -264,6 +301,11 @@ class AbsenceService
 			]);
 		}
 
+		// Send iCal email to employee (and optionally substitute) if enabled in admin settings
+		if ($this->absenceIcalMailService) {
+			$this->absenceIcalMailService->sendIcalForApprovedAbsence($updatedAbsence);
+		}
+
 		return $updatedAbsence;
 	}
 
@@ -327,6 +369,134 @@ class AbsenceService
 	}
 
 	/**
+	 * Approve absence by substitute (Vertretungs-Freigabe)
+	 * Transitions status from substitute_pending to pending (ready for manager approval)
+	 *
+	 * @param int $id Absence ID
+	 * @param string $substituteUserId User ID of the substitute (must match absence.substitute_user_id)
+	 * @return Absence
+	 * @throws \Exception
+	 */
+	public function approveBySubstitute(int $id, string $substituteUserId): Absence
+	{
+		$absence = $this->absenceMapper->find($id);
+		if (!$absence) {
+			throw new \Exception($this->l10n->t('Absence not found'));
+		}
+
+		if ($absence->getStatus() !== Absence::STATUS_SUBSTITUTE_PENDING) {
+			throw new \Exception($this->l10n->t('Absence is not awaiting substitute approval'));
+		}
+
+		$actualSubstitute = $absence->getSubstituteUserId();
+		if ($actualSubstitute === null || $actualSubstitute !== $substituteUserId) {
+			throw new \Exception($this->l10n->t('You are not the designated substitute for this absence'));
+		}
+
+		$oldData = $absence->getSummary();
+		$absence->setStatus(Absence::STATUS_PENDING);
+		$absence->setUpdatedAt(new \DateTime());
+		$updatedAbsence = $this->absenceMapper->update($absence);
+
+		$this->auditLogMapper->logAction(
+			$substituteUserId,
+			'absence_substitute_approved',
+			'absence',
+			$updatedAbsence->getId(),
+			$oldData,
+			$updatedAbsence->getSummary(),
+			$substituteUserId
+		);
+
+		// Notify employee that substitute approved
+		if ($this->notificationService) {
+			$startDate = $updatedAbsence->getStartDate();
+			$endDate = $updatedAbsence->getEndDate();
+			$this->notificationService->notifySubstituteApproved(
+				$updatedAbsence->getUserId(),
+				$substituteUserId,
+				[
+					'id' => $updatedAbsence->getId(),
+					'type' => $updatedAbsence->getType(),
+					'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
+					'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
+					'days' => $updatedAbsence->getDays()
+				]
+			);
+		}
+
+		// Send iCal to substitute so they can add coverage period to their calendar
+		if ($this->absenceIcalMailService) {
+			$this->absenceIcalMailService->sendIcalToSubstituteOnSubstitutionApproval($updatedAbsence);
+		}
+
+		return $updatedAbsence;
+	}
+
+	/**
+	 * Decline absence by substitute
+	 * Transitions status to substitute_declined
+	 *
+	 * @param int $id Absence ID
+	 * @param string $substituteUserId User ID of the substitute
+	 * @param string|null $comment Optional comment for the employee
+	 * @return Absence
+	 * @throws \Exception
+	 */
+	public function declineBySubstitute(int $id, string $substituteUserId, ?string $comment = null): Absence
+	{
+		$absence = $this->absenceMapper->find($id);
+		if (!$absence) {
+			throw new \Exception($this->l10n->t('Absence not found'));
+		}
+
+		if ($absence->getStatus() !== Absence::STATUS_SUBSTITUTE_PENDING) {
+			throw new \Exception($this->l10n->t('Absence is not awaiting substitute approval'));
+		}
+
+		$actualSubstitute = $absence->getSubstituteUserId();
+		if ($actualSubstitute === null || $actualSubstitute !== $substituteUserId) {
+			throw new \Exception($this->l10n->t('You are not the designated substitute for this absence'));
+		}
+
+		$oldData = $absence->getSummary();
+		$absence->setStatus(Absence::STATUS_SUBSTITUTE_DECLINED);
+		$absence->setApproverComment($comment);
+		$absence->setUpdatedAt(new \DateTime());
+		$updatedAbsence = $this->absenceMapper->update($absence);
+
+		$this->auditLogMapper->logAction(
+			$substituteUserId,
+			'absence_substitute_declined',
+			'absence',
+			$updatedAbsence->getId(),
+			$oldData,
+			$updatedAbsence->getSummary(),
+			$substituteUserId
+		);
+
+		// Notify employee that substitute declined
+		if ($this->notificationService) {
+			$startDate = $updatedAbsence->getStartDate();
+			$endDate = $updatedAbsence->getEndDate();
+			$this->notificationService->notifySubstituteDeclined(
+				$updatedAbsence->getUserId(),
+				$substituteUserId,
+				[
+					'id' => $updatedAbsence->getId(),
+					'type' => $updatedAbsence->getType(),
+					'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
+					'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
+					'days' => $updatedAbsence->getDays()
+				],
+				$comment
+			);
+		}
+
+		return $updatedAbsence;
+	}
+
+	/**
 	 * Get absences for a user with optional filters
 	 *
 	 * @param string $userId User ID (empty string to get all users - for manager views)
@@ -351,18 +521,20 @@ class AbsenceService
 		// Handle status filter
 		if (isset($filters['status'])) {
 			if (empty($userId)) {
-				// Get all absences with this status
-				return $this->absenceMapper->findByStatus($filters['status'], $limit, $offset);
-			} else {
-				// Get user's absences with this status
-				$allAbsences = $this->absenceMapper->findByUser($userId, $limit, $offset);
-				return array_filter($allAbsences, function ($absence) use ($filters) {
-					return $absence->getStatus() === $filters['status'];
-				});
+				return [];
 			}
+			$status = $filters['status'];
+			$allAbsences = $this->absenceMapper->findByUser($userId, $limit, $offset);
+			return array_values(array_filter($allAbsences, function ($absence) use ($status) {
+				// "pending" = awaiting any approval (substitute or manager)
+				if ($status === 'pending') {
+					return in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING], true);
+				}
+				return $absence->getStatus() === $status;
+			}));
 		}
 
-		// Default: get absences for user
+		// Default: require non-empty userId (no cross-user listing)
 		if (empty($userId)) {
 			return [];
 		}
@@ -418,10 +590,11 @@ class AbsenceService
 	 * Validate absence data
 	 *
 	 * @param array $data Absence data
-	 * @param string $userId User ID
+	 * @param string $userId User ID (absence owner)
+	 * @param int|null $excludeAbsenceId When updating, ID of the absence to exclude from overlap check
 	 * @throws \Exception
 	 */
-	private function validateAbsenceData(array $data, string $userId): void
+	private function validateAbsenceData(array $data, string $userId, ?int $excludeAbsenceId = null): void
 	{
 		// Validate required fields
 		if (empty($data['type']) || empty($data['start_date']) || empty($data['end_date'])) {
@@ -444,14 +617,13 @@ class AbsenceService
 			throw new \Exception($this->l10n->t('Start date cannot be in the past'));
 		}
 
-		// Check for overlapping absences
-		$overlapping = $this->absenceMapper->findOverlapping($userId, $startDate, $endDate);
+		// Check for overlapping absences (exclude current absence when updating)
+		$overlapping = $this->absenceMapper->findOverlapping($userId, $startDate, $endDate, $excludeAbsenceId);
 		if (!empty($overlapping)) {
 			throw new \Exception($this->l10n->t('Absence overlaps with existing absence'));
 		}
 
-		// Validate absence type specific rules
-		// Ensure type is a string (handle case where it might be an array)
+		// Ensure type is a string and whitelist allowed values
 		$type = $data['type'];
 		if (is_array($type)) {
 			$type = !empty($type) ? (string)reset($type) : '';
@@ -461,7 +633,42 @@ class AbsenceService
 		if (empty($type)) {
 			throw new \Exception($this->l10n->t('Absence type is required'));
 		}
+		$validTypes = [
+			Absence::TYPE_VACATION,
+			Absence::TYPE_SICK_LEAVE,
+			Absence::TYPE_PERSONAL_LEAVE,
+			Absence::TYPE_PARENTAL_LEAVE,
+			Absence::TYPE_SPECIAL_LEAVE,
+			Absence::TYPE_UNPAID_LEAVE,
+			Absence::TYPE_HOME_OFFICE,
+			Absence::TYPE_BUSINESS_TRIP,
+		];
+		if (!in_array($type, $validTypes, true)) {
+			throw new \Exception($this->l10n->t('Invalid absence type'));
+		}
 		$this->validateAbsenceTypeRules($type, $startDate, $endDate);
+
+		// Require substitute for configured types (admin setting)
+		$requireSubstituteTypesJson = $this->config->getAppValue('arbeitszeitcheck', 'require_substitute_types', '[]');
+		$requireSubstituteTypes = json_decode($requireSubstituteTypesJson, true);
+		if (is_array($requireSubstituteTypes) && in_array($type, $requireSubstituteTypes, true)) {
+			$substituteId = isset($data['substitute_user_id']) ? trim((string)$data['substitute_user_id']) : '';
+			if ($substituteId === '') {
+				throw new \Exception($this->l10n->t('A substitute is required for this absence type. Please select who will cover for you.'));
+			}
+		}
+
+		// Validate substitute: must be another existing, enabled user (not self)
+		$substituteId = isset($data['substitute_user_id']) ? trim((string)$data['substitute_user_id']) : '';
+		if ($substituteId !== '') {
+			if ($substituteId === $userId) {
+				throw new \Exception($this->l10n->t('Substitute cannot be yourself'));
+			}
+			$substituteUser = $this->userManager->get($substituteId);
+			if ($substituteUser === null || !$substituteUser->isEnabled()) {
+				throw new \Exception($this->l10n->t('Substitute must be an existing user'));
+			}
+		}
 	}
 
 	/**
@@ -472,29 +679,49 @@ class AbsenceService
 	 * @param \DateTime $endDate
 	 * @throws \Exception
 	 */
+	/**
+	 * Validate absence type rules (max calendar days per type).
+	 * Limits are documented here and enforced for consistency and abuse prevention.
+	 */
 	private function validateAbsenceTypeRules(string $type, \DateTime $startDate, \DateTime $endDate): void
 	{
 		$days = $startDate->diff($endDate)->days + 1;
 
 		switch ($type) {
 			case Absence::TYPE_VACATION:
-				// Vacation can be up to 30 days
 				if ($days > 30) {
 					throw new \Exception($this->l10n->t('Vacation cannot exceed 30 days'));
 				}
 				break;
-
 			case Absence::TYPE_SICK_LEAVE:
-				// No specific limits, but should be reasonable
 				if ($days > 365) {
 					throw new \Exception($this->l10n->t('Sick leave duration seems unreasonable'));
 				}
 				break;
-
 			case Absence::TYPE_PERSONAL_LEAVE:
-				// Personal leave limited to 5 days
 				if ($days > 5) {
 					throw new \Exception($this->l10n->t('Personal leave cannot exceed 5 days'));
+				}
+				break;
+			case Absence::TYPE_PARENTAL_LEAVE:
+				if ($days > 1095) { // ~3 years
+					throw new \Exception($this->l10n->t('Parental leave cannot exceed 3 years per request'));
+				}
+				break;
+			case Absence::TYPE_SPECIAL_LEAVE:
+				if ($days > 30) {
+					throw new \Exception($this->l10n->t('Special leave cannot exceed 30 days'));
+				}
+				break;
+			case Absence::TYPE_UNPAID_LEAVE:
+				if ($days > 365) {
+					throw new \Exception($this->l10n->t('Unpaid leave cannot exceed 365 days'));
+				}
+				break;
+			case Absence::TYPE_HOME_OFFICE:
+			case Absence::TYPE_BUSINESS_TRIP:
+				if ($days > 365) {
+					throw new \Exception($this->l10n->t('Duration cannot exceed 365 days'));
 				}
 				break;
 		}
@@ -517,7 +744,7 @@ class AbsenceService
 			
 			// Validate date
 			if (!checkdate($month, $day, $year)) {
-				throw new \Exception('Invalid date: ' . $dateString);
+				throw new \Exception($this->l10n->t('Invalid date: %s', [$dateString]));
 			}
 			
 			return new \DateTime(sprintf('%04d-%02d-%02d', $year, $month, $day));
@@ -527,7 +754,7 @@ class AbsenceService
 		try {
 			return new \DateTime($dateString);
 		} catch (\Throwable $e) {
-			throw new \Exception('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: ' . $dateString);
+			throw new \Exception($this->l10n->t('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: %s', [$dateString]));
 		}
 	}
 }

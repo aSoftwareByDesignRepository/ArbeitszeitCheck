@@ -408,6 +408,7 @@ class ExportController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function datevConfig(): JSONResponse
 	{
 		try {

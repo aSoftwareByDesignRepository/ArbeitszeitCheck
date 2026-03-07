@@ -120,6 +120,20 @@ class ComplianceViolationMapper extends QBMapper
 	}
 
 	/**
+	 * Delete all violations for a user (used on user deletion)
+	 *
+	 * @param string $userId
+	 * @return int Number of deleted rows
+	 */
+	public function deleteByUser(string $userId): int
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
+		return $qb->executeStatement();
+	}
+
+	/**
 	 * Find violations by type
 	 *
 	 * @param string $violationType

@@ -36,7 +36,7 @@
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'requesttoken': OC.requestToken || ''
+                    'requesttoken': (typeof OC !== 'undefined' && OC.requestToken) || (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || ''
                 },
                 credentials: 'same-origin'
             })
@@ -143,7 +143,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'requesttoken': OC.requestToken
+                    'requesttoken': (typeof OC !== 'undefined' && OC.requestToken) || (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || ''
                 },
                 body: JSON.stringify(data)
             })

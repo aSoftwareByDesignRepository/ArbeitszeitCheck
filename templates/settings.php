@@ -20,6 +20,7 @@ Util::addStyle('arbeitszeitcheck', 'common/typography');
 Util::addStyle('arbeitszeitcheck', 'common/base');
 Util::addStyle('arbeitszeitcheck', 'common/components');
 Util::addStyle('arbeitszeitcheck', 'common/layout');
+Util::addStyle('arbeitszeitcheck', 'common/app-layout');
 Util::addStyle('arbeitszeitcheck', 'common/utilities');
 Util::addStyle('arbeitszeitcheck', 'common/responsive');
 Util::addStyle('arbeitszeitcheck', 'common/accessibility');
@@ -28,8 +29,7 @@ Util::addStyle('arbeitszeitcheck', 'settings');
 Util::addScript('arbeitszeitcheck', 'common/utils');
 Util::addScript('arbeitszeitcheck', 'settings');
 
-$urlGenerator = $_['urlGenerator'] ?? \OC::$server->getURLGenerator();
-$user = \OC::$server->getUserSession()->getUser();
+$urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -38,7 +38,7 @@ $user = \OC::$server->getUserSession()->getUser();
     <div id="app-content-wrapper">
         <!-- Breadcrumb Navigation -->
         <div class="breadcrumb-container">
-            <nav class="breadcrumb" aria-label="Breadcrumb">
+            <nav class="breadcrumb" aria-label="<?php p($l->t('Breadcrumb')); ?>">
                 <ol>
                     <li><a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.index')); ?>"><?php p($l->t('Dashboard')); ?></a></li>
                     <li aria-current="page"><?php p($l->t('Settings')); ?></li>
@@ -47,38 +47,21 @@ $user = \OC::$server->getUserSession()->getUser();
         </div>
 
         <!-- Page Header -->
-        <div class="section page-header-section">
+        <header class="section page-header-section" aria-labelledby="settings-page-title">
             <div class="header-content">
                 <div class="header-text">
-                    <h2><?php p($l->t('Settings')); ?></h2>
+                    <h2 id="settings-page-title"><?php p($l->t('Settings')); ?></h2>
                     <p><?php p($l->t('Manage your personal preferences and notification settings')); ?></p>
                 </div>
             </div>
-        </div>
+        </header>
 
         <!-- Settings Sections -->
-        <div class="section">
+        <section class="section" aria-labelledby="settings-sections-heading" aria-label="<?php p($l->t('Settings options')); ?>">
             <div class="settings-container">
-                <!-- Personal Information -->
-                <div class="settings-section">
-                    <h3 class="section-title"><?php p($l->t('Personal Information')); ?></h3>
-                    <div class="setting-item">
-                        <label><?php p($l->t('User ID')); ?></label>
-                        <div class="setting-value"><?php p($user ? $user->getUID() : '-'); ?></div>
-                    </div>
-                    <div class="setting-item">
-                        <label><?php p($l->t('Display Name')); ?></label>
-                        <div class="setting-value"><?php p($user ? $user->getDisplayName() : '-'); ?></div>
-                    </div>
-                    <div class="setting-item">
-                        <label><?php p($l->t('Email')); ?></label>
-                        <div class="setting-value"><?php p($user ? $user->getEMailAddress() : '-'); ?></div>
-                    </div>
-                </div>
-
                 <!-- Working Time Preferences -->
                 <div class="settings-section">
-                    <h3 class="section-title"><?php p($l->t('Working Time Preferences')); ?></h3>
+                    <h3 id="settings-sections-heading" class="section-title"><?php p($l->t('Working Time Preferences')); ?></h3>
                     <form id="working-time-settings-form" class="form">
                         <div class="form-group">
                             <div class="form-checkbox">
@@ -202,13 +185,13 @@ $user = \OC::$server->getUserSession()->getUser();
                     <div class="info-box">
                         <p>
                             <strong><?php p($l->t('ArbeitszeitCheck')); ?></strong>
-                            <?php p($l->t('Version:')); ?> <?php p(\OC::$server->getAppManager()->getAppVersion('arbeitszeitcheck')); ?>
+                            <?php p($l->t('Version:')); ?> <?php p(\OCP\Server::get(\OCP\App\IAppManager::class)->getAppVersion('arbeitszeitcheck')); ?>
                         </p>
                         <p><?php p($l->t('German labor law compliant time tracking for Nextcloud')); ?></p>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
     </div>
 </div>
 

@@ -8,7 +8,9 @@
     "lint:fix": "eslint js/ --fix",
     "stylelint": "stylelint 'css/**/*.css'",
     "stylelint:fix": "stylelint 'css/**/*.css' --fix",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "echo \"No tests specified\" && exit 0",
+    "build": "echo \"No build step\" && exit 0",
+    "test:a11y": "echo \"No a11y tests yet\" && exit 0"
   },
   "keywords": [
     "nextcloud",

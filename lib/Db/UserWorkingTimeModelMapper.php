@@ -182,4 +182,18 @@ class UserWorkingTimeModelMapper extends QBMapper
 
 		return $this->update($current);
 	}
+
+	/**
+	 * Delete all working time model assignments for a user (used on user deletion)
+	 *
+	 * @param string $userId
+	 * @return int Number of deleted rows
+	 */
+	public function deleteByUser(string $userId): int
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
+		return $qb->executeStatement();
+	}
 }

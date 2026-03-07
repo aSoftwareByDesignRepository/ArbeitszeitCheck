@@ -15,6 +15,7 @@ use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -57,9 +58,10 @@ class TimeTrackingController extends Controller
 	}
 
 	/**
-	 * Clock in endpoint
+	 * Clock in endpoint (called via AJAX with JSON)
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function clockIn(?string $projectCheckProjectId = null, ?string $description = null): JSONResponse
 	{
 		try {
@@ -94,9 +96,10 @@ class TimeTrackingController extends Controller
 	}
 
 	/**
-	 * Clock out endpoint
+	 * Clock out endpoint (called via AJAX with JSON)
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function clockOut(): JSONResponse
 	{
 		try {
@@ -154,9 +157,10 @@ class TimeTrackingController extends Controller
 	}
 
 	/**
-	 * Start break endpoint
+	 * Start break endpoint (called via AJAX with JSON)
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function startBreak(): JSONResponse
 	{
 		try {
@@ -191,9 +195,10 @@ class TimeTrackingController extends Controller
 	}
 
 	/**
-	 * End break endpoint
+	 * End break endpoint (called via AJAX with JSON)
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function endBreak(): JSONResponse
 	{
 		try {

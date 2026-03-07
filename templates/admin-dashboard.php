@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
-$l = \OC::$server->getL10N('arbeitszeitcheck');
+$l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -62,15 +62,15 @@ $l = \OC::$server->getL10N('arbeitszeitcheck');
                         </p>
                     </div>
                 <?php else: ?>
-                    <div class="table-responsive">
-                        <table class="table">
+                    <div class="table-responsive" role="region" aria-label="<?php p($l->t('Recent compliance violations')); ?>">
+                        <table class="table" role="table" aria-label="<?php p($l->t('Recent compliance violations')); ?>">
                             <thead>
                                 <tr>
-                                    <th><?php p($l->t('Employee')); ?></th>
-                                    <th><?php p($l->t('Problem Type')); ?></th>
-                                    <th><?php p($l->t('How Serious')); ?></th>
-                                    <th><?php p($l->t('Date')); ?></th>
-                                    <th><?php p($l->t('Fixed?')); ?></th>
+                                    <th scope="col"><?php p($l->t('Employee')); ?></th>
+                                    <th scope="col"><?php p($l->t('Problem Type')); ?></th>
+                                    <th scope="col"><?php p($l->t('How Serious')); ?></th>
+                                    <th scope="col"><?php p($l->t('Date')); ?></th>
+                                    <th scope="col"><?php p($l->t('Fixed?')); ?></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -79,7 +79,7 @@ $l = \OC::$server->getL10N('arbeitszeitcheck');
                                         <td><?php p($violation['userDisplayName'] ?? $violation['userId']); ?></td>
                                         <td><?php p($violation['type']); ?></td>
                                         <td>
-                                            <span class="badge badge--<?php echo $violation['severity'] === 'high' ? 'error' : ($violation['severity'] === 'medium' ? 'warning' : 'primary'); ?>">
+                                            <span class="badge badge--<?php p($violation['severity'] === 'high' ? 'error' : ($violation['severity'] === 'medium' ? 'warning' : 'primary')); ?>">
                                                 <?php p($violation['severity']); ?>
                                             </span>
                                         </td>

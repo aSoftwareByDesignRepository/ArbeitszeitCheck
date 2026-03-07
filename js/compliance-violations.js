@@ -32,8 +32,10 @@
      * Load violations with filters
      */
     function loadViolations() {
-        const startDate = Utils.$('#start-date')?.value || '';
-        const endDate = Utils.$('#end-date')?.value || '';
+        const dp = window.ArbeitszeitCheckDatepicker;
+        const toISO = dp ? dp.convertEuropeanToISO : function (s) { return s; };
+        const startDate = toISO(Utils.$('#start-date')?.value || '');
+        const endDate = toISO(Utils.$('#end-date')?.value || '');
         const severity = Utils.$('#severity-filter')?.value || '';
 
         const params = new URLSearchParams();
@@ -76,7 +78,7 @@
         if (!tbody) return;
 
         if (violations.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">No violations found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'No violations found') : 'No violations found') + '</td></tr>';
             return;
         }
 

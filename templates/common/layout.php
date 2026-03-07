@@ -15,9 +15,10 @@ if (!defined('OCP\AppFramework\App::class')) {
 }
 
 // Get the current user and app context
-$user = \OC::$server->getUserSession()->getUser();
+$user = \OCP\Server::get(\OCP\IUserSession::class)->getUser();
 $appName = 'arbeitszeitcheck';
-$appVersion = \OC::$server->getAppManager()->getAppVersion($appName);
+$appVersion = \OCP\Server::get(\OCP\App\IAppManager::class)->getAppVersion($appName);
+$l = $l ?? $_['l'] ?? \OCP\Util::getL10N($appName);
 
 // Get the page title and meta information
 $pageTitle = isset($pageTitle) ? $pageTitle : $l->t('ArbeitszeitCheck');
@@ -27,7 +28,7 @@ $pageKeywords = isset($pageKeywords) ? $pageKeywords : $l->t('time tracking, arb
 // Inherit theme from Nextcloud without app overrides; fallback to light
 $theme = 'light';
 try {
-    $theming = \OC::$server->getThemingDefaults();
+    $theming = \OCP\Server::get(\OCA\Theming\ThemingDefaults::class);
     $primary = $theming->getColorPrimary();
     // Compute simple luminance heuristic from hex color to decide dark vs light
     if (is_string($primary) && preg_match('/^#?([0-9a-fA-F]{6})$/', $primary, $m)) {
@@ -41,7 +42,7 @@ try {
     // Optional admin-only QA override via app config and query param
     try {
         /** @var \OCP\IConfig $config */
-        $config = \OC::$server->getConfig();
+        $config = \OCP\Server::get(\OCP\IConfig::class);
         $allowOverride = $config->getAppValue($appName, 'theme_dev_override', 'no') === 'yes';
         if ($allowOverride && isset($_GET['theme'])) {
             $q = $_GET['theme'];
@@ -75,9 +76,9 @@ try {
     <meta name="msapplication-TileColor" content="#0082c9">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="<?php print_unescaped(image_path($appName, 'favicon.png')); ?>">
-    <link rel="apple-touch-icon" href="<?php print_unescaped(image_path($appName, 'apple-touch-icon.png')); ?>">
+    <!-- Favicon (use app icon if dedicated favicon not present) -->
+    <link rel="icon" type="image/svg+xml" href="<?php print_unescaped(image_path($appName, 'app.svg')); ?>">
+    <link rel="apple-touch-icon" href="<?php print_unescaped(image_path($appName, 'app.svg')); ?>">
 
     <!-- Page Title -->
     <title><?php p($pageTitle); ?> - <?php p($l->t('ArbeitszeitCheck')); ?></title>
@@ -95,6 +96,7 @@ try {
     <link rel="stylesheet" href="<?php print_unescaped(link_to($appName, 'css/common/base.css')); ?>">
     <link rel="stylesheet" href="<?php print_unescaped(link_to($appName, 'css/common/components.css')); ?>">
     <link rel="stylesheet" href="<?php print_unescaped(link_to($appName, 'css/common/layout.css')); ?>">
+    <link rel="stylesheet" href="<?php print_unescaped(link_to($appName, 'css/common/app-layout.css')); ?>">
     <link rel="stylesheet" href="<?php print_unescaped(link_to($appName, 'css/common/utilities.css')); ?>">
     <link rel="stylesheet" href="<?php print_unescaped(link_to($appName, 'css/common/responsive.css')); ?>">
     <link rel="stylesheet" href="<?php print_unescaped(link_to($appName, 'css/common/accessibility.css')); ?>">
@@ -267,11 +269,14 @@ try {
                 const formData = new FormData(form);
                 const url = form.action || window.location.href;
 
+                const requestToken = (typeof OC !== 'undefined' && OC.requestToken) ||
+                    (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || '';
                 fetch(url, {
                         method: 'POST',
                         body: formData,
                         headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'requesttoken': requestToken
                         }
                     })
                     .then(response => response.json())

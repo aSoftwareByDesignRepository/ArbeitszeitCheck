@@ -37,8 +37,10 @@
      * Load audit logs with filters
      */
     function loadAuditLogs() {
-        const startDate = Utils.$('#start-date')?.value || '';
-        const endDate = Utils.$('#end-date')?.value || '';
+        const dp = window.ArbeitszeitCheckDatepicker;
+        const toISO = dp ? dp.convertEuropeanToISO : function (s) { return s; };
+        const startDate = toISO(Utils.$('#start-date')?.value || '');
+        const endDate = toISO(Utils.$('#end-date')?.value || '');
         const userId = Utils.$('#user-filter')?.value || '';
         const action = Utils.$('#action-filter')?.value || '';
 
@@ -50,7 +52,7 @@
 
         const tbody = Utils.$('#audit-log-tbody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'Loading…') : 'Loading…') + '</td></tr>';
         }
 
         Utils.ajax('/apps/arbeitszeitcheck/api/admin/audit-logs?' + params.toString(), {
@@ -59,13 +61,13 @@
                 if (data.success && data.logs) {
                     renderAuditLogs(data.logs);
                 } else {
-                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center">Error loading audit logs</td></tr>';
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'Error loading audit logs') : 'Error loading audit logs') + '</td></tr>';
                 }
             },
             onError: function(error) {
-                if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center">Error loading audit logs</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'Error loading audit logs') : 'Error loading audit logs') + '</td></tr>';
                 if (Messaging && Messaging.showError) {
-                    Messaging.showError('Failed to load audit logs. Please try again.');
+                    Messaging.showError(window.t ? window.t('arbeitszeitcheck', 'Failed to load audit logs. Please try again.') : 'Failed to load audit logs. Please try again.');
                 }
             }
         });
@@ -79,7 +81,7 @@
         if (!tbody) return;
 
         if (logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">No audit log entries found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'No audit log entries found') : 'No audit log entries found') + '</td></tr>';
             return;
         }
 
@@ -98,8 +100,10 @@
      * Export audit logs
      */
     function exportLogs() {
-        const startDate = Utils.$('#start-date')?.value || '';
-        const endDate = Utils.$('#end-date')?.value || '';
+        const dp = window.ArbeitszeitCheckDatepicker;
+        const toISO = dp ? dp.convertEuropeanToISO : function (s) { return s; };
+        const startDate = toISO(Utils.$('#start-date')?.value || '');
+        const endDate = toISO(Utils.$('#end-date')?.value || '');
         const userId = Utils.$('#user-filter')?.value || '';
         const action = Utils.$('#action-filter')?.value || '';
 

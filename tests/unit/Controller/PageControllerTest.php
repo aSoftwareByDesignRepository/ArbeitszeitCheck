@@ -12,8 +12,19 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
 use OCA\ArbeitszeitCheck\Controller\PageController;
+use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
+use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
+use OCA\ArbeitszeitCheck\Service\AbsenceService;
+use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\OvertimeService;
+use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\IConfig;
+use OCP\IGroupManager;
 use OCP\IRequest;
+use OCP\IURLGenerator;
+use OCP\IUserSession;
+use OCP\IL10N;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -24,18 +35,42 @@ class PageControllerTest extends TestCase
 	/** @var PageController */
 	private $controller;
 
-	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
-	private $request;
-
 	protected function setUp(): void
 	{
 		parent::setUp();
 
-		$this->request = $this->createMock(IRequest::class);
+		$request = $this->createMock(IRequest::class);
+		$timeTrackingService = $this->createMock(TimeTrackingService::class);
+		$overtimeService = $this->createMock(OvertimeService::class);
+		$absenceService = $this->createMock(AbsenceService::class);
+		$timeEntryMapper = $this->createMock(TimeEntryMapper::class);
+		$absenceMapper = $this->createMock(AbsenceMapper::class);
+		$userSession = $this->createMock(IUserSession::class);
+		$user = $this->createMock(\OCP\IUser::class);
+		$user->method('getUID')->willReturn('test-user');
+		$user->method('getDisplayName')->willReturn('Test User');
+		$userSession->method('getUser')->willReturn($user);
+		$groupManager = $this->createMock(IGroupManager::class);
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$config = $this->createMock(IConfig::class);
+		$cspService = $this->createMock(CSPService::class);
+		$cspService->method('applyPolicyWithNonce')->willReturnCallback(fn ($r) => $r);
+		$l10n = $this->createMock(IL10N::class);
 
 		$this->controller = new PageController(
 			'arbeitszeitcheck',
-			$this->request
+			$request,
+			$timeTrackingService,
+			$overtimeService,
+			$absenceService,
+			$timeEntryMapper,
+			$absenceMapper,
+			$userSession,
+			$groupManager,
+			$urlGenerator,
+			$config,
+			$cspService,
+			$l10n
 		);
 	}
 

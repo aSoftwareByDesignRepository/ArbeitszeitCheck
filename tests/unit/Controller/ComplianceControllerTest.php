@@ -15,12 +15,15 @@ use OCA\ArbeitszeitCheck\Controller\ComplianceController;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
+use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
+use OCP\IL10N;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -43,13 +46,28 @@ class ComplianceControllerTest extends TestCase
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
 
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
+
+	/** @var CSPService|\PHPUnit\Framework\MockObject\MockObject */
+	private $cspService;
+
+	/** @var IL10N|\PHPUnit\Framework\MockObject\MockObject */
+	private $l10n;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
 
 		$this->complianceService = $this->createMock(ComplianceService::class);
 		$this->violationMapper = $this->createMock(ComplianceViolationMapper::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->permissionService->method('canViewUserCompliance')->willReturn(true);
+		$this->permissionService->method('canResolveViolation')->willReturn(true);
 		$this->userSession = $this->createMock(IUserSession::class);
+		$this->cspService = $this->createMock(CSPService::class);
+		$this->l10n = $this->createMock(IL10N::class);
+		$this->l10n->method('t')->willReturnCallback(fn ($s) => $s);
 		$this->request = $this->createMock(IRequest::class);
 
 		$this->controller = new ComplianceController(
@@ -57,7 +75,10 @@ class ComplianceControllerTest extends TestCase
 			$this->request,
 			$this->complianceService,
 			$this->violationMapper,
-			$this->userSession
+			$this->permissionService,
+			$this->userSession,
+			$this->cspService,
+			$this->l10n
 		);
 	}
 
@@ -259,6 +280,7 @@ class ComplianceControllerTest extends TestCase
 		$user->method('getUID')->willReturn($userId);
 
 		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canViewUserCompliance')->with($userId, $otherUserId)->willReturn(false);
 
 		$violation = $this->createMock(ComplianceViolation::class);
 		$violation->method('getUserId')->willReturn($otherUserId);
@@ -486,6 +508,7 @@ class ComplianceControllerTest extends TestCase
 		$user->method('getUID')->willReturn($userId);
 
 		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canResolveViolation')->with($userId, $otherUserId)->willReturn(false);
 
 		$violation = $this->createMock(ComplianceViolation::class);
 		$violation->method('getUserId')->willReturn($otherUserId);

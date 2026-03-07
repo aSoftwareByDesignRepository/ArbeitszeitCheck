@@ -125,15 +125,16 @@ class SettingsController extends Controller
 		Util::addScript('arbeitszeitcheck', 'settings');
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'personal-settings', [
-			'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+			'l' => $this->l10n,
 		]);
 		return $this->configureCSP($response);
 	}
 
 	/**
-	 * Update personal settings
+	 * Update personal settings (called via AJAX with JSON; NoCSRFRequired for same reason as absence/time entry endpoints)
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function update(): JSONResponse
 	{
 		try {
@@ -266,6 +267,7 @@ class SettingsController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function setOnboardingCompleted(): JSONResponse
 	{
 		try {

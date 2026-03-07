@@ -43,9 +43,9 @@ class TimeEntryController extends Controller
 	private IURLGenerator $urlGenerator;
 	private IL10N $l10n;
 	private AuditLogMapper $auditLogMapper;
-	private ?ComplianceService $complianceService;
+	private ComplianceService $complianceService;
 	private IConfig $config;
-	private ?TimeTrackingService $timeTrackingService;
+	private TimeTrackingService $timeTrackingService;
 
 	public function __construct(
 		string $appName,
@@ -58,8 +58,8 @@ class TimeEntryController extends Controller
 		AuditLogMapper $auditLogMapper,
 		IConfig $config,
 		CSPService $cspService,
-		?ComplianceService $complianceService = null,
-		?TimeTrackingService $timeTrackingService = null
+		ComplianceService $complianceService,
+		TimeTrackingService $timeTrackingService
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -139,6 +139,9 @@ class TimeEntryController extends Controller
 	{
 		try {
 			$userId = $this->getUserId();
+			// Cap limit to prevent DoS (max 500 per request)
+			$limit = $limit !== null ? min(max(1, (int)$limit), 500) : 25;
+			$offset = $offset !== null ? max(0, (int)$offset) : 0;
 			$filters = [];
 
 			if ($start_date) {
@@ -150,12 +153,8 @@ class TimeEntryController extends Controller
 			if ($status) {
 				$filters['status'] = $status;
 			}
-			if ($limit) {
-				$filters['limit'] = $limit;
-			}
-			if ($offset) {
-				$filters['offset'] = $offset;
-			}
+			$filters['limit'] = $limit;
+			$filters['offset'] = $offset;
 
 			// Build filters array for mapper count method (uses database filtering)
 			$countFilters = ['user_id' => $userId];
@@ -235,7 +234,7 @@ class TimeEntryController extends Controller
 			}
 
 			// Apply pagination to filtered entries
-			$entries = array_slice($allEntries, $offset ?? 0, $limit ?? 25);
+			$entries = array_slice($allEntries, $offset, $limit);
 
 			// Safely map entries to summaries, handling any potential null DateTime issues
 			$entrySummaries = [];
@@ -283,14 +282,14 @@ class TimeEntryController extends Controller
 			$this->appName,
 			'time-entries',
 			[
-				'urlGenerator' => \OC::$server->getURLGenerator(),
+				'urlGenerator' => $this->urlGenerator,
 				'mode' => 'create',
 				'entry' => null,
 				'entries' => [],
 				'stats' => [],
 				'maxDailyHours' => $maxDailyHours,
 				'complianceStrictMode' => $complianceStrictMode,
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]
 		);
 		return $this->configureCSP($response);
@@ -327,9 +326,9 @@ class TimeEntryController extends Controller
 					$this->appName,
 					'time-entries',
 					[
-						'urlGenerator' => \OC::$server->getURLGenerator(),
-						'error' => 'Access denied',
-						'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+						'urlGenerator' => $this->urlGenerator,
+						'error' => $this->l10n->t('Access denied'),
+						'l' => $this->l10n,
 					]
 				);
 				return $this->configureCSP($response);
@@ -367,9 +366,9 @@ class TimeEntryController extends Controller
 					$this->appName,
 					'time-entries',
 					[
-						'urlGenerator' => \OC::$server->getURLGenerator(),
+						'urlGenerator' => $this->urlGenerator,
 						'error' => $errorMessage,
-						'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+						'l' => $this->l10n,
 					]
 				);
 				return $this->configureCSP($response);
@@ -383,14 +382,14 @@ class TimeEntryController extends Controller
 				$this->appName,
 				'time-entries',
 				[
-					'urlGenerator' => \OC::$server->getURLGenerator(),
+					'urlGenerator' => $this->urlGenerator,
 					'mode' => 'edit',
 					'entry' => $entry,
 					'entries' => [],
 					'stats' => [],
 					'maxDailyHours' => $maxDailyHours,
 					'complianceStrictMode' => $complianceStrictMode,
-					'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+					'l' => $this->l10n,
 				]
 			);
 			return $this->configureCSP($response);
@@ -401,9 +400,9 @@ class TimeEntryController extends Controller
 				$this->appName,
 				'time-entries',
 				[
-					'urlGenerator' => \OC::$server->getURLGenerator(),
+					'urlGenerator' => $this->urlGenerator,
 					'error' => $e->getMessage(),
-					'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+					'l' => $this->l10n,
 				]
 			);
 			return $this->configureCSP($response);
@@ -461,6 +460,7 @@ class TimeEntryController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function store(string $date, float $hours, ?string $description = null, ?string $project_check_project_id = null): JSONResponse
 	{
 		try {
@@ -486,14 +486,7 @@ class TimeEntryController extends Controller
 			$timeEntry->setUpdatedAt(new \DateTime());
 
 			// Check rest period compliance before saving (ArbZG §5)
-			if (!$this->complianceService) {
-				try {
-					$this->complianceService = \OCP\Server::get(ComplianceService::class);
-				} catch (\Throwable $e) {
-					\OCP\Log\logger('arbeitszeitcheck')->warning('ComplianceService not available for rest period check: ' . $e->getMessage());
-				}
-			}
-			if ($this->complianceService && $timeEntry->getStartTime()) {
+			if ($timeEntry->getStartTime()) {
 				$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($userId, $timeEntry->getStartTime());
 				if (!$restPeriodCheck['valid']) {
 					return new JSONResponse([
@@ -505,14 +498,7 @@ class TimeEntryController extends Controller
 
 			// CRITICAL: First calculate automatic breaks (ArbZG §4)
 			// This must happen BEFORE adjusting end time, because breaks affect the working duration
-			if (!$this->timeTrackingService) {
-				try {
-					$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
-				} catch (\Throwable $e) {
-					\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available: ' . $e->getMessage());
-				}
-			}
-			if ($this->timeTrackingService && $timeEntry->getEndTime() && $timeEntry->getStartTime()) {
+			if ($timeEntry->getEndTime() && $timeEntry->getStartTime()) {
 				// First: Calculate and set automatic break if no break was entered (ArbZG §4)
 				$this->timeTrackingService->calculateAndSetAutomaticBreak($timeEntry);
 				
@@ -628,6 +614,7 @@ class TimeEntryController extends Controller
 	 * @throws \Exception If user doesn't own the entry, entry cannot be edited, or validation fails
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function update(int $id, ?string $date = null, ?float $hours = null, ?string $description = null, ?string $project_check_project_id = null): JSONResponse
 	{
 		try {
@@ -685,8 +672,15 @@ class TimeEntryController extends Controller
 
 			// New format: startTime and endTime
 			if ($startTime && $endTime) {
-				$entry->setStartTime(new \DateTime($startTime));
-				$entry->setEndTime(new \DateTime($endTime));
+				try {
+					$entry->setStartTime(new \DateTime($startTime));
+					$entry->setEndTime(new \DateTime($endTime));
+				} catch (\Throwable $e) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Invalid start or end time format. Use ISO 8601 (e.g. Y-m-dTH:i:s).')
+					], Http::STATUS_BAD_REQUEST);
+				}
 
 				// Handle breaks: prefer breaks JSON (multiple breaks) over single break fields
 				if ($breaksJson) {
@@ -735,8 +729,15 @@ class TimeEntryController extends Controller
 					}
 				} elseif ($breakStartTime && $breakEndTime) {
 					// Fallback to single break fields (backward compatibility)
-					$entry->setBreakStartTime(new \DateTime($breakStartTime));
-					$entry->setBreakEndTime(new \DateTime($breakEndTime));
+					try {
+						$entry->setBreakStartTime(new \DateTime($breakStartTime));
+						$entry->setBreakEndTime(new \DateTime($breakEndTime));
+					} catch (\Throwable $e) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Invalid break start or end time format.')
+						], Http::STATUS_BAD_REQUEST);
+					}
 					// Clear breaks JSON when using single break fields
 					$entry->setBreaks(null);
 				} else {
@@ -747,18 +748,8 @@ class TimeEntryController extends Controller
 				}
 
 				// Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
-				if (!$this->timeTrackingService) {
-					try {
-						$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
-					} catch (\Throwable $e) {
-						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available: ' . $e->getMessage());
-					}
-				}
-				if ($this->timeTrackingService && $entry->getEndTime() && $entry->getStartTime()) {
-					// First: Calculate and set automatic break if no break was entered (ArbZG §4)
+				if ($entry->getEndTime() && $entry->getStartTime()) {
 					$this->timeTrackingService->calculateAndSetAutomaticBreak($entry);
-					
-					// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
 					$this->timeTrackingService->adjustEndTimeForDailyMaximum($entry);
 				}
 			}
@@ -778,18 +769,8 @@ class TimeEntryController extends Controller
 				}
 
 				// Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
-				if (!$this->timeTrackingService) {
-					try {
-						$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
-					} catch (\Throwable $e) {
-						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available: ' . $e->getMessage());
-					}
-				}
-				if ($this->timeTrackingService && $entry->getEndTime() && $entry->getStartTime()) {
-					// First: Calculate and set automatic break if no break was entered (ArbZG §4)
+				if ($entry->getEndTime() && $entry->getStartTime()) {
 					$this->timeTrackingService->calculateAndSetAutomaticBreak($entry);
-					
-					// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
 					$this->timeTrackingService->adjustEndTimeForDailyMaximum($entry);
 				}
 			}
@@ -806,14 +787,7 @@ class TimeEntryController extends Controller
 			}
 
 			// Check rest period compliance before saving (ArbZG §5)
-			if (!$this->complianceService) {
-				try {
-					$this->complianceService = \OCP\Server::get(ComplianceService::class);
-				} catch (\Throwable $e) {
-					\OCP\Log\logger('arbeitszeitcheck')->warning('ComplianceService not available for rest period check: ' . $e->getMessage());
-				}
-			}
-			if ($this->complianceService && $entry->getStartTime()) {
+			if ($entry->getStartTime()) {
 				$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($userId, $entry->getStartTime(), $id);
 				if (!$restPeriodCheck['valid']) {
 					return new JSONResponse([
@@ -824,11 +798,8 @@ class TimeEntryController extends Controller
 			}
 
 			// CRITICAL: First calculate automatic breaks (ArbZG §4), then adjust for daily maximum (ArbZG §3)
-			if ($this->timeTrackingService && $entry->getEndTime() && $entry->getStartTime()) {
-				// First: Calculate and set automatic break if no break was entered (ArbZG §4)
+			if ($entry->getEndTime() && $entry->getStartTime()) {
 				$this->timeTrackingService->calculateAndSetAutomaticBreak($entry);
-				
-				// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
 				$this->timeTrackingService->adjustEndTimeForDailyMaximum($entry);
 			}
 
@@ -1040,6 +1011,7 @@ class TimeEntryController extends Controller
 	 * @throws \Exception If user doesn't own the entry, correction already pending, or validation fails
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function requestCorrection(int $id): JSONResponse
 	{
 		try {
@@ -1081,7 +1053,7 @@ class TimeEntryController extends Controller
 			if (empty($justification)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Justification is required for correction requests'
+					'error' => $this->l10n->t('Justification is required for correction requests')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -1090,7 +1062,7 @@ class TimeEntryController extends Controller
 			if (!$entryStartTime) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Time entry has no start time'
+					'error' => $this->l10n->t('Time entry has no start time')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -1238,6 +1210,7 @@ class TimeEntryController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function delete(int $id): JSONResponse
 	{
 		try {
@@ -1537,14 +1510,7 @@ class TimeEntryController extends Controller
 				$timeEntry->setUpdatedAt(new \DateTime());
 
 				// Check rest period compliance before saving (ArbZG §5)
-				if (!$this->complianceService) {
-					try {
-						$this->complianceService = \OCP\Server::get(ComplianceService::class);
-					} catch (\Throwable $e) {
-						\OCP\Log\logger('arbeitszeitcheck')->warning('ComplianceService not available for rest period check: ' . $e->getMessage());
-					}
-				}
-				if ($this->complianceService && $timeEntry->getStartTime()) {
+				if ($timeEntry->getStartTime()) {
 					$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($userId, $timeEntry->getStartTime());
 					if (!$restPeriodCheck['valid']) {
 						return new JSONResponse([
@@ -1555,17 +1521,8 @@ class TimeEntryController extends Controller
 				}
 
 				// Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
-				if (!$this->timeTrackingService) {
-					try {
-						$this->timeTrackingService = \OCP\Server::get(TimeTrackingService::class);
-					} catch (\Throwable $e) {
-						\OCP\Log\logger('arbeitszeitcheck')->warning('TimeTrackingService not available: ' . $e->getMessage());
-					}
-				}
-				if ($this->timeTrackingService && $timeEntry->getEndTime() && $timeEntry->getStartTime()) {
+				if ($timeEntry->getEndTime() && $timeEntry->getStartTime()) {
 					$this->timeTrackingService->calculateAndSetAutomaticBreak($timeEntry);
-					
-					// Check if adjustment is needed and possible
 					$adjusted = $this->timeTrackingService->adjustEndTimeForDailyMaximum($timeEntry);
 					
 					// If adjustment failed (max already reached), check if we need to reject
@@ -1706,6 +1663,8 @@ class TimeEntryController extends Controller
 	 * @param int $id Time entry ID to update
 	 * @return JSONResponse JSON response with 'success' and updated 'entry' data, or 'error' on failure
 	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function apiUpdate(int $id): JSONResponse
 	{
 		$params = $this->request->getParams();
@@ -1727,6 +1686,8 @@ class TimeEntryController extends Controller
 	 * @param int $id Time entry ID to update
 	 * @return JSONResponse JSON response with 'success' and updated 'entry' data, or 'error' on failure
 	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function apiUpdatePost(int $id): JSONResponse
 	{
 		$params = $this->request->getParams();
@@ -1760,6 +1721,7 @@ class TimeEntryController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function apiDelete(int $id): JSONResponse
 	{
 		return $this->delete($id);
@@ -1777,6 +1739,7 @@ class TimeEntryController extends Controller
 	 * @param string|null $end_date End date for custom period (Y-m-d format, required if period is 'custom')
 	 * @return JSONResponse JSON response with 'success', 'overtime' hours, and 'period' information
 	 */
+	#[NoAdminRequired]
 	public function getOvertime(?string $period = 'monthly', ?string $start_date = null, ?string $end_date = null): JSONResponse
 	{
 		try {
@@ -1877,17 +1840,6 @@ class TimeEntryController extends Controller
 		$realTimeComplianceEnabled = $this->config->getAppValue('arbeitszeitcheck', 'realtime_compliance_check', '1') === '1';
 		if (!$realTimeComplianceEnabled) {
 			return; // Real-time checking disabled, rely on daily batch job
-		}
-
-		// Get compliance service (may be null if not available)
-		if (!$this->complianceService) {
-			try {
-				$this->complianceService = \OCP\Server::get(ComplianceService::class);
-			} catch (\Throwable $e) {
-				// Compliance service not available, log and continue
-				\OCP\Log\logger('arbeitszeitcheck')->warning('ComplianceService not available for real-time check: ' . $e->getMessage());
-				return;
-			}
 		}
 
 		try {

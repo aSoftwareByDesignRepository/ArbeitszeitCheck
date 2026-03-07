@@ -13,6 +13,7 @@ namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
 use OCP\AppFramework\Controller;
@@ -36,8 +37,8 @@ class ComplianceController extends Controller
 
 	private ComplianceService $complianceService;
 	private ComplianceViolationMapper $violationMapper;
+	private PermissionService $permissionService;
 	private IUserSession $userSession;
-	private IGroupManager $groupManager;
 	private IL10N $l10n;
 
 	public function __construct(
@@ -45,18 +46,31 @@ class ComplianceController extends Controller
 		IRequest $request,
 		ComplianceService $complianceService,
 		ComplianceViolationMapper $violationMapper,
+		PermissionService $permissionService,
 		IUserSession $userSession,
-		IGroupManager $groupManager,
 		CSPService $cspService,
 		IL10N $l10n
 	) {
 		parent::__construct($appName, $request);
 		$this->complianceService = $complianceService;
 		$this->violationMapper = $violationMapper;
+		$this->permissionService = $permissionService;
 		$this->userSession = $userSession;
-		$this->groupManager = $groupManager;
 		$this->l10n = $l10n;
 		$this->setCspService($cspService);
+	}
+
+	/**
+	 * Ensure current user may access compliance data for the given target user.
+	 * Allowed: own user, team members (manager), or admin.
+	 */
+	private function ensureCanAccessUserCompliance(string $currentUserId, string $targetUserId): void
+	{
+		if ($this->permissionService->canViewUserCompliance($currentUserId, $targetUserId)) {
+			return;
+		}
+		$this->permissionService->logPermissionDenied($currentUserId, 'view_compliance', 'compliance', $targetUserId);
+		throw new \Exception($this->l10n->t('Access denied. You can only view compliance data for yourself or your team members.'));
 	}
 
 	/**
@@ -103,7 +117,7 @@ class ComplianceController extends Controller
 			$complianceStatus = $this->complianceService->getComplianceStatus($userId);
 
 			// Get recent violations
-			$recentViolations = $this->violationMapper->findByUser($userId, 10);
+			$recentViolations = $this->violationMapper->findByUser($userId, null, 10, 0);
 			$violationsData = [];
 			foreach ($recentViolations as $violation) {
 				$violationsData[] = [
@@ -119,7 +133,7 @@ class ComplianceController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-dashboard', [
 				'complianceStatus' => $complianceStatus,
 				'recentViolations' => $violationsData,
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -127,7 +141,7 @@ class ComplianceController extends Controller
 				'complianceStatus' => ['compliant' => false, 'score' => 0],
 				'recentViolations' => [],
 				'error' => $e->getMessage(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -152,6 +166,7 @@ class ComplianceController extends Controller
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/datepicker');
 		Util::addScript('arbeitszeitcheck', 'common/messaging');
 		Util::addScript('arbeitszeitcheck', 'compliance-violations');
 
@@ -183,7 +198,7 @@ class ComplianceController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-violations', [
 				'violations' => $violationsData,
 				'total' => count($violations),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -191,7 +206,7 @@ class ComplianceController extends Controller
 				'violations' => [],
 				'total' => 0,
 				'error' => $e->getMessage(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -255,7 +270,7 @@ class ComplianceController extends Controller
 				'reportData' => $reportData,
 				'startDate' => $startDate->format('Y-m-d'),
 				'endDate' => $endDate->format('Y-m-d'),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -269,7 +284,7 @@ class ComplianceController extends Controller
 				'startDate' => date('Y-m-d', strtotime('-30 days')),
 				'endDate' => date('Y-m-d'),
 				'error' => $e->getMessage(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -301,9 +316,8 @@ class ComplianceController extends Controller
 	): JSONResponse {
 		try {
 			$currentUserId = $this->getUserId();
-
-			// Non-admin users can only see their own violations
 			$targetUserId = $userId ?? $currentUserId;
+			$this->ensureCanAccessUserCompliance($currentUserId, $targetUserId);
 
 			// Build filters
 			$filters = [];
@@ -368,15 +382,15 @@ class ComplianceController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
 			$errorMessage = $e->getMessage();
 			if (strpos($errorMessage, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
 			}
+			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
-			], Http::STATUS_BAD_REQUEST);
+			], $status);
 		}
 	}
 
@@ -390,11 +404,13 @@ class ComplianceController extends Controller
 	public function getViolation(int $id): JSONResponse
 	{
 		try {
-			$userId = $this->getUserId();
+			$currentUserId = $this->getUserId();
 			$violation = $this->violationMapper->find($id);
+			$violationOwnerId = $violation->getUserId();
 
-			// Users can only see their own violations
-			if ($violation->getUserId() !== $userId) {
+			// Allow: owner, admin, or manager of the violation owner
+			if (!$this->permissionService->canViewUserCompliance($currentUserId, $violationOwnerId)) {
+				$this->permissionService->logPermissionDenied($currentUserId, 'get_violation', 'compliance_violation', (string) $id);
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Violation not found')
@@ -431,14 +447,17 @@ class ComplianceController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function resolveViolation(int $id): JSONResponse
 	{
 		try {
 			$userId = $this->getUserId();
 			$violation = $this->violationMapper->find($id);
+			$violationOwnerId = $violation->getUserId();
 
-			// Users can only resolve their own violations
-			if ($violation->getUserId() !== $userId) {
+			// Admin or manager for the violation owner may resolve; owner may resolve own
+			if (!$this->permissionService->canResolveViolation($userId, $violationOwnerId)) {
+				$this->permissionService->logPermissionDenied($userId, 'resolve_violation', 'compliance_violation', (string) $id);
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Violation not found')
@@ -559,12 +578,13 @@ class ComplianceController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function runCheck(): JSONResponse
 	{
 		try {
 			// Only admins can manually trigger compliance checks
 			$user = $this->userSession->getUser();
-			if (!$user || !$this->groupManager->isAdmin($user->getUID())) {
+			if (!$user || !$this->permissionService->isAdmin($user->getUID())) {
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Admin access required')

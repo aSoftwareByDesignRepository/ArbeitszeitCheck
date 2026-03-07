@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
-$l = \OC::$server->getL10N('arbeitszeitcheck');
+$l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $violations = $_['violations'] ?? [];
 $total = $_['total'] ?? 0;
@@ -31,8 +31,8 @@ $total = $_['total'] ?? 0;
             <!-- Filters -->
             <div class="section-content mb-3">
                 <div class="flex flex--gap">
-                    <input type="date" id="start-date" class="form-input" placeholder="<?php p($l->t('Start Date')); ?>">
-                    <input type="date" id="end-date" class="form-input" placeholder="<?php p($l->t('End Date')); ?>">
+                    <input type="text" id="start-date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
+                    <input type="text" id="end-date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
                     <select id="severity-filter" class="form-select">
                         <option value=""><?php p($l->t('All Severities')); ?></option>
                         <option value="low"><?php p($l->t('Low')); ?></option>
@@ -46,15 +46,15 @@ $total = $_['total'] ?? 0;
             </div>
 
             <!-- Violations Table -->
-            <div class="table-responsive">
-                <table class="table" id="violations-table">
+            <div class="table-responsive" role="region" aria-label="<?php p($l->t('Compliance violations list')); ?>">
+                <table class="table" id="violations-table" role="table" aria-label="<?php p($l->t('Compliance violations list')); ?>">
                     <thead>
                         <tr>
-                            <th><?php p($l->t('Problem Type')); ?></th>
-                            <th><?php p($l->t('How Serious')); ?></th>
-                            <th><?php p($l->t('Date')); ?></th>
-                            <th><?php p($l->t('What Happened')); ?></th>
-                            <th><?php p($l->t('Fixed?')); ?></th>
+                            <th scope="col"><?php p($l->t('Problem Type')); ?></th>
+                            <th scope="col"><?php p($l->t('How Serious')); ?></th>
+                            <th scope="col"><?php p($l->t('Date')); ?></th>
+                            <th scope="col"><?php p($l->t('What Happened')); ?></th>
+                            <th scope="col"><?php p($l->t('Fixed?')); ?></th>
                         </tr>
                     </thead>
                     <tbody id="violations-tbody">
@@ -74,7 +74,7 @@ $total = $_['total'] ?? 0;
                                 <tr>
                                     <td><?php p($violation['type']); ?></td>
                                     <td>
-                                        <span class="badge badge--<?php echo $violation['severity'] === 'high' ? 'error' : ($violation['severity'] === 'medium' ? 'warning' : 'primary'); ?>">
+                                        <span class="badge badge--<?php p($violation['severity'] === 'high' ? 'error' : ($violation['severity'] === 'medium' ? 'warning' : 'primary')); ?>">
                                             <?php p($violation['severity']); ?>
                                         </span>
                                     </td>

@@ -12,12 +12,14 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
 use OCA\ArbeitszeitCheck\Controller\ReportController;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
+use OCP\IL10N;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -37,19 +39,30 @@ class ReportControllerTest extends TestCase
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
 
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
+
+	/** @var IL10N|\PHPUnit\Framework\MockObject\MockObject */
+	private $l10n;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
 
 		$this->reportingService = $this->createMock(ReportingService::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->userSession = $this->createMock(IUserSession::class);
+		$this->l10n = $this->createMock(IL10N::class);
+		$this->l10n->method('t')->willReturnCallback(fn ($s) => $s);
 		$this->request = $this->createMock(IRequest::class);
 
 		$this->controller = new ReportController(
 			'arbeitszeitcheck',
 			$this->request,
 			$this->reportingService,
-			$this->userSession
+			$this->permissionService,
+			$this->userSession,
+			$this->l10n
 		);
 	}
 
@@ -127,6 +140,7 @@ class ReportControllerTest extends TestCase
 		$user->method('getUID')->willReturn($userId);
 
 		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canViewUserReport')->with($userId, $targetUserId)->willReturn(true);
 
 		$reportData = [
 			'date' => '2024-01-15',

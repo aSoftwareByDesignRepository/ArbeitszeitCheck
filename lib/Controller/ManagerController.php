@@ -15,6 +15,8 @@ use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -25,7 +27,6 @@ use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
-use OCP\IGroupManager;
 use OCP\IUserManager;
 use OCP\IL10N;
 use OCP\Util;
@@ -41,8 +42,9 @@ class ManagerController extends Controller
 	private TimeTrackingService $timeTrackingService;
 	private ComplianceService $complianceService;
 	private AbsenceMapper $absenceMapper;
+	private TeamResolverService $teamResolver;
+	private PermissionService $permissionService;
 	private IUserSession $userSession;
-	private IGroupManager $groupManager;
 	private IUserManager $userManager;
 	private IL10N $l10n;
 
@@ -53,8 +55,9 @@ class ManagerController extends Controller
 		TimeTrackingService $timeTrackingService,
 		ComplianceService $complianceService,
 		AbsenceMapper $absenceMapper,
+		TeamResolverService $teamResolver,
+		PermissionService $permissionService,
 		IUserSession $userSession,
-		IGroupManager $groupManager,
 		IUserManager $userManager,
 		CSPService $cspService,
 		IL10N $l10n
@@ -64,8 +67,9 @@ class ManagerController extends Controller
 		$this->timeTrackingService = $timeTrackingService;
 		$this->complianceService = $complianceService;
 		$this->absenceMapper = $absenceMapper;
+		$this->teamResolver = $teamResolver;
+		$this->permissionService = $permissionService;
 		$this->userSession = $userSession;
-		$this->groupManager = $groupManager;
 		$this->userManager = $userManager;
 		$this->l10n = $l10n;
 		$this->setCspService($cspService);
@@ -86,40 +90,14 @@ class ManagerController extends Controller
 	}
 
 	/**
-	 * Get team member user IDs for a manager
-	 * Uses Nextcloud groups - assumes manager is in a group and team members are in the same group
-	 * In production, this could be enhanced with custom manager-team relationships
+	 * Get team member user IDs for a manager (shared group membership).
 	 *
 	 * @param string $managerId
 	 * @return array Array of user IDs
 	 */
 	private function getTeamMemberIds(string $managerId): array
 	{
-		$manager = $this->userManager->get($managerId);
-		if (!$manager) {
-			return [];
-		}
-
-		// Get all groups the manager belongs to
-		$managerGroups = $this->groupManager->getUserGroups($manager);
-		
-		if (empty($managerGroups)) {
-			return [];
-		}
-
-		// Get all users from manager's groups (excluding the manager themselves)
-		$teamMemberIds = [];
-		foreach ($managerGroups as $group) {
-			$groupUsers = $group->getUsers();
-			foreach ($groupUsers as $user) {
-				$userId = $user->getUID();
-				if ($userId !== $managerId && !in_array($userId, $teamMemberIds)) {
-					$teamMemberIds[] = $userId;
-				}
-			}
-		}
-
-		return $teamMemberIds;
+		return $this->teamResolver->getTeamMemberIds($managerId);
 	}
 
 	/**
@@ -140,7 +118,7 @@ class ManagerController extends Controller
 	 */
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function dashboard(): TemplateResponse
+	public function dashboard(): TemplateResponse|\OCP\AppFramework\Http\RedirectResponse
 	{
 		Util::addTranslations('arbeitszeitcheck');
 		
@@ -149,7 +127,9 @@ class ManagerController extends Controller
 		Util::addStyle('arbeitszeitcheck', 'common/components');
 		Util::addStyle('arbeitszeitcheck', 'common/layout');
 		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'common/accessibility');
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'manager-dashboard');
 		
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
@@ -159,6 +139,14 @@ class ManagerController extends Controller
 		
 		try {
 			$managerId = $this->getUserId();
+
+			// Redirect non-managers (no team, not admin) to dashboard
+			if (!$this->permissionService->canAccessManagerDashboard($managerId)) {
+				$urlGenerator = \OCP\Server::get(\OCP\IURLGenerator::class);
+				$redirect = $urlGenerator->linkToRoute('arbeitszeitcheck.page.index');
+				return new \OCP\AppFramework\Http\RedirectResponse($redirect);
+			}
+
 			$teamUserIds = $this->getTeamMemberIds($managerId);
 
 			// Get team statistics
@@ -199,7 +187,8 @@ class ManagerController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'manager-dashboard', [
 				'teamStats' => $teamStats,
 				'teamMembers' => $teamMembers,
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'showManagerLink' => true,
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -211,8 +200,9 @@ class ManagerController extends Controller
 					'pending_absences' => 0
 				],
 				'teamMembers' => [],
+				'showManagerLink' => true,
 				'error' => $e->getMessage(),
-				'cspNonce' => \OC::$server->getContentSecurityPolicyNonceManager()->getNonce(),
+				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -573,18 +563,32 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function approveAbsence(int $absenceId, ?string $comment = null): JSONResponse
 	{
 		try {
 			$managerId = $this->getUserId();
+			$absence = $this->absenceMapper->find($absenceId);
+			if (!$this->permissionService->canManageEmployee($managerId, $absence->getUserId())) {
+				$this->permissionService->logPermissionDenied($managerId, 'approve_absence', 'absence', (string) $absenceId);
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Access denied. You can only approve absences for members of your team.')
+				], Http::STATUS_FORBIDDEN);
+			}
 			$absence = $this->absenceService->approveAbsence($absenceId, $managerId, $comment);
 
 			return new JSONResponse([
 				'success' => true,
 				'absence' => $absence->getSummary()
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Absence not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::approveAbsence: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
 			return new JSONResponse([
 				'success' => false,
 				'error' => $e->getMessage()
@@ -601,18 +605,32 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function rejectAbsence(int $absenceId, ?string $comment = null): JSONResponse
 	{
 		try {
 			$managerId = $this->getUserId();
+			$absence = $this->absenceMapper->find($absenceId);
+			if (!$this->permissionService->canManageEmployee($managerId, $absence->getUserId())) {
+				$this->permissionService->logPermissionDenied($managerId, 'reject_absence', 'absence', (string) $absenceId);
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Access denied. You can only reject absences for members of your team.')
+				], Http::STATUS_FORBIDDEN);
+			}
 			$absence = $this->absenceService->rejectAbsence($absenceId, $managerId, $comment);
 
 			return new JSONResponse([
 				'success' => true,
 				'absence' => $absence->getSummary()
 			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Absence not found')
+			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::rejectAbsence: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
 			return new JSONResponse([
 				'success' => false,
 				'error' => $e->getMessage()
@@ -629,6 +647,7 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function approveTimeEntryCorrection(int $timeEntryId, ?string $comment = null): JSONResponse
 	{
 		try {
@@ -644,9 +663,9 @@ class ManagerController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
-			// Verify manager has access to this user's team
-			$teamUserIds = $this->getTeamMemberIds($managerId);
-			if (!in_array($entry->getUserId(), $teamUserIds)) {
+			// Verify manager may manage this employee (admin or team)
+			if (!$this->permissionService->canManageEmployee($managerId, $entry->getUserId())) {
+				$this->permissionService->logPermissionDenied($managerId, 'approve_time_entry_correction', 'time_entry', (string) $timeEntryId);
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Access denied - user is not in your team')
@@ -655,7 +674,7 @@ class ManagerController extends Controller
 
 			// Approve the correction - finalize the proposed changes
 			$entry->setStatus(\OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_COMPLETED);
-			$entry->setApprovedBy((int)$managerId);
+			$entry->setApprovedByUserId($managerId);
 			$entry->setApprovedAt(new \DateTime());
 			$entry->setUpdatedAt(new \DateTime());
 
@@ -748,6 +767,7 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function rejectTimeEntryCorrection(int $timeEntryId, ?string $reason = null): JSONResponse
 	{
 		try {
@@ -763,9 +783,9 @@ class ManagerController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
-			// Verify manager has access to this user's team
-			$teamUserIds = $this->getTeamMemberIds($managerId);
-			if (!in_array($entry->getUserId(), $teamUserIds)) {
+			// Verify manager may manage this employee (admin or team)
+			if (!$this->permissionService->canManageEmployee($managerId, $entry->getUserId())) {
+				$this->permissionService->logPermissionDenied($managerId, 'reject_time_entry_correction', 'time_entry', (string) $timeEntryId);
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Access denied - user is not in your team')
@@ -776,17 +796,31 @@ class ManagerController extends Controller
 			$justificationData = json_decode($entry->getJustification() ?? '{}', true);
 			$originalData = $justificationData['original'] ?? [];
 
-			// Restore original values
-			if (isset($originalData['date'])) {
+			// Restore original values (supports both formats: startTime/endTime and legacy date/hours)
+			if (isset($originalData['startTime'])) {
+				$entry->setStartTime(new \DateTime($originalData['startTime']));
+			} elseif (isset($originalData['date'])) {
 				$entry->setStartTime(new \DateTime($originalData['date']));
 			}
-			if (isset($originalData['hours']) && $entry->getStartTime()) {
+			if (isset($originalData['endTime'])) {
+				$entry->setEndTime(new \DateTime($originalData['endTime']));
+			} elseif (isset($originalData['hours']) && $entry->getStartTime()) {
 				$endTime = clone $entry->getStartTime();
-				$endTime->modify('+' . round($originalData['hours'] * 3600) . ' seconds');
+				$endTime->modify('+' . (int) round((float) $originalData['hours'] * 3600) . ' seconds');
 				$entry->setEndTime($endTime);
 			}
-			if (isset($originalData['description'])) {
-				$entry->setDescription($originalData['description']);
+			if (isset($originalData['breakStartTime']) && $originalData['breakStartTime'] !== null) {
+				$entry->setBreakStartTime(new \DateTime($originalData['breakStartTime']));
+			} else {
+				$entry->setBreakStartTime(null);
+			}
+			if (isset($originalData['breakEndTime']) && $originalData['breakEndTime'] !== null) {
+				$entry->setBreakEndTime(new \DateTime($originalData['breakEndTime']));
+			} else {
+				$entry->setBreakEndTime(null);
+			}
+			if (array_key_exists('description', $originalData)) {
+				$entry->setDescription($originalData['description'] ?? '');
 			}
 
 			// Reject the correction

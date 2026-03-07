@@ -14,24 +14,19 @@ namespace OCA\ArbeitszeitCheck\Service;
 use OCP\App\IAppManager;
 use OCP\IDBConnection;
 use OCP\IL10N;
+use Psr\Log\LoggerInterface;
 
 /**
  * Service for integrating with ProjectCheck app
  */
 class ProjectCheckIntegrationService
 {
-	private IAppManager $appManager;
-	private IDBConnection $db;
-	private IL10N $l10n;
-
 	public function __construct(
-		IAppManager $appManager,
-		IDBConnection $db,
-		IL10N $l10n
+		private readonly IAppManager $appManager,
+		private readonly IDBConnection $db,
+		private readonly IL10N $l10n,
+		private readonly LoggerInterface $logger,
 	) {
-		$this->appManager = $appManager;
-		$this->db = $db;
-		$this->l10n = $l10n;
 	}
 
 	/**
@@ -97,7 +92,7 @@ class ProjectCheckIntegrationService
 			return $projects;
 		} catch (\Throwable $e) {
 			// Log error but don't fail - ProjectCheck integration should be graceful
-			\OC::$server->getLogger()->warning('Failed to load projects from ProjectCheck: ' . $e->getMessage());
+			$this->logger->warning('Failed to load projects from ProjectCheck: ' . $e->getMessage());
 			return [];
 		}
 	}
@@ -143,7 +138,7 @@ class ProjectCheckIntegrationService
 
 			return null;
 		} catch (\Throwable $e) {
-			\OC::$server->getLogger()->warning('Failed to load project details from ProjectCheck: ' . $e->getMessage());
+			$this->logger->warning('Failed to load project details from ProjectCheck: ' . $e->getMessage());
 			return null;
 		}
 	}
@@ -188,7 +183,7 @@ class ProjectCheckIntegrationService
 
 			return $entries;
 		} catch (\Throwable $e) {
-			\OC::$server->getLogger()->warning('Failed to load time entries from ProjectCheck: ' . $e->getMessage());
+			$this->logger->warning('Failed to load time entries from ProjectCheck: ' . $e->getMessage());
 			return [];
 		}
 	}
@@ -254,7 +249,7 @@ class ProjectCheckIntegrationService
 						$synced++;
 					}
 				} catch (\Throwable $e) {
-					\OC::$server->getLogger()->warning('Failed to sync time entry to ProjectCheck: ' . $e->getMessage());
+					$this->logger->warning('Failed to sync time entry to ProjectCheck: ' . $e->getMessage());
 					$errors++;
 				}
 			}
@@ -267,7 +262,7 @@ class ProjectCheckIntegrationService
 				'errors' => $errors
 			];
 		} catch (\Throwable $e) {
-			\OC::$server->getLogger()->warning('Failed to sync time entries to ProjectCheck: ' . $e->getMessage());
+			$this->logger->warning('Failed to sync time entries to ProjectCheck: ' . $e->getMessage());
 			return ['success' => false, 'error' => $e->getMessage()];
 		}
 	}
@@ -304,7 +299,7 @@ class ProjectCheckIntegrationService
 
 			return null;
 		} catch (\Throwable $e) {
-			\OC::$server->getLogger()->warning('Failed to load project budget from ProjectCheck: ' . $e->getMessage());
+			$this->logger->warning('Failed to load project budget from ProjectCheck: ' . $e->getMessage());
 			return null;
 		}
 	}
@@ -359,7 +354,7 @@ class ProjectCheckIntegrationService
 
 			$result->closeCursor();
 		} catch (\Throwable $e) {
-			\OC::$server->getLogger()->warning('Failed to get ArbeitszeitCheck project stats: ' . $e->getMessage());
+			$this->logger->warning('Failed to get ArbeitszeitCheck project stats: ' . $e->getMessage());
 		}
 
 		// Get ProjectCheck stats
@@ -385,7 +380,7 @@ class ProjectCheckIntegrationService
 
 				$result->closeCursor();
 			} catch (\Throwable $e) {
-				\OC::$server->getLogger()->warning('Failed to get ProjectCheck project stats: ' . $e->getMessage());
+				$this->logger->warning('Failed to get ProjectCheck project stats: ' . $e->getMessage());
 			}
 		}
 

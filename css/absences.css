@@ -1,6 +1,6 @@
 /**
  * Absences CSS for arbeitszeitcheck app
- * Matches projectcheck styling
+ * Clear sections, WCAG 2.1 AA, responsive.
  *
  * @copyright Copyright (c) 2024, Nextcloud GmbH
  * @license AGPL-3.0-or-later
@@ -21,10 +21,12 @@
 
 #app-content-wrapper {
 	margin: 0 auto;
-	padding: var(--space-8, 2rem) var(--space-8, 2rem) var(--space-16, 4rem) var(--space-8, 2rem);
+	padding: var(--space-6, 1.5rem) var(--space-6, 1.5rem) var(--space-12, 3rem);
 	width: 100%;
+	max-width: 1200px;
 	display: flex;
 	flex-direction: column;
+	gap: var(--space-8, 2rem);
 	min-height: auto;
 	flex-shrink: 0;
 	overflow: visible;
@@ -34,11 +36,10 @@
 /* Section Styling */
 .section {
 	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background, #fff)));
-	border-radius: var(--radius-2xl, 16px);
-	margin-bottom: var(--space-8, 2rem);
+	border-radius: var(--radius-xl, 12px);
 	overflow: visible;
-	box-shadow: var(--shadow-base, 0 2px 20px rgba(0, 0, 0, 0.04));
-	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #ddd));
+	box-shadow: var(--shadow-base, 0 2px 12px rgba(0, 0, 0, 0.06));
+	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #e5e7eb));
 	position: relative;
 	height: auto;
 	padding: var(--space-6, 1.5rem);
@@ -47,24 +48,108 @@
 	display: block;
 }
 
+.section--form {
+	padding: var(--space-8, 2rem);
+}
+
+.section--form .form-group {
+	margin-bottom: var(--space-6, 1.5rem);
+}
+
+.section--form .form-group:last-of-type {
+	margin-bottom: 0;
+}
+
+.section--form .form-group--substitute {
+	margin-top: var(--space-4, 1rem);
+}
+
+.section--form .form-label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: var(--space-2, 0.5rem);
+	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, #1a1a1a));
+}
+
+.section--form .form-help {
+	margin-top: var(--space-2, 0.5rem);
+	font-size: 0.875rem;
+	color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, #6b7280));
+}
+
+.section--form .form-select,
+.section--form .form-input,
+.section--form .form-textarea {
+	min-height: 44px;
+	padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+	border-radius: var(--radius-base, 8px);
+	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #d1d5db));
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.section--form .form-textarea {
+	min-height: 88px;
+	resize: vertical;
+}
+
+.section--form .form-actions {
+	margin-top: var(--space-8, 2rem);
+	padding-top: var(--space-6, 1.5rem);
+	border-top: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #e5e7eb));
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-4, 1rem);
+	align-items: center;
+}
+
 .page-header-section {
 	padding: 0;
 	background: transparent;
 	border: none;
 	box-shadow: none;
-	margin-bottom: var(--space-8, 2rem);
+	margin-bottom: 0;
 }
 
 .page-header-section .header-content {
-	margin-bottom: var(--space-6, 1.5rem);
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--space-4, 1rem);
+}
+
+.page-header-section .header-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.page-header-section .page-title {
+	margin: 0 0 var(--space-2, 0.5rem);
+	font-size: 1.5rem;
+	line-height: 1.3;
+	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, #1a1a1a));
+}
+
+.page-header-section .header-text p {
+	margin: 0;
+	font-size: 0.9375rem;
+	color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, #6b7280));
+	line-height: 1.5;
+}
+
+.page-header-section .header-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3, 0.75rem);
 }
 
 /* Stats Grid */
-.stats-grid {
+.section--stats .stats-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 	gap: var(--space-6, 1.5rem);
-	margin-bottom: var(--space-8, 2rem);
 	visibility: visible;
 	opacity: 1;
 	width: 100%;
@@ -260,6 +345,12 @@
 	border-color: #2ecc71;
 }
 
+/* WCAG 2.1 AA: focus visible for icon buttons */
+.btn-icon:focus-visible {
+	outline: 2px solid var(--arbeitszeitcheck-color-primary, var(--color-primary-element, #0082c9));
+	outline-offset: 2px;
+}
+
 /* Empty State */
 .empty-state {
 	text-align: center;
@@ -285,31 +376,111 @@
 	opacity: 1;
 }
 
-/* Responsive adjustments */
+/* Responsive: table as cards on small screens */
 @media (max-width: 768px) {
 	#app-content-wrapper {
 		padding: var(--space-4, 1rem);
+		gap: var(--space-6, 1.5rem);
 	}
 
-	.stats-grid {
+	.section--form {
+		padding: var(--space-6, 1.5rem);
+	}
+
+	.section--stats .stats-grid {
 		grid-template-columns: 1fr;
 		gap: var(--space-4, 1rem);
 	}
 
 	.stat-card {
-		padding: var(--space-4, 1rem);
+		padding: var(--space-5, 1.25rem);
 	}
 
 	.section {
 		padding: var(--space-4, 1rem);
 	}
 
+	/* Hide table header and show each row as a card */
+	.section--list .table-container {
+		overflow: visible;
+	}
+
+	.absences-table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.absences-table tbody tr {
+		display: block;
+		margin-bottom: var(--space-4, 1rem);
+		padding: var(--space-4, 1rem);
+		background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, #fff));
+		border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border, #e5e7eb));
+		border-radius: var(--radius-base, 8px);
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+	}
+
+	/* Empty state row: single full-width cell */
+	.absences-table tbody tr:only-child td[colspan] {
+		display: block;
+		text-align: center;
+		padding: var(--space-6, 1.5rem);
+		border-bottom: none;
+	}
+
+	.absences-table tbody tr:only-child td[colspan]::before {
+		display: none;
+	}
+
+	.absences-table tbody td {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: var(--space-2, 0.5rem) 0;
+		border-bottom: 1px solid var(--arbeitszeitcheck-color-border-secondary, #f3f4f6);
+		gap: var(--space-3, 0.75rem);
+	}
+
+	.absences-table tbody td:last-child {
+		border-bottom: none;
+		padding-top: var(--space-3, 0.75rem);
+		border-top: 1px solid var(--arbeitszeitcheck-color-border, #e5e7eb);
+	}
+
+	.absences-table tbody td::before {
+		content: attr(data-label);
+		font-weight: 600;
+		font-size: 0.8125rem;
+		color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, #6b7280));
+		flex-shrink: 0;
+	}
+
+	.absences-table tbody td.reason-cell::before { content: attr(data-label); }
+	.absences-table .actions-cell {
+		flex-direction: row;
+		justify-content: flex-end;
+		gap: var(--space-2, 0.5rem);
+	}
+
+	.absences-table .actions-cell::before {
+		content: attr(data-label);
+	}
+
 	.reason-cell {
-		max-width: 150px;
+		max-width: none;
+		white-space: normal;
+		text-overflow: unset;
 	}
 
 	.actions-cell {
-		flex-direction: column;
-		gap: var(--space-1, 0.25rem);
+		flex-direction: row;
+		gap: var(--space-2, 0.5rem);
 	}
 }

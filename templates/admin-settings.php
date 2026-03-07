@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
-$l = \OC::$server->getL10N('arbeitszeitcheck');
+$l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $settings = $_['settings'] ?? [];
 ?>
@@ -86,6 +86,64 @@ $settings = $_['settings'] ?? [];
                         <?php p($l->t('When someone works too many hours or doesn\'t take required breaks, the system will send a notification to managers and the employee.')); ?>
                     </p>
                 </div>
+
+                <fieldset class="form-fieldset" aria-labelledby="send-ical-legend">
+                    <legend id="send-ical-legend" class="form-legend"><?php p($l->t('Absences: Send iCal by email after approval')); ?></legend>
+                    <p class="form-help form-help--block">
+                        <?php p($l->t('When an absence is approved, the employee can receive an email with an iCalendar (.ics) attachment so they can add the absence to their calendar.')); ?>
+                    </p>
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="sendIcalApprovedAbsences" name="sendIcalApprovedAbsences" value="1"
+                                <?php echo ($settings['sendIcalApprovedAbsences'] ?? true) ? 'checked' : ''; ?>
+                                aria-describedby="send-ical-legend">
+                            <label for="sendIcalApprovedAbsences" class="form-label">
+                                <?php p($l->t('Send iCal email to employee when absence is approved')); ?>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="sendIcalToSubstitute" name="sendIcalToSubstitute" value="1"
+                                <?php echo ($settings['sendIcalToSubstitute'] ?? false) ? 'checked' : ''; ?>
+                                aria-describedby="send-ical-legend">
+                            <label for="sendIcalToSubstitute" class="form-label">
+                                <?php p($l->t('Also send iCal to the substitute (if one was selected)')); ?>
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="form-fieldset" aria-labelledby="require-substitute-legend">
+                    <legend id="require-substitute-legend" class="form-legend"><?php p($l->t('Absences: Require substitute')); ?></legend>
+                    <p class="form-help form-help--block">
+                        <?php p($l->t('For the selected absence types, employees must specify who will cover for them. This helps ensure work is assigned during time off.')); ?>
+                    </p>
+                    <?php
+                    $requireTypes = $settings['requireSubstituteTypes'] ?? [];
+                    $absenceTypes = [
+                        'vacation' => $l->t('Vacation'),
+                        'sick_leave' => $l->t('Sick Leave'),
+                        'personal_leave' => $l->t('Personal Leave'),
+                        'parental_leave' => $l->t('Parental Leave'),
+                        'special_leave' => $l->t('Special Leave'),
+                        'unpaid_leave' => $l->t('Unpaid Leave'),
+                        'home_office' => $l->t('Home Office'),
+                        'business_trip' => $l->t('Business Trip'),
+                    ];
+                    foreach ($absenceTypes as $typeKey => $typeLabel):
+                        $checked = in_array($typeKey, $requireTypes, true);
+                    ?>
+                    <div class="form-group form-group--inline">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="requireSubstitute_<?php p($typeKey); ?>" name="requireSubstituteTypes[]" value="<?php p($typeKey); ?>"
+                                <?php echo $checked ? 'checked' : ''; ?>
+                                aria-describedby="require-substitute-legend">
+                            <label for="requireSubstitute_<?php p($typeKey); ?>" class="form-label"><?php p($typeLabel); ?></label>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </fieldset>
 
                 <div class="form-group">
                     <label for="maxDailyHours" class="form-label">
@@ -210,7 +268,7 @@ $settings = $_['settings'] ?? [];
                             title="<?php p($l->t('Click to save all settings. Changes will apply to all users.')); ?>">
                         <?php p($l->t('Save Settings')); ?>
                     </button>
-                    <a href="<?php p(\OC::$server->getURLGenerator()->linkToRoute('arbeitszeitcheck.page.index')); ?>"
+                    <a href="<?php p(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.index')); ?>"
                        class="btn btn--secondary"
                        aria-label="<?php p($l->t('Cancel and go back to dashboard')); ?>"
                        title="<?php p($l->t('Click to cancel and go back without saving changes')); ?>">
