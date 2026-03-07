@@ -99,14 +99,14 @@
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
             });
             const safeName = node.name || '';
-            const editLabel = (t('Edit team', 'Edit') + ' ' + safeName).trim();
-            const deleteLabel = (t('Delete team', 'Delete team') + ' ' + safeName).trim();
+            const editLabel = (t('Edit unit', 'Edit') + ' ' + safeName).trim();
+            const deleteLabel = (t('Delete unit', 'Delete unit') + ' ' + safeName).trim();
             const hasChildren = node.children && node.children.length > 0;
             const ariaExpanded = hasChildren ? ' aria-expanded="true"' : '';
             const selected = selectedTeamId === node.id ? ' teams-tree__item--selected' : '';
             html += '<li class="teams-tree__item' + selected + '" role="treeitem" tabindex="-1" data-team-id="' + node.id + '"' + ariaExpanded + ' aria-selected="' + (selectedTeamId === node.id) + '" style="padding-left: ' + (indent + 8) + 'px">';
             html += '<span class="teams-tree__label" tabindex="0" role="button">' + name + '</span>';
-            html += '<span class="teams-tree__actions" role="group" aria-label="' + (t('Actions for team', 'Actions')) + '">';
+            html += '<span class="teams-tree__actions" role="group" aria-label="' + (t('Actions for unit', 'Actions')) + '">';
             html += '<button type="button" class="button button--icon teams-tree__edit" data-team-id="' + node.id + '" data-team-name="' + (Utils.escapeHtml ? Utils.escapeHtml(safeName) : safeName) + '" aria-label="' + editLabel + '"><span class="icon icon-rename" aria-hidden="true"></span></button>';
             html += '<button type="button" class="button button--icon teams-tree__delete" data-team-id="' + node.id + '" data-team-name="' + name + '" aria-label="' + deleteLabel + '"><span class="icon icon-delete" aria-hidden="true"></span></button>';
             html += '</span>';
@@ -183,7 +183,7 @@
         showTab('members');
         loadTeamMembers(id);
         loadTeamManagers(id);
-        announceStatus(t('Team selected', 'Team selected'));
+        announceStatus(t('Unit selected', 'Unit selected'));
     }
 
     function findTeamById(nodes, id) {
@@ -240,7 +240,7 @@
             onError: function() {
                 setLoading(false);
                 setEmpty(true);
-                Messaging && Messaging.showError && Messaging.showError(t('Failed to load teams', 'Failed to load teams'));
+                Messaging && Messaging.showError && Messaging.showError(t('Failed to load structure', 'Failed to load structure'));
             }
         });
     }
@@ -324,9 +324,9 @@
     }
 
     function confirmDeleteTeam(id, name) {
-        var message = t('Are you sure you want to delete the team "%s"? Members and managers will be unassigned.', 'Are you sure you want to delete this team?').replace('%s', name);
+        var message = t('Are you sure you want to delete the unit "%s"? Members and managers will be unassigned.', 'Are you sure you want to delete this unit?').replace('%s', name);
         if (typeof OC !== 'undefined' && OC.dialogs && OC.dialogs.confirmDestructive) {
-            OC.dialogs.confirmDestructive(message, t('Delete team', 'Delete team'), {
+            OC.dialogs.confirmDestructive(message, t('Delete unit', 'Delete unit'), {
                 type: OC.dialogs.YES_NO_BUTTONS,
                 confirm: t('Delete', 'Delete'),
                 confirmClasses: 'error',
@@ -349,20 +349,20 @@
                     if (detail) detail.classList.add('hidden');
                 }
                 loadTeams();
-                Messaging && Messaging.showSuccess && Messaging.showSuccess(t('Team deleted', 'Team deleted'));
-                announceStatus(t('Team deleted', 'Team deleted'));
+                Messaging && Messaging.showSuccess && Messaging.showSuccess(t('Unit deleted', 'Unit deleted'));
+                announceStatus(t('Unit deleted', 'Unit deleted'));
             },
             onError: function(err) {
-                var msg = (err && err.error) ? err.error : t('Failed to delete team', 'Failed to delete team');
+                var msg = (err && err.error) ? err.error : t('Failed to delete unit', 'Failed to delete unit');
                 Messaging && Messaging.showError && Messaging.showError(msg);
             }
         });
     }
 
     function openAddTeamModal(parentId) {
-        var title = t('Add team', 'Add team');
-        var nameLabel = t('Team name', 'Team name');
-        var parentLabel = t('Parent team', 'Parent team');
+        var title = t('Add unit', 'Add unit');
+        var nameLabel = t('Unit name', 'Unit name');
+        var parentLabel = t('Parent unit', 'Parent unit');
         var cancelLabel = t('Cancel', 'Cancel');
         var createLabel = t('Create', 'Create');
         var noParent = t('None (top level)', 'None (top level)');
@@ -412,14 +412,14 @@
                         if (data.success) {
                             Components.closeModal(document.getElementById('modal-add-team'));
                             loadTeams();
-                            Messaging && Messaging.showSuccess && Messaging.showSuccess(t('Team created', 'Team created'));
-                            announceStatus(t('Team created', 'Team created'));
+                            Messaging && Messaging.showSuccess && Messaging.showSuccess(t('Unit created', 'Unit created'));
+                            announceStatus(t('Unit created', 'Unit created'));
                         } else {
-                            Messaging && Messaging.showError && Messaging.showError(data.error || t('Failed to create team', 'Failed to create team'));
+                            Messaging && Messaging.showError && Messaging.showError(data.error || t('Failed to create unit', 'Failed to create unit'));
                         }
                     },
                     onError: function(err) {
-                        Messaging && Messaging.showError && Messaging.showError((err && err.error) || t('Failed to create team', 'Failed to create team'));
+                        Messaging && Messaging.showError && Messaging.showError((err && err.error) || t('Failed to create unit', 'Failed to create unit'));
                     }
                 });
             });
@@ -431,9 +431,9 @@
     function openEditTeamModal(id) {
         var team = findTeamById(teamsTreeData, id);
         if (!team) return;
-        var title = t('Edit team', 'Edit team');
-        var nameLabel = t('Team name', 'Team name');
-        var parentLabel = t('Parent team', 'Parent team');
+        var title = t('Edit unit', 'Edit unit');
+        var nameLabel = t('Unit name', 'Unit name');
+        var parentLabel = t('Parent unit', 'Parent unit');
         var cancelLabel = t('Cancel', 'Cancel');
         var saveLabel = t('Save', 'Save');
         var noParent = t('None (top level)', 'None (top level)');
@@ -484,14 +484,14 @@
                             Components.closeModal(document.getElementById('modal-edit-team'));
                             loadTeams();
                             if (selectedTeamId === id) selectTeam(id);
-                            Messaging && Messaging.showSuccess && Messaging.showSuccess(t('Team updated', 'Team updated'));
-                            announceStatus(t('Team updated', 'Team updated'));
+                            Messaging && Messaging.showSuccess && Messaging.showSuccess(t('Unit updated', 'Unit updated'));
+                            announceStatus(t('Unit updated', 'Unit updated'));
                         } else {
-                            Messaging && Messaging.showError && Messaging.showError(data.error || t('Failed to update team', 'Failed to update team'));
+                            Messaging && Messaging.showError && Messaging.showError(data.error || t('Failed to update unit', 'Failed to update unit'));
                         }
                     },
                     onError: function(err) {
-                        Messaging && Messaging.showError && Messaging.showError((err && err.error) || t('Failed to update team', 'Failed to update team'));
+                        Messaging && Messaging.showError && Messaging.showError((err && err.error) || t('Failed to update unit', 'Failed to update unit'));
                     }
                 });
             });

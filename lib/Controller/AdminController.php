@@ -1545,6 +1545,13 @@ class AdminController extends Controller
 	{
 		try {
 			$team = $this->teamMapper->find($id);
+			$children = $this->teamMapper->findByParentId($id);
+			if (count($children) > 0) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Cannot delete a team that has sub-teams. Move or delete sub-teams first.')
+				], Http::STATUS_BAD_REQUEST);
+			}
 			$this->teamMemberMapper->deleteByTeamId($id);
 			$this->teamManagerMapper->deleteByTeamId($id);
 			$this->teamMapper->delete($team);

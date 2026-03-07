@@ -109,7 +109,7 @@ $currentYear = date('Y');
                             <li class="footer__link-item">
                                 <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.teams')); ?>"
                                     class="footer__link">
-                                    <?php p($l->t('Teams &amp; Departments')); ?>
+                                    <?php p($l->t('Organization')); ?>
                                 </a>
                             </li>
                         <?php endif; ?>

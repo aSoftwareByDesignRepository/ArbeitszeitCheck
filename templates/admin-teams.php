@@ -21,9 +21,9 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
 <div id="app-content">
     <div id="app-content-wrapper" class="admin-teams">
         <header class="section section--teams-header" role="banner">
-            <h1 id="admin-teams-title" class="section__title"><?php p($l->t('Teams &amp; Departments')); ?></h1>
+            <h1 id="admin-teams-title" class="section__title"><?php p($l->t('Organizational structure')); ?></h1>
             <p id="admin-teams-desc" class="section__desc">
-                <?php p($l->t('Define teams and assign members and managers. Managers can approve absences and time corrections for their team members. When enabled below, this replaces Nextcloud group-based manager resolution.')); ?>
+                <?php p($l->t('Define teams, departments, or any organizational units in a flexible hierarchy. Assign members and managers. When enabled below, managers can approve absences and time corrections for their unit members.')); ?>
             </p>
         </header>
 
@@ -48,19 +48,19 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
         <!-- Teams list -->
         <section class="section section--teams-list" aria-labelledby="teams-list-heading">
             <div class="section__header flex flex--between flex--wrap flex--gap">
-                <h2 id="teams-list-heading" class="section__heading"><?php p($l->t('Teams')); ?></h2>
+                <h2 id="teams-list-heading" class="section__heading"><?php p($l->t('Structure')); ?></h2>
                 <button type="button" id="admin-teams-add" class="btn btn--primary"
-                        aria-label="<?php p($l->t('Add new team')); ?>">
-                    <?php p($l->t('Add team')); ?>
+                        aria-label="<?php p($l->t('Add new unit')); ?>">
+                    <?php p($l->t('Add unit')); ?>
                 </button>
             </div>
-            <div id="admin-teams-tree" class="teams-tree" role="tree" aria-label="<?php p($l->t('Team list')); ?>">
+            <div id="admin-teams-tree" class="teams-tree org-tree" role="tree" aria-label="<?php p($l->t('Organizational structure')); ?>">
                 <p id="teams-loading" class="teams-loading" aria-live="polite"><?php p($l->t('Loading…')); ?></p>
-                <p id="teams-empty" class="teams-empty hidden" aria-live="polite"><?php p($l->t('No teams yet. Add a team to get started.')); ?></p>
+                <p id="teams-empty" class="teams-empty hidden" aria-live="polite"><?php p($l->t('No units yet. Add a unit to build your organization.')); ?></p>
             </div>
         </section>
 
-        <!-- Selected team: members & managers -->
+        <!-- Selected unit: members & managers -->
         <section id="admin-team-detail" class="section section--team-detail hidden" aria-labelledby="team-detail-heading">
             <h2 id="team-detail-heading" class="section__heading">
                 <span id="team-detail-name"></span>

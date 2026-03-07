@@ -81,7 +81,6 @@ class TeamMapper extends QBMapper
 	public function getIdsWithDescendants(int $teamId): array
 	{
 		$ids = [$teamId];
-		$current = $teamId;
 		$toProcess = [$teamId];
 		while (!empty($toProcess)) {
 			$parentIds = $toProcess;

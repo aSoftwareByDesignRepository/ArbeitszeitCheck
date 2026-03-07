@@ -1,5 +1,5 @@
 /**
- * Admin Teams & Departments — layout, tree, detail panel.
+ * Admin Organizational Structure (Organigram) — layout, tree, detail panel.
  * Theme-safe (CSS variables only). WCAG 2.1 AA friendly. Responsive.
  *
  * @copyright Copyright (c) 2024, Nextcloud GmbH
@@ -82,15 +82,19 @@
 }
 
 /* -------------------------------------------------------------------------
-   Teams tree
+   Organization tree (organigram)
    ------------------------------------------------------------------------- */
 .admin-teams .teams-tree {
   min-height: 140px;
-  padding: 1rem 0;
+  padding: 1.25rem 1rem;
   background: var(--color-background-dark);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-large, 8px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.admin-teams .org-tree .teams-tree__root {
+  padding-left: 0;
 }
 
 .admin-teams .teams-loading,
@@ -104,8 +108,8 @@
 .admin-teams .teams-tree__label[role="button"] {
   cursor: pointer;
   border-radius: var(--border-radius, 4px);
-  padding: 0.25rem 0.5rem;
-  margin: -0.25rem -0.5rem;
+  padding: 0.35rem 0.6rem;
+  margin: -0.35rem -0.6rem;
 }
 
 .admin-teams .teams-tree__label[role="button"]:focus-visible {
@@ -123,15 +127,26 @@
   padding: 0;
 }
 
+.admin-teams .teams-tree__item .teams-tree__list {
+  margin-left: 0.5rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--color-border);
+}
+
 .admin-teams .teams-tree__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-height: var(--default-clickable-area, 44px);
-  padding: 0.5rem 8px;
+  margin: 0.25rem 0;
+  padding: 0.35rem 0.5rem;
+  padding-left: 0.75rem;
   border-radius: var(--border-radius);
   color: var(--color-main-text);
   cursor: pointer;
+  background: var(--color-main-background);
+  border: 1px solid var(--color-border);
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .admin-teams .teams-tree__item:hover,
@@ -142,6 +157,7 @@
 .admin-teams .teams-tree__item--selected {
   background: var(--color-primary-light);
   color: var(--color-primary-text);
+  border-color: var(--color-primary-element);
 }
 
 .admin-teams .teams-tree__label {
@@ -149,6 +165,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .admin-teams .teams-tree__actions {

@@ -659,7 +659,7 @@ class ManagerController extends Controller
 			if ($entry->getStatus() !== \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_PENDING_APPROVAL) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Time entry is not pending approval'
+					'error' => $this->l10n->t('Time entry is not pending approval')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -668,7 +668,7 @@ class ManagerController extends Controller
 				$this->permissionService->logPermissionDenied($managerId, 'approve_time_entry_correction', 'time_entry', (string) $timeEntryId);
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Access denied - user is not in your team')
+					'error' => $this->l10n->t('Access denied. You can only approve time entries for members of your team.')
 				], Http::STATUS_FORBIDDEN);
 			}
 
@@ -742,7 +742,7 @@ class ManagerController extends Controller
 			return new JSONResponse([
 				'success' => true,
 				'entry' => $updatedEntry->getSummary(),
-				'message' => 'Time entry correction approved successfully'
+				'message' => $this->l10n->t('Time entry correction approved successfully')
 			]);
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse([
@@ -779,7 +779,7 @@ class ManagerController extends Controller
 			if ($entry->getStatus() !== \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_PENDING_APPROVAL) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Time entry is not pending approval'
+					'error' => $this->l10n->t('Time entry is not pending approval')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -788,7 +788,7 @@ class ManagerController extends Controller
 				$this->permissionService->logPermissionDenied($managerId, 'reject_time_entry_correction', 'time_entry', (string) $timeEntryId);
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Access denied - user is not in your team')
+					'error' => $this->l10n->t('Access denied. You can only reject time entries for members of your team.')
 				], Http::STATUS_FORBIDDEN);
 			}
 
