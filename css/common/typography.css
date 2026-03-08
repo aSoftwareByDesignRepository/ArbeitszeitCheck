@@ -502,8 +502,8 @@ i {
   h4,
   h5,
   h6 {
-    page-break-after: avoid;
-    page-break-inside: avoid;
+    break-after: avoid;
+    break-inside: avoid;
   }
 
   p,

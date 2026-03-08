@@ -466,7 +466,7 @@ template {
   pre,
   blockquote {
     border: 1px solid var(--arbeitszeitcheck-color-border);
-    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   thead {
@@ -475,7 +475,7 @@ template {
 
   tr,
   img {
-    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   img {
@@ -491,7 +491,7 @@ template {
 
   h2,
   h3 {
-    page-break-after: avoid;
+    break-after: avoid;
   }
 }
 
@@ -792,7 +792,7 @@ meter::-webkit-meter-even-less-good-value {
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border-width: 0;
 }
