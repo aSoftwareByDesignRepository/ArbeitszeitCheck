@@ -61,7 +61,7 @@ $endDate = $_['endDate'] ?? date('Y-m-d');
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($reportData['by_type'] as $type => $count): ?>
+                                <?php foreach (($reportData['by_type'] ?? []) as $type => $count): ?>
                                     <tr>
                                         <td><?php p($type); ?></td>
                                         <td><?php p($count); ?></td>
@@ -89,7 +89,7 @@ $endDate = $_['endDate'] ?? date('Y-m-d');
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($reportData['by_severity'] as $severity => $count): ?>
+                                <?php foreach (($reportData['by_severity'] ?? []) as $severity => $count): ?>
                                     <tr>
                                         <td>
                                             <span class="badge badge--<?php p($severity === 'high' ? 'error' : ($severity === 'medium' ? 'warning' : 'primary')); ?>">

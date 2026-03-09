@@ -825,7 +825,7 @@ class ComplianceService
         $startTime = $timeEntry->getStartTime();
         $endTime = $timeEntry->getEndTime();
 
-        if (!$endTime) {
+        if (!$endTime || !$startTime) {
             return;
         }
 
@@ -860,7 +860,7 @@ class ComplianceService
         $startTime = $timeEntry->getStartTime();
         $endTime = $timeEntry->getEndTime();
 
-        if (!$endTime) {
+        if (!$endTime || !$startTime) {
             return;
         }
 

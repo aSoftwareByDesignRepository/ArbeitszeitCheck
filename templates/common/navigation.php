@@ -39,29 +39,31 @@ $isDashboard = strpos($currentPage, '/dashboard') !== false ||
                (!$isTimeEntries && !$isAbsences && !$isReports && !$isCompliance && !$isCalendar && !$isTimeline && !$isSettings && 
                 !$isSubstitutionRequests && !$isAdmin && strpos($currentPage, '/apps/arbeitszeitcheck') !== false) && !$isManagerPage;
 
-// Show Manager link only to users who can use it: admin, in manager/leiter group, or have team members
+// Show Substitution requests link only when user has pending requests (where they are the substitute)
+$showSubstitutionLink = isset($_['showSubstitutionLink']) ? (bool) $_['showSubstitutionLink'] : null;
+if ($showSubstitutionLink === null) {
+	$showSubstitutionLink = false;
+	try {
+		$user = \OCP\Server::get(\OCP\IUserSession::class)->getUser();
+		if ($user !== null) {
+			$absenceMapper = \OCP\Server::get(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class);
+			$pending = $absenceMapper->findSubstitutePendingForUser($user->getUID(), 1, 0);
+			$showSubstitutionLink = count($pending) > 0;
+		}
+	} catch (\Throwable $e) {
+		$showSubstitutionLink = false;
+	}
+}
+
+// Show Manager link only when user can actually access the manager dashboard (admin or has team members)
 $showManagerLink = isset($_['showManagerLink']) ? (bool) $_['showManagerLink'] : null;
 if ($showManagerLink === null) {
 	$showManagerLink = false;
 	try {
 		$user = \OCP\Server::get(\OCP\IUserSession::class)->getUser();
 		if ($user !== null) {
-			$groupManager = \OCP\Server::get(\OCP\IGroupManager::class);
-			$showManagerLink = $groupManager->isAdmin($user->getUID());
-			if (!$showManagerLink) {
-				foreach ($groupManager->getUserGroups($user) as $group) {
-					$gid = $group->getGID();
-					if (stripos($gid, 'manager') !== false || stripos($gid, 'leiter') !== false) {
-						$showManagerLink = true;
-						break;
-					}
-				}
-			}
-			if (!$showManagerLink) {
-				$teamResolver = \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\TeamResolverService::class);
-				$teamIds = $teamResolver->getTeamMemberIds($user->getUID());
-				$showManagerLink = count($teamIds) > 0;
-			}
+			$permissionService = \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\PermissionService::class);
+			$showManagerLink = $permissionService->canAccessManagerDashboard($user->getUID());
 		}
 	} catch (\Throwable $e) {
 		$showManagerLink = false;
@@ -205,9 +207,10 @@ if ($showManagerLink === null) {
             </a>
         </li>
         <?php endif; ?>
-        <?php if (!$showManagerLink): ?>
+        <?php if (!$showManagerLink && $showSubstitutionLink): ?>
         <li class="nav-section-divider" role="separator" aria-hidden="true"></li>
         <?php endif; ?>
+        <?php if ($showSubstitutionLink): ?>
         <li class="<?php p($isSubstitutionRequests ? 'active' : ''); ?>" <?php p($isSubstitutionRequests ? 'aria-current="page"' : ''); ?>>
             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.substitute.index')); ?>"
                title="<?php p($l->t('Substitution requests: Approve or decline requests to cover for colleagues')); ?>"
@@ -216,6 +219,7 @@ if ($showManagerLink === null) {
                 <span><?php p($l->t('Substitution requests')); ?></span>
             </a>
         </li>
+        <?php endif; ?>
     </ul>
 </div>
 

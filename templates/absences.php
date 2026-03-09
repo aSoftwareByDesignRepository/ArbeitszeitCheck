@@ -232,6 +232,7 @@ $usersUrl = $_['usersUrl'] ?? '';
                         <p class="form-help"><?php p($l->t('You can provide additional information about your absence request')); ?></p>
                     </div>
 
+                    <?php if (($_['hasColleagues'] ?? true)): ?>
                     <div class="form-group form-group--substitute">
                         <label for="absence-substitute" class="form-label">
                             <?php p($l->t('Substitute')); ?>
@@ -247,6 +248,9 @@ $usersUrl = $_['usersUrl'] ?? '';
                         <p id="absence-substitute-help" class="form-help"><?php p($l->t('Choose a colleague from your team who will cover your tasks during your absence. Only team members appear in this list.')); ?></p>
                         <p id="absence-substitute-empty" class="form-help form-help--info" style="display: none;" role="status"><?php p($l->t('No team members found. Add yourself to a team or group to select a substitute.')); ?></p>
                     </div>
+                    <?php else: ?>
+                    <p class="form-help form-help--info" role="status"><?php p($l->t('No team members in your team. You cannot select a substitute. Add yourself to a team to enable this option.')); ?></p>
+                    <?php endif; ?>
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn--primary">
@@ -298,7 +302,7 @@ $usersUrl = $_['usersUrl'] ?? '';
                         </thead>
                         <tbody>
                             <?php if (!empty($absences)): ?>
-                                <?php foreach ($absences as $absence): ?>
+                                <?php foreach (($absences ?? []) as $absence): ?>
                                     <tr data-absence-id="<?php p($absence->getId()); ?>">
                                         <td data-label="<?php p($l->t('Type')); ?>">
                                             <span class="absence-type-badge type-<?php p($absence->getType()); ?>">

@@ -589,4 +589,70 @@ class ComplianceControllerTest extends TestCase
 		$this->assertFalse($data['success']);
 		$this->assertStringContainsString('not authenticated', $data['error']);
 	}
+
+	/**
+	 * Test runCheck succeeds when admin
+	 */
+	public function testRunCheckSucceedsWhenAdmin(): void
+	{
+		$userId = 'admin';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->with($userId)->willReturn(true);
+
+		$stats = ['users_checked' => 5, 'violations_found' => 2];
+		$this->complianceService->expects($this->once())
+			->method('runDailyComplianceCheck')
+			->willReturn($stats);
+
+		$response = $this->controller->runCheck();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+		$this->assertArrayHasKey('stats', $data);
+		$this->assertEquals($stats, $data['stats']);
+	}
+
+	/**
+	 * Test runCheck returns forbidden when not admin
+	 */
+	public function testRunCheckReturnsForbiddenWhenNotAdmin(): void
+	{
+		$userId = 'regularuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->with($userId)->willReturn(false);
+
+		$this->complianceService->expects($this->never())
+			->method('runDailyComplianceCheck');
+
+		$response = $this->controller->runCheck();
+
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringContainsString('Admin', $data['error']);
+	}
+
+	/**
+	 * Test runCheck returns forbidden when no user
+	 */
+	public function testRunCheckReturnsForbiddenWhenNoUser(): void
+	{
+		$this->userSession->method('getUser')->willReturn(null);
+		$this->permissionService->expects($this->never())->method('isAdmin');
+
+		$this->complianceService->expects($this->never())
+			->method('runDailyComplianceCheck');
+
+		$response = $this->controller->runCheck();
+
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+	}
 }

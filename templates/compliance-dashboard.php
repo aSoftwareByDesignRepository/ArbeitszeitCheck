@@ -134,7 +134,7 @@ $hasData = $complianceStatus['has_data'] ?? true;
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($recentViolations as $violation): ?>
+                                <?php foreach (($recentViolations ?? []) as $violation): ?>
                                     <tr>
                                         <td><?php p($violation['type']); ?></td>
                                         <td>

@@ -111,7 +111,7 @@ $teamMembers = $_['teamMembers'] ?? [];
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($teamMembers as $member): ?>
+                                <?php foreach (($teamMembers ?? []) as $member): ?>
                                     <tr>
                                         <td><?php p($member['displayName']); ?></td>
                                         <td><?php p(round($member['todayHours'], 2)); ?>h</td>

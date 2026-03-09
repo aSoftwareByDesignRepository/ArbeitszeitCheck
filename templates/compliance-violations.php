@@ -71,7 +71,7 @@ $total = $_['total'] ?? 0;
                                 </td>
                             </tr>
                         <?php else: ?>
-                            <?php foreach ($violations as $violation): ?>
+                            <?php foreach (($violations ?? []) as $violation): ?>
                                 <tr>
                                     <td><?php p($violation['type']); ?></td>
                                     <td>

@@ -74,7 +74,7 @@ $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($_['recent_violations'] as $violation): ?>
+                                <?php foreach (($_['recent_violations'] ?? []) as $violation): ?>
                                     <tr>
                                         <td><?php p($violation['userDisplayName'] ?? $violation['userId']); ?></td>
                                         <td><?php p($violation['type']); ?></td>

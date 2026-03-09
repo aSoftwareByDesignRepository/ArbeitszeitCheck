@@ -573,7 +573,7 @@ $error = $_['error'] ?? null;
                         </thead>
                         <tbody>
                             <?php if (!empty($entries)): ?>
-                                <?php foreach ($entries as $entry): ?>
+                                <?php foreach (($entries ?? []) as $entry): ?>
                                     <tr data-entry-id="<?php p($entry->getId()); ?>">
                                         <td><?php p($entry->getStartTime()->format('d.m.Y')); ?></td>
                                         <td><?php p($entry->getStartTime()->format('H:i')); ?></td>

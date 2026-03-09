@@ -1420,6 +1420,7 @@
 		"List of all compliance problems": "Liste aller Compliance-Probleme",
 		"See all working time rule violations": "Alle Arbeitszeit-Verstöße anzeigen",
 		"Compliance reports and statistics": "Compliance-Berichte und Statistiken",
-		"See reports and statistics": "Berichte und Statistiken anzeigen"
+		"See reports and statistics": "Berichte und Statistiken anzeigen",
+		"No team members in your team. You cannot select a substitute. Add yourself to a team to enable this option.": "Keine Teammitglieder in Ihrem Team. Sie können keine Vertretung auswählen. Treten Sie einem Team bei, um diese Option zu nutzen."
 	}
 }

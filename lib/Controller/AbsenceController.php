@@ -233,6 +233,9 @@ class AbsenceController extends Controller
 	public function create(): TemplateResponse
 	{
 		$userId = $this->getUserId();
+		$colleagueIds = $this->teamResolver->getColleagueIds($userId);
+		$hasColleagues = count($colleagueIds) > 0;
+
 		$response = new TemplateResponse(
 			$this->appName,
 			'absences',
@@ -241,6 +244,7 @@ class AbsenceController extends Controller
 				'mode' => 'create',
 				'absence' => null,
 				'absences' => [],
+				'hasColleagues' => $hasColleagues,
 				'stats' => [],
 				'currentUserId' => $userId,
 				'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
@@ -280,6 +284,9 @@ class AbsenceController extends Controller
 			}
 
 			$userId = $this->getUserId();
+			$colleagueIds = $this->teamResolver->getColleagueIds($userId);
+			$hasColleagues = count($colleagueIds) > 0;
+
 			$response = new TemplateResponse(
 				$this->appName,
 				'absences',
@@ -288,6 +295,7 @@ class AbsenceController extends Controller
 					'mode' => 'edit',
 					'absence' => $absence,
 					'absences' => [],
+					'hasColleagues' => $hasColleagues,
 					'stats' => [],
 					'currentUserId' => $userId,
 					'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),

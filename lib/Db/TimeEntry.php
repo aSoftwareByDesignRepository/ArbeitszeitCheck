@@ -138,7 +138,7 @@ class TimeEntry extends Entity
 	 */
 	public function getDurationHours(): ?float
 	{
-		if (!$this->endTime) {
+		if (!$this->endTime || !$this->startTime) {
 			return null;
 		}
 
@@ -178,8 +178,12 @@ class TimeEntry extends Entity
 			$breaks = json_decode($this->breaks, true) ?? [];
 			foreach ($breaks as $break) {
 				if (isset($break['start']) && isset($break['end'])) {
-					$start = new \DateTime($break['start']);
-					$end = new \DateTime($break['end']);
+					try {
+						$start = new \DateTime($break['start']);
+						$end = new \DateTime($break['end']);
+					} catch (\Exception $e) {
+						continue; // Skip invalid break date strings
+					}
 					$durationSeconds = $end->getTimestamp() - $start->getTimestamp();
 					
 					// Only include breaks that meet the minimum duration requirement (ArbZG §4)

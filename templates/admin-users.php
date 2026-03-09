@@ -58,7 +58,7 @@ $total = $_['total'] ?? 0;
                                     </td>
                                 </tr>
                             <?php else: ?>
-                                <?php foreach ($users as $user): ?>
+                                <?php foreach (($users ?? []) as $user): ?>
                                     <tr data-user-id="<?php p($user['userId']); ?>">
                                         <td><?php p($user['displayName']); ?></td>
                                         <td><?php p($user['email'] ?? '-'); ?></td>

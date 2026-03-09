@@ -17,6 +17,7 @@ use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
@@ -41,6 +42,7 @@ class PageController extends Controller
 	private AbsenceService $absenceService;
 	private TimeEntryMapper $timeEntryMapper;
 	private AbsenceMapper $absenceMapper;
+	private TeamResolverService $teamResolver;
 	private IUserSession $userSession;
 	private IGroupManager $groupManager;
 	private IURLGenerator $urlGenerator;
@@ -69,6 +71,7 @@ class PageController extends Controller
 		AbsenceService $absenceService,
 		TimeEntryMapper $timeEntryMapper,
 		AbsenceMapper $absenceMapper,
+		TeamResolverService $teamResolver,
 		IUserSession $userSession,
 		IGroupManager $groupManager,
 		IURLGenerator $urlGenerator,
@@ -82,6 +85,7 @@ class PageController extends Controller
 		$this->absenceService = $absenceService;
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->absenceMapper = $absenceMapper;
+		$this->teamResolver = $teamResolver;
 		$this->userSession = $userSession;
 		$this->groupManager = $groupManager;
 		$this->urlGenerator = $urlGenerator;
@@ -291,8 +295,13 @@ class PageController extends Controller
 		$filterStartDate = $filterStartDt ? $filterStartDt->format('d.m.Y') : '';
 		$filterEndDate = $filterEndDt ? $filterEndDt->format('d.m.Y') : '';
 
+		// Check if user has colleagues (for substitute field visibility)
+		$colleagueIds = $this->teamResolver->getColleagueIds($userId);
+		$hasColleagues = count($colleagueIds) > 0;
+
 		$params = [
 			'absences' => $absences,
+			'hasColleagues' => $hasColleagues,
 			'filterStartDate' => $filterStartDate,
 			'filterEndDate' => $filterEndDate,
 			'filterStatus' => $statusParam ?? '',
@@ -324,6 +333,7 @@ class PageController extends Controller
 			}
 			$response = new TemplateResponse('arbeitszeitcheck', 'absences', [
 				'absences' => [],
+				'hasColleagues' => false,
 				'filterStartDate' => '',
 				'filterEndDate' => '',
 				'filterStatus' => '',

@@ -319,6 +319,26 @@ class ComplianceController extends Controller
 	}
 
 	/**
+	 * Parse and validate date string (Y-m-d format). Returns null for empty, throws on invalid.
+	 *
+	 * @param string|null $dateStr Date string in Y-m-d format
+	 * @param string $paramName Parameter name for error message
+	 * @return \DateTime|null Parsed DateTime or null if empty
+	 * @throws \Exception On invalid date format
+	 */
+	private function parseDateParam(?string $dateStr, string $paramName = 'date'): ?\DateTime
+	{
+		if ($dateStr === null || $dateStr === '') {
+			return null;
+		}
+		$d = \DateTime::createFromFormat('Y-m-d', $dateStr);
+		if ($d === false || $d->format('Y-m-d') !== $dateStr) {
+			throw new \Exception($this->l10n->t('Invalid %s format. Use Y-m-d (e.g. 2024-01-15)', [$paramName]));
+		}
+		return $d;
+	}
+
+	/**
 	 * Get compliance violations API endpoint
 	 *
 	 * @param string|null $userId Filter by user ID (admin only)
@@ -347,22 +367,26 @@ class ComplianceController extends Controller
 			$targetUserId = $userId ?? $currentUserId;
 			$this->ensureCanAccessUserCompliance($currentUserId, $targetUserId);
 
+			// Parse and validate date params (Y-m-d format)
+			$startDt = $this->parseDateParam($startDate, 'start_date');
+			$endDt = $this->parseDateParam($endDate, 'end_date');
+
 			// Build filters
 			$filters = [];
-			if ($startDate) {
-				$filters['start_date'] = new \DateTime($startDate);
+			if ($startDt) {
+				$filters['start_date'] = $startDt;
 			}
-			if ($endDate) {
-				$endDateTime = new \DateTime($endDate);
+			if ($endDt) {
+				$endDateTime = clone $endDt;
 				$endDateTime->setTime(23, 59, 59);
 				$endDateTime->modify('+1 day'); // Make exclusive for date range query
 				$filters['end_date'] = $endDateTime;
 			}
 
 			// Get violations using mapper methods
-			if ($startDate || $endDate) {
-				$start = $startDate ? new \DateTime($startDate) : new \DateTime('1970-01-01');
-				$end = $endDate ? new \DateTime($endDate) : new \DateTime('2099-12-31');
+			if ($startDt || $endDt) {
+				$start = $startDt ?: new \DateTime('1970-01-01');
+				$end = $endDt ? clone $endDt : new \DateTime('2099-12-31');
 				$end->setTime(23, 59, 59);
 				$end->modify('+1 day'); // Make exclusive for findByDateRange
 				$allViolations = $this->violationMapper->findByDateRange($start, $end, $targetUserId, $resolved);
@@ -483,7 +507,7 @@ class ComplianceController extends Controller
 			$violation = $this->violationMapper->find($id);
 			$violationOwnerId = $violation->getUserId();
 
-			// Admin or manager for the violation owner may resolve; owner may resolve own
+			// Admin or manager for the violation owner may resolve (owner cannot resolve own)
 			if (!$this->permissionService->canResolveViolation($userId, $violationOwnerId)) {
 				$this->permissionService->logPermissionDenied($userId, 'resolve_violation', 'compliance_violation', (string) $id);
 				return new JSONResponse([
@@ -571,11 +595,15 @@ class ComplianceController extends Controller
 		try {
 			$userId = $this->getUserId();
 
+			// Parse and validate date params (Y-m-d format)
+			$startDt = $this->parseDateParam($startDate, 'start_date');
+			$endDt = $this->parseDateParam($endDate, 'end_date');
+
 			// Default to last 30 days if not specified
-			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+			$end = $endDt ?: new \DateTime();
 			$end->setTime(23, 59, 59);
-			$start = $startDate ? new \DateTime($startDate) : clone $end;
-			if (!$startDate) {
+			$start = $startDt ?: clone $end;
+			if (!$startDt) {
 				$start->modify('-30 days');
 			}
 			$start->setTime(0, 0, 0);

@@ -1434,6 +1434,7 @@
 		"List of all compliance problems": "List of all compliance problems",
 		"See all working time rule violations": "See all working time rule violations",
 		"Compliance reports and statistics": "Compliance reports and statistics",
-		"See reports and statistics": "See reports and statistics"
+		"See reports and statistics": "See reports and statistics",
+		"No team members in your team. You cannot select a substitute. Add yourself to a team to enable this option.": "No team members in your team. You cannot select a substitute. Add yourself to a team to enable this option."
 	}
 }

@@ -74,7 +74,7 @@ $total = $_['total'] ?? 0;
                                 </td>
                             </tr>
                         <?php else: ?>
-                            <?php foreach ($logs as $log): ?>
+                            <?php foreach (($logs ?? []) as $log): ?>
                                 <tr>
                                     <td><?php p($log['createdAt'] ?? '-'); ?></td>
                                     <td><?php p($log['userDisplayName'] ?? $log['userId']); ?></td>
@@ -89,7 +89,7 @@ $total = $_['total'] ?? 0;
             </div>
 
             <div class="pagination-info">
-                <p><?php p($l->t('Showing %d of %d entries', [count($logs), $total])); ?></p>
+                <p><?php p($l->t('Showing %d of %d entries', [count($logs ?? []), $total ?? 0])); ?></p>
             </div>
         </div>
     </div>

@@ -58,7 +58,7 @@ $models = $_['models'] ?? [];
                             </td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($models as $model): ?>
+                        <?php foreach (($models ?? []) as $model): ?>
                             <tr data-model-id="<?php p($model['id']); ?>">
                                 <td><?php p($model['name']); ?></td>
                                 <td><?php p($model['type']); ?></td>

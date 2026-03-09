@@ -1,5 +1,7 @@
 # ArbeitszeitCheck – Workflows and Edge Cases
 
+> **See [WORKFLOWS_COMPLETE.md](WORKFLOWS_COMPLETE.md) for the full workflow map (all 20 workflows, test coverage, settings, gaps).**
+
 ## 1. Absence Workflow
 
 ```mermaid
@@ -121,7 +123,21 @@ flowchart TD
 
 ---
 
-## 6. Remaining Considerations
+## 6. Edge-Case Fixes Implemented
+
+| Fix | Location | Description |
+|-----|----------|-------------|
+| **Template null-safety** | `templates/*.php` | `foreach (($var ?? []) as ...)` guards against null iteration (admin-dashboard, audit-log, working-time-models, compliance-*, absences, admin-users, manager-dashboard, time-entries) |
+| **TimeEntry getBreakDurationHours** | `lib/Db/TimeEntry.php` | `try/catch` around `new \DateTime()` for invalid JSON break strings; skip invalid entries |
+| **TimeEntry getDurationHours** | `lib/Db/TimeEntry.php` | Early return `null` when `startTime` or `endTime` is null |
+| **ComplianceService null checks** | `lib/Service/ComplianceService.php` | `checkNightWork()`, `checkSundayAndHolidayWork()` return early when `startTime`/`endTime` null |
+| **Date validation** | `ComplianceController` | `parseDateParam()` validates Y-m-d format; clear error on invalid input for getViolations, getReport |
+| **WCAG 2.1 AA** | `css/common/accessibility.css` | Focus indicators, touch targets (44px+), reduced motion, high contrast support |
+| **Responsive** | `css/common/responsive.css` | Mobile layout, table overflow, touch targets on small screens |
+
+---
+
+## 7. Remaining Considerations
 
 1. **Compliance violations:** Admin can resolve any; manager only for team. If employee has no manager, only admin can resolve. No auto-resolve (would be unsafe).
 2. **Update absence:** Owner can update when status is pending/substitute_pending. Adding/removing substitute can change flow; validation ensures substitute is colleague.

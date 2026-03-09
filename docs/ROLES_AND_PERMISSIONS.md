@@ -19,11 +19,13 @@ Roles are **not** stored in the database. They are derived from:
 | Role | Definition | How it is determined |
 |------|------------|------------------------|
 | **Admin** | Nextcloud administrator | User is in the Nextcloud admin group (`groupManager->isAdmin($userId)`). |
-| **Manager** | User who may approve/reject absences and time-entry corrections for a set of employees | User shares at least one group with those employees (team membership). Admins are also treated as managers for all users. |
+| **Manager** | User who may approve/reject absences and time-entry corrections for a set of employees | When **app teams** disabled: user shares at least one Nextcloud group with those employees. When **app teams** enabled: user is a manager of a team (or descendant) that contains those employees. Admins are always managers for all users. |
 | **Substitute** | User designated to approve/decline a specific absence request (Vertretungs-Freigabe) | Stored on the absence record (`absence.substitute_user_id`). Only colleagues in the same team/group may be selected as substitute. Only the designated substitute may approve or decline that absence while it is in status `substitute_pending`. |
 | **Employee** | Any authenticated user of the app | Logged-in user. Can manage only their own time entries, absences, and view their own reports/compliance. |
 
 **Important:** A user can hold multiple roles (e.g. Admin and Manager, or Employee and Substitute for a given absence).
+
+**App teams vs groups:** Admin setting `use_app_teams` switches team resolution. When `0` (default): Nextcloud groups (same-group members = team). When `1`: app-owned teams (`at_teams`, `at_team_members`, `at_team_managers`) – managers see members of teams they manage; colleagues for substitute selection come from teams the user is in.
 
 ---
 
@@ -62,7 +64,7 @@ User A may act as manager for employee E if and only if:
 | View team overview / pending approvals / team compliance / team hours / absence calendar / pending corrections | — | Same as “View manager dashboard” (team or admin) |
 | View report for another user | Report (target user) | `canViewUserReport(actor, targetUserId)` → self, or admin, or `canManageEmployee(actor, targetUserId)` |
 | View compliance data for another user | Compliance (target user) | Same as report: self, or admin, or `canManageEmployee(actor, targetUserId)` |
-| Resolve compliance violation | Violation (owner = employee) | Admin or `canManageEmployee(actor, violation.userId)` |
+| Resolve compliance violation | Violation (owner = employee) | Admin or `canManageEmployee(actor, violation.userId)`. Owner cannot resolve own (separation of duties). |
 
 ### 2.3 Substitute actions
 
