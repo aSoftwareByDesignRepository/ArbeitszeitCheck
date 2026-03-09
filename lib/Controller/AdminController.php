@@ -201,7 +201,7 @@ class AdminController extends Controller
 					'userDisplayName' => $user ? $user->getDisplayName() : $violation->getUserId(),
 					'type' => $violation->getViolationType(),
 					'severity' => $violation->getSeverity(),
-					'date' => $violation->getViolationDate() ? $violation->getViolationDate()->format('Y-m-d') : null,
+					'date' => $violation->getDate() ? $violation->getDate()->format('Y-m-d') : null,
 					'resolved' => $violation->getResolved()
 				];
 			}
@@ -252,6 +252,7 @@ class AdminController extends Controller
 		Util::addStyle('arbeitszeitcheck', 'common/responsive');
 		Util::addStyle('arbeitszeitcheck', 'navigation');
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'admin-users');
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
@@ -275,6 +276,9 @@ class AdminController extends Controller
 				}
 			}
 
+			$startDate = $currentModel ? $currentModel->getStartDate() : null;
+			$endDate = $currentModel ? $currentModel->getEndDate() : null;
+
 			$usersData[] = [
 				'userId' => $userId,
 				'displayName' => $user->getDisplayName(),
@@ -283,7 +287,10 @@ class AdminController extends Controller
 				'workingTimeModel' => $workingTimeModel ? [
 					'id' => $workingTimeModel->getId(),
 					'name' => $workingTimeModel->getName()
-				] : null
+				] : null,
+				'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
+				'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
+				'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
 			];
 		}
 
@@ -780,6 +787,9 @@ class AdminController extends Controller
 			// Get all available working time models
 			$allModels = $this->workingTimeModelMapper->findAll();
 
+			$startDate = $currentModel ? $currentModel->getStartDate() : null;
+			$endDate = $currentModel ? $currentModel->getEndDate() : null;
+
 			return new JSONResponse([
 				'success' => true,
 				'user' => [
@@ -794,6 +804,9 @@ class AdminController extends Controller
 						'weeklyHours' => $workingTimeModel->getWeeklyHours(),
 						'dailyHours' => $workingTimeModel->getDailyHours()
 					] : null,
+					'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
+					'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
+					'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
 					'userWorkingTimeModel' => $currentModel ? $currentModel->getSummary() : null,
 					'availableWorkingTimeModels' => array_map(function ($model) {
 						return [
@@ -825,10 +838,13 @@ class AdminController extends Controller
 	{
 		try {
 			$params = $this->request->getParams();
-			$workingTimeModelId = isset($params['workingTimeModelId']) ? (int)$params['workingTimeModelId'] : null;
+			$workingTimeModelIdRaw = $params['workingTimeModelId'] ?? null;
+			$workingTimeModelId = ($workingTimeModelIdRaw !== null && $workingTimeModelIdRaw !== '')
+				? (int)$workingTimeModelIdRaw
+				: null;
 			$vacationDaysPerYear = isset($params['vacationDaysPerYear']) ? (int)$params['vacationDaysPerYear'] : null;
-			$startDate = isset($params['startDate']) ? $params['startDate'] : null;
-			$endDate = isset($params['endDate']) ? $params['endDate'] : null;
+			$startDate = $params['startDate'] ?? null;
+			$endDate = $params['endDate'] ?? null;
 
 			if ($vacationDaysPerYear !== null && ($vacationDaysPerYear < 0 || $vacationDaysPerYear > 366)) {
 				return new JSONResponse([
@@ -869,7 +885,7 @@ class AdminController extends Controller
 
 			$oldValues = $currentModel ? $this->userWorkingTimeModelToAuditValues($currentModel) : null;
 
-			if ($currentModel && $workingTimeModelId !== null) {
+			if ($currentModel && $workingTimeModelId !== null && $workingTimeModelId > 0) {
 				// Update existing assignment
 				if ($startDate) {
 					$currentModel->setStartDate(new \DateTime($startDate));
@@ -877,9 +893,7 @@ class AdminController extends Controller
 				if ($endDate !== null) {
 					$currentModel->setEndDate($endDate ? new \DateTime($endDate) : null);
 				}
-				if ($workingTimeModelId > 0) {
-					$currentModel->setWorkingTimeModelId($workingTimeModelId);
-				}
+				$currentModel->setWorkingTimeModelId($workingTimeModelId);
 				if ($vacationDaysPerYear !== null) {
 					$currentModel->setVacationDaysPerYear($vacationDaysPerYear);
 				}
@@ -945,16 +959,87 @@ class AdminController extends Controller
 					$newValues,
 					$this->getPerformedBy()
 				);
+			} elseif ($workingTimeModelId === null || $workingTimeModelId === 0) {
+				// Remove assignment: end current assignment when user selects "No Model Assigned"
+				if ($currentModel) {
+					$endDateForRemoval = $endDate ? new \DateTime($endDate) : new \DateTime();
+					$updated = $this->userWorkingTimeModelMapper->endCurrentAssignment($userId, $endDateForRemoval);
+					$newValues = $updated ? $this->userWorkingTimeModelToAuditValues($updated) : null;
+					$this->auditLogMapper->logAction(
+						$userId,
+						'user_working_time_model_ended',
+						'user_working_time_model',
+						$currentModel->getId(),
+						$oldValues,
+						$newValues,
+						$this->getPerformedBy()
+					);
+				} else {
+					$updated = null;
+				}
 			} else {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Working time model ID is required'
+					'error' => $this->l10n->t('Working time model ID is required')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
 			return new JSONResponse([
 				'success' => true,
-				'userWorkingTimeModel' => $updated->getSummary()
+				'userWorkingTimeModel' => $updated !== null ? $updated->getSummary() : null
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $e->getMessage()
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Get assignment history for a user (all past and current work schedule assignments)
+	 *
+	 * @param string $userId
+	 * @return JSONResponse
+	 */
+	#[NoCSRFRequired]
+	public function getUserAssignmentHistory(string $userId): JSONResponse
+	{
+		try {
+			$user = $this->userManager->get($userId);
+			if (!$user) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('User not found')
+				], Http::STATUS_NOT_FOUND);
+			}
+
+			$assignments = $this->userWorkingTimeModelMapper->findByUser($userId);
+			$history = [];
+			foreach ($assignments as $assignment) {
+				$modelName = null;
+				try {
+					$model = $this->workingTimeModelMapper->find($assignment->getWorkingTimeModelId());
+					$modelName = $model->getName();
+				} catch (\Throwable $e) {
+					$modelName = $this->l10n->t('Unknown (deleted)');
+				}
+				$startDate = $assignment->getStartDate();
+				$endDate = $assignment->getEndDate();
+				$history[] = [
+					'id' => $assignment->getId(),
+					'workingTimeModelId' => $assignment->getWorkingTimeModelId(),
+					'modelName' => $modelName,
+					'vacationDaysPerYear' => $assignment->getVacationDaysPerYear(),
+					'startDate' => $startDate ? $startDate->format('Y-m-d') : null,
+					'endDate' => $endDate ? $endDate->format('Y-m-d') : null,
+					'isActive' => $assignment->isActive(),
+				];
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'history' => $history
 			]);
 		} catch (\Throwable $e) {
 			return new JSONResponse([

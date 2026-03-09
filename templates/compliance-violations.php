@@ -32,8 +32,8 @@ $total = $_['total'] ?? 0;
             <!-- Filters -->
             <div class="section-content mb-3">
                 <div class="flex flex--gap">
-                    <input type="text" id="start-date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
-                    <input type="text" id="end-date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
+                    <input type="text" id="start-date" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
+                    <input type="text" id="end-date" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
                     <select id="severity-filter" class="form-select">
                         <option value=""><?php p($l->t('All Severities')); ?></option>
                         <option value="low"><?php p($l->t('Low')); ?></option>

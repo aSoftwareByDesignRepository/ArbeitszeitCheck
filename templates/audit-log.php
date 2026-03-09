@@ -35,11 +35,11 @@ $endDate = $_['endDate'] ?? '';
                 <div class="audit-log-filters__grid">
                     <div class="audit-log-filters__field">
                         <label for="start-date" class="audit-log-filters__label"><?php p($l->t('From date')); ?></label>
-                        <input type="text" id="start-date" class="form-input datepicker-input audit-log-filters__input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly value="<?php p($startDate); ?>">
+                        <input type="text" id="start-date" class="form-input datepicker-input audit-log-filters__input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly value="<?php p($startDate); ?>">
                     </div>
                     <div class="audit-log-filters__field">
                         <label for="end-date" class="audit-log-filters__label"><?php p($l->t('To date')); ?></label>
-                        <input type="text" id="end-date" class="form-input datepicker-input audit-log-filters__input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly value="<?php p($endDate); ?>">
+                        <input type="text" id="end-date" class="form-input datepicker-input audit-log-filters__input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly value="<?php p($endDate); ?>">
                     </div>
                     <div class="audit-log-filters__field">
                         <label for="user-filter" class="audit-log-filters__label"><?php p($l->t('Employee or user ID')); ?></label>

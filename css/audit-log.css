@@ -28,7 +28,7 @@
 .audit-log-subtitle {
   margin: 0;
   font-size: 1rem;
-  color: var(--color-text-lighter);
+  color: var(--color-text-maxcontrast);
 }
 
 .audit-log-filters {
@@ -101,7 +101,7 @@
 .audit-log-pagination {
   margin: 1rem 0 0 0;
   font-size: 0.9rem;
-  color: var(--color-text-lighter);
+  color: var(--color-text-maxcontrast);
 }
 
 /* Responsive: stack table on small screens */

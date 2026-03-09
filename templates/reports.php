@@ -128,13 +128,13 @@ $canAccessReports = $isAdmin || $isManager;
                     <div class="form-group">
                         <label for="start-date" class="form-label">
                             <?php p($l->t('Start Date')); ?>
-                            <span class="form-required" aria-label="required">*</span>
+                            <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
                         </label>
                         <input type="text"
                                id="start-date"
                                name="start_date"
                                class="form-input datepicker-input"
-                               placeholder="dd.mm.yyyy"
+                               placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
                                pattern="\d{2}\.\d{2}\.\d{4}"
                                maxlength="10"
                                required
@@ -147,13 +147,13 @@ $canAccessReports = $isAdmin || $isManager;
                     <div class="form-group">
                         <label for="end-date" class="form-label">
                             <?php p($l->t('End Date')); ?>
-                            <span class="form-required" aria-label="required">*</span>
+                            <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
                         </label>
                         <input type="text"
                                id="end-date"
                                name="end_date"
                                class="form-input datepicker-input"
-                               placeholder="dd.mm.yyyy"
+                               placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
                                pattern="\d{2}\.\d{2}\.\d{4}"
                                maxlength="10"
                                required

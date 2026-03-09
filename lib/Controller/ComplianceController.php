@@ -137,7 +137,7 @@ class ComplianceController extends Controller
 					'id' => $violation->getId(),
 					'type' => $violation->getViolationType(),
 					'severity' => $violation->getSeverity(),
-					'date' => $violation->getViolationDate() ? $violation->getViolationDate()->format('Y-m-d') : null,
+					'date' => $violation->getDate() ? $violation->getDate()->format('Y-m-d') : null,
 					'resolved' => $violation->getResolved(),
 					'description' => $violation->getDescription()
 				];
@@ -151,6 +151,7 @@ class ComplianceController extends Controller
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Compliance dashboard error: ' . $e->getMessage(), ['exception' => $e]);
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-dashboard', [
 				'complianceStatus' => [
 					'compliant' => false,
@@ -160,7 +161,7 @@ class ComplianceController extends Controller
 				],
 				'recentViolations' => [],
 				'urlGenerator' => $this->urlGenerator,
-				'error' => $e->getMessage(),
+				'error' => null,
 				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
@@ -177,7 +178,9 @@ class ComplianceController extends Controller
 	{
 		Util::addTranslations('arbeitszeitcheck');
 
-		// Add common CSS files (including app-layout, responsive, navigation)
+		// Add common CSS files (including colors, typography for consistent fonts)
+		Util::addStyle('arbeitszeitcheck', 'common/colors');
+		Util::addStyle('arbeitszeitcheck', 'common/typography');
 		Util::addStyle('arbeitszeitcheck', 'common/base');
 		Util::addStyle('arbeitszeitcheck', 'common/components');
 		Util::addStyle('arbeitszeitcheck', 'common/layout');
@@ -213,7 +216,7 @@ class ComplianceController extends Controller
 					'id' => $violation->getId(),
 					'type' => $violation->getViolationType(),
 					'severity' => $violation->getSeverity(),
-					'date' => $violation->getViolationDate() ? $violation->getViolationDate()->format('Y-m-d') : null,
+					'date' => $violation->getDate() ? $violation->getDate()->format('Y-m-d') : null,
 					'resolved' => $violation->getResolved(),
 					'description' => $violation->getDescription()
 				];
@@ -248,7 +251,9 @@ class ComplianceController extends Controller
 	{
 		Util::addTranslations('arbeitszeitcheck');
 
-		// Add common CSS files (including app-layout, responsive, navigation)
+		// Add common CSS files (including colors, typography for consistent fonts)
+		Util::addStyle('arbeitszeitcheck', 'common/colors');
+		Util::addStyle('arbeitszeitcheck', 'common/typography');
 		Util::addStyle('arbeitszeitcheck', 'common/base');
 		Util::addStyle('arbeitszeitcheck', 'common/components');
 		Util::addStyle('arbeitszeitcheck', 'common/layout');

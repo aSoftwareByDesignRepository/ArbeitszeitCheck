@@ -183,7 +183,7 @@ $error = $_['error'] ?? null;
                                             name="date"
                                             class="form-input datepicker-input"
                                             pattern="\d{2}\.\d{2}\.\d{4}"
-                                            placeholder="dd.mm.yyyy"
+                                            placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
                                             value="<?php p($entry ? $entry->getStartTime()->format('d.m.Y') : date('d.m.Y')); ?>"
                                             aria-labelledby="entry-date-label"
                                             aria-describedby="entry-date-help entry-date-error"
@@ -532,11 +532,11 @@ $error = $_['error'] ?? null;
                 <div class="form">
                     <div class="form-group">
                         <label for="filter-start-date" class="form-label"><?php p($l->t('Start Date')); ?></label>
-                        <input type="text" id="filter-start-date" name="start_date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
+                        <input type="text" id="filter-start-date" name="start_date" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
                     </div>
                     <div class="form-group">
                         <label for="filter-end-date" class="form-label"><?php p($l->t('End Date')); ?></label>
-                        <input type="text" id="filter-end-date" name="end_date" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
+                        <input type="text" id="filter-end-date" name="end_date" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
                     </div>
                     <div class="form-group">
                         <label for="filter-status" class="form-label"><?php p($l->t('Status')); ?></label>

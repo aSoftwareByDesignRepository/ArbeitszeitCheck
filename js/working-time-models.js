@@ -43,15 +43,16 @@
      * Show create model modal
      */
     function showCreateModal() {
-        const title = window.ArbeitszeitCheck?.l10n?.createModel || 'Create Working Time Model';
-        const createLabel = window.ArbeitszeitCheck?.l10n?.create || 'Create';
-        const cancelLabel = window.ArbeitszeitCheck?.l10n?.cancel || 'Cancel';
-        const nameLabel = window.ArbeitszeitCheck?.l10n?.name || 'Name';
-        const descriptionLabel = window.ArbeitszeitCheck?.l10n?.description || 'Description';
-        const typeLabel = window.ArbeitszeitCheck?.l10n?.type || 'Type';
-        const weeklyHoursLabel = window.ArbeitszeitCheck?.l10n?.weeklyHours || 'Weekly Hours';
-        const dailyHoursLabel = window.ArbeitszeitCheck?.l10n?.dailyHours || 'Daily Hours';
-        const isDefaultLabel = window.ArbeitszeitCheck?.l10n?.isDefault || 'Set as Default';
+        const t = (s) => (window.t ? window.t('arbeitszeitcheck', s) : s);
+        const title = window.ArbeitszeitCheck?.l10n?.createModel || t('Create Working Time Model');
+        const createLabel = window.ArbeitszeitCheck?.l10n?.create || t('Create');
+        const cancelLabel = window.ArbeitszeitCheck?.l10n?.cancel || t('Cancel');
+        const nameLabel = window.ArbeitszeitCheck?.l10n?.name || t('Name');
+        const descriptionLabel = window.ArbeitszeitCheck?.l10n?.description || t('Description');
+        const typeLabel = window.ArbeitszeitCheck?.l10n?.type || t('Type');
+        const weeklyHoursLabel = window.ArbeitszeitCheck?.l10n?.weeklyHours || t('Weekly Hours');
+        const dailyHoursLabel = window.ArbeitszeitCheck?.l10n?.dailyHours || t('Daily Hours');
+        const isDefaultLabel = window.ArbeitszeitCheck?.l10n?.isDefault || t('Set as Default');
         
         const formContent = `
             <form id="create-model-form" class="form">
@@ -69,11 +70,11 @@
                 <div class="form-group">
                     <label for="model-type" class="form-label">${typeLabel}</label>
                     <select id="model-type" name="type" class="form-select">
-                        <option value="full_time">Full-Time</option>
-                        <option value="part_time">Part-Time</option>
-                        <option value="flexible">Flexible</option>
-                        <option value="trust_based">Trust-Based</option>
-                        <option value="shift_work">Shift Work</option>
+                        <option value="full_time">${(window.t ? window.t('arbeitszeitcheck', 'Full-Time') : 'Full-Time')}</option>
+                        <option value="part_time">${(window.t ? window.t('arbeitszeitcheck', 'Part-Time') : 'Part-Time')}</option>
+                        <option value="flexible">${(window.t ? window.t('arbeitszeitcheck', 'Flexible') : 'Flexible')}</option>
+                        <option value="trust_based">${(window.t ? window.t('arbeitszeitcheck', 'Trust-Based') : 'Trust-Based')}</option>
+                        <option value="shift_work">${(window.t ? window.t('arbeitszeitcheck', 'Shift Work') : 'Shift Work')}</option>
                     </select>
                 </div>
                 <div class="form-group">

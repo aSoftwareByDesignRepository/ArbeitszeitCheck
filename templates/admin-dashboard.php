@@ -66,12 +66,17 @@ $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
                 <div class="card admin-card">
                     <div class="card-header">
-                        <h3 class="card-title"><?php p($l->t('Compliance & App Settings')); ?></h3>
+                        <h3 class="card-title"><?php p($l->t('Compliance, Settings & Audit')); ?></h3>
                     </div>
                     <div class="card-body">
-                        <p><?php p($l->t('Adjust global compliance rules, notifications, and integration settings.')); ?></p>
+                        <p><?php p($l->t('Adjust global rules, view the activity log, and configure app settings.')); ?></p>
                     </div>
                     <div class="card-actions">
+                        <a href="<?php p(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.auditLog')); ?>"
+                           class="btn btn--secondary"
+                           aria-label="<?php p($l->t('Open activity log to see all actions in the system')); ?>">
+                            <?php p($l->t('Activity Log')); ?>
+                        </a>
                         <a href="<?php p(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.settings')); ?>"
                            class="btn btn--secondary"
                            aria-label="<?php p($l->t('Open admin settings to configure compliance and app behaviour')); ?>">
