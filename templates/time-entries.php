@@ -965,6 +965,14 @@ $error = $_['error'] ?? null;
                 updateValue();
             }
 
+            /**
+             * Automatically calculate and enforce required breaks based on German ArbZG.
+             * This is used when the auto-break toggle is enabled.
+             */
+            handleAutoBreakCalculation() {
+                if (!this.autoBreakToggle || !this.autoBreakToggle.checked) {
+                    return;
+                }
 
                 if (!this.hasFormData()) return;
 
@@ -981,7 +989,7 @@ $error = $_['error'] ?? null;
 
                     if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) return;
 
-                    // Handle overnight work
+                    // Handle overnight work (end time next day)
                     if (endDateTime < startDateTime) {
                         endDateTime.setDate(endDateTime.getDate() + 1);
                     }
@@ -1021,49 +1029,149 @@ $error = $_['error'] ?? null;
                 }
             }
 
-                            }
-                        } catch (error) {
-                            console.warn('Error calculating existing break time:', error);
+            /**
+             * Calculate total existing break time (in minutes) for the given work date.
+             * Only counts breaks of at least 15 minutes, and correctly handles overnight breaks.
+             */
+            calculateExistingBreakTime(dateStr) {
+                if (!this.breaksContainer) {
+                    return 0;
+                }
+
+                let totalBreakMinutes = 0;
+                const breakEntries = this.breaksContainer.querySelectorAll('.break-entry');
+                const minBreakMs = 15 * 60 * 1000; // 15 minutes
+
+                breakEntries.forEach((breakEntry) => {
+                    try {
+                        const startHidden = breakEntry.querySelector('input.break-start-time');
+                        const endHidden = breakEntry.querySelector('input.break-end-time');
+                        if (!startHidden || !endHidden || !startHidden.value || !endHidden.value) {
+                            return;
                         }
+
+                        let breakStart = new Date(dateStr + 'T' + startHidden.value);
+                        let breakEnd = new Date(dateStr + 'T' + endHidden.value);
+                        if (isNaN(breakStart.getTime()) || isNaN(breakEnd.getTime())) {
+                            return;
+                        }
+
+                        // Handle overnight breaks
+                        if (breakEnd < breakStart) {
+                            breakEnd.setDate(breakEnd.getDate() + 1);
+                        }
+
+                        const durationMs = breakEnd - breakStart;
+                        if (durationMs >= minBreakMs && durationMs > 0) {
+                            totalBreakMinutes += durationMs / (1000 * 60);
+                        }
+                    } catch (error) {
+                        console.warn('Error calculating existing break time:', error);
                     }
                 });
 
                 return totalBreakMinutes;
             }
 
-                        // Add new auto-break
-                        this.createAutoBreak(breakStartTime, breakMinutes);
-                    }
-
-                    // Show notification about auto-break addition
-                    if (window.OC && OC.Notification) {
-                        const breakText = breakMinutes === 45 ? '45 minutes' : '30 minutes';
-                        OC.Notification.showTemporary(
-                            `<?php echo addslashes($l->t('Automatic %s break added for legal compliance', ['%s'])); ?>`.replace('%s', breakText),
-                            { type: 'info', timeout: 3000 }
-                        );
-                    }
+            /**
+             * Add an automatic break to cover the required shortfall in break minutes.
+             */
+            addAutomaticBreak(startDateTime, endDateTime, shortfallMinutes) {
+                const breakStartTime = this.calculateOptimalBreakTime(startDateTime, endDateTime, shortfallMinutes);
+                if (!breakStartTime) {
+                    return;
                 }
+
+                this.createAutoBreak(breakStartTime, shortfallMinutes);
+
+                // Show notification about auto-break addition
+                if (window.OC && OC.Notification) {
+                    const breakText = shortfallMinutes >= 45 ? '45 minutes' : '30 minutes';
+                    OC.Notification.showTemporary(
+                        `<?php echo addslashes($l->t('Automatic %s break added for legal compliance', ['%s'])); ?>`.replace('%s', breakText),
+                        { type: 'info', timeout: 3000 }
+                    );
+                }
+
+                this.updateTimeSummary();
             }
 
+            /**
+             * Choose an optimal break start time within the working period.
+             * Places the break roughly in the middle of the shift while ensuring it ends before endDateTime.
+             */
+            calculateOptimalBreakTime(startDateTime, endDateTime, breakMinutes) {
+                const workDurationMs = endDateTime - startDateTime;
+                if (workDurationMs <= 0) {
+                    return null;
+                }
 
-                const breakEndTime = new Date(breakStartTime.getTime() + breakMinutes * 60 * 1000);
+                const breakMs = breakMinutes * 60 * 1000;
+                // Center the break in the working period
+                const startMs = startDateTime.getTime() + Math.max(0, (workDurationMs - breakMs) / 2);
+                const breakStartTime = new Date(startMs);
+
+                const breakEndTime = new Date(breakStartTime.getTime() + breakMs);
                 if (breakEndTime > endDateTime) {
                     // If break would end after work, start it earlier
-                    breakStartTime.setTime(endDateTime.getTime() - breakMinutes * 60 * 1000);
+                    breakStartTime.setTime(endDateTime.getTime() - breakMs);
                 }
 
                 return breakStartTime;
             }
 
+            /**
+             * Create a new auto-break entry in the form for the given start time and duration.
+             */
+            createAutoBreak(breakStartTime, breakMinutes) {
+                if (!this.breaksContainer) {
+                    return;
                 }
-                return null;
+
+                const breakEntry = this.createBreakEntryElement(this.breakIndex);
+                this.breaksContainer.appendChild(breakEntry);
+
+                // Update the break with calculated times and mark it as auto-generated
+                this.updateAutoBreak(breakEntry, breakStartTime, breakMinutes);
+
+                this.breakIndex++;
+                this.updateTimeSummary();
             }
 
-                    endHourSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }
+            /**
+             * Update an existing break entry with given start time and duration and mark it as auto-generated.
+             */
+            updateAutoBreak(breakEntry, breakStartTime, breakMinutes) {
+                const index = breakEntry.getAttribute('data-break-index');
+                if (!index) return;
 
+                const startHidden = breakEntry.querySelector('input.break-start-time[data-break-index="' + index + '"]');
+                const endHidden = breakEntry.querySelector('input.break-end-time[data-break-index="' + index + '"]');
+                const startHourSelect = breakEntry.querySelector('.break-start-time-hour');
+                const startMinuteSelect = breakEntry.querySelector('.break-start-time-minute');
+                const endHourSelect = breakEntry.querySelector('.break-end-time-hour');
+                const endMinuteSelect = breakEntry.querySelector('.break-end-time-minute');
+
+                const startHour = String(breakStartTime.getHours()).padStart(2, '0');
+                const startMinute = String(breakStartTime.getMinutes()).padStart(2, '0');
+                const endTime = new Date(breakStartTime.getTime() + breakMinutes * 60 * 1000);
+                const endHour = String(endTime.getHours()).padStart(2, '0');
+                const endMinute = String(endTime.getMinutes()).padStart(2, '0');
+
+                if (startHourSelect) startHourSelect.value = startHour;
+                if (startMinuteSelect) startMinuteSelect.value = startMinute;
+                if (endHourSelect) endHourSelect.value = endHour;
+                if (endMinuteSelect) endMinuteSelect.value = endMinute;
+
+                if (startHidden) startHidden.value = `${startHour}:${startMinute}`;
+                if (endHidden) endHidden.value = `${endHour}:${endMinute}`;
+
+                // Trigger change events so any listeners update summaries/validation
+                if (startHourSelect) startHourSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                if (endHourSelect) endHourSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+                // Mark as auto-generated
+                breakEntry.setAttribute('data-auto-break', 'true');
 
                 // Add a note below the auto-break
                 const formGrid = breakEntry.querySelector('.form-grid');
@@ -1073,16 +1181,15 @@ $error = $_['error'] ?? null;
                     autoNote.innerHTML = '<small><?php echo addslashes($l->t('Automatically added for German labor law compliance (ArbZG §4)')); ?></small>';
                     formGrid.appendChild(autoNote);
                 }
-
-                this.breaksContainer.appendChild(breakEntry);
-
-                // Update the break with calculated times
-                this.updateAutoBreak(breakEntry, breakStartTime, breakMinutes);
-
-                this.breakIndex++;
             }
 
-
+            /**
+             * Remove all automatically added breaks (used when no break is required).
+             */
+            removeAutoAddedBreaks() {
+                if (!this.breaksContainer) return;
+                const autoBreaks = this.breaksContainer.querySelectorAll('.break-entry[data-auto-break]');
+                autoBreaks.forEach((entry) => entry.remove());
                 this.updateTimeSummary();
             }
 
@@ -1405,15 +1512,16 @@ $error = $_['error'] ?? null;
             }
 
             showDateError(message) {
-                    const errorContainer = document.getElementById('entry-date-error');
-                    if (errorContainer) {
+                const errorContainer = document.getElementById('entry-date-error');
+                if (errorContainer) {
+                    const safeMessage = _escapeHtml(String(message));
                     errorContainer.style.display = 'block';
-                    errorContainer.innerHTML = `<div class="form-error" role="alert"><span class="form-error__icon" aria-hidden="true">⚠️</span><div class="form-error__content"><strong>${_escapeHtml(String(message))}</strong></div></div>`;
+                    errorContainer.innerHTML = '<div class="form-error" role="alert"><span class="form-error__icon" aria-hidden="true">⚠️</span><div class="form-error__content"><strong>' + safeMessage + '</strong></div></div>';
                 }
                 if (this.dateInput) {
                     this.dateInput.setAttribute('aria-invalid', 'true');
                     this.dateInput.classList.add('form-input--error');
-                    this.dateInput.setCustomValidity(message);
+                    this.dateInput.setCustomValidity(String(message));
                 }
             }
 
@@ -1528,9 +1636,9 @@ $error = $_['error'] ?? null;
                                     breaks.push({
                                         start: breakStart.toISOString(),
                                         end: breakEnd.toISOString()
-                    });
-                }
-            }
+                                    });
+                                }
+                            }
                         } catch (breakError) {
                             console.warn('Error processing break:', breakError);
                             // Continue processing other breaks
@@ -1727,6 +1835,9 @@ $error = $_['error'] ?? null;
                     return false;
                 }
 
+                // Always start with a clean validation state
+                this.clearValidationErrors();
+
                 // If auto-breaks are enabled, ensure they're created before validation
                 if (this.autoBreakToggle && this.autoBreakToggle.checked) {
                     // Ensure auto-breaks are in place
@@ -1779,8 +1890,10 @@ $error = $_['error'] ?? null;
                     isValid = false;
                 }
 
-                // That's it - no break validation required!
-                // Auto-breaks will be calculated and added during submission if needed
+                // Validate overall work duration and break totals
+                if (!this.validateWorkDuration()) {
+                    isValid = false;
+                }
 
                 return isValid;
             }
@@ -1819,82 +1932,37 @@ $error = $_['error'] ?? null;
                 return true;
             }
 
+            /**
+             * Validate that the overall work duration is reasonable and that breaks
+             * do not exceed the total work time.
+             *
+             * @returns {boolean} true if the current work/break configuration is valid
+             */
+            validateWorkDuration() {
+                // We need a valid date and start/end times to perform this check
+                const dateStr = this.convertDateFormat(this.dateInput ? this.dateInput.value : '');
+                if (!dateStr || !this.startTimeHidden || !this.endTimeHidden) {
+                    return true;
+                }
 
-                    const breakIndex = breakEntry.getAttribute('data-break-index');
-                    const startInput = breakEntry.querySelector(`input.break-start-time[data-break-index="${breakIndex}"]`);
-                    const endInput = breakEntry.querySelector(`input.break-end-time[data-break-index="${breakIndex}"]`);
+                const startTime = this.startTimeHidden.value;
+                const endTime = this.endTimeHidden.value;
+                if (!startTime || !endTime || startTime === '00:00' || endTime === '00:00') {
+                    return true;
+                }
 
-                    if (startInput && endInput) {
-                        const startTime = startInput.value;
-                        const endTime = endInput.value;
+                try {
+                    const startDateTime = new Date(dateStr + 'T' + startTime);
+                    let endDateTime = new Date(dateStr + 'T' + endTime);
 
-                        // If both times are provided, validate they form a valid break
-                        if (startTime && endTime && startTime !== '00:00' && endTime !== '00:00') {
-                            try {
-                                const startDate = new Date('1970-01-01T' + startTime);
-                                const endDate = new Date('1970-01-01T' + endTime);
-
-                                if (endDate <= startDate) {
-                                    // Handle overnight breaks
-                                    endDate.setDate(endDate.getDate() + 1);
-                                }
-
-                                const durationMs = endDate - startDate;
-
-                                // Check if breaks are required based on estimated work duration
-                                // We need to estimate based on current form data
-                                let workDurationHours = 0;
-                                if (this.startTimeHidden?.value && this.endTimeHidden?.value) {
-                                    try {
-                                        const workStart = new Date('1970-01-01T' + this.startTimeHidden.value);
-                                        let workEnd = new Date('1970-01-01T' + this.endTimeHidden.value);
-                                        if (workEnd < workStart) workEnd.setDate(workEnd.getDate() + 1);
-                                        workDurationHours = (workEnd - workStart) / (1000 * 60 * 60);
-                                    } catch (e) {
-                                        // If we can't calculate work duration, assume breaks might be required
-                                        workDurationHours = 8; // Conservative estimate
-                                    }
-                                }
-
-                                // Break requirements based on German labor law (ArbZG)
-                                const breaksRequired = workDurationHours >= 6;
-                                const minDurationMs = breaksRequired ? 15 * 60 * 1000 : 0; // 15 minutes if required, 0 if not
-
-                                if (durationMs < minDurationMs) {
-                                    const durationMinutes = Math.floor(durationMs / (1000 * 60));
-                                    const startSelect = breakEntry.querySelector('.break-start-time-hour');
-                                    if (startSelect) {
-                                        if (breaksRequired) {
-                                            startSelect.setCustomValidity('<?php echo addslashes($l->t('Break must be at least 15 minutes long')); ?>');
-                        } else {
-                                            startSelect.setCustomValidity('<?php echo addslashes($l->t('Breaks are not required for work periods under 6 hours')); ?>');
-                                        }
-                                        startSelect.reportValidity();
-                                    }
-                                    isValid = false;
-                                }
-
-                                // Additional validation: break should not be longer than work period
-                                if (workDurationHours > 0 && durationMs > workDurationHours * 60 * 60 * 1000) {
-                                    const startSelect = breakEntry.querySelector('.break-start-time-hour');
-                                    if (startSelect) {
-                                        startSelect.setCustomValidity('<?php echo addslashes($l->t('Break cannot be longer than work period')); ?>');
-                                        startSelect.reportValidity();
-                                    }
-                                    isValid = false;
-                                }
-
-                            } catch (error) {
-                                console.warn('Error validating break time:', error);
-                                isValid = false;
-                            }
-                        }
+                    if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+                        return true;
                     }
-                });
 
-                return isValid;
-            }
-
+                    // Handle overnight work
+                    if (endDateTime < startDateTime) {
+                        endDateTime.setDate(endDateTime.getDate() + 1);
+                    }
 
                     const workDurationMs = endDateTime - startDateTime;
                     const workDurationHours = workDurationMs / (1000 * 60 * 60);
@@ -1908,7 +1976,6 @@ $error = $_['error'] ?? null;
                     }
 
                     // Check for unreasonably short work periods (less than 15 minutes)
-                    // This helps prevent accidental entries while still allowing legitimate short shifts
                     const minWorkDurationMs = 15 * 60 * 1000; // 15 minutes
                     if (workDurationMs < minWorkDurationMs) {
                         if (this.endTimeHour) {
@@ -1961,7 +2028,6 @@ $error = $_['error'] ?? null;
                         console.info('Breaks added for short shift - this is allowed but not required');
                         // Don't fail validation, just log - breaks are optional for short shifts
                     }
-
                 } catch (error) {
                     console.warn('Error validating work duration:', error);
                     return false;
@@ -1975,8 +2041,8 @@ $error = $_['error'] ?? null;
 
                 if (workingHours <= 0) {
                     this.breakRequirementIndicator.style.display = 'none';
-                            return;
-                        }
+                    return;
+                }
 
                 let requirementText = '';
                 if (workingHours < 6) {
@@ -1990,13 +2056,12 @@ $error = $_['error'] ?? null;
                 if (requirementText) {
                     this.breakRequirementText.textContent = requirementText;
                     this.breakRequirementIndicator.style.display = 'block';
-                        } else {
+                } else {
                     this.breakRequirementIndicator.style.display = 'none';
                 }
             }
 
-                });
-
+            clearValidationErrors() {
                 // Clear validation on break inputs
                 if (this.breaksContainer) {
                     const breakSelects = this.breaksContainer.querySelectorAll('select');
@@ -2105,11 +2170,26 @@ $error = $_['error'] ?? null;
 
                     clearTimeout(timeoutId);
 
-                            if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
+                    let result;
+                    if (!response.ok) {
+                        // Try to extract a structured error message from the API response
+                        try {
+                            result = await response.json();
+                        } catch (parseError) {
+                            // Fallback to generic HTTP error if body is not JSON
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
 
-                    const result = await response.json();
+                        const apiErrorMessage = (result && (result.error || result.message)) || '';
+                        if (apiErrorMessage) {
+                            // Mark as API-level error so we can distinguish it in the catch block
+                            throw new Error(`API_ERROR:${apiErrorMessage}`);
+                        }
+
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    } else {
+                        result = await response.json();
+                    }
 
                     if (result.success) {
                         // Success - show message then redirect
@@ -2127,8 +2207,8 @@ $error = $_['error'] ?? null;
                         }, 1000);
 
                     } else {
-                        // Server returned success=false
-                        const errorMsg = result.message || '<?php echo addslashes($l->t('An error occurred while saving')); ?>';
+                        // Server returned success=false with a JSON body
+                        const errorMsg = (result.error || result.message) || '<?php echo addslashes($l->t('An error occurred while saving')); ?>';
                         this.showErrorNotification(errorMsg);
                         this.resetSubmitButton(submitBtn, originalText);
                     }
@@ -2139,6 +2219,9 @@ $error = $_['error'] ?? null;
                     let errorMsg;
                     if (error.name === 'AbortError') {
                         errorMsg = '<?php echo addslashes($l->t('Request timed out. Please try again.')); ?>';
+                    } else if (error.message.startsWith('API_ERROR:')) {
+                        // Detailed API error coming from backend JSON (e.g. overlap, compliance violations)
+                        errorMsg = error.message.substring('API_ERROR:'.length);
                     } else if (error.message.includes('HTTP')) {
                         errorMsg = '<?php echo addslashes($l->t('Server error occurred. Please try again.')); ?>';
                     } else if (error.message.includes('required form fields')) {

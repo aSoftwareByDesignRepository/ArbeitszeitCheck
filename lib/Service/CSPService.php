@@ -57,18 +57,18 @@ class CSPService
         // Clickjacking protection (allow framing by self only)
         $policy->addAllowedFrameAncestorDomain("'self'");
 
-        // CRITICAL: Add Google Fonts to ALL policies to ensure they're always available
+        // Allow Google Fonts used by some Nextcloud themes.
+        // Note: this relaxes CSP only for font and style sources, not for scripts.
         $policy->addAllowedFontDomain('https://fonts.gstatic.com');
         $policy->addAllowedFontDomain('fonts.gstatic.com');
         $policy->addAllowedFontDomain('*.googleusercontent.com');
         $policy->addAllowedStyleDomain('https://fonts.googleapis.com');
         $policy->addAllowedStyleDomain('fonts.googleapis.com');
 
-        // NOTE: Nextcloud Core uses eval() in some minified scripts (e.g., baseline-browser-mapping).
-        // To avoid CSP violations, we allow unsafe-eval, but only because Nextcloud Core requires it.
-        // Our app code does NOT use eval() - this is purely for Nextcloud Core compatibility.
-        // This is a known limitation of Nextcloud Core and should be addressed by Nextcloud itself.
-        $policy->allowEvalScript(true);
+        // IMPORTANT: We intentionally do NOT enable eval in scripts (`unsafe-eval`).
+        // Nextcloud 31 ships with a strict CSP by default and does not require eval for core code.
+        // Keeping eval disabled significantly reduces XSS risk and avoids adding `unsafe-eval`
+        // or `wasm-unsafe-eval` to `script-src` / `script-src-elem`.
 
         return $policy;
     }

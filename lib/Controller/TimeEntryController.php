@@ -668,6 +668,7 @@ class TimeEntryController extends Controller
 
 			// Get data from request body
 			$params = $this->request->getParams();
+			$dateParam = $params['date'] ?? $date;
 			$startTime = $params['startTime'] ?? null;
 			$endTime = $params['endTime'] ?? null;
 			$breakStartTime = $params['breakStartTime'] ?? null;
@@ -677,8 +678,52 @@ class TimeEntryController extends Controller
 			// New format: startTime and endTime
 			if ($startTime && $endTime) {
 				try {
-					$entry->setStartTime(new \DateTime($startTime));
-					$entry->setEndTime(new \DateTime($endTime));
+					// Combine date + local time for correct calendar day.
+					// If $startTime / $endTime already contain a full ISO datetime, respect that.
+					$baseDate = null;
+					if ($dateParam !== null && $dateParam !== '') {
+						try {
+							$baseDate = $this->parseDate($dateParam);
+						} catch (\Throwable $e) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $this->l10n->t('Invalid date: %s', [$dateParam]),
+							], Http::STATUS_BAD_REQUEST);
+						}
+					}
+
+					$startDateTime = null;
+					$endDateTime = null;
+
+					$isPlainTime = static function (string $value): bool {
+						return (bool)\preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', $value);
+					};
+
+					// Start
+					if ($baseDate instanceof \DateTime && $isPlainTime($startTime)) {
+						$startDateTime = clone $baseDate;
+						[$h, $m] = \explode(':', $startTime, 2);
+						$startDateTime->setTime((int)$h, (int)$m, 0);
+					} else {
+						$startDateTime = new \DateTime($startTime);
+					}
+
+					// End
+					if ($baseDate instanceof \DateTime && $isPlainTime($endTime)) {
+						$endDateTime = clone $baseDate;
+						[$h, $m] = \explode(':', $endTime, 2);
+						$endDateTime->setTime((int)$h, (int)$m, 0);
+					} else {
+						$endDateTime = new \DateTime($endTime);
+					}
+
+					// Overnight work: if we have a base date and end < start, treat end as next day
+					if ($baseDate instanceof \DateTime && $endDateTime < $startDateTime) {
+						$endDateTime->modify('+1 day');
+					}
+
+					$entry->setStartTime($startDateTime);
+					$entry->setEndTime($endDateTime);
 				} catch (\Throwable $e) {
 					return new JSONResponse([
 						'success' => false,
@@ -694,23 +739,52 @@ class TimeEntryController extends Controller
 						// Filter out breaks shorter than 15 minutes (ArbZG §4)
 						$validBreaks = [];
 						foreach ($breaks as $break) {
-							if (isset($break['start']) && isset($break['end'])) {
-								try {
-									$breakStart = new \DateTime($break['start']);
-									$breakEnd = new \DateTime($break['end']);
-									$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-									$minBreakDurationSeconds = 900; // 15 minutes
+							// Support both {start,end} and {start_time,end_time}
+							$startKey = isset($break['start']) ? 'start' : (isset($break['start_time']) ? 'start_time' : null);
+							$endKey = isset($break['end']) ? 'end' : (isset($break['end_time']) ? 'end_time' : null);
+							if ($startKey === null || $endKey === null) {
+								continue;
+							}
 
-									// Only include breaks that are at least 15 minutes
-									if ($breakDurationSeconds >= $minBreakDurationSeconds) {
-										$validBreaks[] = [
-											'start' => $breakStart->format('c'),
-											'end' => $breakEnd->format('c')
-										];
-									}
-								} catch (\Exception $e) {
-									// Skip invalid break times
+							try {
+								$rawStart = (string)$break[$startKey];
+								$rawEnd = (string)$break[$endKey];
+
+								// Combine date + time if only local times were provided
+								if ($baseDate instanceof \DateTime && $isPlainTime($rawStart)) {
+									$breakStart = clone $baseDate;
+									[$h, $m] = \explode(':', $rawStart, 2);
+									$breakStart->setTime((int)$h, (int)$m, 0);
+								} else {
+									$breakStart = new \DateTime($rawStart);
 								}
+
+								if ($baseDate instanceof \DateTime && $isPlainTime($rawEnd)) {
+									$breakEnd = clone $baseDate;
+									[$h, $m] = \explode(':', $rawEnd, 2);
+									$breakEnd->setTime((int)$h, (int)$m, 0);
+								} else {
+									$breakEnd = new \DateTime($rawEnd);
+								}
+
+								// Handle overnight breaks
+								if ($breakEnd < $breakStart) {
+									$breakEnd->modify('+1 day');
+								}
+
+								$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
+								$minBreakDurationSeconds = 900; // 15 minutes
+
+								// Only include breaks that are at least 15 minutes
+								if ($breakDurationSeconds >= $minBreakDurationSeconds) {
+									$validBreaks[] = [
+										'start' => $breakStart->format('c'),
+										'end' => $breakEnd->format('c')
+									];
+								}
+							} catch (\Exception $e) {
+								// Skip invalid break times
+								continue;
 							}
 						}
 
@@ -734,8 +808,31 @@ class TimeEntryController extends Controller
 				} elseif ($breakStartTime && $breakEndTime) {
 					// Fallback to single break fields (backward compatibility)
 					try {
-						$entry->setBreakStartTime(new \DateTime($breakStartTime));
-						$entry->setBreakEndTime(new \DateTime($breakEndTime));
+						$singleBreakStart = null;
+						$singleBreakEnd = null;
+
+						if ($baseDate instanceof \DateTime && $isPlainTime($breakStartTime)) {
+							$singleBreakStart = clone $baseDate;
+							[$h, $m] = \explode(':', $breakStartTime, 2);
+							$singleBreakStart->setTime((int)$h, (int)$m, 0);
+						} else {
+							$singleBreakStart = new \DateTime($breakStartTime);
+						}
+
+						if ($baseDate instanceof \DateTime && $isPlainTime($breakEndTime)) {
+							$singleBreakEnd = clone $baseDate;
+							[$h, $m] = \explode(':', $breakEndTime, 2);
+							$singleBreakEnd->setTime((int)$h, (int)$m, 0);
+						} else {
+							$singleBreakEnd = new \DateTime($breakEndTime);
+						}
+
+						if ($singleBreakEnd < $singleBreakStart) {
+							$singleBreakEnd->modify('+1 day');
+						}
+
+						$entry->setBreakStartTime($singleBreakStart);
+						$entry->setBreakEndTime($singleBreakEnd);
 					} catch (\Throwable $e) {
 						return new JSONResponse([
 							'success' => false,
@@ -1527,10 +1624,53 @@ class TimeEntryController extends Controller
 			try {
 				$userId = $this->getUserId();
 
+				// Combine date + local time for correct calendar day.
+				// If $startTime / $endTime already contain a full ISO datetime, respect that.
+				$baseDate = null;
+				if ($date !== null && $date !== '') {
+					try {
+						$baseDate = $this->parseDate($date);
+					} catch (\Throwable $e) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Invalid date: %s', [$date]),
+						], Http::STATUS_BAD_REQUEST);
+					}
+				}
+
+				$startDateTime = null;
+				$endDateTime = null;
+
+				// Helper: detect plain "HH:MM" time string
+				$isPlainTime = static function (string $value): bool {
+					return (bool)\preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', $value);
+				};
+
+				if ($baseDate instanceof \DateTime && $isPlainTime($startTime)) {
+					$startDateTime = clone $baseDate;
+					[$h, $m] = \explode(':', $startTime, 2);
+					$startDateTime->setTime((int)$h, (int)$m, 0);
+				} else {
+					$startDateTime = new \DateTime($startTime);
+				}
+
+				if ($baseDate instanceof \DateTime && $isPlainTime($endTime)) {
+					$endDateTime = clone $baseDate;
+					[$h, $m] = \explode(':', $endTime, 2);
+					$endDateTime->setTime((int)$h, (int)$m, 0);
+				} else {
+					$endDateTime = new \DateTime($endTime);
+				}
+
+				// Overnight work: if we have a base date and end < start, treat end as next day
+				if ($baseDate instanceof \DateTime && $endDateTime < $startDateTime) {
+					$endDateTime->modify('+1 day');
+				}
+
 				$timeEntry = new TimeEntry();
 				$timeEntry->setUserId($userId);
-				$timeEntry->setStartTime(new \DateTime($startTime));
-				$timeEntry->setEndTime(new \DateTime($endTime));
+				$timeEntry->setStartTime($startDateTime);
+				$timeEntry->setEndTime($endDateTime);
 
 				// Handle breaks: prefer breaks JSON (multiple breaks) over single break fields
 				$breaksJson = $params['breaks'] ?? null;
@@ -1541,23 +1681,52 @@ class TimeEntryController extends Controller
 						// Filter out breaks shorter than 15 minutes (ArbZG §4)
 						$validBreaks = [];
 						foreach ($breaks as $break) {
-							if (isset($break['start']) && isset($break['end'])) {
-								try {
-									$breakStart = new \DateTime($break['start']);
-									$breakEnd = new \DateTime($break['end']);
-									$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-									$minBreakDurationSeconds = 900; // 15 minutes
+							// Support both {start,end} and {start_time,end_time} from clients
+							$startKey = isset($break['start']) ? 'start' : (isset($break['start_time']) ? 'start_time' : null);
+							$endKey = isset($break['end']) ? 'end' : (isset($break['end_time']) ? 'end_time' : null);
+							if ($startKey === null || $endKey === null) {
+								continue;
+							}
 
-									// Only include breaks that are at least 15 minutes
-									if ($breakDurationSeconds >= $minBreakDurationSeconds) {
-										$validBreaks[] = [
-											'start' => $breakStart->format('c'),
-											'end' => $breakEnd->format('c')
-										];
-									}
-								} catch (\Exception $e) {
-									// Skip invalid break times
+							try {
+								$rawStart = (string)$break[$startKey];
+								$rawEnd = (string)$break[$endKey];
+
+								// Combine date + time if only local times were provided
+								if ($baseDate instanceof \DateTime && $isPlainTime($rawStart)) {
+									$breakStart = clone $baseDate;
+									[$h, $m] = \explode(':', $rawStart, 2);
+									$breakStart->setTime((int)$h, (int)$m, 0);
+								} else {
+									$breakStart = new \DateTime($rawStart);
 								}
+
+								if ($baseDate instanceof \DateTime && $isPlainTime($rawEnd)) {
+									$breakEnd = clone $baseDate;
+									[$h, $m] = \explode(':', $rawEnd, 2);
+									$breakEnd->setTime((int)$h, (int)$m, 0);
+								} else {
+									$breakEnd = new \DateTime($rawEnd);
+								}
+
+								// Handle overnight breaks
+								if ($breakEnd < $breakStart) {
+									$breakEnd->modify('+1 day');
+								}
+
+								$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
+								$minBreakDurationSeconds = 900; // 15 minutes
+
+								// Only include breaks that are at least 15 minutes
+								if ($breakDurationSeconds >= $minBreakDurationSeconds) {
+									$validBreaks[] = [
+										'start' => $breakStart->format('c'),
+										'end' => $breakEnd->format('c'),
+									];
+								}
+							} catch (\Exception $e) {
+								// Skip invalid break times
+								continue;
 							}
 						}
 
@@ -1580,8 +1749,31 @@ class TimeEntryController extends Controller
 					}
 				} elseif ($breakStartTime && $breakEndTime) {
 					// Fallback to single break fields (backward compatibility)
-					$timeEntry->setBreakStartTime(new \DateTime($breakStartTime));
-					$timeEntry->setBreakEndTime(new \DateTime($breakEndTime));
+					$singleBreakStart = null;
+					$singleBreakEnd = null;
+
+					if ($baseDate instanceof \DateTime && $isPlainTime($breakStartTime)) {
+						$singleBreakStart = clone $baseDate;
+						[$h, $m] = \explode(':', $breakStartTime, 2);
+						$singleBreakStart->setTime((int)$h, (int)$m, 0);
+					} else {
+                        $singleBreakStart = new \DateTime($breakStartTime);
+					}
+
+					if ($baseDate instanceof \DateTime && $isPlainTime($breakEndTime)) {
+						$singleBreakEnd = clone $baseDate;
+						[$h, $m] = \explode(':', $breakEndTime, 2);
+						$singleBreakEnd->setTime((int)$h, (int)$m, 0);
+					} else {
+                        $singleBreakEnd = new \DateTime($breakEndTime);
+					}
+
+					if ($singleBreakEnd < $singleBreakStart) {
+						$singleBreakEnd->modify('+1 day');
+					}
+
+					$timeEntry->setBreakStartTime($singleBreakStart);
+					$timeEntry->setBreakEndTime($singleBreakEnd);
 					// Clear breaks JSON when using single break fields
 					$timeEntry->setBreaks(null);
 				}

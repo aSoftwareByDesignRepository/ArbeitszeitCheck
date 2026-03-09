@@ -1862,7 +1862,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 .team-compliance-loading {
   margin: 0;
   padding: var(--space-4);
-  color: var(--arbeitszeitcheck-color-text-secondary);
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text-secondary)));
 }
 
 .team-compliance-grid {
@@ -1885,6 +1885,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.2;
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--color-main-text)));
 }
 
 .team-compliance-stat__label {
@@ -1894,20 +1895,24 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   margin-top: var(--space-1);
 }
 
-.team-compliance-stat--ok .team-compliance-stat__value {
-  color: var(--color-success, #2fb344);
+.team-compliance-stat--ok {
+  border-left-width: 4px;
+  border-left-color: var(--color-success, #2fb344);
 }
 
-.team-compliance-stat--warning .team-compliance-stat__value {
-  color: var(--color-warning, #eca700);
+.team-compliance-stat--warning {
+  border-left-width: 4px;
+  border-left-color: var(--color-warning, #eca700);
 }
 
-.team-compliance-stat--error .team-compliance-stat__value {
-  color: var(--color-error, #e9322d);
+.team-compliance-stat--error {
+  border-left-width: 4px;
+  border-left-color: var(--color-error, #e9322d);
 }
 
-.team-compliance-stat--info .team-compliance-stat__value {
-  color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
+.team-compliance-stat--info {
+  border-left-width: 4px;
+  border-left-color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
 }
 
 .team-compliance-stat--has-issues {
@@ -1925,7 +1930,9 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 }
 
 .team-compliance-note--success {
-  color: var(--color-success, #2fb344);
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text-secondary)));
+  border-left: 3px solid var(--color-success, #2fb344);
+  padding-left: var(--space-2);
 }
 
 .team-compliance-empty {

@@ -46,6 +46,11 @@ $hasData = $complianceStatus['has_data'] ?? true;
                                 <p class="alert-message">
                                     <?php p($l->t('Please refresh the page to try again.')); ?>
                                 </p>
+                                <?php if (!empty($error)): ?>
+                                    <p class="form-help">
+                                        <?php p($error); ?>
+                                    </p>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php elseif ($complianceStatus['compliant'] ?? false): ?>

@@ -152,7 +152,7 @@
 .team-compliance-loading {
   margin: 0;
   padding: 1rem;
-  color: var(--color-text-lighter);
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--color-text-lighter)));
 }
 
 .manager-dashboard .table-responsive {

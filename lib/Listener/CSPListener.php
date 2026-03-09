@@ -33,18 +33,18 @@ class CSPListener implements IEventListener
         // This ensures our additions are properly merged with the default policy
         $csp = new \OCP\AppFramework\Http\EmptyContentSecurityPolicy();
 
-        // Allow Google Fonts (used by Nextcloud themes)
-        // These are commonly used by Nextcloud core and themes
-        // IMPORTANT: Call addAllowedFontDomain() which initializes the array if null
+        // Allow Google Fonts (used by some Nextcloud themes).
+        // These relax CSP only for font/style sources, not for scripts.
+        // IMPORTANT: Call addAllowedFontDomain() which initializes the array if null.
         $csp->addAllowedFontDomain('https://fonts.gstatic.com');
         $csp->addAllowedFontDomain('fonts.gstatic.com');
         $csp->addAllowedStyleDomain('https://fonts.googleapis.com');
         $csp->addAllowedStyleDomain('fonts.googleapis.com');
 
-        // NOTE: Nextcloud Core uses eval() in some minified scripts (e.g., baseline-browser-mapping).
-        // To avoid CSP violations, we allow unsafe-eval, but only because Nextcloud Core requires it.
-        // Our app code does NOT use eval() - this is purely for Nextcloud Core compatibility.
-        $csp->allowEvalScript(true);
+        // IMPORTANT: We intentionally do NOT enable eval in scripts here (`unsafe-eval`).
+        // Enabling eval would weaken CSP for every Nextcloud app page because this listener
+        // is registered globally via AddContentSecurityPolicyEvent.
+        // Nextcloud 31 core does not require eval for its own scripts, so we keep it disabled.
 
         $event->addPolicy($csp);
     }

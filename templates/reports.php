@@ -249,6 +249,12 @@ $canAccessReports = $isAdmin || $isManager;
         absence: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.absence'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         compliance: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.compliance.getReport'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
     };
+    // Export endpoints that trigger real file downloads
+    window.ArbeitszeitCheck.exportUrl = {
+        timeEntries: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.timeEntries'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        absences: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.absences'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        compliance: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.compliance'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+    };
     
     <?php if ($canAccessReports): ?>
     // Initialize reports functionality
@@ -454,10 +460,54 @@ $canAccessReports = $isAdmin || $isManager;
                     announceToScreenReader(msg);
                 });
         }
+        // Trigger a real file download using the export endpoints
+        function downloadReport() {
+            var reportType = reportTypeInput ? reportTypeInput.value : '';
+            if (!reportType || !startDateInput || !endDateInput) {
+                return;
+            }
+            var dp = window.ArbeitszeitCheckDatepicker;
+            var toISO = dp ? dp.convertEuropeanToISO : function(s) { return s; };
+            var startIso = toISO(startDateInput.value || '');
+            var endIso = toISO(endDateInput.value || '');
+            if (!startIso || !endIso) {
+                return;
+            }
+            var format = formatSelect ? formatSelect.value : 'csv';
+            // Map report types to export endpoints
+            var exportKey = 'timeEntries';
+            if (reportType === 'absence') {
+                exportKey = 'absences';
+            } else if (reportType === 'compliance') {
+                exportKey = 'compliance';
+            }
+            var exportBase = window.ArbeitszeitCheck && window.ArbeitszeitCheck.exportUrl
+                ? window.ArbeitszeitCheck.exportUrl[exportKey]
+                : null;
+            if (!exportBase) {
+                return;
+            }
+            try {
+                var urlObj = new URL(exportBase, window.location.origin);
+                if (startIso) urlObj.searchParams.set('startDate', startIso);
+                if (endIso) urlObj.searchParams.set('endDate', endIso);
+                if (format) urlObj.searchParams.set('format', format);
+                var a = document.createElement('a');
+                a.href = urlObj.toString();
+                a.style.display = 'none';
+                a.setAttribute('download', '');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } catch (e) {
+                // If URL construction fails, silently skip download to avoid breaking preview
+            }
+        }
         if (reportForm) {
             reportForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 fetchAndShowReport();
+                downloadReport();
             });
         }
         if (previewBtn) {
