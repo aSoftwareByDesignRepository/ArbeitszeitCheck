@@ -362,7 +362,7 @@ class PageController extends Controller
 
 		try {
 			$userId = $this->getUserId();
-			// Use PermissionService as single source of truth (ROLES_AND_PERMISSIONS.md)
+			// Use PermissionService as single source of truth for roles and permissions
 			$canAccessReports = $this->permissionService->canAccessManagerDashboard($userId);
 			$isAdmin = $this->permissionService->isAdmin($userId);
 			$isManager = $canAccessReports && !$isAdmin;
