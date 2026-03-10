@@ -6,38 +6,37 @@
 -->
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>arbeitszeitcheck</id>
-	<name>ArbeitszeitCheck / TimeGuard</name>
-	<summary>Legally compliant Nextcloud time tracking app for German labor law (ArbZG) and GDPR</summary>
+	<name>ArbeitszeitCheck</name>
+	<summary>Time tracking for German labor law (ArbZG) and GDPR – supports compliance with breaks, rest periods, and record-keeping</summary>
 	<description>
-		ArbeitszeitCheck is a comprehensive, legally compliant time tracking app for Nextcloud, specifically designed for German organizations.
-		It fully implements German labor law (Arbeitszeitgesetz - ArbZG) requirements including mandatory break times,
-		maximum working hours, rest periods, and Sunday/holiday work tracking.
+		ArbeitszeitCheck helps organizations implement technical controls for German working time law (ArbZG) and GDPR.
+		The app supports compliance requirements such as mandatory break times, maximum working hours, rest periods,
+		and Sunday/holiday work tracking.
 
 		Key features:
-		- German labor law compliance (ArbZG, ECJ C-55/18)
-		- GDPR compliant data processing and employee rights
-		- Real-time compliance monitoring and violation alerts
-		- Employee self-service portal with dashboard
+		- ArbZG-oriented rules (ECJ C-55/18): breaks, rest periods, overtime
+		- GDPR: data export, retention, DPIA templates
+		- Compliance monitoring and violation alerts
+		- Employee self-service dashboard
 		- Manager approval workflows
 		- Vacation and absence management
-		- Project time tracking integration (optional)
-		- Comprehensive reporting and exports
-		- WCAG 2.1 AAA accessibility compliance
-		- Mobile-responsive design
-		- Audit logging and data retention management
+		- Optional project time tracking
+		- Reports and exports (incl. DATEV)
+		- Audit logging
+		- Mobile-responsive, WCAG 2.1 oriented
 
-		This system ensures organizations meet all legal requirements while providing employees with
-		full transparency and control over their working time data.
+		Legal notice: This app supports technical implementation of legal requirements. It is not a substitute for legal advice.
+		Employers remain responsible for configuration, policies, and compliance. Review your setup with legal counsel if in doubt.
 	</description>
 
-	<version>1.1.1</version>
+	<version>1.1.2</version>
 	<licence>agpl</licence>
 	<author mail="info@software-by-design.de" homepage="https://software-by-design.de">Alexander Mäule</author>
 
 	<namespace>ArbeitszeitCheck</namespace>
 
 	<category>organization</category>
-	<category>productivity</category>
+	<category>tools</category>
 
 	<website>https://software-by-design.de</website>
 	<bugs>https://software-by-design.de</bugs>
@@ -92,6 +91,7 @@
 		<keyword>audit</keyword>
 		<keyword>reporting</keyword>
 		<keyword>accessibility</keyword>
+		<keyword>timeguard</keyword>
 	</keywords>
 
 	<release>
