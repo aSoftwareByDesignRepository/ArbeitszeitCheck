@@ -1076,18 +1076,97 @@
             return formatted;
         },
 
+        /** Cached timeline data for filter re-renders (set after successful load) */
+        _timelineData: null,
+
+        /** Session storage key for timeline filter preferences */
+        _timelineFiltersKey: 'arbeitszeitcheck-timeline-filters',
+
+        /**
+         * Get current timeline filter state from checkboxes
+         * @returns {{ timeEntries: boolean, absences: boolean, holidays: boolean }}
+         */
+        getTimelineFilterState: function() {
+            const timeEntries = document.getElementById('timeline-filter-time-entries');
+            const absences = document.getElementById('timeline-filter-absences');
+            const holidays = document.getElementById('timeline-filter-holidays');
+            return {
+                timeEntries: timeEntries ? timeEntries.checked : true,
+                absences: absences ? absences.checked : true,
+                holidays: holidays ? holidays.checked : true
+            };
+        },
+
+        /**
+         * Restore timeline filter state from sessionStorage
+         */
+        restoreTimelineFilters: function() {
+            try {
+                const raw = sessionStorage.getItem(this._timelineFiltersKey);
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (!saved || typeof saved !== 'object') return;
+                const timeEntries = document.getElementById('timeline-filter-time-entries');
+                const absences = document.getElementById('timeline-filter-absences');
+                const holidays = document.getElementById('timeline-filter-holidays');
+                if (timeEntries && saved.timeEntries !== undefined) timeEntries.checked = !!saved.timeEntries;
+                if (absences && saved.absences !== undefined) absences.checked = !!saved.absences;
+                if (holidays && saved.holidays !== undefined) holidays.checked = !!saved.holidays;
+            } catch (e) {
+                /* ignore parse/storage errors */
+            }
+        },
+
+        /**
+         * Persist timeline filter state to sessionStorage
+         */
+        persistTimelineFilters: function() {
+            try {
+                const state = this.getTimelineFilterState();
+                sessionStorage.setItem(this._timelineFiltersKey, JSON.stringify(state));
+            } catch (e) {
+                /* ignore storage errors */
+            }
+        },
+
+        /**
+         * Apply filters and re-render timeline (uses cached data)
+         */
+        applyTimelineFilters: function() {
+            const container = document.getElementById('timeline-container');
+            if (!container || !this._timelineData) {
+                return;
+            }
+            const filter = this.getTimelineFilterState();
+            const allUnchecked = !filter.timeEntries && !filter.absences && !filter.holidays;
+            if (allUnchecked) {
+                const msg = this.config.l10n?.selectAtLeastOneFilter || 'Select at least one type to display in the timeline.';
+                container.innerHTML = `
+                    <div class="timeline-empty" role="status" aria-live="polite">
+                        <p>${escapeHtml(msg)}</p>
+                    </div>
+                `;
+                return;
+            }
+            const entries = filter.timeEntries ? this._timelineData.timeEntries : [];
+            const absences = filter.absences ? this._timelineData.absences : [];
+            const holidays = filter.holidays ? this._timelineData.holidays : [];
+            this.renderTimeline(container, entries, absences, holidays);
+        },
+
         /**
          * Initialize timeline page
          */
         initTimeline: function() {
             const container = document.getElementById('timeline-container');
             if (!container) {
-                // Container not found, try again after a short delay
                 setTimeout(() => {
                     this.initTimeline();
                 }, 100);
                 return;
             }
+
+            this.restoreTimelineFilters();
 
             const refreshBtn = document.getElementById('btn-refresh-timeline');
             if (refreshBtn) {
@@ -1095,8 +1174,20 @@
                     this.loadTimeline();
                 });
             }
-            
-            // Load timeline data on page load
+
+            const bindFilter = (id) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('change', () => {
+                        this.persistTimelineFilters();
+                        this.applyTimelineFilters();
+                    });
+                }
+            };
+            bindFilter('timeline-filter-time-entries');
+            bindFilter('timeline-filter-absences');
+            bindFilter('timeline-filter-holidays');
+
             this.loadTimeline();
         },
 
@@ -1110,10 +1201,11 @@
             }
 
             // Show loading state
+            const loadingMsg = this.config.l10n?.loadingTimeline || 'Loading timeline...';
             container.innerHTML = `
                 <div class="timeline-loading">
                     <div class="loading-spinner"></div>
-                    <p>${this.config.l10n?.loadingTimeline || 'Loading timeline...'}</p>
+                    <p>${escapeHtml(loadingMsg)}</p>
                 </div>
             `;
 
@@ -1152,8 +1244,8 @@
                 });
 
                 if (allDates.length === 0) {
-                    // No timeline items; render as before without holidays
-                    this.renderTimeline(container, entries, abs);
+                    this._timelineData = { timeEntries: entries, absences: abs, holidays: [] };
+                    this.applyTimelineFilters();
                     return;
                 }
 
@@ -1165,14 +1257,15 @@
                 const startDateYmd = formatLocalDateYmd(start);
                 const endDateYmd = formatLocalDateYmd(end);
 
-                // Fetch holidays for the derived date range; failure must not break the timeline
                 this.fetchTimelineData(holidaysUrl, { start: startDateYmd, end: endDateYmd })
                     .then((holidaysResponse) => {
                         const holidays = Array.isArray(holidaysResponse && holidaysResponse.holidays) ? holidaysResponse.holidays : [];
-                        this.renderTimeline(container, entries, abs, holidays);
+                        this._timelineData = { timeEntries: entries, absences: abs, holidays };
+                        this.applyTimelineFilters();
                     })
                     .catch(() => {
-                        this.renderTimeline(container, entries, abs);
+                        this._timelineData = { timeEntries: entries, absences: abs, holidays: [] };
+                        this.applyTimelineFilters();
                     });
             }).catch((error) => {
                 const errMsg = error && error.message ? escapeHtml(error.message) : (this.config.l10n?.error || 'An error occurred');
@@ -1300,9 +1393,10 @@
             items.sort((a, b) => b.date - a.date);
 
             if (items.length === 0) {
+                const emptyMsg = this.config.l10n?.noTimelineData || 'No timeline data available';
                 container.innerHTML = `
-                    <div class="timeline-empty">
-                        <p>${this.config.l10n?.noTimelineData || 'No timeline data available'}</p>
+                    <div class="timeline-empty" role="status" aria-live="polite">
+                        <p>${escapeHtml(emptyMsg)}</p>
                     </div>
                 `;
                 return;

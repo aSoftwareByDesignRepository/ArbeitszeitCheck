@@ -63,6 +63,23 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
 
         <!-- Timeline Content -->
         <section class="section" aria-label="<?php p($l->t('Timeline of working time')); ?>">
+            <div id="timeline-filters" class="timeline-filters" role="group" aria-labelledby="timeline-filters-heading">
+                <h3 id="timeline-filters-heading" class="timeline-filters__title"><?php p($l->t('Show in timeline')); ?></h3>
+                <div class="timeline-filters__options">
+                    <label class="timeline-filters__option">
+                        <input type="checkbox" id="timeline-filter-time-entries" class="timeline-filters__checkbox" checked>
+                        <span class="timeline-filters__label"><?php p($l->t('Time Entries')); ?></span>
+                    </label>
+                    <label class="timeline-filters__option">
+                        <input type="checkbox" id="timeline-filter-absences" class="timeline-filters__checkbox" checked>
+                        <span class="timeline-filters__label"><?php p($l->t('Absences')); ?></span>
+                    </label>
+                    <label class="timeline-filters__option">
+                        <input type="checkbox" id="timeline-filter-holidays" class="timeline-filters__checkbox" checked>
+                        <span class="timeline-filters__label"><?php p($l->t('Holidays')); ?></span>
+                    </label>
+                </div>
+            </div>
             <div id="timeline-container" class="timeline-container">
                 <div class="timeline-loading">
                     <div class="loading-spinner"></div>
@@ -88,6 +105,11 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
     // L10n strings
     window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
     window.ArbeitszeitCheck.l10n.loadingTimeline = <?php echo json_encode($l->t('Loading timeline...'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.showInTimeline = <?php echo json_encode($l->t('Show in timeline'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.timeEntries = <?php echo json_encode($l->t('Time Entries'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.absences = <?php echo json_encode($l->t('Absences'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.holidays = <?php echo json_encode($l->t('Holidays'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.selectAtLeastOneFilter = <?php echo json_encode($l->t('Select at least one type to display in the timeline.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.noTimelineData = <?php echo json_encode($l->t('No timeline data available'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.error = <?php echo json_encode($l->t('An error occurred'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.months = <?php echo json_encode([

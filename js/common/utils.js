@@ -484,6 +484,7 @@ const ArbeitszeitCheckUtils = {
   // Timeline / calendar shared strings
   l10n.loadingTimeline = l10n.loadingTimeline || tt('Loading timeline...');
   l10n.noTimelineData = l10n.noTimelineData || tt('No timeline data available');
+  l10n.selectAtLeastOneFilter = l10n.selectAtLeastOneFilter || tt('Select at least one type to display in the timeline.');
   l10n.loadingCalendar = l10n.loadingCalendar || tt('Loading calendar...');
   l10n.noEntries = l10n.noEntries || tt('No entries for this day');
 
