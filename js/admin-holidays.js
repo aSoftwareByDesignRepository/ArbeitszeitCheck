@@ -10,7 +10,13 @@
     const Utils = window.ArbeitszeitCheckUtils || {};
     const Messaging = window.ArbeitszeitCheckMessaging || {};
 
+    let initialized = false;
+
     function init() {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
         bindEvents();
         loadExistingHolidays();
     }
@@ -131,6 +137,7 @@
         row.appendChild(dateCell);
         row.appendChild(nameCell);
         row.appendChild(typeCell);
+        row.appendChild(scopeCell);
         row.appendChild(actionsCell);
 
         tbody.appendChild(row);
@@ -150,6 +157,12 @@
         const scopeSelect = row.querySelector('select[name="scope"]');
 
         if (!dateInput || !nameInput || !typeSelect || !scopeSelect) {
+            const msg = window.t ? window.t('arbeitszeitcheck', 'Technischer Fehler: Pflichtfelder für den Feiertag konnten nicht gefunden werden.') : 'Technischer Fehler: Pflichtfelder für den Feiertag konnten nicht gefunden werden.';
+            if (Messaging && Messaging.showError) {
+                Messaging.showError(msg);
+            } else {
+                alert(msg);
+            }
             return;
         }
 
@@ -283,28 +296,49 @@
         const kindLabel = item.kind === 'half'
             ? (window.t ? window.t('arbeitszeitcheck', 'Halber Feiertag') : 'Halber Feiertag')
             : (window.t ? window.t('arbeitszeitcheck', 'Voller Feiertag') : 'Voller Feiertag');
-        typeCell.textContent = kindLabel;
+        const typeBadge = document.createElement('span');
+        typeBadge.className = 'admin-holidays-badge ' + (item.kind === 'half' ? 'admin-holidays-badge--half' : 'admin-holidays-badge--full');
+        typeBadge.textContent = kindLabel;
+        typeCell.appendChild(typeBadge);
 
         const scopeCell = document.createElement('td');
         let scopeLabel = '';
+        let scopeBadgeClass = 'admin-holidays-badge--custom';
         if (item.scope === 'statutory') {
             scopeLabel = window.t ? window.t('arbeitszeitcheck', 'Gesetzlich') : 'Gesetzlich';
+            scopeBadgeClass = 'admin-holidays-badge--statutory';
         } else if (item.scope === 'company') {
             scopeLabel = window.t ? window.t('arbeitszeitcheck', 'Firmenfeiertag') : 'Firmenfeiertag';
+            scopeBadgeClass = 'admin-holidays-badge--company';
         } else {
             scopeLabel = window.t ? window.t('arbeitszeitcheck', 'Benutzerdefiniert') : 'Benutzerdefiniert';
+            scopeBadgeClass = 'admin-holidays-badge--custom';
         }
-        scopeCell.textContent = scopeLabel;
+        const scopeBadge = document.createElement('span');
+        scopeBadge.className = 'admin-holidays-badge ' + scopeBadgeClass;
+        scopeBadge.textContent = scopeLabel;
+        scopeCell.appendChild(scopeBadge);
 
         const actionsCell = document.createElement('td');
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'btn btn--secondary btn--sm';
-        deleteBtn.textContent = window.t ? window.t('arbeitszeitcheck', 'Entfernen') : 'Entfernen';
-        Utils.on(deleteBtn, 'click', function() {
-            deleteHoliday(item.id, row);
-        });
-        actionsCell.appendChild(deleteBtn);
+        // Gesetzliche Feiertage sind nicht löschbar – kein Button anzeigen,
+        // um falsche Erwartungen zu vermeiden.
+        if (item.scope !== 'statutory') {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'btn btn--secondary btn--sm';
+            deleteBtn.textContent = window.t ? window.t('arbeitszeitcheck', 'Entfernen') : 'Entfernen';
+            if (window.t) {
+                const labelTemplate = window.t('arbeitszeitcheck', 'Feiertag {name} am {date} entfernen');
+                const ariaLabel = labelTemplate
+                    .replace('{name}', item.name || '')
+                    .replace('{date}', displayDate || '');
+                deleteBtn.setAttribute('aria-label', ariaLabel);
+            }
+            Utils.on(deleteBtn, 'click', function() {
+                deleteHoliday(item.id, row);
+            });
+            actionsCell.appendChild(deleteBtn);
+        }
 
         row.appendChild(dateCell);
         row.appendChild(nameCell);
@@ -364,9 +398,10 @@
         });
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
+    // Robust initialisierung: sowohl beim DOMContentLoaded-Event als auch,
+    // falls das Skript nach dem Laden des DOMs eingebunden wurde.
+    document.addEventListener('DOMContentLoaded', init);
+    if (document.readyState !== 'loading') {
         init();
     }
 })();

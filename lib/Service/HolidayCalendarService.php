@@ -532,9 +532,10 @@ class HolidayCalendarService
 		}
 
 		$name = $holiday->getName();
-		// Translate generated statutory holidays on the fly so that existing
-		// rows with English base names are also localized for the UI.
-		if ($holiday->getScope() === Holiday::SCOPE_STATUTORY && $holiday->getSource() === Holiday::SOURCE_GENERATED) {
+		// Statutory holidays are always run through the translator so that:
+		// - generated base-calendar entries with English names become localized
+		// - existing rows from older versions are also shown in the current UI language
+		if ($holiday->getScope() === Holiday::SCOPE_STATUTORY) {
 			$name = $this->l10n->t($name);
 		}
 

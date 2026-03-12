@@ -697,7 +697,23 @@ class AdminController extends Controller
 		try {
 			$this->migrateLegacyCompanyHolidaysIfNeeded();
 
+			// Support both traditional form-encoded requests and modern JSON bodies
 			$params = $this->request->getParams();
+			if ($params === [] || $params === null) {
+				$contentType = (string)$this->request->getHeader('Content-Type');
+				if (str_contains($contentType, 'application/json')) {
+					$raw = @file_get_contents('php://input');
+					if (is_string($raw) && $raw !== '') {
+						$decoded = json_decode($raw, true);
+						if (is_array($decoded)) {
+							$params = $decoded;
+						}
+					}
+				}
+				if (!is_array($params)) {
+					$params = [];
+				}
+			}
 			$id = isset($params['id']) ? (int)$params['id'] : 0;
 			$state = isset($params['state']) ? strtoupper(trim((string)$params['state'])) : '';
 			$date = isset($params['date']) ? trim((string)$params['date']) : '';
@@ -825,6 +841,15 @@ class AdminController extends Controller
 			try {
 				$existing = $this->holidayMapper->findById($id);
 				if ($existing !== null) {
+					// Gesetzliche Feiertage werden aus Gründen der Rechts- und
+					// Compliance-Sicherheit nicht mehr physisch gelöscht.
+					// Sie bilden den unveränderlichen gesetzlichen Referenzkalender.
+					if ($existing->getScope() === Holiday::SCOPE_STATUTORY) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Gesetzliche Feiertage können nicht gelöscht werden. Sie können stattdessen zusätzliche Firmen- oder benutzerdefinierte Feiertage anlegen.'),
+						], Http::STATUS_BAD_REQUEST);
+					}
 					$oldValues = $this->holidayToAuditValues($existing);
 					$state = $existing->getState();
 					$date = $existing->getDate();
