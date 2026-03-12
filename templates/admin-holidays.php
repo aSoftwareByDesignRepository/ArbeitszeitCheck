@@ -97,44 +97,48 @@ $currentYear = (int)date('Y');
                     </div>
 
                     <div class="section-content admin-holidays-filters" aria-label="<?php p($l->t('Kalenderauswahl')); ?>">
-                        <div class="form-group form-group--inline">
-                            <label for="holiday-state-select" class="form-label">
-                                <?php p($l->t('Bundesland')); ?>
-                            </label>
-                            <select id="holiday-state-select"
-                                    name="holidayState"
-                                    class="form-select">
-                                <?php foreach ($states as $code => $name): ?>
-                                    <?php $selected = $code === $defaultState ? ' selected' : ''; ?>
-                                    <option value="<?php p($code); ?>"<?php p($selected); ?>>
-                                        <?php p($l->t($name)); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                        <div class="admin-holidays-filters__controls">
+                            <div class="form-group form-group--inline">
+                                <label for="holiday-state-select" class="form-label">
+                                    <?php p($l->t('Bundesland')); ?>
+                                </label>
+                                <select id="holiday-state-select"
+                                        name="holidayState"
+                                        class="form-select">
+                                    <?php foreach ($states as $code => $name): ?>
+                                        <?php $selected = $code === $defaultState ? ' selected' : ''; ?>
+                                        <option value="<?php p($code); ?>"<?php p($selected); ?>>
+                                            <?php p($l->t($name)); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+
+                            <div class="form-group form-group--inline">
+                                <label for="holiday-year-select" class="form-label">
+                                    <?php p($l->t('Jahr')); ?>
+                                </label>
+                                <select id="holiday-year-select"
+                                        name="holidayYear"
+                                        class="form-select">
+                                    <?php for ($y = $currentYear - 1; $y <= $currentYear + 3; $y++): ?>
+                                        <option value="<?php p($y); ?>"<?php if ($y === $currentYear) { echo ' selected'; } ?>>
+                                            <?php p($y); ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
                         </div>
 
-                        <div class="form-group form-group--inline">
-                            <label for="holiday-year-select" class="form-label">
-                                <?php p($l->t('Jahr')); ?>
-                            </label>
-                            <select id="holiday-year-select"
-                                    name="holidayYear"
-                                    class="form-select">
-                                <?php for ($y = $currentYear - 1; $y <= $currentYear + 3; $y++): ?>
-                                    <option value="<?php p($y); ?>"<?php if ($y === $currentYear) { echo ' selected'; } ?>>
-                                        <?php p($y); ?>
-                                    </option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-
-                        <div class="form-group form-group--inline">
-                            <button type="button"
-                                    id="holiday-add-entry"
-                                    class="btn btn--primary"
-                                    aria-label="<?php p($l->t('Neuen Feiertag anlegen')); ?>">
-                                <?php p($l->t('Neuen Feiertag hinzufügen')); ?>
-                            </button>
+                        <div class="admin-holidays-filters__actions">
+                            <div class="form-group form-group--inline">
+                                <button type="button"
+                                        id="holiday-add-entry"
+                                        class="btn btn--primary"
+                                        aria-label="<?php p($l->t('Neuen Feiertag anlegen')); ?>">
+                                    <?php p($l->t('Neuen Feiertag hinzufügen')); ?>
+                                </button>
+                            </div>
                         </div>
                     </div>
 

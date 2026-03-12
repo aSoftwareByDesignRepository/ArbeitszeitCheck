@@ -226,6 +226,9 @@
         const url = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/state-holidays') +
             '?state=' + encodeURIComponent(state) + '&year=' + encodeURIComponent(String(year));
 
+        // Clear existing content
+        tbody.innerHTML = '';
+
         fetch(url, {
             method: 'GET',
             headers: {
@@ -234,15 +237,29 @@
         }).then(function(response) {
             return response.json();
         }).then(function(data) {
-            if (!data || !data.success || !Array.isArray(data.holidays)) {
+            if (!data || data.success !== true || !Array.isArray(data.holidays)) {
+                renderEmptyHolidaysRow(tbody);
+                if (Messaging && Messaging.showError) {
+                    const msg = window.t ? window.t('arbeitszeitcheck', 'Feiertage konnten nicht geladen werden.') : 'Feiertage konnten nicht geladen werden.';
+                    Messaging.showError(msg);
+                }
                 return;
             }
-            tbody.innerHTML = '';
+
+            if (data.holidays.length === 0) {
+                renderEmptyHolidaysRow(tbody);
+                return;
+            }
+
             data.holidays.forEach(function(item) {
                 appendExistingHolidayRow(tbody, item);
             });
         }).catch(function() {
-            // Silent fail; page remains usable
+            renderEmptyHolidaysRow(tbody);
+            if (Messaging && Messaging.showError) {
+                const msg = window.t ? window.t('arbeitszeitcheck', 'Feiertage konnten nicht geladen werden.') : 'Feiertage konnten nicht geladen werden.';
+                Messaging.showError(msg);
+            }
         });
     }
 
@@ -298,6 +315,17 @@
             row.setAttribute('data-id', String(item.id));
         }
 
+        tbody.appendChild(row);
+    }
+
+    function renderEmptyHolidaysRow(tbody) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 5;
+        cell.className = 'admin-holidays-empty';
+        cell.textContent = (window.t && window.t('arbeitszeitcheck', 'Keine Feiertage für dieses Jahr konfiguriert.')) ||
+            'Keine Feiertage für dieses Jahr konfiguriert.';
+        row.appendChild(cell);
         tbody.appendChild(row);
     }
 

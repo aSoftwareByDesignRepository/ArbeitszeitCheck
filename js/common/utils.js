@@ -331,11 +331,32 @@ const ArbeitszeitCheckUtils = {
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
-    if (days > 0) return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-    if (hours > 0) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-    if (minutes > 0) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
-    return 'Just now';
+
+    const replaceVars = (template, vars = {}) =>
+      template.replace(/\{(\w+)\}/g, (_, key) => (vars && key in vars ? vars[key] : `{${key}}`));
+
+    const tFn = (typeof window !== 'undefined' && typeof window.t === 'function')
+      ? (s, vars) => window.t('arbeitszeitcheck', s, vars || {})
+      : (s, vars) => replaceVars(s, vars);
+
+    const nFn = (typeof window !== 'undefined' && typeof window.n === 'function')
+      ? (singular, plural, count, vars) => window.n('arbeitszeitcheck', singular, plural, count, vars || {})
+      : (singular, plural, count, vars) => {
+        const template = count === 1 ? singular : plural;
+        const allVars = { count, ...(vars || {}) };
+        return replaceVars(template, allVars);
+      };
+
+    if (days > 0) {
+      return nFn('{count} day ago', '{count} days ago', days, { count: days });
+    }
+    if (hours > 0) {
+      return nFn('{count} hour ago', '{count} hours ago', hours, { count: hours });
+    }
+    if (minutes > 0) {
+      return nFn('{count} minute ago', '{count} minutes ago', minutes, { count: minutes });
+    }
+    return tFn('Just now');
   },
 
   // ===== STRING UTILITIES =====

@@ -158,10 +158,13 @@ class ManagerController extends Controller
 				'teams' => $teams,
 			]);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getManagedTeams: ' . $e->getMessage(), ['exception' => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::getManagedTeams',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.'),
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -238,8 +241,7 @@ class ManagerController extends Controller
 
 			// Redirect non-managers (no team, not admin) to dashboard
 			if (!$this->permissionService->canAccessManagerDashboard($managerId)) {
-				$urlGenerator = $this->urlGenerator;
-				$redirect = $urlGenerator->linkToRoute('arbeitszeitcheck.page.index');
+				$redirect = $this->urlGenerator->linkToRoute('arbeitszeitcheck.page.index');
 				return new \OCP\AppFramework\Http\RedirectResponse($redirect);
 			}
 
@@ -280,14 +282,32 @@ class ManagerController extends Controller
 				];
 			}
 
+			$showSubstitutionLink = false;
+			try {
+				$pending = $this->absenceMapper->findSubstitutePendingForUser($managerId, 1, 0);
+				$showSubstitutionLink = \is_array($pending) && \count($pending) > 0;
+			} catch (\Throwable $e) {
+				$showSubstitutionLink = false;
+			}
+
+			$isAdmin = $this->permissionService->isAdmin($managerId);
+
 			$response = new TemplateResponse('arbeitszeitcheck', 'manager-dashboard', [
 				'teamStats' => $teamStats,
 				'teamMembers' => $teamMembers,
 				'showManagerLink' => true,
+				'showSubstitutionLink' => $showSubstitutionLink,
+				'showReportsLink' => true,
+				'showAdminNav' => $isAdmin,
+				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::dashboard',
+				['exception' => $e]
+			);
 			$response = new TemplateResponse('arbeitszeitcheck', 'manager-dashboard', [
 				'teamStats' => [
 					'total_members' => 0,
@@ -297,7 +317,11 @@ class ManagerController extends Controller
 				],
 				'teamMembers' => [],
 				'showManagerLink' => true,
-				'error' => $e->getMessage(),
+				'showSubstitutionLink' => false,
+				'showReportsLink' => true,
+				'showAdminNav' => false,
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.'),
+				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
@@ -383,10 +407,13 @@ class ManagerController extends Controller
 				'total' => count($teamUserIds)
 			]);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::getTeamOverview',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -496,10 +523,13 @@ class ManagerController extends Controller
 				'total' => $total
 			]);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::getPendingApprovals',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -569,10 +599,13 @@ class ManagerController extends Controller
 				'compliance' => $complianceOverview
 			]);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::getTeamCompliance',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -637,10 +670,13 @@ class ManagerController extends Controller
 				'summary' => $summary
 			]);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::getTeamHoursSummary',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -654,7 +690,6 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function approveAbsence(int $absenceId, ?string $comment = null): JSONResponse
 	{
 		try {
@@ -679,10 +714,13 @@ class ManagerController extends Controller
 				'error' => $this->l10n->t('Absence not found')
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::approveAbsence: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::approveAbsence',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -696,7 +734,6 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function rejectAbsence(int $absenceId, ?string $comment = null): JSONResponse
 	{
 		try {
@@ -721,10 +758,13 @@ class ManagerController extends Controller
 				'error' => $this->l10n->t('Absence not found')
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::rejectAbsence: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::rejectAbsence',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -738,7 +778,6 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function approveTimeEntryCorrection(int $timeEntryId, ?string $comment = null): JSONResponse
 	{
 		try {
@@ -838,10 +877,13 @@ class ManagerController extends Controller
 				'error' => $this->l10n->t('Time entry not found')
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::approveTimeEntryCorrection: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::approveTimeEntryCorrection',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -855,7 +897,6 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function rejectTimeEntryCorrection(int $timeEntryId, ?string $reason = null): JSONResponse
 	{
 		try {
@@ -958,10 +999,13 @@ class ManagerController extends Controller
 				'error' => $this->l10n->t('Time entry not found')
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::rejectTimeEntryCorrection: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::rejectTimeEntryCorrection',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1034,10 +1078,13 @@ class ManagerController extends Controller
 				'corrections' => $corrections
 			]);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::getPendingTimeEntryCorrections',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1104,10 +1151,13 @@ class ManagerController extends Controller
 				'absences' => $calendarData
 			]);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ManagerController::getPendingApprovals: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::getTeamAbsenceCalendar',
+				['exception' => $e]
+			);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}

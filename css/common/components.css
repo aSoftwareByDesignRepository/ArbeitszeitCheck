@@ -899,6 +899,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 /* Modal */
 .modal {
   background-color: var(--arbeitszeitcheck-color-modal-background);
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text)));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2xl);
   max-width: 90vw;
@@ -1015,6 +1016,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 /* Modal Body */
 .modal-body {
   padding: var(--space-4);
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text)));
   overflow-y: auto;
   flex: 1;
 }

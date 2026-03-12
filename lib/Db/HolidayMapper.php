@@ -117,5 +117,33 @@ class HolidayMapper extends QBMapper
 
 		return $row !== false && $row !== null;
 	}
+
+	/**
+	 * Find a holiday by its primary ID.
+	 *
+	 * Implemented explicitly with QueryBuilder so that static analysis
+	 * does not need to know about QBMapper::find().
+	 */
+	public function findById(int $id): Holiday
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where(
+				$qb->expr()->eq(
+					'id',
+					$qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)
+				)
+			)
+			->setMaxResults(1);
+
+		/** @var Holiday|null $entity */
+		$entity = $this->findEntity($qb);
+		if ($entity === null) {
+			throw new \OCP\AppFramework\Db\DoesNotExistException('Holiday not found');
+		}
+
+		return $entity;
+	}
 }
 

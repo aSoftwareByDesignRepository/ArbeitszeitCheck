@@ -1,0 +1,41 @@
+/**
+ * Page-specific styling for Compliance Violations filters
+ *
+ * Makes the filter row look like a compact, modern toolbar and keeps it
+ * usable on small screens.
+ */
+
+#content.app-arbeitszeitcheck .compliance-violations__filters {
+  margin-bottom: var(--space-4);
+}
+
+#content.app-arbeitszeitcheck .compliance-violations__filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-end;
+}
+
+/* Inputs grow nicely, button keeps natural size */
+#content.app-arbeitszeitcheck .compliance-violations__filters-row .form-input,
+#content.app-arbeitszeitcheck .compliance-violations__filters-row .form-select {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+#content.app-arbeitszeitcheck .compliance-violations__filters-row #apply-filters {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 768px) {
+  #content.app-arbeitszeitcheck .compliance-violations__filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #content.app-arbeitszeitcheck .compliance-violations__filters-row #apply-filters {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

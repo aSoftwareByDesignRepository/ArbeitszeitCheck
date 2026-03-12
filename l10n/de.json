@@ -657,6 +657,10 @@
 		"Medium": "Mittel",
 		"High": "Hoch",
 		"Recent Violations": "Aktuelle Verstöße",
+		"Compliance violations list": "Liste der Compliance-Verstöße",
+		"What Happened": "Was ist passiert",
+		"All Severities": "Alle Schweregrade",
+		"Apply Filters": "Filter anwenden",
 		"Non-Compliant": "Nicht konform",
 		"Compliant": "Konform",
 		"Add Time Entry": "Zeiteintrag hinzufügen",
@@ -963,6 +967,7 @@
 		"What kind of report do you need?": "Welche Art von Bericht benötigen Sie?",
 		"First choose the scope above, then pick the type of report.": "Wählen Sie zuerst oben den Umfang aus und anschließend die Art des Berichts.",
 		"Generating report...": "Bericht wird erstellt...",
+		"Report generated successfully": "Bericht wurde erfolgreich erstellt",
 		"What information do you want in the report?": "Welche Informationen möchten Sie im Bericht?",
 		"The first day to include in the report. Click the calendar icon to pick a date. Example: If you want a report for January, select January 1st.": "Der erste Tag, der in den Bericht aufgenommen werden soll. Klicken Sie auf das Kalendersymbol, um ein Datum auszuwählen. Beispiel: Wenn Sie einen Bericht für Januar möchten, wählen Sie den 1. Januar.",
 		"The last day to include in the report. Click the calendar icon to pick a date. Example: If you want a report for January, select January 31st.": "Der letzte Tag, der in den Bericht aufgenommen werden soll. Klicken Sie auf das Kalendersymbol, um ein Datum auszuwählen. Beispiel: Wenn Sie einen Bericht für Januar möchten, wählen Sie den 31. Januar.",
@@ -1587,6 +1592,19 @@
 		"Break must be completely within your work period. Please adjust the break times.": "Die Pause muss vollständig in Ihrer Arbeitszeit liegen. Bitte passen Sie die Pausenzeiten an.",
 		"Break end time must be after break start time.": "Das Pausenende muss nach dem Pausenbeginn liegen.",
 		"Break must be at least 15 minutes long (ArbZG §4). Your break is {minutes} minutes.": "Pausen müssen mindestens 15 Minuten dauern (ArbZG §4). Ihre Pause beträgt {minutes} Minuten.",
-		"Break {a} and Break {b} overlap. Please adjust the break times so they do not overlap.": "Pause {a} und Pause {b} überschneiden sich. Bitte passen Sie die Pausenzeiten an."
+		"Break {a} and Break {b} overlap. Please adjust the break times so they do not overlap.": "Pause {a} und Pause {b} überschneiden sich. Bitte passen Sie die Pausenzeiten an.",
+		"_{count} day ago_::_{count} days ago_": [
+			"vor {count} Tag",
+			"vor {count} Tagen"
+		],
+		"_{count} hour ago_::_{count} hours ago_": [
+			"vor {count} Stunde",
+			"vor {count} Stunden"
+		],
+		"_{count} minute ago_::_{count} minutes ago_": [
+			"vor {count} Minute",
+			"vor {count} Minuten"
+		],
+		"Just now": "Gerade eben"
 	}
 }

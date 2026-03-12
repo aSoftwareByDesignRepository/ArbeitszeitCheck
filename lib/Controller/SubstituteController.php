@@ -15,6 +15,7 @@ namespace OCA\ArbeitszeitCheck\Controller;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -42,6 +43,7 @@ class SubstituteController extends Controller
 	private IUserManager $userManager;
 	private IURLGenerator $urlGenerator;
 	private IL10N $l10n;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		string $appName,
@@ -52,7 +54,8 @@ class SubstituteController extends Controller
 		IUserManager $userManager,
 		IURLGenerator $urlGenerator,
 		CSPService $cspService,
-		IL10N $l10n
+		IL10N $l10n,
+		PermissionService $permissionService
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
@@ -61,6 +64,7 @@ class SubstituteController extends Controller
 		$this->userManager = $userManager;
 		$this->urlGenerator = $urlGenerator;
 		$this->l10n = $l10n;
+		$this->permissionService = $permissionService;
 		$this->setCspService($cspService);
 	}
 
@@ -117,6 +121,11 @@ class SubstituteController extends Controller
 				'requests' => $items,
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				// Navigation flags
+				'showSubstitutionLink' => \count($requests) > 0,
+				'showManagerLink' => $this->permissionService->canAccessManagerDashboard($userId),
+				'showReportsLink' => $this->permissionService->canAccessManagerDashboard($userId) || $this->permissionService->isAdmin($userId),
+				'showAdminNav' => $this->permissionService->isAdmin($userId),
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {

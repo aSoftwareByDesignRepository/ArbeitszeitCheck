@@ -116,6 +116,7 @@ class ComplianceController extends Controller
 		Util::addStyle('arbeitszeitcheck', 'common/responsive');
 		Util::addStyle('arbeitszeitcheck', 'navigation');
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'compliance-violations');
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
@@ -143,11 +144,19 @@ class ComplianceController extends Controller
 				];
 			}
 
+			$isAdmin = $this->permissionService->isAdmin($userId);
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
+
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-dashboard', [
 				'complianceStatus' => $complianceStatus,
 				'recentViolations' => $violationsData,
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				// Navigation flags
+				'showSubstitutionLink' => false,
+				'showManagerLink' => $canAccessManagerDashboard,
+				'showReportsLink' => $canAccessManagerDashboard || $isAdmin,
+				'showAdminNav' => $isAdmin,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -163,6 +172,10 @@ class ComplianceController extends Controller
 				'urlGenerator' => $this->urlGenerator,
 				'error' => null,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -217,11 +230,18 @@ class ComplianceController extends Controller
 				];
 			}
 
+			$isAdmin = $this->permissionService->isAdmin($userId);
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
+
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-violations', [
 				'violations' => $violationsData,
 				'total' => count($violations),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => $canAccessManagerDashboard,
+				'showReportsLink' => $canAccessManagerDashboard || $isAdmin,
+				'showAdminNav' => $isAdmin,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -231,6 +251,10 @@ class ComplianceController extends Controller
 				'urlGenerator' => $this->urlGenerator,
 				'error' => $e->getMessage(),
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -290,6 +314,9 @@ class ComplianceController extends Controller
 				$reportData['by_severity'][$severity] = ($reportData['by_severity'][$severity] ?? 0) + 1;
 			}
 
+			$isAdmin = $this->permissionService->isAdmin($userId);
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
+
 			$response = new TemplateResponse(
 				'arbeitszeitcheck',
 				'compliance-reports',
@@ -300,6 +327,10 @@ class ComplianceController extends Controller
 					'endDate' => null,
 					'urlGenerator' => $this->urlGenerator,
 					'l' => $this->l10n,
+					'showSubstitutionLink' => false,
+					'showManagerLink' => $canAccessManagerDashboard,
+					'showReportsLink' => $canAccessManagerDashboard || $isAdmin,
+					'showAdminNav' => $isAdmin,
 				]
 			);
 			return $this->configureCSP($response);
@@ -316,6 +347,10 @@ class ComplianceController extends Controller
 				'urlGenerator' => $this->urlGenerator,
 				'error' => $e->getMessage(),
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}

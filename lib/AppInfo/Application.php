@@ -214,6 +214,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class),
 				$c->query(\OCP\IConfig::class),
 				$c->query(\OCP\ICacheFactory::class),
+				$c->query(\OCP\IL10N::class),
 				$c->query(\Psr\Log\LoggerInterface::class)
 			);
 		});

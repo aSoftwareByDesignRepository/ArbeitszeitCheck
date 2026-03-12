@@ -114,6 +114,49 @@ class PageController extends Controller
 	}
 
 	/**
+	 * Build common navigation flags for templates.
+	 *
+	 * @param string $userId
+	 * @return array{showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool}
+	 */
+	private function getNavigationFlags(string $userId): array
+	{
+		$showSubstitutionLink = false;
+		$showManagerLink = false;
+		$showReportsLink = false;
+		$showAdminNav = false;
+
+		// Substitution requests (link only when there is at least one pending request)
+		try {
+			$pending = $this->absenceMapper->findSubstitutePendingForUser($userId, 1, 0);
+			$showSubstitutionLink = \is_array($pending) && \count($pending) > 0;
+		} catch (\Throwable $e) {
+			$showSubstitutionLink = false;
+		}
+
+		// Manager / reports / admin visibility derived from permission service
+		try {
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
+			$isAdmin = $this->permissionService->isAdmin($userId);
+
+			$showManagerLink = $canAccessManagerDashboard;
+			$showReportsLink = $canAccessManagerDashboard || $isAdmin;
+			$showAdminNav = $isAdmin;
+		} catch (\Throwable $e) {
+			$showManagerLink = false;
+			$showReportsLink = false;
+			$showAdminNav = false;
+		}
+
+		return [
+			'showSubstitutionLink' => $showSubstitutionLink,
+			'showManagerLink' => $showManagerLink,
+			'showReportsLink' => $showReportsLink,
+			'showAdminNav' => $showAdminNav,
+		];
+	}
+
+	/**
 	 * Main index page - redirects to dashboard
 	 *
 	 */
@@ -150,6 +193,8 @@ class PageController extends Controller
 			// Check if this is a first-time user (no time entries yet)
 			$isFirstTimeUser = $timeEntryCount === 0;
 
+			$navFlags = $this->getNavigationFlags($userId);
+
 			$params = [
 				'status' => $status,
 				'overtime' => $overtimeData,
@@ -161,7 +206,7 @@ class PageController extends Controller
 				],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
-			];
+			] + $navFlags;
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'dashboard', $params);
 			return $this->configureCSP($response);
@@ -180,6 +225,10 @@ class PageController extends Controller
 				'error' => $errorMessage,
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -204,6 +253,8 @@ class PageController extends Controller
 			// Get compliance configuration for frontend validation
 			$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
 			$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
+
+			$navFlags = $this->getNavigationFlags($userId);
 			
 			$params = [
 				'entries' => $entries,
@@ -220,7 +271,7 @@ class PageController extends Controller
 				'complianceStrictMode' => $complianceStrictMode,
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
-			];
+			] + $navFlags;
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'time-entries', $params);
 			return $this->configureCSP($response);
@@ -236,6 +287,10 @@ class PageController extends Controller
 				'stats' => ['total_time_entries' => 0, 'entries_this_month' => 0, 'total_hours' => 0],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -304,6 +359,8 @@ class PageController extends Controller
 		$colleagueIds = $this->teamResolver->getColleagueIds($userId);
 		$hasColleagues = count($colleagueIds) > 0;
 
+		$navFlags = $this->getNavigationFlags($userId);
+
 		$params = [
 			'absences' => $absences,
 			'hasColleagues' => $hasColleagues,
@@ -326,7 +383,7 @@ class PageController extends Controller
 			],
 			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
-		];
+		] + $navFlags;
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'absences', $params);
 			return $this->configureCSP($response);
@@ -346,6 +403,10 @@ class PageController extends Controller
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0, 'vacation_days_remaining' => 0, 'pending_requests' => 0, 'days_taken_this_year' => 0],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -380,6 +441,8 @@ class PageController extends Controller
 			$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
 			$absenceCount = $this->absenceMapper->countByUser($userId);
 
+			$navFlags = $this->getNavigationFlags($userId);
+
 			$params = [
 				'stats' => [
 					'total_time_entries' => $timeEntryCount,
@@ -389,7 +452,7 @@ class PageController extends Controller
 				'isManager' => $isManager,
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
-			];
+			] + $navFlags;
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'reports', $params);
 			return $this->configureCSP($response);
@@ -406,6 +469,10 @@ class PageController extends Controller
 				'isManager' => false,
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -436,6 +503,8 @@ class PageController extends Controller
 			$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
 			$absenceCount = $this->absenceMapper->countByUser($userId);
 
+			$navFlags = $this->getNavigationFlags($userId);
+
 			$params = [
 				'currentMonth' => $currentMonth,
 				'stats' => [
@@ -444,7 +513,7 @@ class PageController extends Controller
 				],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
-			];
+			] + $navFlags;
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'calendar', $params);
 			return $this->configureCSP($response);
@@ -459,6 +528,10 @@ class PageController extends Controller
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -481,6 +554,8 @@ class PageController extends Controller
 		$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
 		$absenceCount = $this->absenceMapper->countByUser($userId);
 
+		$navFlags = $this->getNavigationFlags($userId);
+
 		$params = [
 			'stats' => [
 				'total_time_entries' => $timeEntryCount,
@@ -488,7 +563,7 @@ class PageController extends Controller
 			],
 			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
-		];
+		] + $navFlags;
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'timeline', $params);
 			return $this->configureCSP($response);
@@ -503,6 +578,10 @@ class PageController extends Controller
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -525,6 +604,8 @@ class PageController extends Controller
 		$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
 		$absenceCount = $this->absenceMapper->countByUser($userId);
 
+		$navFlags = $this->getNavigationFlags($userId);
+
 		$params = [
 			'stats' => [
 				'total_time_entries' => $timeEntryCount,
@@ -532,7 +613,7 @@ class PageController extends Controller
 			],
 			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
-		];
+		] + $navFlags;
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'settings', $params);
 			return $this->configureCSP($response);
@@ -547,6 +628,10 @@ class PageController extends Controller
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}

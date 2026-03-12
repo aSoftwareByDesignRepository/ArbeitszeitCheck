@@ -33,6 +33,7 @@ use OCA\ArbeitszeitCheck\Db\HolidayMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCP\ICacheFactory;
 use OCP\IConfig;
+use OCP\IL10N;
 use Psr\Log\LoggerInterface;
 
 class HolidayCalendarService
@@ -46,6 +47,9 @@ class HolidayCalendarService
 	/** @var IConfig */
 	private $config;
 
+	/** @var IL10N */
+	private $l10n;
+
 	/** @var LoggerInterface */
 	private $logger;
 
@@ -58,19 +62,54 @@ class HolidayCalendarService
 		'NI', 'NW', 'RP', 'SL', 'SN', 'ST', 'SH', 'TH',
 	];
 
+	/**
+	 * App config key that tracks which (state, year) combinations have already
+	 * been initialised from the base German public holiday calendar.
+	 *
+	 * Once a (state, year) is marked as initialised we NEVER auto-seed it
+	 * again, even if all holidays are later deleted from at_holidays. This
+	 * allows administrators to permanently remove statutory holidays without
+	 * them being recreated on the next read.
+	 */
+	private const INITIALIZED_CONFIG_KEY = 'holidays_initialized_state_years';
+
 	public function __construct(
 		HolidayMapper $holidayMapper,
 		UserSettingsMapper $userSettingsMapper,
 		IConfig $config,
 		ICacheFactory $cacheFactory,
+		IL10N $l10n,
 		LoggerInterface $logger
 	) {
 		$this->holidayMapper = $holidayMapper;
 		$this->userSettingsMapper = $userSettingsMapper;
 		$this->config = $config;
+		$this->l10n = $l10n;
 		$this->logger = $logger;
 		// Use a local app-specific cache namespace
 		$this->cache = $cacheFactory->createDistributed('arbeitszeitcheck_holidays');
+	}
+
+	/**
+	 * Build cache key for a given state/year combination.
+	 */
+	private function getCacheKey(string $state, int $year): string
+	{
+		return sprintf('holidays:%s:%d', $this->normalizeState($state), $year);
+	}
+
+	/**
+	 * Invalidate cached holidays for a given state/year.
+	 *
+	 * This is called from admin write operations so that changes to
+	 * holidays become visible immediately in the admin UI and services.
+	 */
+	public function clearCacheForStateYear(string $state, int $year): void
+	{
+		if ($this->cache === null) {
+			return;
+		}
+		$this->cache->remove($this->getCacheKey($state, $year));
 	}
 
 	/**
@@ -271,7 +310,7 @@ class HolidayCalendarService
 	{
 		$state = $this->normalizeState($state);
 
-		$cacheKey = sprintf('holidays:%s:%d', $state, $year);
+		$cacheKey = $this->getCacheKey($state, $year);
 		if ($this->cache !== null) {
 			$cached = $this->cache->get($cacheKey);
 			if (is_array($cached)) {
@@ -279,9 +318,14 @@ class HolidayCalendarService
 			}
 		}
 
-		// If no holidays for this state/year exist yet, seed statutory ones
-		if (!$this->holidayMapper->hasHolidaysForStateAndYear($state, $year)) {
-			$this->seedStatutoryHolidaysForStateAndYear($state, $year);
+		// Initialise from base calendar only once per state/year.
+		if (!$this->isYearInitialized($state, $year)) {
+			// For legacy data or tests there may already be entries; only seed
+			// when there are none at all for this state/year.
+			if (!$this->holidayMapper->hasHolidaysForStateAndYear($state, $year)) {
+				$this->seedStatutoryHolidaysForStateAndYear($state, $year);
+			}
+			$this->markYearInitialized($state, $year);
 		}
 
 		$entities = $this->holidayMapper->findByStateAndYear($state, $year);
@@ -314,7 +358,8 @@ class HolidayCalendarService
 		foreach ($base as $dateStr => $name) {
 			$holiday = new Holiday();
 			$holiday->setState($state);
-			$holiday->setName($name);
+			// Store a localized, human-readable name for statutory holidays.
+			$holiday->setName($this->l10n->t($name));
 			$holiday->setKind(Holiday::KIND_FULL);
 			$holiday->setScope(Holiday::SCOPE_STATUTORY);
 			$holiday->setSource(Holiday::SOURCE_GENERATED);
@@ -381,6 +426,40 @@ class HolidayCalendarService
 			$years[] = $y;
 		}
 		return $years;
+	}
+
+	/**
+	 * Check whether a given (state, year) has already been initialised from
+	 * the base German public holiday calendar.
+	 */
+	private function isYearInitialized(string $state, int $year): bool
+	{
+		$json = $this->config->getAppValue('arbeitszeitcheck', self::INITIALIZED_CONFIG_KEY, '[]');
+		$list = json_decode($json, true);
+		if (!is_array($list)) {
+			$list = [];
+		}
+		$key = sprintf('%s-%04d', $state, $year);
+		return in_array($key, $list, true);
+	}
+
+	/**
+	 * Mark a (state, year) combination as initialised so that we never
+	 * auto-seed it again, even if the at_holidays table becomes empty
+	 * for that state/year later.
+	 */
+	private function markYearInitialized(string $state, int $year): void
+	{
+		$json = $this->config->getAppValue('arbeitszeitcheck', self::INITIALIZED_CONFIG_KEY, '[]');
+		$list = json_decode($json, true);
+		if (!is_array($list)) {
+			$list = [];
+		}
+		$key = sprintf('%s-%04d', $state, $year);
+		if (!in_array($key, $list, true)) {
+			$list[] = $key;
+			$this->config->setAppValue('arbeitszeitcheck', self::INITIALIZED_CONFIG_KEY, json_encode($list));
+		}
 	}
 
 	/**
@@ -452,11 +531,18 @@ class HolidayCalendarService
 			$weight = 1.0;
 		}
 
+		$name = $holiday->getName();
+		// Translate generated statutory holidays on the fly so that existing
+		// rows with English base names are also localized for the UI.
+		if ($holiday->getScope() === Holiday::SCOPE_STATUTORY && $holiday->getSource() === Holiday::SOURCE_GENERATED) {
+			$name = $this->l10n->t($name);
+		}
+
 		return [
 			'id' => $holiday->getId(),
 			'state' => $holiday->getState(),
 			'date' => $date ? $date->format('Y-m-d') : null,
-			'name' => $holiday->getName(),
+			'name' => $name,
 			'kind' => $holiday->getKind(),
 			'scope' => $holiday->getScope(),
 			'source' => $holiday->getSource(),

@@ -24,6 +24,7 @@ use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Db\HolidayMapper;
 use OCA\ArbeitszeitCheck\Db\Holiday;
+use OCA\ArbeitszeitCheck\Service\HolidayCalendarService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -62,6 +63,7 @@ class AdminController extends Controller
 	private IUserSession $userSession;
 	private IURLGenerator $urlGenerator;
 	private HolidayMapper $holidayMapper;
+	private HolidayCalendarService $holidayCalendarService;
 
 	public function __construct(
 		string $appName,
@@ -81,7 +83,8 @@ class AdminController extends Controller
 		CSPService $cspService,
 		IL10N $l10n,
 		IURLGenerator $urlGenerator,
-		HolidayMapper $holidayMapper
+		HolidayMapper $holidayMapper,
+		HolidayCalendarService $holidayCalendarService
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -99,6 +102,7 @@ class AdminController extends Controller
 		$this->l10n = $l10n;
 		$this->urlGenerator = $urlGenerator;
 		$this->holidayMapper = $holidayMapper;
+		$this->holidayCalendarService = $holidayCalendarService;
 		$this->setCspService($cspService);
 	}
 
@@ -148,6 +152,24 @@ class AdminController extends Controller
 			'isDefault' => $model->getIsDefault(),
 			'createdAt' => $created ? $created->format('c') : null,
 			'updatedAt' => $updated ? $updated->format('c') : null,
+		];
+	}
+
+	/**
+	 * Convert Holiday entity to JSON-serializable array for audit log.
+	 */
+	private function holidayToAuditValues(Holiday $holiday): array
+	{
+		$date = $holiday->getDate();
+
+		return [
+			'id' => $holiday->getId(),
+			'state' => $holiday->getState(),
+			'date' => $date ? $date->format('Y-m-d') : null,
+			'name' => $holiday->getName(),
+			'kind' => $holiday->getKind(),
+			'scope' => $holiday->getScope(),
+			'source' => $holiday->getSource(),
 		];
 	}
 
@@ -226,7 +248,12 @@ class AdminController extends Controller
 					'unresolved_violations' => $unresolvedCount
 				],
 				'recent_violations' => $violationsData,
+				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => true,
+				'showAdminNav' => true,
 			]);
 			return $this->configureCSP($response, 'admin');
 		} catch (\Throwable $e) {
@@ -238,7 +265,12 @@ class AdminController extends Controller
 				],
 				'recent_violations' => [],
 				'error' => $e->getMessage(),
+				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => true,
+				'showAdminNav' => true,
 			]);
 			return $this->configureCSP($response, 'admin');
 		}
@@ -315,7 +347,12 @@ class AdminController extends Controller
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-users', [
 			'users' => $usersData,
 			'total' => $totalCount,
+			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => false,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
@@ -371,7 +408,12 @@ class AdminController extends Controller
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
 			'settings' => $settings,
+			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => false,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
@@ -416,6 +458,10 @@ class AdminController extends Controller
 			'defaultState' => $defaultState,
 			'urlGenerator' => $urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => false,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 
 		return $this->configureCSP($response, 'admin');
@@ -615,29 +661,18 @@ class AdminController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
-			$start = new \DateTime(sprintf('%04d-01-01', $year));
-			$end = new \DateTime(sprintf('%04d-12-31', $year));
-			$holidays = $this->holidayMapper->findByStateAndYear($state, $year);
+			$start = new \DateTimeImmutable(sprintf('%04d-01-01', $year));
+			$end = new \DateTimeImmutable(sprintf('%04d-12-31', $year));
 
-			$data = [];
-			foreach ($holidays as $holiday) {
-				$date = $holiday->getDate();
-				$data[] = [
-					'id' => $holiday->getId(),
-					'state' => $holiday->getState(),
-					'date' => $date ? $date->format('Y-m-d') : null,
-					'name' => $holiday->getName(),
-					'kind' => $holiday->getKind(),
-					'scope' => $holiday->getScope(),
-					'source' => $holiday->getSource(),
-				];
-			}
+			// Use HolidayCalendarService so that statutory holidays are
+			// automatically seeded for the requested state/year.
+			$dtoList = $this->holidayCalendarService->getHolidaysForRange($state, new \DateTime($start->format('Y-m-d')), new \DateTime($end->format('Y-m-d')));
 
 			return new JSONResponse([
 				'success' => true,
 				'state' => $state,
 				'year' => $year,
-				'holidays' => $data,
+				'holidays' => $dtoList,
 				'period' => [
 					'start' => $start->format('Y-m-d'),
 					'end' => $end->format('Y-m-d'),
@@ -692,8 +727,16 @@ class AdminController extends Controller
 			}
 
 			$holiday = new Holiday();
+			$oldValues = null;
 			if ($id > 0) {
 				$holiday->setId($id);
+				// Load existing holiday for audit log (best-effort).
+				try {
+					$existing = $this->holidayMapper->findById($id);
+					$oldValues = $this->holidayToAuditValues($existing);
+				} catch (\Throwable) {
+					$oldValues = null;
+				}
 			}
 			if ($holiday->getCreatedAt() === null) {
 				$holiday->setCreatedAt(new \DateTime());
@@ -716,9 +759,27 @@ class AdminController extends Controller
 
 			if ($id > 0) {
 				$holiday = $this->holidayMapper->update($holiday);
+				$action = 'state_holiday_updated';
 			} else {
 				$holiday = $this->holidayMapper->insert($holiday);
+				$action = 'state_holiday_created';
 			}
+
+			// Ensure subsequent reads see the updated set of holidays
+			$this->holidayCalendarService->clearCacheForStateYear($state, (int)$dateObj->format('Y'));
+
+			// Audit log
+			$newValues = $this->holidayToAuditValues($holiday);
+			$performedBy = $this->getPerformedBy();
+			$this->auditLogMapper->logAction(
+				$performedBy,
+				$action,
+				'state_holiday',
+				$holiday->getId(),
+				$oldValues,
+				$newValues,
+				$performedBy
+			);
 
 			return new JSONResponse([
 				'success' => true,
@@ -757,7 +818,45 @@ class AdminController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
+			// Resolve state/year before deletion so we can clear the cache precisely.
+			$state = '';
+			$year = null;
+			$oldValues = null;
+			try {
+				$existing = $this->holidayMapper->findById($id);
+				if ($existing !== null) {
+					$oldValues = $this->holidayToAuditValues($existing);
+					$state = $existing->getState();
+					$date = $existing->getDate();
+					if ($date !== null) {
+						$year = (int)$date->format('Y');
+					}
+				}
+			} catch (DoesNotExistException $e) {
+				// Idempotent delete: if the holiday is already gone, treat this
+				// as success to keep the admin UI robust and avoid confusing 404s.
+				return new JSONResponse([
+					'success' => true,
+				]);
+			}
+
 			$this->holidayMapper->deleteById($id);
+
+			if ($state !== '' && $year !== null) {
+				$this->holidayCalendarService->clearCacheForStateYear($state, $year);
+			}
+
+			// Audit log: deletion
+			$performedBy = $this->getPerformedBy();
+			$this->auditLogMapper->logAction(
+				$performedBy,
+				'state_holiday_deleted',
+				'state_holiday',
+				$id,
+				$oldValues,
+				null,
+				$performedBy
+			);
 
 			return new JSONResponse([
 				'success' => true,
@@ -907,7 +1006,12 @@ class AdminController extends Controller
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'working-time-models', [
 			'models' => $modelsData,
+			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => false,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
@@ -975,7 +1079,12 @@ class AdminController extends Controller
 			'total' => count($logs),
 			'startDate' => $startDate->format('d.m.Y'),
 			'endDate' => $endDate->format('d.m.Y'),
+			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => false,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
@@ -2232,11 +2341,13 @@ class AdminController extends Controller
 		Util::addScript('arbeitszeitcheck', 'common/messaging');
 		Util::addScript('arbeitszeitcheck', 'admin-teams');
 
-		$urlGenerator = \OCP\Server::get(\OCP\IURLGenerator::class);
-		$l = \OCP\Util::getL10N('arbeitszeitcheck');
 		return new TemplateResponse('arbeitszeitcheck', 'admin-teams', [
-			'urlGenerator' => $urlGenerator,
-			'l' => $l,
+			'urlGenerator' => $this->urlGenerator,
+			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => false,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 	}
 
