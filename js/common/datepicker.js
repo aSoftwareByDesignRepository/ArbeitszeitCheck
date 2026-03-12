@@ -123,6 +123,8 @@ function initializeDatepicker(input, options = {}) {
 			if (disabled) {
 				dayCell.style.opacity = '0.3';
 				dayCell.style.cursor = 'not-allowed';
+				dayCell.setAttribute('aria-disabled', 'true');
+				dayCell.setAttribute('tabindex', '-1');
 			} else {
 				dayCell.addEventListener('click', function () {
 					selectedDate = new Date(date);
@@ -172,7 +174,7 @@ function initializeDatepicker(input, options = {}) {
 		nextBtn.type = 'button';
 		nextBtn.innerHTML = '›';
 		nextBtn.style.cssText = 'background:none;border:none;font-size:20px;cursor:pointer;padding:4px 8px;color:var(--color-main-text);';
-		nextBtn.setAttribute('aria-label', 'Next month');
+		nextBtn.setAttribute('aria-label', t('Next month'));
 
 		const cal = document.createElement('div');
 		cal.className = 'arbeitszeitcheck-datepicker-calendar';
@@ -281,13 +283,27 @@ function initializeDatepicker(input, options = {}) {
 			convertISOToEuropean: convertISOToEuropean
 		};
 
+		function parseDateFromAttr(val) {
+			if (!val || val === 'today') return val === 'today' ? new Date() : null;
+			if (/^\d{2}\.\d{2}\.\d{4}$/.test(val)) {
+				var p = val.split('.');
+				return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+			}
+			if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return new Date(val);
+			return null;
+		}
+
 		function initAll() {
 			document.querySelectorAll('.datepicker-input').forEach(function (el) {
 				if (el.dataset.datepickerInit) return;
 				el.dataset.datepickerInit = '1';
 				var opts = {};
-				if (el.getAttribute('data-datepicker-min') === 'today') opts.minDate = new Date();
-				if (el.getAttribute('data-datepicker-max') === 'today') opts.maxDate = new Date();
+				var minVal = el.getAttribute('data-datepicker-min');
+				var maxVal = el.getAttribute('data-datepicker-max');
+				var minDate = minVal === 'today' ? new Date() : parseDateFromAttr(minVal);
+				var maxDate = maxVal === 'today' ? new Date() : parseDateFromAttr(maxVal);
+				if (minDate) opts.minDate = minDate;
+				if (maxDate) opts.maxDate = maxDate;
 				initializeDatepicker(el, opts);
 			});
 		}

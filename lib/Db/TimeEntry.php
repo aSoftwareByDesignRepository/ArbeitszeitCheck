@@ -53,6 +53,9 @@ use OCP\AppFramework\Db\Entity;
  */
 class TimeEntry extends Entity
 {
+	/** Max length for project_check_project_id (matches DB column) */
+	public const PROJECT_CHECK_PROJECT_ID_MAX_LENGTH = 64;
+
 	public const STATUS_ACTIVE = 'active';
 	public const STATUS_COMPLETED = 'completed';
 	public const STATUS_BREAK = 'break';

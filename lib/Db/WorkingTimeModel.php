@@ -105,7 +105,7 @@ class WorkingTimeModel extends Entity
             return null;
         }
 
-        return json_decode($this->breakRules, true);
+        return json_decode($this->breakRules, true) ?? [];
     }
 
     /**
@@ -129,7 +129,7 @@ class WorkingTimeModel extends Entity
             return null;
         }
 
-        return json_decode($this->overtimeRules, true);
+        return json_decode($this->overtimeRules, true) ?? [];
     }
 
     /**

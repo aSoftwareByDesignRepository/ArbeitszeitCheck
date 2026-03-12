@@ -47,34 +47,40 @@
         const formData = Utils.serializeForm(form);
 
         // Normalize requireSubstituteTypes[] to requireSubstituteTypes array for backend
-        if (formData['requireSubstituteTypes[]'] !== undefined) {
-            formData.requireSubstituteTypes = Array.isArray(formData['requireSubstituteTypes[]'])
-                ? formData['requireSubstituteTypes[]']
-                : [formData['requireSubstituteTypes[]']];
-            delete formData['requireSubstituteTypes[]'];
-        }
+        // Always send (empty array when none checked) so unchecked state is persisted
+        const raw = formData['requireSubstituteTypes[]'];
+        formData.requireSubstituteTypes = raw === undefined
+            ? []
+            : (Array.isArray(raw) ? raw : [raw]);
+        delete formData['requireSubstituteTypes[]'];
 
-        // Convert checkboxes to boolean (unchecked = not in form, so default false)
-        formData.autoComplianceCheck = formData.autoComplianceCheck === 'on' || formData.autoComplianceCheck === true;
-        formData.requireBreakJustification = formData.requireBreakJustification === 'on' || formData.requireBreakJustification === true;
-        formData.enableViolationNotifications = formData.enableViolationNotifications === 'on' || formData.enableViolationNotifications === true;
-        formData.sendIcalApprovedAbsences = formData.sendIcalApprovedAbsences === 'on' || formData.sendIcalApprovedAbsences === true;
-        formData.sendIcalToSubstitute = formData.sendIcalToSubstitute === 'on' || formData.sendIcalToSubstitute === true;
-        formData.sendIcalToManagers = formData.sendIcalToManagers === 'on' || formData.sendIcalToManagers === true;
+        // Convert checkboxes to boolean (unchecked = not in form; checked sends "on" or value e.g. "1")
+        function isChecked(v) { return v === 'on' || v === '1' || v === 1 || v === true; }
+        formData.autoComplianceCheck = isChecked(formData.autoComplianceCheck);
+        formData.realtimeComplianceCheck = isChecked(formData.realtimeComplianceCheck);
+        formData.complianceStrictMode = isChecked(formData.complianceStrictMode);
+        formData.enableViolationNotifications = isChecked(formData.enableViolationNotifications);
+        formData.sendIcalApprovedAbsences = isChecked(formData.sendIcalApprovedAbsences);
+        formData.sendIcalToSubstitute = isChecked(formData.sendIcalToSubstitute);
+        formData.sendIcalToManagers = isChecked(formData.sendIcalToManagers);
+        formData.statutoryAutoReseed = isChecked(formData.statutoryAutoReseed);
 
-        // Convert numbers
-        formData.maxDailyHours = parseFloat(formData.maxDailyHours);
-        formData.minRestPeriod = parseFloat(formData.minRestPeriod);
-        formData.defaultWorkingHours = parseFloat(formData.defaultWorkingHours);
-        formData.retentionPeriod = parseInt(formData.retentionPeriod);
+        // Convert numbers (use defaults on invalid/empty)
+        const num = (v, def) => { const n = parseFloat(v); return (Number.isFinite(n) ? n : def); };
+        const int = (v, def) => { const n = parseInt(String(v), 10); return (Number.isInteger(n) ? n : def); };
+        formData.maxDailyHours = num(formData.maxDailyHours, 10);
+        formData.minRestPeriod = num(formData.minRestPeriod, 11);
+        formData.defaultWorkingHours = num(formData.defaultWorkingHours, 8);
+        formData.retentionPeriod = int(formData.retentionPeriod, 2);
 
         // Validate
         if (!validateForm(formData)) {
             return;
         }
 
-        // Submit
-        Utils.ajax('/apps/arbeitszeitcheck/api/admin/settings', {
+        // Submit (use server-generated URL for subpath compatibility)
+        const apiUrl = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminSettingsApiUrl) || '/apps/arbeitszeitcheck/api/admin/settings';
+        Utils.ajax(apiUrl, {
             method: 'POST',
             data: formData,
             onSuccess: function(data) {

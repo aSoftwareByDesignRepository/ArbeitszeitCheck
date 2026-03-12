@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.3 – 2025-03-12
+
+### Fixed
+
+- Admin holidays and settings: use English source strings for translation keys (correct l10n behaviour)
+- UserDeletedListener: inject TeamMemberMapper and TeamManagerMapper instead of OC
+- XSS: sanitise team names in admin-teams.js (aria-label, data-team-name)
+
+### Changed
+
+- Added Constants.php for magic numbers (limits, timeouts)
+- Replaced raw exception messages with user-facing messages
+
 ## 1.1.2 – 2025-03-07
 
 ### Changed

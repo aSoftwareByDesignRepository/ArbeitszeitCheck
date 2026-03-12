@@ -2044,6 +2044,14 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 /* ===== SUBSTITUTION REQUESTS (Vertretungs-Freigabe) ===== */
 .substitution-requests-page .substitution-requests__header {
   margin-bottom: var(--space-6);
+  padding: var(--space-6);
+  background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background));
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+}
+
+.substitution-requests-page .substitution-requests__list {
+  padding: var(--space-6);
 }
 
 .substitution-requests__title {
@@ -2075,11 +2083,16 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 }
 
 .substitution-request-card {
-  background: var(--arbeitszeitcheck-color-background-card, var(--color-main-background));
+  background: var(--arbeitszeitcheck-color-background-card, var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background)));
   border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
-  border-radius: var(--radius-base);
-  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
   box-shadow: var(--arbeitszeitcheck-shadow-subtle);
+  transition: box-shadow 0.2s ease;
+}
+
+.substitution-request-card:focus-within {
+  box-shadow: 0 0 0 2px var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
 }
 
 .substitution-request-card__body {

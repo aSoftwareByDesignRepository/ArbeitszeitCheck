@@ -1,0 +1,187 @@
+/**
+ * Admin settings page styles
+ * Clear section hierarchy, WCAG 2.1 AA, responsive
+ *
+ * @copyright Copyright (c) 2024, Nextcloud GmbH
+ * @license AGPL-3.0-or-later
+ */
+
+/* ===== PAGE LAYOUT ===== */
+#admin-settings-form {
+  max-width: 52rem;
+}
+
+.admin-settings-form .section-header {
+  margin-bottom: var(--space-8, 2rem);
+}
+
+.admin-settings-form .section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-2, 0.5rem);
+  color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+}
+
+.admin-settings-form .section-header p {
+  margin: 0;
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast));
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* ===== SECTION CARDS ===== */
+/* Clear visual separation, easy to identify sections, WCAG 2.1 AA */
+.admin-settings-section {
+  margin-bottom: var(--space-8, 2rem);
+  padding: var(--space-6, 1.5rem);
+  background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover));
+  border-radius: var(--border-radius, 8px);
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+}
+
+
+.admin-settings-section:last-of-type {
+  margin-bottom: var(--space-6, 1.5rem);
+}
+
+.admin-settings-section__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-4, 1rem);
+  padding-bottom: var(--space-3, 0.75rem);
+  color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+  border-bottom: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+}
+
+/* ===== FORM GROUPS ===== */
+#admin-settings-form .form-group {
+  margin-bottom: var(--space-5, 1.25rem);
+}
+
+#admin-settings-form .form-group:last-child {
+  margin-bottom: 0;
+}
+
+#admin-settings-form .form-help {
+  margin-top: var(--space-1, 0.25rem);
+  margin-left: 0;
+  font-size: 0.875rem;
+  color: var(--arbeitszeitcheck-color-text-lighter, var(--color-text-lighter));
+  line-height: 1.45;
+}
+
+/* ===== CHECKBOXES — WCAG 2.1 AA: min 44×44px touch target ===== */
+#admin-settings-form .form-checkbox,
+#admin-settings-form .checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3, 0.75rem);
+  min-height: 2.75rem;
+  padding: var(--space-1, 0.25rem) 0;
+}
+
+#admin-settings-form .form-checkbox input[type="checkbox"],
+#admin-settings-form .checkbox input[type="checkbox"] {
+  flex-shrink: 0;
+  margin: 0.375rem 0 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+}
+
+#admin-settings-form .form-checkbox .form-label,
+#admin-settings-form .checkbox .form-label,
+#admin-settings-form .form-checkbox label,
+#admin-settings-form .checkbox label {
+  margin: 0;
+  flex: 1;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+}
+
+/* ===== FIELDSETS ===== */
+#admin-settings-form .form-fieldset {
+  margin: var(--space-5, 1.25rem) 0;
+  padding: var(--space-4, 1rem);
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+  border-radius: var(--border-radius, 6px);
+  background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background));
+}
+
+#admin-settings-form .form-legend {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0 var(--space-2, 0.5rem);
+  color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+}
+
+#admin-settings-form .form-help--block {
+  margin-bottom: var(--space-4, 1rem);
+}
+
+/* Require substitute types: grid for compact layout ===== */
+#admin-settings-form .form-fieldset[aria-labelledby="require-substitute-legend"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 0.75rem);
+}
+
+#admin-settings-form .form-fieldset[aria-labelledby="require-substitute-legend"] .form-group--inline {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+#admin-settings-form .form-fieldset[aria-labelledby="require-substitute-legend"] .form-group--inline .form-checkbox {
+  width: 100%;
+}
+
+/* ===== INPUTS ===== */
+#admin-settings-form .form-input,
+#admin-settings-form .form-select {
+  min-width: 0;
+  max-width: 12rem;
+}
+
+/* ===== CARD ACTIONS ===== */
+.admin-settings-form .card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 0.75rem);
+  margin-top: var(--space-6, 1.5rem);
+  padding-top: var(--space-6, 1.5rem);
+  border-top: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+}
+
+.admin-settings-form .card-actions .btn {
+  min-height: 2.75rem;
+  padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
+  font-weight: 500;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 600px) {
+  .admin-settings-section {
+    padding: var(--space-4, 1rem);
+  }
+
+  #admin-settings-form .form-input,
+  #admin-settings-form .form-select {
+    max-width: 100%;
+  }
+
+  .admin-settings-form .card-actions {
+    flex-direction: column;
+  }
+
+  .admin-settings-form .card-actions .btn {
+    width: 100%;
+  }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  .admin-settings-form .btn {
+    transition: none;
+  }
+}

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
@@ -24,6 +25,7 @@ use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IUserSession;
 use OCP\IUserManager;
@@ -45,6 +47,7 @@ class AbsenceController extends Controller
 	private IURLGenerator $urlGenerator;
 	private IUserManager $userManager;
 	private IL10N $l10n;
+	private IConfig $config;
 
 	public function __construct(
 		string $appName,
@@ -57,7 +60,8 @@ class AbsenceController extends Controller
 		IURLGenerator $urlGenerator,
 		IUserManager $userManager,
 		CSPService $cspService,
-		IL10N $l10n
+		IL10N $l10n,
+		IConfig $config
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
@@ -68,12 +72,24 @@ class AbsenceController extends Controller
 		$this->urlGenerator = $urlGenerator;
 		$this->userManager = $userManager;
 		$this->l10n = $l10n;
+		$this->config = $config;
 		$this->setCspService($cspService);
 	}
 
 	/**
+	 * Absence types for which a substitute must be designated (from admin config).
+	 *
+	 * @return string[]
+	 */
+	private function getRequireSubstituteTypes(): array
+	{
+		$json = $this->config->getAppValue('arbeitszeitcheck', 'require_substitute_types', '[]');
+		$arr = json_decode($json, true);
+		return is_array($arr) ? $arr : [];
+	}
+
+	/**
 	 * Whether the request expects a JSON response (AJAX/API).
-	 * When false, success responses use redirect instead of JSON so the user never sees raw JSON.
 	 *
 	 * @return bool
 	 */
@@ -111,7 +127,7 @@ class AbsenceController extends Controller
 	}
 
 	/**
-	 * API: Get absence by ID (delegates to show)
+	 * API: Get absence by ID (JSON)
 	 *
 	 * @param int $id Absence ID
 	 * @return JSONResponse
@@ -119,7 +135,27 @@ class AbsenceController extends Controller
 	#[NoAdminRequired]
 	public function apiShow(int $id): JSONResponse
 	{
-		return $this->show($id);
+		try {
+			$userId = $this->getUserId();
+			$absence = $this->absenceService->getAbsence($id, $userId);
+
+			if (!$absence) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Absence not found')
+				], Http::STATUS_NOT_FOUND);
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'absence' => $absence->getSummary()
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_BAD_REQUEST);
+		}
 	}
 
 	/**
@@ -157,6 +193,112 @@ class AbsenceController extends Controller
 	}
 
 	/**
+	 * Cancel absence (set status to cancelled without deleting record).
+	 *
+	 * This is intended for employees to cancel their own future absences.
+	 * The underlying service enforces that:
+	 * - only the owner can cancel their own absences, and
+	 * - the absence has not started yet.
+	 *
+	 * When called via form POST (e.g. from absence details page), redirects to
+	 * absences list. When called via API with Accept: application/json, returns JSON.
+	 *
+	 * @param int $id Absence ID
+	 * @return JSONResponse|RedirectResponse
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function cancel(int $id): JSONResponse|RedirectResponse
+	{
+		try {
+			$userId = $this->getUserId();
+			$absence = $this->absenceService->cancelAbsence($id, $userId);
+
+			if (!$this->wantsJson()) {
+				$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.page.absences') . '?cancelled=1';
+				return new RedirectResponse($url, Http::STATUS_SEE_OTHER);
+			}
+			return new JSONResponse([
+				'success' => true,
+				'absence' => $absence->getSummary()
+			]);
+		} catch (\Throwable $e) {
+			if (!$this->wantsJson()) {
+				$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.page.absences') . '?error=' . rawurlencode($this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'));
+				return new RedirectResponse($url, Http::STATUS_SEE_OTHER);
+			}
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_BAD_REQUEST);
+		}
+	}
+
+	/**
+	 * API: Shorten absence (early return). Accepts JSON or form-encoded end_date.
+	 *
+	 * @param int $id Absence ID
+	 * @return JSONResponse
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function shorten(int $id): JSONResponse
+	{
+		$params = $this->request->getParams();
+		$endDate = isset($params['end_date']) ? trim((string)$params['end_date']) : '';
+
+		if ($endDate === '') {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('New end date is required.')
+			], Http::STATUS_BAD_REQUEST);
+		}
+
+		try {
+			$userId = $this->getUserId();
+			$absence = $this->absenceService->shortenAbsence($id, $userId, $endDate);
+
+			return new JSONResponse([
+				'success' => true,
+				'absence' => $absence->getSummary()
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_BAD_REQUEST);
+		}
+	}
+
+	/**
+	 * Form POST: Shorten absence (early return). Redirects back to show page.
+	 *
+	 * @param int $id Absence ID
+	 * @return RedirectResponse|TemplateResponse
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function shortenForm(int $id)
+	{
+		$endDate = trim((string)($this->request->getParam('end_date') ?? ''));
+
+		if ($endDate === '') {
+			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
+			return new RedirectResponse($url . '?shorten_error=' . rawurlencode($this->l10n->t('New end date is required.')), Http::STATUS_SEE_OTHER);
+		}
+
+		try {
+			$userId = $this->getUserId();
+			$this->absenceService->shortenAbsence($id, $userId, $endDate);
+			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
+			return new RedirectResponse($url . '?shortened=1', Http::STATUS_SEE_OTHER);
+		} catch (\Throwable $e) {
+			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
+			return new RedirectResponse($url . '?shorten_error=' . rawurlencode($this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')), Http::STATUS_SEE_OTHER);
+		}
+	}
+
+	/**
 	 * Legacy API: Get absences (alias for index)
 	 *
 	 * Legacy endpoint for backward compatibility. Delegates to the index() method.
@@ -169,7 +311,7 @@ class AbsenceController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
-	public function index_api(?string $status = null, ?string $type = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
+	public function index_api(?string $status = null, ?string $type = null, ?int $limit = Constants::DEFAULT_LIST_LIMIT, ?int $offset = 0): JSONResponse
 	{
 		return $this->index($status, $type, $limit, $offset);
 	}
@@ -185,11 +327,11 @@ class AbsenceController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
-	public function index(?string $status = null, ?string $type = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
+	public function index(?string $status = null, ?string $type = null, ?int $limit = Constants::DEFAULT_LIST_LIMIT, ?int $offset = 0): JSONResponse
 	{
 		try {
 			$userId = $this->getUserId();
-			$limit = $limit !== null ? min(max(1, (int)$limit), 500) : 25;
+			$limit = $limit !== null ? min(max(1, (int)$limit), Constants::MAX_LIST_LIMIT) : Constants::DEFAULT_LIST_LIMIT;
 			$offset = $offset !== null ? max(0, (int)$offset) : 0;
 			$filters = [];
 
@@ -220,7 +362,7 @@ class AbsenceController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -237,6 +379,7 @@ class AbsenceController extends Controller
 		$userId = $this->getUserId();
 		$colleagueIds = $this->teamResolver->getColleagueIds($userId);
 		$hasColleagues = count($colleagueIds) > 0;
+		$requireSubstituteTypes = $this->getRequireSubstituteTypes();
 
 		$response = new TemplateResponse(
 			$this->appName,
@@ -247,6 +390,7 @@ class AbsenceController extends Controller
 				'absence' => null,
 				'absences' => [],
 				'hasColleagues' => $hasColleagues,
+				'requireSubstituteTypes' => $requireSubstituteTypes,
 				'stats' => [],
 				'currentUserId' => $userId,
 				'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
@@ -277,7 +421,7 @@ class AbsenceController extends Controller
 					'absences',
 					[
 						'urlGenerator' => $this->urlGenerator,
-						'error' => 'Absence not found',
+						'error' => $this->l10n->t('Absence not found'),
 						'l' => $this->l10n,
 					],
 					'blank'
@@ -288,6 +432,7 @@ class AbsenceController extends Controller
 			$userId = $this->getUserId();
 			$colleagueIds = $this->teamResolver->getColleagueIds($userId);
 			$hasColleagues = count($colleagueIds) > 0;
+			$requireSubstituteTypes = $this->getRequireSubstituteTypes();
 
 			$response = new TemplateResponse(
 				$this->appName,
@@ -298,6 +443,7 @@ class AbsenceController extends Controller
 					'absence' => $absence,
 					'absences' => [],
 					'hasColleagues' => $hasColleagues,
+					'requireSubstituteTypes' => $requireSubstituteTypes,
 					'stats' => [],
 					'currentUserId' => $userId,
 					'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
@@ -325,7 +471,7 @@ class AbsenceController extends Controller
 				'absences',
 				[
 					'urlGenerator' => $this->urlGenerator,
-					'error' => $e->getMessage(),
+					'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 					'l' => $this->l10n,
 				],
 				'blank'
@@ -335,34 +481,79 @@ class AbsenceController extends Controller
 	}
 
 	/**
-	 * Get absence by ID endpoint
+	 * Get absence details page (HTML view)
 	 *
 	 * @param int $id Absence ID
-	 * @return JSONResponse
+	 * @return TemplateResponse
 	 */
 	#[NoAdminRequired]
-	public function show(int $id): JSONResponse
+	#[NoCSRFRequired]
+	public function show(int $id): TemplateResponse
 	{
 		try {
 			$userId = $this->getUserId();
 			$absence = $this->absenceService->getAbsence($id, $userId);
 
 			if (!$absence) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Absence not found')
-				], Http::STATUS_NOT_FOUND);
+				$response = new TemplateResponse(
+					$this->appName,
+					'absences',
+					[
+						'urlGenerator' => $this->urlGenerator,
+						'error' => $this->l10n->t('Absence not found'),
+						'l' => $this->l10n,
+					],
+					'blank'
+				);
+				return $this->configureCSP($response);
 			}
 
-			return new JSONResponse([
-				'success' => true,
-				'absence' => $absence->getSummary()
-			]);
+			$colleagueIds = $this->teamResolver->getColleagueIds($userId);
+			$hasColleagues = count($colleagueIds) > 0;
+
+			$substituteDisplayName = null;
+			$subId = $absence->getSubstituteUserId();
+			if ($subId !== null && $subId !== '') {
+				$subUser = $this->userManager->get($subId);
+				$substituteDisplayName = $subUser !== null ? $subUser->getDisplayName() : $subId;
+			}
+
+			// Precompute working days when days=NULL (HolidayCalendarService, state-aware)
+			$displayDays = $absence->getDays() !== null
+				? (float)$absence->getDays()
+				: $this->absenceService->getWorkingDaysForDisplay($absence);
+
+			$response = new TemplateResponse(
+				$this->appName,
+				'absences',
+				[
+					'urlGenerator' => $this->urlGenerator,
+					'mode' => 'view',
+					'absence' => $absence,
+					'displayDays' => $displayDays,
+					'computedWorkingDays' => [],
+					'absences' => [],
+					'hasColleagues' => $hasColleagues,
+					'substituteDisplayName' => $substituteDisplayName,
+					'stats' => [],
+					'currentUserId' => $userId,
+					'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
+					'l' => $this->l10n,
+				]
+			);
+			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
-			return new JSONResponse([
-				'success' => false,
-				'error' => $e->getMessage()
-			], Http::STATUS_BAD_REQUEST);
+			$response = new TemplateResponse(
+				$this->appName,
+				'absences',
+				[
+					'urlGenerator' => $this->urlGenerator,
+					'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+					'l' => $this->l10n,
+				],
+				'blank'
+			);
+			return $this->configureCSP($response);
 		}
 	}
 
@@ -421,7 +612,7 @@ class AbsenceController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -493,7 +684,7 @@ class AbsenceController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -518,7 +709,7 @@ class AbsenceController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -559,7 +750,7 @@ class AbsenceController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -600,7 +791,7 @@ class AbsenceController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_BAD_REQUEST);
 		}
 	}
@@ -638,7 +829,7 @@ class AbsenceController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -675,7 +866,7 @@ class AbsenceController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AbsenceController::stats: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}

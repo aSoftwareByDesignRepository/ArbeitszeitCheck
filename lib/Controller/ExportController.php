@@ -15,6 +15,7 @@ use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Service\DatevExportService;
+use OCA\ArbeitszeitCheck\Constants;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -83,6 +84,20 @@ class ExportController extends Controller
 				$start->modify('-30 days');
 			}
 			$start->setTime(0, 0, 0);
+
+			if ($start > $end) {
+				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+			}
+
+			// Enforce max date range to prevent heavy queries
+			$diff = $end->diff($start);
+			$days = (int) $diff->format('%a');
+			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+				throw new \Exception($this->l10n->t(
+					'Export date range must not exceed %d days. Please narrow the range.',
+					[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
+				));
+			}
 
 			// Get time entries from database
 			$entries = $this->timeEntryMapper->findByUserAndDateRange($userId, $start, $end);
@@ -161,6 +176,20 @@ class ExportController extends Controller
 			$start->setTime(0, 0, 0);
 			$end->setTime(23, 59, 59);
 
+			if ($start > $end) {
+				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+			}
+
+			// Enforce max date range to prevent heavy queries
+			$diff = $end->diff($start);
+			$days = (int) $diff->format('%a');
+			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+				throw new \Exception($this->l10n->t(
+					'Export date range must not exceed %d days. Please narrow the range.',
+					[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
+				));
+			}
+
 			// Get absences from database
 			$absences = $this->absenceMapper->findByUserAndDateRange($userId, $start, $end);
 
@@ -232,6 +261,20 @@ class ExportController extends Controller
 				$start->modify('-30 days');
 			}
 			$start->setTime(0, 0, 0);
+
+			if ($start > $end) {
+				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+			}
+
+			// Enforce max date range to prevent heavy queries
+			$diff = $end->diff($start);
+			$days = (int) $diff->format('%a');
+			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+				throw new \Exception($this->l10n->t(
+					'Export date range must not exceed %d days. Please narrow the range.',
+					[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
+				));
+			}
 
 			// Get compliance violations for user from database
 			$violations = $this->violationMapper->findByDateRange($start, $end, $userId);
@@ -390,6 +433,20 @@ class ExportController extends Controller
 				$start->modify('-30 days');
 			}
 			$start->setTime(0, 0, 0);
+
+			if ($start > $end) {
+				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+			}
+
+			// Enforce max date range to prevent heavy queries
+			$diff = $end->diff($start);
+			$days = (int) $diff->format('%a');
+			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+				throw new \Exception($this->l10n->t(
+					'Export date range must not exceed %d days. Please narrow the range.',
+					[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
+				));
+			}
 
 			// Use the existing DATEV export method
 			return $this->exportAsDatev($userId, $start, $end);

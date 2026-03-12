@@ -71,7 +71,7 @@
   display: flex;
   color: var(--color-main-text);
   flex-direction: column;
-  gap: 0;
+  gap: var(--space-8);
   box-sizing: border-box;
 }
 
@@ -174,7 +174,7 @@
 /* ===== SECTIONS (clear, easy-to-identify blocks — simple UX, WCAG 2.1 AA) ===== */
 
 #app-content-wrapper>.section {
-  margin-bottom: 0px;
+  margin-bottom: 0;
   padding: var(--space-8) var(--space-8);
   border-radius: var(--radius-2xl);
   border: 1px solid var(--arbeitszeitcheck-color-border);

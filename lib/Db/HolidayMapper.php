@@ -93,8 +93,52 @@ class HolidayMapper extends QBMapper
 	}
 
 	/**
+	 * Check whether a holiday exists for the given state, date and scope
+	 * (avoids duplicate inserts when seeding; used for idempotent statutory seed).
+	 */
+	public function existsForStateDateScope(string $state, string $dateYmd, string $scope): bool
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->createFunction('1'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter($state)))
+			->andWhere($qb->expr()->eq('date', $qb->createNamedParameter($dateYmd)))
+			->andWhere($qb->expr()->eq('scope', $qb->createNamedParameter($scope)))
+			->setMaxResults(1);
+		$cursor = $qb->executeQuery();
+		$row = $cursor->fetchOne();
+		$cursor->closeCursor();
+		return $row !== false && $row !== null;
+	}
+
+	/**
+	 * Check whether at least one statutory holiday exists for a state/year
+	 * (used to decide if statutory seeding is needed; company holidays alone
+	 * do not imply statutory holidays have been seeded).
+	 */
+	public function hasStatutoryHolidaysForStateAndYear(string $state, int $year): bool
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->createFunction('1'))
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter($state)))
+			->andWhere($qb->expr()->eq('scope', $qb->createNamedParameter(Holiday::SCOPE_STATUTORY)))
+			->andWhere(
+				$qb->expr()->andX(
+					$qb->expr()->gte('date', $qb->createNamedParameter(sprintf('%04d-01-01', $year))),
+					$qb->expr()->lte('date', $qb->createNamedParameter(sprintf('%04d-12-31', $year)))
+				)
+			)
+			->setMaxResults(1);
+		$cursor = $qb->executeQuery();
+		$row = $cursor->fetchOne();
+		$cursor->closeCursor();
+		return $row !== false && $row !== null;
+	}
+
+	/**
 	 * Check whether at least one holiday definition exists for a state/year
-	 * combination (used to decide if seeding from the base calendar is needed).
+	 * combination (kept for backward compatibility).
 	 */
 	public function hasHolidaysForStateAndYear(string $state, int $year): bool
 	{

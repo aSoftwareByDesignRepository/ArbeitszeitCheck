@@ -122,7 +122,7 @@ $currentMonth = $_['currentMonth'] ?? date('Y-m');
                     <div class="legend-item" role="listitem">
                         <span class="legend-color legend-color--holiday" aria-hidden="true"></span>
                         <span class="legend-label">
-                            <?php p($l->t('Public holiday (statutory)')); ?>
+                            <?php p($l->t('Public holiday')); ?>
                         </span>
                     </div>
                     <div class="legend-item" role="listitem">
@@ -185,6 +185,7 @@ $currentMonth = $_['currentMonth'] ?? date('Y-m');
     window.ArbeitszeitCheck.l10n.totalHours = <?php echo json_encode($l->t('Total Hours'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.workingDays = <?php echo json_encode($l->t('Working Days'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.error = <?php echo json_encode($l->t('An error occurred'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.holiday = <?php echo json_encode($l->t('Public holiday'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     
     window.ArbeitszeitCheck.apiUrl = {
         calendar: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.time_entry.apiIndex'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,

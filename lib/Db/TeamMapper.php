@@ -89,7 +89,7 @@ class TeamMapper extends QBMapper
 			$qb->select('id')
 				->from($this->getTableName())
 				->where($qb->expr()->in('parent_id', $qb->createParameter('parents')));
-			foreach (array_chunk($parentIds, 500) as $chunk) {
+			foreach (array_chunk($parentIds, \OCA\ArbeitszeitCheck\Constants::BATCH_CHUNK_SIZE) as $chunk) {
 				$qb->setParameter('parents', $chunk, IQueryBuilder::PARAM_INT_ARRAY);
 				$result = $qb->executeQuery();
 				while ($row = $result->fetch()) {

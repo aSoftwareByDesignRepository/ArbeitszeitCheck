@@ -197,5 +197,7 @@ foreach ($holidayStates as $code => $name) {
     window.ArbeitszeitCheck.l10n.germanStateLabel = <?php echo json_encode($l->t('Bundesland für Feiertage / Kalender'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.germanStateHelp = <?php echo json_encode($l->t('Wählen Sie das Bundesland, dessen Feiertagskalender für diese Person gelten soll. Ohne Auswahl wird das globale Standard-Bundesland verwendet.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.germanStateDefault = <?php echo json_encode($l->t('Globales Standard-Bundesland verwenden'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.failedToLoadUserDetails = <?php echo json_encode($l->t('Failed to load user details'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.errorLoadingHistory = <?php echo json_encode($l->t('Error loading assignment history'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.states = <?php echo json_encode($holidayStatesForJs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>

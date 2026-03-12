@@ -26,9 +26,9 @@ $currentYear = (int)date('Y');
     <div id="app-content-wrapper">
             <div class="section admin-holidays-section">
                 <header class="section-header admin-holidays-section__header">
-                    <h2><?php p($l->t('Feiertage & Kalender')); ?></h2>
+                    <h2><?php p($l->t('Holidays & Calendar')); ?></h2>
                     <p class="section-intro">
-                        <?php p($l->t('Verwalten Sie hier die gesetzlichen und zusätzlichen Feiertage pro Bundesland. Diese Kalender werden für Urlaub, Arbeitszeitberechnungen und Compliance-Prüfungen genutzt.')); ?>
+                        <?php p($l->t('Manage statutory and additional holidays per federal state. These calendars are used for vacation, working time calculations, and compliance checks.')); ?>
                     </p>
                 </header>
 
@@ -36,17 +36,17 @@ $currentYear = (int)date('Y');
                     <section class="admin-holidays-card" aria-labelledby="holiday-default-state-heading">
                         <header class="admin-holidays-card__header">
                             <h3 id="holiday-default-state-heading" class="admin-holidays-card__title">
-                                <?php p($l->t('Standard-Bundesland für Feiertage')); ?>
+                                <?php p($l->t('Default federal state for holidays')); ?>
                             </h3>
                             <p class="admin-holidays-card__subtitle">
-                                <?php p($l->t('Dieses Bundesland verwendet das System automatisch, wenn für Mitarbeitende oder Teams kein eigenes Bundesland hinterlegt ist.')); ?>
+                                <?php p($l->t('This federal state is used automatically when no own state is configured for employees or teams.')); ?>
                             </p>
                         </header>
 
                         <div class="admin-holidays-card__body">
                             <div class="form-group">
                                 <label for="holiday-default-state" class="form-label">
-                                    <?php p($l->t('Standard-Bundesland auswählen')); ?>
+                                    <?php p($l->t('Select default federal state')); ?>
                                 </label>
                                 <select id="holiday-default-state"
                                         name="holidayDefaultState"
@@ -84,7 +84,7 @@ $currentYear = (int)date('Y');
                                     <?php
                                     $usersUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.users');
                                     print_unescaped($l->t(
-                                        'Das konkrete Bundesland eines Mitarbeiters oder einer Mitarbeiterin wird ausschließlich von Administratoren oder Managerinnen festgelegt, zum Beispiel in den %1$sMitarbeiter-Einstellungen%2$s. Wenn dort kein eigenes Bundesland hinterlegt ist, greift automatisch das hier konfigurierte Standard-Bundesland.',
+                                        'The federal state for an employee is set by administrators or managers, for example in %1$sEmployee settings%2$s. If no own state is configured there, the default state configured here is used.',
                                         [
                                             '<a href="' . \OCP\Util::sanitizeHTML($usersUrl) . '">',
                                             '</a>',
@@ -99,18 +99,18 @@ $currentYear = (int)date('Y');
                     <section class="admin-holidays-card" aria-labelledby="state-calendar-heading">
                         <header class="admin-holidays-card__header">
                             <h3 id="state-calendar-heading" class="admin-holidays-card__title">
-                                <?php p($l->t('Kalender je Bundesland verwalten')); ?>
+                                <?php p($l->t('Manage calendar per federal state')); ?>
                             </h3>
                             <p class="admin-holidays-card__subtitle">
-                                <?php p($l->t('Wählen Sie ein Bundesland und ein Jahr, um gesetzliche Feiertage sowie zusätzliche Firmen- oder Custom-Feiertage zu prüfen und anzupassen.')); ?>
+                                <?php p($l->t('Select a federal state and year to view and edit statutory holidays plus additional company or custom holidays.')); ?>
                             </p>
                         </header>
 
-                        <div class="section-content admin-holidays-filters" aria-label="<?php p($l->t('Kalenderauswahl')); ?>">
+                        <div class="section-content admin-holidays-filters" aria-label="<?php p($l->t('Calendar selection')); ?>">
                         <div class="admin-holidays-filters__controls">
                             <div class="form-group form-group--inline">
                                 <label for="holiday-state-select" class="form-label">
-                                    <?php p($l->t('Bundesland')); ?>
+                                    <?php p($l->t('Federal state')); ?>
                                 </label>
                                 <select id="holiday-state-select"
                                         name="holidayState"
@@ -126,7 +126,7 @@ $currentYear = (int)date('Y');
 
                             <div class="form-group form-group--inline">
                                 <label for="holiday-year-select" class="form-label">
-                                    <?php p($l->t('Jahr')); ?>
+                                    <?php p($l->t('Year')); ?>
                                 </label>
                                 <select id="holiday-year-select"
                                         name="holidayYear"

@@ -41,6 +41,8 @@ class UserDeletedListener implements IEventListener
 		private readonly AuditLogMapper $auditLogMapper,
 		private readonly UserSettingsMapper $userSettingsMapper,
 		private readonly UserWorkingTimeModelMapper $userWorkingTimeModelMapper,
+		private readonly TeamMemberMapper $teamMemberMapper,
+		private readonly TeamManagerMapper $teamManagerMapper,
 		private readonly LoggerInterface $logger,
 	) {
 	}

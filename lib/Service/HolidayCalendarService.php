@@ -177,10 +177,17 @@ class HolidayCalendarService
 			$holidays = $this->getHolidaysForYearInternal($state, $year);
 			foreach ($holidays as $holiday) {
 				$date = $holiday->getDate();
-				if ($date < $start || $date > $end) {
+				if ($date === null) {
 					continue;
 				}
-				$result[] = $this->buildHolidayDto($holiday);
+				$dateNorm = $date instanceof \DateTimeInterface ? $date : new \DateTime((string)$date);
+				if ($dateNorm < $start || $dateNorm > $end) {
+					continue;
+				}
+				$dto = $this->buildHolidayDto($holiday);
+				if (isset($dto['date']) && $dto['date'] !== null) {
+					$result[] = $dto;
+				}
 			}
 		}
 
@@ -310,22 +317,30 @@ class HolidayCalendarService
 	{
 		$state = $this->normalizeState($state);
 
+		// Seed statutory holidays when missing. Company holidays alone must not
+		// prevent statutory seeding (bug: admin adding company holidays first
+		// caused statutory to be skipped).
+		$statutoryAutoReseed = $this->config->getAppValue('arbeitszeitcheck', 'statutory_auto_reseed', '1') === '1';
+		$needsStatutory = !$this->holidayMapper->hasStatutoryHolidaysForStateAndYear($state, $year);
+		// When auto-reseed is disabled and year was already initialized, do not re-seed
+		// (preserves admin-deleted statutory holidays)
+		if ($needsStatutory && !$statutoryAutoReseed && $this->isYearInitialized($state, $year)) {
+			$needsStatutory = false;
+		}
+		if ($needsStatutory) {
+			$this->seedStatutoryHolidaysForStateAndYear($state, $year);
+			$this->clearCacheForStateYear($state, $year);
+		}
+		if (!$this->isYearInitialized($state, $year)) {
+			$this->markYearInitialized($state, $year);
+		}
+
 		$cacheKey = $this->getCacheKey($state, $year);
-		if ($this->cache !== null) {
+		if (!$needsStatutory && $this->cache !== null) {
 			$cached = $this->cache->get($cacheKey);
 			if (is_array($cached)) {
 				return $this->hydrateFromArray($cached);
 			}
-		}
-
-		// Initialise from base calendar only once per state/year.
-		if (!$this->isYearInitialized($state, $year)) {
-			// For legacy data or tests there may already be entries; only seed
-			// when there are none at all for this state/year.
-			if (!$this->holidayMapper->hasHolidaysForStateAndYear($state, $year)) {
-				$this->seedStatutoryHolidaysForStateAndYear($state, $year);
-			}
-			$this->markYearInitialized($state, $year);
 		}
 
 		$entities = $this->holidayMapper->findByStateAndYear($state, $year);
@@ -387,9 +402,20 @@ class HolidayCalendarService
 				continue;
 			}
 
+			// Idempotent: skip if already exists (avoids duplicates from concurrent requests)
+			if ($this->holidayMapper->existsForStateDateScope($state, $dateStr, Holiday::SCOPE_STATUTORY)) {
+				continue;
+			}
+
 			try {
 				$this->holidayMapper->insert($holiday);
 			} catch (\Throwable $e) {
+				$msg = (string)$e->getMessage();
+				$isDuplicate = $e instanceof \OCP\DB\Exception
+					&& $e->getReason() === \OCP\DB\Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION;
+				if ($isDuplicate || str_contains($msg, 'Duplicate entry') || str_contains($msg, 'unique constraint')) {
+					continue;
+				}
 				$this->logger->error('HolidayCalendarService: failed to insert generated holiday', [
 					'state' => $state,
 					'year' => $year,
@@ -523,6 +549,17 @@ class HolidayCalendarService
 	private function buildHolidayDto(Holiday $holiday): array
 	{
 		$date = $holiday->getDate();
+		$dateStr = null;
+		if ($date !== null) {
+			$dateStr = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : (string)$date;
+			if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateStr) !== 1) {
+				try {
+					$dateStr = (new \DateTime($dateStr))->format('Y-m-d');
+				} catch (\Throwable $e) {
+					$dateStr = null;
+				}
+			}
+		}
 
 		// Working day weight is derived from kind/scope; we expose it
 		// here so callers do not have to duplicate this logic.
@@ -542,7 +579,7 @@ class HolidayCalendarService
 		return [
 			'id' => $holiday->getId(),
 			'state' => $holiday->getState(),
-			'date' => $date ? $date->format('Y-m-d') : null,
+			'date' => $dateStr,
 			'name' => $name,
 			'kind' => $holiday->getKind(),
 			'scope' => $holiday->getScope(),

@@ -17,16 +17,16 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Service\HolidayCalendarService;
+use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
-use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 use OCP\IUserSession;
 use OCP\IL10N;
 use Psr\Log\LoggerInterface;
 
-class HolidayController extends OCSController
+class HolidayController extends Controller
 {
 	public function __construct(
 		string $appName,
@@ -42,9 +42,13 @@ class HolidayController extends OCSController
 	#[NoAdminRequired]
 	public function index(?string $start = null, ?string $end = null): JSONResponse
 	{
+		$params = $this->request->getParams();
+		$start = $start ?? $params['start'] ?? null;
+		$end = $end ?? $params['end'] ?? null;
+
 		$user = $this->userSession->getUser();
 		if ($user === null) {
-			return new JSONResponse(['error' => 'Unauthorized'], Http::STATUS_UNAUTHORIZED);
+			return new JSONResponse(['error' => $this->l10n->t('Unauthorized')], Http::STATUS_UNAUTHORIZED);
 		}
 
 		try {

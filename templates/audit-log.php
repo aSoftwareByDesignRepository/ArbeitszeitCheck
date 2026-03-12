@@ -43,7 +43,7 @@ $endDate = $_['endDate'] ?? '';
                     </div>
                     <div class="audit-log-filters__field">
                         <label for="user-filter" class="audit-log-filters__label"><?php p($l->t('Mitarbeiter oder Benutzer-ID')); ?></label>
-                        <input type="text" id="user-filter" class="form-input audit-log-filters__input" placeholder="<?php p($l->t('Nach Benutzer filtern')); ?>" autocomplete="off">
+                        <input type="text" id="user-filter" class="form-input audit-log-filters__input" placeholder="<?php p($l->t('Filter by user')); ?>" autocomplete="off">
                     </div>
                     <div class="audit-log-filters__field">
                         <label for="action-filter" class="audit-log-filters__label"><?php p($l->t('Aktionstyp (vereinfacht)')); ?></label>

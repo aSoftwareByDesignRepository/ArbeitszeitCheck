@@ -60,6 +60,7 @@ return [
 		['name' => 'absence#edit', 'url' => '/absences/{id}/edit', 'verb' => 'GET'],
 		['name' => 'absence#update', 'url' => '/absences/{id}', 'verb' => 'PUT'],
 		['name' => 'absence#updatePost', 'url' => '/absences/{id}/update', 'verb' => 'POST'],
+		['name' => 'absence#shortenForm', 'url' => '/absences/{id}/shorten', 'verb' => 'POST'],
 		['name' => 'absence#delete', 'url' => '/absences/{id}', 'verb' => 'DELETE'],
 
 		// API routes for absences (specific routes must come before parameterized routes)
@@ -72,6 +73,8 @@ return [
 		['name' => 'absence#apiDelete', 'url' => '/api/absences/{id}', 'verb' => 'DELETE'],
 		['name' => 'absence#approve', 'url' => '/api/absences/{id}/approve', 'verb' => 'POST'],
 		['name' => 'absence#reject', 'url' => '/api/absences/{id}/reject', 'verb' => 'POST'],
+		['name' => 'absence#cancel', 'url' => '/api/absences/{id}/cancel', 'verb' => 'POST'],
+		['name' => 'absence#shorten', 'url' => '/api/absences/{id}/shorten', 'verb' => 'POST'],
 
 		// Manager routes
 		['name' => 'manager#dashboard', 'url' => '/manager', 'verb' => 'GET'],

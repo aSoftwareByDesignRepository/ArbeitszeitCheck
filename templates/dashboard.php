@@ -471,12 +471,12 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                         // Do NOT show if entry is already approved or older than 2 weeks
                                         $isApproved = $entry->getApprovedBy() !== null;
                                         $entryDate = $entry->getStartTime();
-                                        $twoWeeksAgo = new \DateTime();
-                                        $twoWeeksAgo->modify('-14 days');
-                                        $twoWeeksAgo->setTime(0, 0, 0); // Start of day
-                                        $isWithinTwoWeeks = $entryDate && $entryDate >= $twoWeeksAgo;
+                                        $editCutoff = new \DateTime();
+                                        $editCutoff->modify('-' . \OCA\ArbeitszeitCheck\Constants::EDIT_WINDOW_DAYS . ' days');
+                                        $editCutoff->setTime(0, 0, 0);
+                                        $isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
 
-                                        $canEdit = !$isApproved && $isWithinTwoWeeks && (
+                                        $canEdit = !$isApproved && $isWithinEditWindow && (
                                             $entry->getIsManualEntry()
                                             || $entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_PENDING_APPROVAL
                                             || ($entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())

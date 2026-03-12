@@ -13,10 +13,12 @@ namespace OCA\ArbeitszeitCheck\Service;
 
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
+use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\IConfig;
 use OCP\IL10N;
 
 /**
@@ -30,6 +32,8 @@ class TimeTrackingService
 	private ProjectCheckIntegrationService $projectCheckService;
 	private ComplianceService $complianceService;
 	private IL10N $l10n;
+	private IConfig $config;
+	private UserSettingsMapper $userSettingsMapper;
 
 	public function __construct(
 		TimeEntryMapper $timeEntryMapper,
@@ -37,7 +41,9 @@ class TimeTrackingService
 		AuditLogMapper $auditLogMapper,
 		ProjectCheckIntegrationService $projectCheckService,
 		ComplianceService $complianceService,
-		IL10N $l10n
+		IL10N $l10n,
+		IConfig $config,
+		UserSettingsMapper $userSettingsMapper
 	) {
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->violationMapper = $violationMapper;
@@ -45,6 +51,18 @@ class TimeTrackingService
 		$this->projectCheckService = $projectCheckService;
 		$this->complianceService = $complianceService;
 		$this->l10n = $l10n;
+		$this->config = $config;
+		$this->userSettingsMapper = $userSettingsMapper;
+	}
+
+	private function getMaxDailyHours(): float
+	{
+		return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10')));
+	}
+
+	private function getMinRestPeriod(): float
+	{
+		return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'min_rest_period', '11')));
 	}
 
 	/**
@@ -100,31 +118,27 @@ class TimeTrackingService
 				$pausedEntryWorkingHours = max(0, $pausedDuration - $pausedBreakHours);
 			}
 			
-			// Total working hours if we resume this entry (completed hours + paused entry hours)
-			$maxDailyHours = 10.0; // ArbZG §3 maximum
+			$maxDailyHours = $this->getMaxDailyHours();
 			$totalWorkingHoursIfResumed = $todayHours + $pausedEntryWorkingHours;
 			
 			// Check if resuming would exceed maximum daily hours (ArbZG §3)
 			// This check is always enforced, regardless of same day or different day
 			if ($totalWorkingHoursIfResumed > $maxDailyHours) {
 				throw new \Exception($this->l10n->t(
-					'Cannot resume: Maximum daily working hours (10h) would be exceeded. Current: %.1f hours, would be: %.1f hours (ArbZG §3).',
-					[
-						$todayHours,
-						$totalWorkingHoursIfResumed
-					]
+					'Cannot resume: Maximum daily working hours (%1$dh) would be exceeded. Current: %2$.1f hours, would be: %3$.1f hours (ArbZG §3).',
+					[(int)$maxDailyHours, $todayHours, $totalWorkingHoursIfResumed]
 				));
 			}
 			
 			// Check rest period (ArbZG §5): Only required between different days
 			// On the same day, resuming is allowed without 11h rest period (it's a work interruption, not a new shift)
 			if (!$isSameDay && $pausedEntryUpdatedAt) {
+				$minRest = $this->getMinRestPeriod();
 				$hoursSincePause = ($now->getTimestamp() - $pausedEntryUpdatedAt->getTimestamp()) / 3600;
 				
-				if ($hoursSincePause < 11) {
-					// Calculate when user can clock in again
+				if ($hoursSincePause < $minRest) {
 					$earliestClockIn = clone $pausedEntryUpdatedAt;
-					$earliestClockIn->modify('+11 hours');
+					$earliestClockIn->modify('+' . (int)$minRest . ' hours');
 					$hoursRemaining = ($earliestClockIn->getTimestamp() - $now->getTimestamp()) / 3600;
 					
 					throw new \Exception($this->l10n->t(
@@ -195,6 +209,11 @@ class TimeTrackingService
 			return $savedEntry;
 		}
 
+		// Validate project ID length (DB column limit; ProjectCheck may not enforce)
+		if ($projectCheckProjectId !== null && mb_strlen($projectCheckProjectId) > TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH) {
+			throw new \Exception($this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH]));
+		}
+
 		// Validate ProjectCheck project if provided
 		if ($projectCheckProjectId && !$this->projectCheckService->projectExists($projectCheckProjectId)) {
 			throw new \Exception($this->l10n->t('Selected project does not exist'));
@@ -210,12 +229,11 @@ class TimeTrackingService
 		$tomorrow = clone $today;
 		$tomorrow->modify('+1 day');
 		$todayHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $today, $tomorrow);
-		
-		$maxDailyHours = 10.0; // ArbZG §3 maximum
+		$maxDailyHours = $this->getMaxDailyHours();
 		if ($todayHours >= $maxDailyHours) {
 			throw new \Exception($this->l10n->t(
-				'Cannot clock in: Maximum daily working hours (10h) already reached. You have already worked %.1f hours today (ArbZG §3).',
-				[$todayHours]
+				'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
+				[(int)$maxDailyHours, $todayHours]
 			));
 		}
 
@@ -653,11 +671,10 @@ class TimeTrackingService
 				}
 			}
 
-			// Calculate non-overlapping hours (automatically handles overlaps)
 			$totalHours = $this->calculateNonOverlappingHours($allEntries);
-			
-			// Apply 10-hour maximum limit (ArbZG §3)
-			return min($totalHours, 10.0);
+			$maxDaily = $this->getMaxDailyHours();
+
+			return min($totalHours, $maxDaily);
 			
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting today hours for user ' . $userId . ': ' . $e->getMessage(), ["exception" => $e]);
@@ -726,7 +743,11 @@ class TimeTrackingService
 	 */
 	public function calculateAndSetAutomaticBreak(TimeEntry $timeEntry): bool
 	{
-		// Only process completed entries with start and end time
+		$userId = $timeEntry->getUserId();
+		if ($this->userSettingsMapper->getStringSetting($userId, 'auto_break_calculation', '1') !== '1') {
+			return false;
+		}
+
 		if (!$timeEntry->getStartTime() || !$timeEntry->getEndTime()) {
 			return false;
 		}
@@ -891,13 +912,11 @@ class TimeTrackingService
 		
 		// Calculate total daily working hours
 		$totalDailyWorkingHours = $totalWorkingHoursFromPreviousEntries + $entryWorkingHours;
-		
-		$maxWorkingHours = 10.0; // ArbZG §3 maximum
-		
-		// If total daily working hours exceeds maximum, complete the entry automatically
+		$maxWorkingHours = $this->getMaxDailyHours();
+
 		if ($totalDailyWorkingHours >= $maxWorkingHours) {
 			$oldValues = $timeEntry->getSummary();
-			$oldValues['_reason'] = 'ArbZG §3: Auto-completing due to daily maximum (10h)';
+			$oldValues['_reason'] = 'ArbZG §3: Auto-completing due to daily maximum (' . (int)$maxWorkingHours . 'h)';
 
 			// Calculate maximum allowed working hours for this entry
 			$maxAllowedWorkingHoursForEntry = max(0, $maxWorkingHours - $totalWorkingHoursFromPreviousEntries);
@@ -969,7 +988,7 @@ class TimeTrackingService
 			]);
 
 			$newValues = $timeEntry->getSummary();
-			$newValues['_reason'] = 'ArbZG §3: Auto-completed at daily maximum (10h)';
+			$newValues['_reason'] = 'ArbZG §3: Auto-completed at daily maximum (' . (int)$maxWorkingHours . 'h)';
 			$this->auditLogMapper->logAction(
 				$userId,
 				'time_entry_auto_completed_daily_max',
@@ -1033,9 +1052,8 @@ class TimeTrackingService
 		// Calculate total daily working hours
 		$totalDailyWorkingHours = $totalWorkingHoursFromPreviousEntries + $entryWorkingHours;
 		
-		$maxWorkingHours = 10.0; // ArbZG §3 maximum
-		
-		// If total daily working hours exceeds maximum, adjust end time
+		$maxWorkingHours = $this->getMaxDailyHours();
+
 		if ($totalDailyWorkingHours > $maxWorkingHours) {
 			// Calculate maximum allowed working hours for this entry
 			$maxAllowedWorkingHoursForEntry = max(0, $maxWorkingHours - $totalWorkingHoursFromPreviousEntries);

@@ -68,10 +68,12 @@ class HealthController extends Controller
 
 			return new JSONResponse($health);
 		} catch (\Throwable $e) {
+			// Do not expose exception message to unauthenticated users (PublicPage).
+			// Log internally; return generic message for health checks (load balancers, monitoring).
 			return new JSONResponse([
 				'status' => 'unhealthy',
 				'timestamp' => time(),
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('Service unavailable')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -101,9 +103,10 @@ class HealthController extends Controller
 				];
 			}
 		} catch (\Throwable $e) {
+			// Do not expose raw exception to PublicPage health endpoint
 			return [
 				'status' => 'unhealthy',
-				'message' => $this->l10n->t('Database error: %s', [$e->getMessage()])
+				'message' => $this->l10n->t('Database connection failed')
 			];
 		}
 	}
@@ -132,9 +135,10 @@ class HealthController extends Controller
 			];
 		}
 	} catch (\Throwable $e) {
+		// Do not expose raw exception to PublicPage health endpoint
 		return [
 			'status' => 'unhealthy',
-			'message' => $this->l10n->t('Compliance service error: %s', [$e->getMessage()])
+			'message' => $this->l10n->t('Compliance service check failed')
 		];
 	}
 	}
@@ -155,9 +159,10 @@ class HealthController extends Controller
 				'available' => $isAvailable
 			];
 		} catch (\Throwable $e) {
+			// Do not expose raw exception to PublicPage health endpoint
 			return [
 				'status' => 'unhealthy',
-				'message' => $this->l10n->t('ProjectCheck integration error: %s', [$e->getMessage()])
+				'message' => $this->l10n->t('ProjectCheck integration check failed')
 			];
 		}
 	}

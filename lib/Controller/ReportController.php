@@ -11,8 +11,11 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
-use OCA\ArbeitszeitCheck\Service\ReportingService;
+use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
+use OCA\ArbeitszeitCheck\Db\TeamMemberMapper;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
+use OCA\ArbeitszeitCheck\Service\ReportingService;
+use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -29,6 +32,9 @@ class ReportController extends Controller
 {
 	private ReportingService $reportingService;
 	private PermissionService $permissionService;
+	private TeamResolverService $teamResolver;
+	private TeamMemberMapper $teamMemberMapper;
+	private TeamManagerMapper $teamManagerMapper;
 	private IUserSession $userSession;
 	private IL10N $l10n;
 
@@ -37,12 +43,18 @@ class ReportController extends Controller
 		IRequest $request,
 		ReportingService $reportingService,
 		PermissionService $permissionService,
+		TeamResolverService $teamResolver,
+		TeamMemberMapper $teamMemberMapper,
+		TeamManagerMapper $teamManagerMapper,
 		IUserSession $userSession,
 		IL10N $l10n
 	) {
 		parent::__construct($appName, $request);
 		$this->reportingService = $reportingService;
 		$this->permissionService = $permissionService;
+		$this->teamResolver = $teamResolver;
+		$this->teamMemberMapper = $teamMemberMapper;
+		$this->teamManagerMapper = $teamManagerMapper;
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
 	}
@@ -289,37 +301,57 @@ class ReportController extends Controller
 	/**
 	 * Generate team report
 	 *
+	 * Accepts either userIds (comma-separated) or teamId. When userIds is empty:
+	 * - If teamId is provided: resolve team members (admin: any team; manager: must manage that team)
+	 * - If teamId is empty and user has manager capabilities: use everyone the manager is responsible for
+	 *
 	 * @param string|null $startDate Start date (Y-m-d format)
 	 * @param string|null $endDate End date (Y-m-d format)
-	 * @param string|null $userIds Comma-separated user IDs (defaults to manager's team)
+	 * @param string|null $userIds Comma-separated user IDs (optional if teamId or manager scope)
+	 * @param string|null $teamId Team ID for app-owned teams (optional)
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function team(?string $startDate = null, ?string $endDate = null, ?string $userIds = null): JSONResponse
-	{
+	public function team(
+		?string $startDate = null,
+		?string $endDate = null,
+		?string $userIds = null,
+		?string $teamId = null
+	): JSONResponse {
 		try {
 			$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-30 days');
 			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
 			$start->setTime(0, 0, 0);
 			$end->setTime(23, 59, 59);
 
-			// If userIds provided, use them; otherwise require manager's team (handled elsewhere)
-			if ($userIds) {
+			$currentUserId = $this->getUserId();
+			$teamUserIds = [];
+
+			if ($userIds && trim($userIds) !== '') {
 				$teamUserIds = array_filter(array_map('trim', explode(',', $userIds)));
-			} else {
-				throw new \Exception($this->l10n->t('User IDs must be provided for team reports'));
+			} elseif ($teamId !== null && $teamId !== '') {
+				$tid = (int) $teamId;
+				if ($tid <= 0) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Invalid team selected.')
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$teamUserIds = $this->resolveTeamMemberIdsFromTeamId($currentUserId, $tid);
+			} elseif ($this->permissionService->canAccessManagerDashboard($currentUserId)) {
+				// Manager scope: "everyone I manage" – resolve via TeamResolverService
+				$teamUserIds = $this->teamResolver->getTeamMemberIds($currentUserId);
 			}
 
 			if (empty($teamUserIds)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('No user IDs provided')
+					'error' => $this->l10n->t('No users to include in the report. Please select a scope or team.')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
 			// Security: current user may view report only for self or users they can manage
-			$currentUserId = $this->getUserId();
 			foreach ($teamUserIds as $uid) {
 				if (!$this->permissionService->canViewUserReport($currentUserId, $uid)) {
 					$this->permissionService->logPermissionDenied($currentUserId, 'view_team_report', 'report', $uid);
@@ -345,5 +377,39 @@ class ReportController extends Controller
 				'error' => $errorMessage
 			], $status);
 		}
+	}
+
+	/**
+	 * Resolve team member user IDs from a team ID, enforcing permissions.
+	 * Admins: any team. Managers: only teams they manage.
+	 *
+	 * @param string $currentUserId
+	 * @param int $teamId
+	 * @return list<string>
+	 */
+	private function resolveTeamMemberIdsFromTeamId(string $currentUserId, int $teamId): array {
+		if ($this->permissionService->isAdmin($currentUserId)) {
+			$members = $this->teamMemberMapper->findByTeamId($teamId);
+			$ids = [];
+			foreach ($members as $m) {
+				$ids[] = $m->getUserId();
+			}
+			return $ids;
+		}
+
+		if ($this->permissionService->canAccessManagerDashboard($currentUserId)) {
+			$managedTeamIds = $this->teamManagerMapper->getTeamIdsForManager($currentUserId);
+			if (!in_array($teamId, $managedTeamIds, true)) {
+				throw new \Exception($this->l10n->t('Access denied. You can only view reports for teams you manage.'));
+			}
+			$members = $this->teamMemberMapper->findByTeamId($teamId);
+			$ids = [];
+			foreach ($members as $m) {
+				$ids[] = $m->getUserId();
+			}
+			return $ids;
+		}
+
+		throw new \Exception($this->l10n->t('Access denied. You can only view reports for yourself or your team members.'));
 	}
 }

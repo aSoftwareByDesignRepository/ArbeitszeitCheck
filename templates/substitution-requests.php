@@ -14,6 +14,9 @@ declare(strict_types=1);
 $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 $requests = $_['requests'] ?? [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
+$apiListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.substitute.getPending');
+$apiApproveUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.substitute.approve', ['absenceId' => '__ID__']);
+$apiDeclineUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.substitute.decline', ['absenceId' => '__ID__']);
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -52,3 +55,12 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
     </div>
 </div>
 </div><!-- /#arbeitszeitcheck-app -->
+
+<script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
+window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
+window.ArbeitszeitCheck.substitutionApi = {
+    list: <?php echo json_encode($apiListUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+    approve: <?php echo json_encode($apiApproveUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+    decline: <?php echo json_encode($apiDeclineUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+};
+</script>

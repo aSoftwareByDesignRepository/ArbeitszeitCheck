@@ -15,6 +15,8 @@ declare(strict_types=1);
 $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $settings = $_['settings'] ?? [];
+$urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
+$apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdminSettings');
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -23,21 +25,21 @@ $settings = $_['settings'] ?? [];
     <div id="app-content-wrapper">
         <div class="section">
             <div class="section-header">
-                <h2><?php p($l->t('Einstellungen für ArbeitszeitCheck')); ?></h2>
-                <p><?php p($l->t('Hier legen Sie fest, wie die Zeiterfassung und die Prüfungen für alle Beschäftigten funktionieren.')); ?></p>
+                <h2><?php p($l->t('Settings for ArbeitszeitCheck')); ?></h2>
+                <p><?php p($l->t('Configure how time tracking and compliance checks work for all employees.')); ?></p>
             </div>
 
             <?php if (isset($_['error']) && !empty($_['error'])): ?>
                 <div class="alert alert--error" role="alert" aria-live="polite">
                     <span class="alert-icon" aria-hidden="true">⚠️</span>
                     <div class="alert-content">
-                        <strong class="alert-title"><?php p($l->t('Es ist ein Fehler aufgetreten')); ?></strong>
+                        <strong class="alert-title"><?php p($l->t('An error occurred')); ?></strong>
                         <p class="alert-message">
                             <?php 
                             // Make error message more helpful
                             $error = $_['error'];
                             if (strpos($error, 'Exception') !== false || strpos($error, 'Error') !== false || strpos($error, 'SQL') !== false) {
-                                p($l->t('Bitte versuchen Sie es erneut. Wenn das Problem bleibt, wenden Sie sich an Ihre Administratorin oder Ihren Administrator.'));
+                                p($l->t('Please try again. If the problem persists, contact your administrator.'));
                             } else {
                                 p($error);
                             }
@@ -47,30 +49,48 @@ $settings = $_['settings'] ?? [];
                 </div>
             <?php endif; ?>
 
-            <form id="admin-settings-form" class="form">
+            <form id="admin-settings-form" class="form admin-settings-form" method="post" action="#" novalidate>
+                <section class="admin-settings-section" aria-labelledby="section-compliance-heading">
+                    <h3 id="section-compliance-heading" class="admin-settings-section__title"><?php p($l->t('Compliance & working time rules')); ?></h3>
                 <div class="form-group">
                     <div class="form-checkbox">
-                        <input type="checkbox" id="autoComplianceCheck" name="autoComplianceCheck" 
-                            <?php echo ($settings['autoComplianceCheck'] ?? true) ? 'checked' : ''; ?>>
+                        <input type="checkbox" id="autoComplianceCheck" name="autoComplianceCheck"
+                            <?php echo ($settings['autoComplianceCheck'] ?? true) ? 'checked' : ''; ?>
+                            aria-describedby="autoComplianceCheck-help">
                         <label for="autoComplianceCheck" class="form-label">
-                            <?php p($l->t('Arbeitszeitregeln automatisch prüfen')); ?>
+                            <?php p($l->t('Check working time rules automatically')); ?>
                         </label>
                     </div>
-                    <p class="form-help">
-                        <?php p($l->t('Die App prüft automatisch, ob Arbeitszeiten das Arbeitszeitgesetz einhalten (z. B. Warnung bei mehr als 8 Stunden ohne Pause).')); ?>
+                    <p id="autoComplianceCheck-help" class="form-help">
+                        <?php p($l->t('The system will automatically check if working hours follow German labor law. For example, it will warn if someone works more than 8 hours per day without a break.')); ?>
                     </p>
                 </div>
 
                 <div class="form-group">
                     <div class="form-checkbox">
-                        <input type="checkbox" id="requireBreakJustification" name="requireBreakJustification"
-                            <?php echo ($settings['requireBreakJustification'] ?? true) ? 'checked' : ''; ?>>
-                        <label for="requireBreakJustification" class="form-label">
-                            <?php p($l->t('Grund für Pausen verlangen')); ?>
+                        <input type="checkbox" id="realtimeComplianceCheck" name="realtimeComplianceCheck"
+                            <?php echo ($settings['realtimeComplianceCheck'] ?? true) ? 'checked' : ''; ?>
+                            aria-describedby="realtimeComplianceCheck-help">
+                        <label for="realtimeComplianceCheck" class="form-label">
+                            <?php p($l->t('Real-time compliance check when recording')); ?>
                         </label>
                     </div>
-                    <p class="form-help">
-                        <?php p($l->t('Bei Pausen muss ein kurzer Grund eingetragen werden. Das hilft, Pausen korrekt und nachvollziehbar zu dokumentieren.')); ?>
+                    <p id="realtimeComplianceCheck-help" class="form-help">
+                        <?php p($l->t('Checks working times immediately when saving or editing. Disable only if you run compliance checks exclusively via batch processing.')); ?>
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="complianceStrictMode" name="complianceStrictMode"
+                            <?php echo ($settings['complianceStrictMode'] ?? false) ? 'checked' : ''; ?>
+                            aria-describedby="complianceStrictMode-help">
+                        <label for="complianceStrictMode" class="form-label">
+                            <?php p($l->t('Strict mode: Violations block saving')); ?>
+                        </label>
+                    </div>
+                    <p id="complianceStrictMode-help" class="form-help">
+                        <?php p($l->t('In default mode, violations are shown but saving is still possible. In strict mode, violations prevent saving the time entry.')); ?>
                     </p>
                 </div>
 
@@ -79,18 +99,21 @@ $settings = $_['settings'] ?? [];
                         <input type="checkbox" id="enableViolationNotifications" name="enableViolationNotifications"
                             <?php echo ($settings['enableViolationNotifications'] ?? true) ? 'checked' : ''; ?>>
                         <label for="enableViolationNotifications" class="form-label">
-                            <?php p($l->t('Hinweise bei Verstößen gegen Arbeitszeitregeln senden')); ?>
+                            <?php p($l->t('Send alerts when working time rules are broken')); ?>
                         </label>
                     </div>
                     <p class="form-help">
-                        <?php p($l->t('Bei Überschreitung von Grenzwerten (z. B. zu viele Stunden, fehlende Pausen) werden Hinweise an Beschäftigte und ggf. Vorgesetzte gesendet.')); ?>
+                        <?php p($l->t('When someone works too many hours or doesn\'t take required breaks, the system will send a notification to managers and the employee.')); ?>
                     </p>
                 </div>
+                </section>
 
+                <section class="admin-settings-section" aria-labelledby="section-absences-heading">
+                    <h3 id="section-absences-heading" class="admin-settings-section__title"><?php p($l->t('Absences & notifications')); ?></h3>
                 <fieldset class="form-fieldset" aria-labelledby="send-ical-legend">
-                    <legend id="send-ical-legend" class="form-legend"><?php p($l->t('Abwesenheiten: iCal per E‑Mail versenden')); ?></legend>
+                    <legend id="send-ical-legend" class="form-legend"><?php p($l->t('Absences: Send iCal via email')); ?></legend>
                     <p class="form-help form-help--block">
-                        <?php p($l->t('Bei genehmigten Abwesenheiten kann automatisch eine E‑Mail mit einem iCalendar‑Anhang (.ics) verschickt werden.')); ?>
+                        <?php p($l->t('For approved absences, an email with an iCal attachment (.ics) can be sent automatically.')); ?>
                     </p>
                     <div class="form-group">
                         <div class="form-checkbox">
@@ -98,7 +121,7 @@ $settings = $_['settings'] ?? [];
                                 <?php echo ($settings['sendIcalApprovedAbsences'] ?? true) ? 'checked' : ''; ?>
                                 aria-describedby="send-ical-legend">
                             <label for="sendIcalApprovedAbsences" class="form-label">
-                                <?php p($l->t('iCal an die Person mit genehmigter Abwesenheit senden')); ?>
+                                <?php p($l->t('Send iCal to the person with approved absence')); ?>
                             </label>
                         </div>
                     </div>
@@ -108,7 +131,7 @@ $settings = $_['settings'] ?? [];
                                 <?php echo ($settings['sendIcalToSubstitute'] ?? false) ? 'checked' : ''; ?>
                                 aria-describedby="send-ical-legend">
                             <label for="sendIcalToSubstitute" class="form-label">
-                                <?php p($l->t('Zusätzlich iCal an Vertretung senden (falls ausgewählt)')); ?>
+                                <?php p($l->t('Also send iCal to substitute (if selected)')); ?>
                             </label>
                         </div>
                     </div>
@@ -118,28 +141,28 @@ $settings = $_['settings'] ?? [];
                                 <?php echo ($settings['sendIcalToManagers'] ?? false) ? 'checked' : ''; ?>
                                 aria-describedby="send-ical-legend">
                             <label for="sendIcalToManagers" class="form-label">
-                                <?php p($l->t('Zusätzlich iCal an Vorgesetzte senden (Team-Manager:innen)')); ?>
+                                <?php p($l->t('Also send iCal to managers (team managers)')); ?>
                             </label>
                         </div>
                     </div>
                 </fieldset>
 
                 <fieldset class="form-fieldset" aria-labelledby="require-substitute-legend">
-                    <legend id="require-substitute-legend" class="form-legend"><?php p($l->t('Abwesenheiten: Vertretung erforderlich')); ?></legend>
+                    <legend id="require-substitute-legend" class="form-legend"><?php p($l->t('Absences: Substitute required')); ?></legend>
                     <p class="form-help form-help--block">
-                        <?php p($l->t('Für die ausgewählten Abwesenheitsarten muss eine Vertretung angegeben werden. So ist klar, wer während der Abwesenheit zuständig ist.')); ?>
+                        <?php p($l->t('For the selected absence types, a substitute must be designated.')); ?>
                     </p>
                     <?php
                     $requireTypes = $settings['requireSubstituteTypes'] ?? [];
                     $absenceTypes = [
-                        'vacation' => $l->t('Urlaub'),
-                        'sick_leave' => $l->t('Krankschreibung'),
-                        'personal_leave' => $l->t('Persönliche Gründe'),
-                        'parental_leave' => $l->t('Elternzeit'),
-                        'special_leave' => $l->t('Sonderurlaub'),
-                        'unpaid_leave' => $l->t('Unbezahlter Urlaub'),
-                        'home_office' => $l->t('Homeoffice'),
-                        'business_trip' => $l->t('Dienstreise'),
+                        'vacation' => $l->t('Vacation'),
+                        'sick_leave' => $l->t('Sick leave'),
+                        'personal_leave' => $l->t('Personal reasons'),
+                        'parental_leave' => $l->t('Parental leave'),
+                        'special_leave' => $l->t('Special leave'),
+                        'unpaid_leave' => $l->t('Unpaid leave'),
+                        'home_office' => $l->t('Home office'),
+                        'business_trip' => $l->t('Business trip'),
                     ];
                     foreach ($absenceTypes as $typeKey => $typeLabel):
                         $checked = in_array($typeKey, $requireTypes, true);
@@ -154,10 +177,13 @@ $settings = $_['settings'] ?? [];
                     </div>
                     <?php endforeach; ?>
                 </fieldset>
+                </section>
 
+                <section class="admin-settings-section" aria-labelledby="section-hours-heading">
+                    <h3 id="section-hours-heading" class="admin-settings-section__title"><?php p($l->t('Daily hours & rest periods')); ?></h3>
                 <div class="form-group">
                     <label for="maxDailyHours" class="form-label">
-                        <?php p($l->t('Maximale Arbeitsstunden pro Tag')); ?>
+                        <?php p($l->t('Maximum working hours per day (in hours)')); ?>
                         <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
                     </label>
                     <input type="number" 
@@ -172,7 +198,7 @@ $settings = $_['settings'] ?? [];
                            aria-describedby="maxDailyHours-help <?php echo isset($_['errors']['maxDailyHours']) ? 'maxDailyHours-error' : ''; ?>"
                            aria-invalid="<?php echo isset($_['errors']['maxDailyHours']) ? 'true' : 'false'; ?>">
                     <p id="maxDailyHours-help" class="form-help">
-                        <?php p($l->t('Obergrenze der täglichen Arbeitszeit in Stunden. Nach ArbZG in der Regel 8 Stunden, in Ausnahmen bis 10 Stunden.')); ?>
+                        <?php p($l->t('Upper limit of daily working time in hours. German labor law (ArbZG) allows 8 hours normally, up to 10 in special cases.')); ?>
                     </p>
                     <?php if (isset($_['errors']['maxDailyHours'])): ?>
                         <?php 
@@ -185,7 +211,7 @@ $settings = $_['settings'] ?? [];
 
                 <div class="form-group">
                     <label for="minRestPeriod" class="form-label">
-                        <?php p($l->t('Mindest-Ruhezeit zwischen zwei Arbeitstagen')); ?>
+                        <?php p($l->t('Minimum rest period between work days (in hours)')); ?>
                         <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
                     </label>
                     <input type="number" 
@@ -199,13 +225,13 @@ $settings = $_['settings'] ?? [];
                            required
                            aria-describedby="minRestPeriod-help">
                     <p id="minRestPeriod-help" class="form-help">
-                        <?php p($l->t('Anzahl Stunden Ruhezeit zwischen Arbeitsende und nächstem Arbeitsbeginn (ArbZG verlangt mindestens 11 Stunden).')); ?>
+                        <?php p($l->t('Hours of rest between end of work and next start. German law requires at least 11 hours.')); ?>
                     </p>
                 </div>
 
                 <div class="form-group">
                     <label for="defaultWorkingHours" class="form-label">
-                        <?php p($l->t('Standard-Arbeitszeit pro Tag')); ?>
+                        <?php p($l->t('Standard working hours per day')); ?>
                         <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
                     </label>
                     <input type="number" 
@@ -219,13 +245,16 @@ $settings = $_['settings'] ?? [];
                            required
                            aria-describedby="defaultWorkingHours-help">
                     <p id="defaultWorkingHours-help" class="form-help">
-                        <?php p($l->t('Übliche tägliche Arbeitszeit in Stunden. Wird für neue Mitarbeitende als Voreinstellung verwendet, bis individuelle Modelle gesetzt sind.')); ?>
+                        <?php p($l->t('Default daily working hours. Used for new employees until individual models are set.')); ?>
                     </p>
                 </div>
+                </section>
 
+                <section class="admin-settings-section" aria-labelledby="section-regional-heading">
+                    <h3 id="section-regional-heading" class="admin-settings-section__title"><?php p($l->t('Region & holidays')); ?></h3>
                 <div class="form-group">
                     <label for="germanState" class="form-label">
-                        <?php p($l->t('Standard-Bundesland für Feiertage')); ?>
+                        <?php p($l->t('Default federal state for holidays')); ?>
                         <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
                     </label>
                     <select id="germanState" 
@@ -263,13 +292,33 @@ $settings = $_['settings'] ?? [];
                         ?>
                     </select>
                     <p id="germanState-help" class="form-help">
-                        <?php p($l->t('Wird für gesetzliche Feiertage und arbeitszeitrechtliche Prüfungen verwendet, wenn für Mitarbeitende/Teams nichts Spezielleres hinterlegt ist.')); ?>
+                        <?php p($l->t('Used for statutory holidays and compliance when no specific state is configured for employees or teams.')); ?>
                     </p>
                 </div>
 
                 <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" 
+                               id="statutoryAutoReseed" 
+                               name="statutoryAutoReseed" 
+                               value="1"
+                               <?php echo ($settings['statutoryAutoReseed'] ?? true) ? 'checked' : ''; ?>
+                               aria-describedby="statutoryAutoReseed-help">
+                        <label for="statutoryAutoReseed" class="form-label">
+                            <?php p($l->t('Auto-restore statutory holidays when viewing calendar')); ?>
+                        </label>
+                    </div>
+                    <p id="statutoryAutoReseed-help" class="form-help">
+                        <?php p($l->t('When enabled, missing statutory holidays are added when the calendar is viewed. Disable if you want deleted holidays to stay removed.')); ?>
+                    </p>
+                </div>
+                </section>
+
+                <section class="admin-settings-section" aria-labelledby="section-retention-heading">
+                    <h3 id="section-retention-heading" class="admin-settings-section__title"><?php p($l->t('Data retention')); ?></h3>
+                <div class="form-group">
                     <label for="retentionPeriod" class="form-label">
-                        <?php p($l->t('Aufbewahrungsdauer für Zeitnachweise (in Jahren)')); ?>
+                        <?php p($l->t('Data retention period for time records (in years)')); ?>
                         <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
                     </label>
                     <input type="number" 
@@ -282,22 +331,23 @@ $settings = $_['settings'] ?? [];
                            required
                            aria-describedby="retentionPeriod-help">
                     <p id="retentionPeriod-help" class="form-help">
-                        <?php p($l->t('Anzahl der Jahre, für die Arbeitszeitdaten gespeichert werden, bevor sie automatisch gelöscht werden (typisch: mindestens 2 Jahre).')); ?>
+                        <?php p($l->t('Number of years to keep time tracking data before automatic deletion (typically at least 2 years).')); ?>
                     </p>
                 </div>
+                </section>
 
                 <div class="card-actions">
                     <button type="submit" 
                             class="btn btn--primary"
-                            aria-label="<?php p($l->t('Alle Einstellungen speichern')); ?>"
-                            title="<?php p($l->t('Änderungen speichern und für alle Benutzerinnen und Benutzer übernehmen')); ?>">
-                        <?php p($l->t('Einstellungen speichern')); ?>
+                            aria-label="<?php p($l->t('Save all settings')); ?>"
+                            title="<?php p($l->t('Save changes and apply to all users')); ?>">
+                        <?php p($l->t('Save all settings')); ?>
                     </button>
                     <a href="<?php p(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.page.index')); ?>"
                        class="btn btn--secondary"
-                       aria-label="<?php p($l->t('Abbrechen und zurück zur Übersicht')); ?>"
-                       title="<?php p($l->t('Zurück, ohne Änderungen zu speichern')); ?>">
-                        <?php p($l->t('Abbrechen')); ?>
+                       aria-label="<?php p($l->t('Cancel and return to overview')); ?>"
+                       title="<?php p($l->t('Go back without saving changes')); ?>">
+                        <?php p($l->t('Cancel')); ?>
                     </a>
                 </div>
             </form>
@@ -305,3 +355,8 @@ $settings = $_['settings'] ?? [];
     </div>
 </div>
 </div><!-- /#arbeitszeitcheck-app -->
+
+<script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
+window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
+window.ArbeitszeitCheck.adminSettingsApiUrl = <?php echo json_encode($apiSettingsUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+</script>

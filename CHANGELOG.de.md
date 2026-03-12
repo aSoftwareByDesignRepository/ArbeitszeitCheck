@@ -1,3 +1,13 @@
+## 1.1.3 – 2025-03-12
+### Behoben
+- Admin-Feiertage und -Einstellungen: englische Quellstrings für Übersetzungsschlüssel (korrektes l10n-Verhalten)
+- UserDeletedListener: TeamMemberMapper und TeamManagerMapper per Injection statt OC
+- XSS: Team-Namen in admin-teams.js bereinigt (aria-label, data-team-name)
+
+### Geändert
+- Constants.php für Magic Numbers ergänzt (z. B. Limits, Timeouts)
+- Rohe Exception-Meldungen durch benutzerfreundliche Meldungen ersetzt
+
 ## 1.1.2 – 2025-03-07
 ### Geändert
 - Langfristiges Refactoring: Ersetzung aller `\OC::$server`-Verwendungen durch OCP-APIs und Konstruktor-Injection

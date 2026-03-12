@@ -527,17 +527,26 @@ class ReportingService
 
 			$startDate = $absence->getStartDate();
 			$endDate = $absence->getEndDate();
+			// Use stored days; fallback to HolidayCalendarService (state-aware) for legacy null
+			if ($absence->getDays() !== null) {
+				$days = (float)$absence->getDays();
+			} elseif ($startDate && $endDate) {
+				$days = $this->holidayCalendarService->computeWorkingDaysForUser($uid, $startDate, $endDate);
+			} else {
+				$days = 0.0;
+			}
+
 			$userAbsences[$uid]['absences'][] = [
 				'id' => $absence->getId(),
 				'type' => $type,
 				'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
 				'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
-				'days' => $absence->getDays(),
+				'days' => $days,
 				'status' => $status
 			];
 
-			$userAbsences[$uid]['total_days'] += $absence->getDays();
-			$totalDays += $absence->getDays();
+			$userAbsences[$uid]['total_days'] += $days;
+			$totalDays += $days;
 		}
 
 		$report['users'] = array_values($userAbsences);

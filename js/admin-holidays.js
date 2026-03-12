@@ -87,10 +87,10 @@
         typeSelect.className = 'form-select';
         const optFull = document.createElement('option');
         optFull.value = 'full';
-        optFull.textContent = window.t ? window.t('arbeitszeitcheck', 'Voller Feiertag') : 'Voller Feiertag';
+        optFull.textContent = (window.t && window.t('arbeitszeitcheck', 'Full-day holiday')) || 'Full-day holiday';
         const optHalf = document.createElement('option');
         optHalf.value = 'half';
-        optHalf.textContent = window.t ? window.t('arbeitszeitcheck', 'Halber Feiertag') : 'Halber Feiertag';
+        optHalf.textContent = (window.t && window.t('arbeitszeitcheck', 'Half-day holiday')) || 'Half-day holiday';
         typeSelect.appendChild(optFull);
         typeSelect.appendChild(optHalf);
         typeCell.appendChild(typeSelect);
@@ -101,9 +101,9 @@
         scopeSelect.name = 'scope';
         scopeSelect.className = 'form-select';
         const scopes = [
-            { value: 'company', label: window.t ? window.t('arbeitszeitcheck', 'Firmenfeiertag') : 'Firmenfeiertag' },
-            { value: 'custom', label: window.t ? window.t('arbeitszeitcheck', 'Benutzerdefiniert') : 'Benutzerdefiniert' },
-            { value: 'statutory', label: window.t ? window.t('arbeitszeitcheck', 'Gesetzlich') : 'Gesetzlich' }
+            { value: 'company', label: (window.t && window.t('arbeitszeitcheck', 'Company holiday')) || 'Company holiday' },
+            { value: 'custom', label: (window.t && window.t('arbeitszeitcheck', 'custom')) || 'Custom' },
+            { value: 'statutory', label: (window.t && window.t('arbeitszeitcheck', 'Statutory')) || 'Statutory' }
         ];
         scopes.forEach(function(s) {
             const opt = document.createElement('option');
@@ -118,7 +118,7 @@
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
         saveBtn.className = 'btn btn--primary btn--sm';
-        saveBtn.textContent = window.t ? window.t('arbeitszeitcheck', 'Speichern') : 'Speichern';
+        saveBtn.textContent = (window.t && window.t('arbeitszeitcheck', 'Save')) || 'Save';
         Utils.on(saveBtn, 'click', function() {
             saveHolidayRow(row);
         });
@@ -126,7 +126,7 @@
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'btn btn--secondary btn--sm';
-        deleteBtn.textContent = window.t ? window.t('arbeitszeitcheck', 'Entfernen') : 'Entfernen';
+        deleteBtn.textContent = (window.t && window.t('arbeitszeitcheck', 'Remove')) || 'Remove';
         Utils.on(deleteBtn, 'click', function() {
             row.remove();
         });
@@ -157,7 +157,7 @@
         const scopeSelect = row.querySelector('select[name="scope"]');
 
         if (!dateInput || !nameInput || !typeSelect || !scopeSelect) {
-            const msg = window.t ? window.t('arbeitszeitcheck', 'Technischer Fehler: Pflichtfelder für den Feiertag konnten nicht gefunden werden.') : 'Technischer Fehler: Pflichtfelder für den Feiertag konnten nicht gefunden werden.';
+            const msg = (window.t && window.t('arbeitszeitcheck', 'Technical error: Required fields for the holiday could not be found.')) || 'Technical error: Required fields for the holiday could not be found.';
             if (Messaging && Messaging.showError) {
                 Messaging.showError(msg);
             } else {
@@ -180,7 +180,7 @@
         };
 
         if (!payload.date || !payload.name) {
-            const msg = window.t ? window.t('arbeitszeitcheck', 'Bitte Datum und Name des Feiertags angeben.') : 'Bitte Datum und Name des Feiertags angeben.';
+            const msg = (window.t && window.t('arbeitszeitcheck', 'Please specify date and name of the holiday.')) || 'Please specify date and name of the holiday.';
             if (Messaging && Messaging.showError) {
                 Messaging.showError(msg);
             } else {
@@ -207,11 +207,11 @@
                 }
                 loadExistingHolidays();
                 if (Messaging && Messaging.showSuccess) {
-                    const msg = window.t ? window.t('arbeitszeitcheck', 'Feiertag wurde gespeichert.') : 'Feiertag wurde gespeichert.';
+                    const msg = window.t ? window.t('arbeitszeitcheck', 'Holiday was saved.') : 'Holiday was saved.';
                     Messaging.showSuccess(msg);
                 }
             } else {
-                const errorMsg = (data && data.error) || (window.t ? window.t('arbeitszeitcheck', 'Feiertag konnte nicht gespeichert werden.') : 'Feiertag konnte nicht gespeichert werden.');
+                const errorMsg = (data && data.error) || (window.t && window.t('arbeitszeitcheck', 'Holiday could not be saved.')) || 'Holiday could not be saved.';
                 if (Messaging && Messaging.showError) {
                     Messaging.showError(errorMsg);
                 } else {
@@ -219,7 +219,7 @@
                 }
             }
         }).catch(function() {
-            const msg = window.t ? window.t('arbeitszeitcheck', 'Beim Speichern des Feiertags ist ein Fehler aufgetreten.') : 'Beim Speichern des Feiertags ist ein Fehler aufgetreten.';
+            const msg = (window.t && window.t('arbeitszeitcheck', 'An error occurred while saving the holiday.')) || 'An error occurred while saving the holiday.';
             if (Messaging && Messaging.showError) {
                 Messaging.showError(msg);
             } else {
@@ -253,7 +253,7 @@
             if (!data || data.success !== true || !Array.isArray(data.holidays)) {
                 renderEmptyHolidaysRow(tbody);
                 if (Messaging && Messaging.showError) {
-                    const msg = window.t ? window.t('arbeitszeitcheck', 'Feiertage konnten nicht geladen werden.') : 'Feiertage konnten nicht geladen werden.';
+                    const msg = window.t ? window.t('arbeitszeitcheck', 'Holidays could not be loaded.') : 'Holidays could not be loaded.';
                     Messaging.showError(msg);
                 }
                 return;
@@ -270,7 +270,7 @@
         }).catch(function() {
             renderEmptyHolidaysRow(tbody);
             if (Messaging && Messaging.showError) {
-                const msg = window.t ? window.t('arbeitszeitcheck', 'Feiertage konnten nicht geladen werden.') : 'Feiertage konnten nicht geladen werden.';
+                const msg = window.t ? window.t('arbeitszeitcheck', 'Holidays could not be loaded.') : 'Holidays could not be loaded.';
                 Messaging.showError(msg);
             }
         });
@@ -294,8 +294,8 @@
 
         const typeCell = document.createElement('td');
         const kindLabel = item.kind === 'half'
-            ? (window.t ? window.t('arbeitszeitcheck', 'Halber Feiertag') : 'Halber Feiertag')
-            : (window.t ? window.t('arbeitszeitcheck', 'Voller Feiertag') : 'Voller Feiertag');
+            ? ((window.t && window.t('arbeitszeitcheck', 'Half-day holiday')) || 'Half-day holiday')
+            : ((window.t && window.t('arbeitszeitcheck', 'Full-day holiday')) || 'Full-day holiday');
         const typeBadge = document.createElement('span');
         typeBadge.className = 'admin-holidays-badge ' + (item.kind === 'half' ? 'admin-holidays-badge--half' : 'admin-holidays-badge--full');
         typeBadge.textContent = kindLabel;
@@ -305,13 +305,13 @@
         let scopeLabel = '';
         let scopeBadgeClass = 'admin-holidays-badge--custom';
         if (item.scope === 'statutory') {
-            scopeLabel = window.t ? window.t('arbeitszeitcheck', 'Gesetzlich') : 'Gesetzlich';
+            scopeLabel = window.t ? window.t('arbeitszeitcheck', 'Statutory') : 'Statutory';
             scopeBadgeClass = 'admin-holidays-badge--statutory';
         } else if (item.scope === 'company') {
-            scopeLabel = window.t ? window.t('arbeitszeitcheck', 'Firmenfeiertag') : 'Firmenfeiertag';
+            scopeLabel = window.t ? window.t('arbeitszeitcheck', 'Company holiday') : 'Company holiday';
             scopeBadgeClass = 'admin-holidays-badge--company';
         } else {
-            scopeLabel = window.t ? window.t('arbeitszeitcheck', 'Benutzerdefiniert') : 'Benutzerdefiniert';
+            scopeLabel = window.t ? window.t('arbeitszeitcheck', 'custom') : 'Custom';
             scopeBadgeClass = 'admin-holidays-badge--custom';
         }
         const scopeBadge = document.createElement('span');
@@ -320,21 +320,26 @@
         scopeCell.appendChild(scopeBadge);
 
         const actionsCell = document.createElement('td');
-        // Gesetzliche Feiertage sind nicht löschbar – kein Button anzeigen,
-        // um falsche Erwartungen zu vermeiden.
-        if (item.scope !== 'statutory') {
+        {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'btn btn--secondary btn--sm';
-            deleteBtn.textContent = window.t ? window.t('arbeitszeitcheck', 'Entfernen') : 'Entfernen';
+            deleteBtn.textContent = (window.t && window.t('arbeitszeitcheck', 'Remove')) || 'Remove';
             if (window.t) {
-                const labelTemplate = window.t('arbeitszeitcheck', 'Feiertag {name} am {date} entfernen');
+                const labelTemplate = window.t('arbeitszeitcheck', 'Remove holiday {name} on {date}');
                 const ariaLabel = labelTemplate
                     .replace('{name}', item.name || '')
                     .replace('{date}', displayDate || '');
                 deleteBtn.setAttribute('aria-label', ariaLabel);
             }
             Utils.on(deleteBtn, 'click', function() {
+                if (item.scope === 'statutory') {
+                    const infoMsg = (window.t && window.t('arbeitszeitcheck', 'Statutory holidays are automatically restored when the calendar is viewed, unless "Auto-restore statutory holidays" is disabled in Settings.')) || 'Statutory holidays are automatically restored when the calendar is viewed, unless "Auto-restore statutory holidays" is disabled in Settings.';
+                    const confirmMsg = (window.t && window.t('arbeitszeitcheck', 'Remove this holiday?')) || 'Remove this holiday?';
+                    if (!window.confirm(infoMsg + '\n\n' + confirmMsg)) {
+                        return;
+                    }
+                }
                 deleteHoliday(item.id, row);
             });
             actionsCell.appendChild(deleteBtn);
@@ -357,8 +362,8 @@
         const cell = document.createElement('td');
         cell.colSpan = 5;
         cell.className = 'admin-holidays-empty';
-        cell.textContent = (window.t && window.t('arbeitszeitcheck', 'Keine Feiertage für dieses Jahr konfiguriert.')) ||
-            'Keine Feiertage für dieses Jahr konfiguriert.';
+        cell.textContent = (window.t && window.t('arbeitszeitcheck', 'No holidays configured for this year.')) ||
+            'No holidays configured for this year.';
         row.appendChild(cell);
         tbody.appendChild(row);
     }
@@ -381,17 +386,17 @@
             if (data && data.success) {
                 row.remove();
                 if (Messaging && Messaging.showSuccess) {
-                    const msg = window.t ? window.t('arbeitszeitcheck', 'Feiertag wurde entfernt.') : 'Feiertag wurde entfernt.';
+                    const msg = (window.t && window.t('arbeitszeitcheck', 'Holiday was removed.')) || 'Holiday was removed.';
                     Messaging.showSuccess(msg);
                 }
             } else {
-                const errorMsg = (data && data.error) || (window.t ? window.t('arbeitszeitcheck', 'Feiertag konnte nicht entfernt werden.') : 'Feiertag konnte nicht entfernt werden.');
+                const errorMsg = (data && data.error) || (window.t ? window.t('arbeitszeitcheck', 'Holiday could not be removed.') : 'Holiday could not be removed.');
                 if (Messaging && Messaging.showError) {
                     Messaging.showError(errorMsg);
                 }
             }
         }).catch(function() {
-            const msg = window.t ? window.t('arbeitszeitcheck', 'Beim Entfernen des Feiertags ist ein Fehler aufgetreten.') : 'Beim Entfernen des Feiertags ist ein Fehler aufgetreten.';
+            const msg = (window.t && window.t('arbeitszeitcheck', 'An error occurred while removing the holiday.')) || 'An error occurred while removing the holiday.';
             if (Messaging && Messaging.showError) {
                 Messaging.showError(msg);
             }

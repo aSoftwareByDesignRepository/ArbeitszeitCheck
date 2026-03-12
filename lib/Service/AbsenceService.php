@@ -20,6 +20,7 @@ use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
 use OCP\IL10N;
+use OCA\ArbeitszeitCheck\Constants;
 use OCP\IUserManager;
 
 /**
@@ -258,6 +259,144 @@ class AbsenceService
 			$absence->getSummary(),
 			null
 		);
+	}
+
+	/**
+	 * Cancel an existing absence.
+	 *
+	 * Security / business rules:
+	 * - Only the owner can cancel their own absences (enforced via getAbsence()).
+	 * - Cancellation is only allowed if the absence has not started yet
+	 *   (start date strictly greater than today, in server timezone).
+	 * - Only absences in one of the "active" states can be cancelled:
+	 *   pending, substitute_pending, or approved.
+	 *
+	 * We keep the record (status = cancelled) for auditability instead of
+	 * deleting it, so reports and logs remain consistent.
+	 *
+	 * @param int $id Absence ID
+	 * @param string $userId User ID performing the cancellation
+	 * @return Absence
+	 * @throws \Exception
+	 */
+	public function cancelAbsence(int $id, string $userId): Absence
+	{
+		$absence = $this->getAbsence($id, $userId);
+		if (!$absence) {
+			throw new \Exception($this->l10n->t('Absence not found'));
+		}
+
+		$status = $absence->getStatus();
+		if (!in_array($status, [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_APPROVED], true)) {
+			throw new \Exception($this->l10n->t('This absence cannot be cancelled.'));
+		}
+
+		$startDate = $absence->getStartDate();
+		if (!$startDate) {
+			throw new \Exception($this->l10n->t('Start date is missing for this absence.'));
+		}
+
+		$today = new \DateTimeImmutable('today');
+		// Only allow cancellation before the first day of the absence
+		if ($startDate <= $today) {
+			throw new \Exception($this->l10n->t('You can only cancel absences that have not started yet.'));
+		}
+
+		$oldData = $absence->getSummary();
+
+		$absence->setStatus(Absence::STATUS_CANCELLED);
+		$absence->setUpdatedAt(new \DateTime());
+
+		$updatedAbsence = $this->absenceMapper->update($absence);
+
+		// Log the action for audit/compliance
+		$this->auditLogMapper->logAction(
+			$userId,
+			'absence_cancelled',
+			'absence',
+			$updatedAbsence->getId(),
+			$oldData,
+			$updatedAbsence->getSummary()
+		);
+
+		// Optional: notify managers or substitutes in the future; for now we keep it simple
+
+		return $updatedAbsence;
+	}
+
+	/**
+	 * Shorten an approved absence (early return).
+	 *
+	 * Security / business rules:
+	 * - Only the owner can shorten their own absences (enforced via getAbsence()).
+	 * - Only approved absences can be shortened.
+	 * - The absence must have started (start_date <= today) but not yet ended
+	 *   (end_date > today), i.e. the employee is currently in the absence period.
+	 * - The new end date must be strictly earlier than the original end date.
+	 * - The new end date must be >= start date.
+	 *
+	 * Recalculates working days for the new range and logs the change for audit.
+	 *
+	 * @param int $id Absence ID
+	 * @param string $userId User ID performing the change
+	 * @param string $newEndDate New end date (Y-m-d or d.m.Y)
+	 * @return Absence
+	 * @throws \Exception
+	 */
+	public function shortenAbsence(int $id, string $userId, string $newEndDate): Absence
+	{
+		$absence = $this->getAbsence($id, $userId);
+		if (!$absence) {
+			throw new \Exception($this->l10n->t('Absence not found'));
+		}
+
+		if ($absence->getStatus() !== Absence::STATUS_APPROVED) {
+			throw new \Exception($this->l10n->t('Only approved absences can be shortened.'));
+		}
+
+		$startDate = $absence->getStartDate();
+		$originalEndDate = $absence->getEndDate();
+		if (!$startDate || !$originalEndDate) {
+			throw new \Exception($this->l10n->t('Start date or end date is missing for this absence.'));
+		}
+
+		$today = new \DateTimeImmutable('today');
+		if ($startDate > $today) {
+			throw new \Exception($this->l10n->t('You can only shorten absences that have already started.'));
+		}
+		if ($originalEndDate <= $today) {
+			throw new \Exception($this->l10n->t('This absence has already ended. It cannot be shortened.'));
+		}
+
+		$newEnd = $this->parseDate($newEndDate);
+		$newEnd->setTime(0, 0, 0);
+
+		if ($newEnd < $startDate) {
+			throw new \Exception($this->l10n->t('The new end date cannot be before the start date.'));
+		}
+		if ($newEnd >= $originalEndDate) {
+			throw new \Exception($this->l10n->t('The new end date must be earlier than the original end date.'));
+		}
+
+		$oldData = $absence->getSummary();
+
+		$absence->setEndDate($newEnd);
+		$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $newEnd);
+		$absence->setDays($workingDays);
+		$absence->setUpdatedAt(new \DateTime());
+
+		$updatedAbsence = $this->absenceMapper->update($absence);
+
+		$this->auditLogMapper->logAction(
+			$userId,
+			'absence_shortened',
+			'absence',
+			$updatedAbsence->getId(),
+			$oldData,
+			$updatedAbsence->getSummary()
+		);
+
+		return $updatedAbsence;
 	}
 
 	/**
@@ -572,7 +711,20 @@ class AbsenceService
 	public function getVacationStats(string $userId, int $year): array
 	{
 		try {
+			// 1. Sum days for absences entirely within the year
 			$usedDays = $this->absenceMapper->getVacationDaysUsed($userId, $year);
+
+			// 2. Add per-year portion for absences spanning the year boundary
+			$spanning = $this->absenceMapper->findVacationApprovedSpanningYearBoundary($userId, $year);
+			foreach ($spanning as $absence) {
+				$start = $absence->getStartDate();
+				$end = $absence->getEndDate();
+				if (!$start || !$end) {
+					continue;
+				}
+				$perYear = $this->holidayCalendarService->computeWorkingDaysPerYearForUser($userId, $start, $end);
+				$usedDays += (float)($perYear[$year] ?? 0);
+			}
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting vacation days used: ' . $e->getMessage(), ['exception' => $e]);
 			$usedDays = 0.0;
@@ -586,8 +738,7 @@ class AbsenceService
 		}
 
 		// Get total vacation entitlement from the assigned working time model (single source of truth),
-		// falling back to user setting or a safe default of 25 days.
-		$totalEntitlement = 25;
+		$totalEntitlement = Constants::DEFAULT_VACATION_DAYS_PER_YEAR;
 		try {
 			$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
 			if ($currentModel !== null && $currentModel->getVacationDaysPerYear() !== null) {
@@ -597,12 +748,12 @@ class AbsenceService
 				$totalEntitlement = $this->userSettingsMapper->getIntegerSetting(
 					$userId,
 					'vacation_days_per_year',
-					25
+					Constants::DEFAULT_VACATION_DAYS_PER_YEAR
 				);
 			}
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting vacation entitlement: ' . $e->getMessage(), ['exception' => $e]);
-			$totalEntitlement = 25;
+			$totalEntitlement = Constants::DEFAULT_VACATION_DAYS_PER_YEAR;
 		}
 
 		return [
@@ -763,7 +914,7 @@ class AbsenceService
 				}
 				break;
 			case Absence::TYPE_SICK_LEAVE:
-				if ($days > 365) {
+				if ($days > Constants::MAX_ABSENCE_DAYS) {
 					throw new \Exception($this->l10n->t('Sick leave duration seems unreasonable'));
 				}
 				break;
@@ -783,13 +934,13 @@ class AbsenceService
 				}
 				break;
 			case Absence::TYPE_UNPAID_LEAVE:
-				if ($days > 365) {
+				if ($days > Constants::MAX_ABSENCE_DAYS) {
 					throw new \Exception($this->l10n->t('Unpaid leave cannot exceed 365 days'));
 				}
 				break;
 			case Absence::TYPE_HOME_OFFICE:
 			case Absence::TYPE_BUSINESS_TRIP:
-				if ($days > 365) {
+				if ($days > Constants::MAX_ABSENCE_DAYS) {
 					throw new \Exception($this->l10n->t('Duration cannot exceed 365 days'));
 				}
 				break;
@@ -900,6 +1051,28 @@ class AbsenceService
 	private function computeWorkingDaysForUser(string $userId, \DateTime $start, \DateTime $end): float
 	{
 		return $this->holidayCalendarService->computeWorkingDaysForUser($userId, $start, $end);
+	}
+
+	/**
+	 * Get working days for display (state-aware).
+	 * Uses stored days when set; otherwise computes via HolidayCalendarService
+	 * for consistency with vacation stats and company/state holidays.
+	 */
+	public function getWorkingDaysForDisplay(Absence $absence): float
+	{
+		if ($absence->getDays() !== null) {
+			return (float)$absence->getDays();
+		}
+		$start = $absence->getStartDate();
+		$end = $absence->getEndDate();
+		if (!$start || !$end) {
+			return 0.0;
+		}
+		return $this->holidayCalendarService->computeWorkingDaysForUser(
+			$absence->getUserId(),
+			$start,
+			$end
+		);
 	}
 
 	/**

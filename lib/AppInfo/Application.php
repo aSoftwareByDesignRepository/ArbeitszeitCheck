@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\AppInfo;
 
 use OCA\ArbeitszeitCheck\Capabilities;
+use OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays;
 use OCA\ArbeitszeitCheck\Listener\LoadSidebarScripts;
 use OCA\ArbeitszeitCheck\Listener\CSPListener;
 use OCA\ArbeitszeitCheck\Listener\UserDeletedListener;
@@ -104,12 +105,6 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
-		$context->registerService(\OCA\ArbeitszeitCheck\Db\HolidayMapper::class, function($c) {
-			return new \OCA\ArbeitszeitCheck\Db\HolidayMapper(
-				$c->query(IDBConnection::class)
-			);
-		});
-
 		$context->registerService(\OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper::class, function($c) {
 			return new \OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper(
 				$c->query(IDBConnection::class)
@@ -138,6 +133,13 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(BackfillAbsenceDays::class, function($c) {
+			return new BackfillAbsenceDays(
+				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
+				$c->query(HolidayCalendarService::class)
+			);
+		});
+
 		// Register CSPService
 		$context->registerService(CSPService::class, function($c) {
 			return new CSPService(
@@ -163,7 +165,9 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
 				$c->query(ProjectCheckIntegrationService::class),
 				$c->query(ComplianceService::class),
-				$c->query(\OCP\IL10N::class)
+				$c->query(\OCP\IL10N::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class)
 			);
 		});
 
@@ -224,7 +228,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\Notification\IManager::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class),
-				$c->query(\OCP\IUserManager::class)
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\OCP\IConfig::class)
 			);
 		});
 

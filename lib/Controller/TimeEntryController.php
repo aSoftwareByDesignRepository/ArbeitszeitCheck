@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
@@ -138,17 +139,16 @@ class TimeEntryController extends Controller
 	 * @param string|null $start_date Start date filter (Y-m-d format)
 	 * @param string|null $end_date End date filter (Y-m-d format)
 	 * @param string|null $status Status filter (active, completed, break, pending_approval, rejected)
-	 * @param int|null $limit Maximum number of entries to return (default: 25)
+	 * @param int|null $limit Maximum number of entries to return (default: Constants::DEFAULT_LIST_LIMIT)
 	 * @param int|null $offset Number of entries to skip for pagination (default: 0)
 	 * @return JSONResponse JSON response with 'success', 'entries' array, and 'total' count
 	 */
 	#[NoAdminRequired]
-	public function index(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
+	public function index(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = Constants::DEFAULT_LIST_LIMIT, ?int $offset = 0): JSONResponse
 	{
 		try {
 			$userId = $this->getUserId();
-			// Cap limit to prevent DoS (max 500 per request)
-			$limit = $limit !== null ? min(max(1, (int)$limit), 500) : 25;
+			$limit = $limit !== null ? min(max(1, (int)$limit), Constants::MAX_LIST_LIMIT) : Constants::DEFAULT_LIST_LIMIT;
 			$offset = $offset !== null ? max(0, (int)$offset) : 0;
 			$filters = [];
 
@@ -173,7 +173,7 @@ class TimeEntryController extends Controller
 					\OCP\Log\logger('arbeitszeitcheck')->error('Invalid start_date format: ' . $start_date, ['exception' => $e]);
 					return new JSONResponse([
 						'success' => false,
-						'error' => 'Invalid start date format'
+						'error' => $this->l10n->t('Invalid start date format')
 					], Http::STATUS_BAD_REQUEST);
 				}
 			}
@@ -272,7 +272,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -357,12 +357,12 @@ class TimeEntryController extends Controller
 			// Do NOT allow editing if entry is already approved (approvedBy is set) or older than 2 weeks
 			$isApproved = $entry->getApprovedBy() !== null;
 			$entryDate = $entry->getStartTime();
-			$twoWeeksAgo = new \DateTime();
-			$twoWeeksAgo->modify('-14 days');
-			$twoWeeksAgo->setTime(0, 0, 0); // Start of day
-			$isWithinTwoWeeks = $entryDate && $entryDate >= $twoWeeksAgo;
+			$editCutoff = new \DateTime();
+			$editCutoff->modify('-' . Constants::EDIT_WINDOW_DAYS . ' days');
+			$editCutoff->setTime(0, 0, 0);
+			$isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
 
-			$canEdit = !$isApproved && $isWithinTwoWeeks && (
+			$canEdit = !$isApproved && $isWithinEditWindow && (
 				$entry->getIsManualEntry()
 				|| $entry->getStatus() === TimeEntry::STATUS_PENDING_APPROVAL
 				|| ($entry->getStatus() === TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())
@@ -371,7 +371,7 @@ class TimeEntryController extends Controller
 			if (!$canEdit) {
 				$errorMessage = $isApproved
 					? $this->l10n->t('Cannot edit this time entry. Please use "Request Correction" for approved entries.')
-					: (!$isWithinTwoWeeks
+					: (!$isWithinEditWindow
 						? $this->l10n->t('Cannot edit this time entry. Only entries from the last 2 weeks can be edited.')
 						: $this->l10n->t('Cannot edit this time entry.'));
 
@@ -408,14 +408,13 @@ class TimeEntryController extends Controller
 			);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
-			// Redirect to time entries list on error
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in edit method: ' . $e->getMessage(), ['exception' => $e]);
 			$response = new TemplateResponse(
 				$this->appName,
 				'time-entries',
 				[
 					'urlGenerator' => $this->urlGenerator,
-					'error' => $e->getMessage(),
+					'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 					'l' => $this->l10n,
 				]
 			);
@@ -444,7 +443,7 @@ class TimeEntryController extends Controller
 			if ($entry->getUserId() !== $userId) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Access denied'
+					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
 			}
 
@@ -461,7 +460,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -503,6 +502,12 @@ class TimeEntryController extends Controller
 			$endDateTime->modify('+' . round($hours * 3600) . ' seconds');
 			$timeEntry->setEndTime($endDateTime);
 			$timeEntry->setDescription($description);
+			if ($project_check_project_id !== null && mb_strlen($project_check_project_id) > TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH])
+				], Http::STATUS_BAD_REQUEST);
+			}
 			$timeEntry->setProjectCheckProjectId($project_check_project_id);
 			$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
 			$timeEntry->setIsManualEntry(true);
@@ -611,7 +616,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -653,7 +658,7 @@ class TimeEntryController extends Controller
 			if ($entry->getUserId() !== $userId) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Access denied'
+					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
 			}
 
@@ -666,12 +671,12 @@ class TimeEntryController extends Controller
 			// Do NOT allow editing if entry is already approved (approvedBy is set) or older than 2 weeks
 			$isApproved = $entry->getApprovedBy() !== null;
 			$entryDate = $entry->getStartTime();
-			$twoWeeksAgo = new \DateTime();
-			$twoWeeksAgo->modify('-14 days');
-			$twoWeeksAgo->setTime(0, 0, 0); // Start of day
-			$isWithinTwoWeeks = $entryDate && $entryDate >= $twoWeeksAgo;
+			$editCutoff = new \DateTime();
+			$editCutoff->modify('-' . Constants::EDIT_WINDOW_DAYS . ' days');
+			$editCutoff->setTime(0, 0, 0);
+			$isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
 
-			$canEdit = !$isApproved && $isWithinTwoWeeks && (
+			$canEdit = !$isApproved && $isWithinEditWindow && (
 				$entry->getIsManualEntry()
 				|| $entry->getStatus() === TimeEntry::STATUS_PENDING_APPROVAL
 				|| ($entry->getStatus() === TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())
@@ -680,7 +685,7 @@ class TimeEntryController extends Controller
 			if (!$canEdit) {
 				$errorMessage = $isApproved
 					? $this->l10n->t('Cannot edit this time entry. Please use "Request Correction" for approved entries.')
-					: (!$isWithinTwoWeeks
+					: (!$isWithinEditWindow
 						? $this->l10n->t('Cannot edit this time entry. Only entries from the last 2 weeks can be edited.')
 						: $this->l10n->t('Cannot edit this time entry.'));
 
@@ -914,6 +919,12 @@ class TimeEntryController extends Controller
 			}
 
 			if ($project_check_project_id !== null) {
+				if (mb_strlen($project_check_project_id) > TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH])
+					], Http::STATUS_BAD_REQUEST);
+				}
 				$entry->setProjectCheckProjectId($project_check_project_id);
 			}
 
@@ -1024,7 +1035,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1120,7 +1131,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController::getDeletionImpact: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1153,7 +1164,7 @@ class TimeEntryController extends Controller
 			if ($entry->getUserId() !== $userId) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Access denied'
+					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
 			}
 
@@ -1336,7 +1347,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1434,7 +1445,7 @@ class TimeEntryController extends Controller
 			if ($entry->getUserId() !== $userId) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Access denied'
+					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
 			}
 
@@ -1442,7 +1453,7 @@ class TimeEntryController extends Controller
 			if (!$entry->getIsManualEntry()) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Cannot delete automatic time entries'
+					'error' => $this->l10n->t('Cannot delete automatic time entries')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -1488,7 +1499,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1560,7 +1571,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1600,12 +1611,12 @@ class TimeEntryController extends Controller
 	 * @param string|null $start_date Start date filter (Y-m-d format)
 	 * @param string|null $end_date End date filter (Y-m-d format)
 	 * @param string|null $status Status filter
-	 * @param int|null $limit Maximum number of entries to return (default: 25)
+	 * @param int|null $limit Maximum number of entries to return (default: Constants::DEFAULT_LIST_LIMIT)
 	 * @param int|null $offset Number of entries to skip for pagination (default: 0)
 	 * @return JSONResponse JSON response with 'success', 'entries' array, and 'total' count
 	 */
 	#[NoAdminRequired]
-	public function index_api(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
+	public function index_api(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = Constants::DEFAULT_LIST_LIMIT, ?int $offset = 0): JSONResponse
 	{
 		return $this->index($start_date, $end_date, $status, $limit, $offset);
 	}
@@ -1619,12 +1630,12 @@ class TimeEntryController extends Controller
 	 * @param string|null $start_date Start date filter (Y-m-d format)
 	 * @param string|null $end_date End date filter (Y-m-d format)
 	 * @param string|null $status Status filter
-	 * @param int|null $limit Maximum number of entries to return (default: 25)
+	 * @param int|null $limit Maximum number of entries to return (default: Constants::DEFAULT_LIST_LIMIT)
 	 * @param int|null $offset Number of entries to skip for pagination (default: 0)
 	 * @return JSONResponse JSON response with 'success', 'entries' array, and 'total' count
 	 */
 	#[NoAdminRequired]
-	public function apiIndex(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
+	public function apiIndex(?string $start_date = null, ?string $end_date = null, ?string $status = null, ?int $limit = Constants::DEFAULT_LIST_LIMIT, ?int $offset = 0): JSONResponse
 	{
 		return $this->index($start_date, $end_date, $status, $limit, $offset);
 	}
@@ -1824,6 +1835,12 @@ class TimeEntryController extends Controller
 
 				// Set all required fields
 				$timeEntry->setDescription($description);
+				if ($project_check_project_id !== null && mb_strlen($project_check_project_id) > TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH])
+					], Http::STATUS_BAD_REQUEST);
+				}
 				$timeEntry->setProjectCheckProjectId($project_check_project_id);
 				$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
 				$timeEntry->setIsManualEntry(true);
@@ -1960,7 +1977,7 @@ class TimeEntryController extends Controller
 				\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController::apiStore: ' . $e->getMessage(), ['exception' => $e]);
 				return new JSONResponse([
 					'success' => false,
-					'error' => $e->getMessage()
+					'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 				], Http::STATUS_INTERNAL_SERVER_ERROR);
 			}
 		}
@@ -1969,7 +1986,7 @@ class TimeEntryController extends Controller
 		if (!$date || $hours === null) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => 'Either (date and hours) or (startTime and endTime) are required'
+				'error' => $this->l10n->t('Either (date and hours) or (startTime and endTime) are required')
 			], Http::STATUS_BAD_REQUEST);
 		}
 
@@ -2084,7 +2101,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -2110,7 +2127,7 @@ class TimeEntryController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}

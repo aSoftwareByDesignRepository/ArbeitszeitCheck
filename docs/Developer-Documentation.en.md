@@ -182,8 +182,8 @@ class ExampleController extends Controller
 
 **Controller Annotations:**
 - `@NoAdminRequired` - Endpoint accessible to all authenticated users
-- `@NoCSRFRequired` - Skip CSRF check (use sparingly)
-- `@PublicPage` - Public endpoint (no auth required)
+- `@NoCSRFRequired` - JSON API endpoints use this because the CSRF check runs before the request body is decoded; the frontend still sends `requesttoken` in headers for session integrity. Use sparingly.
+- `@PublicPage` - No auth required (e.g. health check for load balancers). **Security:** Never expose raw exception messages or sensitive data on PublicPage endpoints.
 
 #### Services
 

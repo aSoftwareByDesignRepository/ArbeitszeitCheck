@@ -339,9 +339,12 @@
         const modelId = e.target.dataset.modelId;
         if (!modelId) return;
 
-        const modelName = e.target.closest('tr')?.querySelector('td:first-child')?.textContent?.trim() || 'this work schedule';
-        const confirmMessage = window.ArbeitszeitCheck?.l10n?.confirmDeleteModel || 
-            `Are you sure you want to delete "${modelName}"?\n\nThis will permanently remove this work schedule. If any employees are using this schedule, you should assign them to a different schedule first.\n\nThis action cannot be undone.`;
+        const modelName = e.target.closest('tr')?.querySelector('td:first-child')?.textContent?.trim() || (window.t && window.t('arbeitszeitcheck', 'this work schedule')) || 'this work schedule';
+        const template = window.ArbeitszeitCheck?.l10n?.confirmDeleteModelWithName ||
+            window.ArbeitszeitCheck?.l10n?.confirmDeleteModel ||
+            (window.t && window.t('arbeitszeitcheck', 'Are you sure you want to delete "{name}"?\n\nThis will permanently remove this work schedule. If any employees are using this schedule, you should assign them to a different schedule first.\n\nThis action cannot be undone.')) ||
+            'Are you sure you want to delete "{name}"?\n\nThis will permanently remove this work schedule. If any employees are using this schedule, you should assign them to a different schedule first.\n\nThis action cannot be undone.';
+        const confirmMessage = String(template).replace(/\{name\}/g, modelName);
 
         if (!confirm(confirmMessage)) {
             return;

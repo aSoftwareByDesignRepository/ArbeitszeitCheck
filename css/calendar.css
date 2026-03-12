@@ -160,12 +160,13 @@
 
 .calendar-day {
 	min-height: 100px;
+	min-width: 0; /* Allow shrink in grid */
 	padding: var(--space-2, 0.5rem);
-	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+	border: 2px solid var(--arbeitszeitcheck-color-border, var(--color-border));
 	border-radius: var(--radius-base, 4px);
 	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background)));
 	cursor: pointer;
-	transition: all 0.2s ease;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 	position: relative;
 	display: flex;
 	flex-direction: column;
@@ -176,7 +177,6 @@
 .calendar-day:hover {
 	background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover, var(--arbeitszeitcheck-color-background-secondary)));
 	border-color: var(--arbeitszeitcheck-color-primary, var(--color-primary));
-	transform: translateY(-2px);
 	box-shadow: var(--arbeitszeitcheck-shadow-md);
 }
 
@@ -229,6 +229,18 @@
 	font-size: 1rem;
 	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, var(--arbeitszeitcheck-color-text)));
 	margin-bottom: var(--space-1, 0.25rem);
+}
+
+.calendar-day-holiday-label {
+	display: block;
+	font-size: 0.7rem;
+	line-height: 1.2;
+	color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text-tertiary)));
+	margin-top: var(--space-1, 0.25rem);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
 }
 
 .calendar-day-hours {
@@ -291,6 +303,14 @@
 	font-size: 0.85rem;
 	color: var(--arbeitszeitcheck-color-primary, var(--color-primary));
 	font-weight: 500;
+}
+
+.week-day-holiday {
+	font-size: 0.75rem;
+	color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--color-text-tertiary)));
+	font-weight: 500;
+	margin-top: var(--space-1, 0.25rem);
+	line-height: 1.2;
 }
 
 /* Calendar Legend */
@@ -473,8 +493,8 @@
 	}
 
 	.calendar-day {
-		min-height: 60px;
-		padding: var(--space-1, 0.25rem);
+		min-height: 72px; /* Touch target ~44px + content */
+		padding: var(--space-2, 0.5rem);
 	}
 
 	.calendar-weekdays {

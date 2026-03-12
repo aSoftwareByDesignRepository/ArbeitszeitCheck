@@ -132,13 +132,15 @@ class HolidayCalendarServiceTest extends TestCase
 			->with($state, $year)
 			->willReturn([$holiday]);
 
-		// hasHolidaysForStateAndYear should be called exactly once across
-		// multiple calls because the year is marked as initialised.
+		// First call: no statutory -> seed. Second call: statutory exist (from first seed) -> use cache.
 		$this->holidayMapper
-			->expects($this->once())
-			->method('hasHolidaysForStateAndYear')
+			->method('hasStatutoryHolidaysForStateAndYear')
 			->with($state, $year)
-			->willReturn(false);
+			->willReturnOnConsecutiveCalls(false, true);
+
+		$this->holidayMapper
+			->expects($this->atLeastOnce())
+			->method('insert');
 
 		// First call triggers initialisation + (simulated) seeding
 		$result1 = $this->service->getHolidaysForRange(

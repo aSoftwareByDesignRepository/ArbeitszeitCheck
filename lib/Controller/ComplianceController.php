@@ -17,6 +17,7 @@ use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
+use OCA\ArbeitszeitCheck\Constants;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -170,7 +171,7 @@ class ComplianceController extends Controller
 				],
 				'recentViolations' => [],
 				'urlGenerator' => $this->urlGenerator,
-				'error' => null,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 				'l' => $this->l10n,
 				'showSubstitutionLink' => false,
 				'showManagerLink' => false,
@@ -249,7 +250,7 @@ class ComplianceController extends Controller
 				'violations' => [],
 				'total' => 0,
 				'urlGenerator' => $this->urlGenerator,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 				'l' => $this->l10n,
 				'showSubstitutionLink' => false,
 				'showManagerLink' => false,
@@ -345,7 +346,7 @@ class ComplianceController extends Controller
 				'startDate' => date('Y-m-d', strtotime('-30 days')),
 				'endDate' => date('Y-m-d'),
 				'urlGenerator' => $this->urlGenerator,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 				'l' => $this->l10n,
 				'showSubstitutionLink' => false,
 				'showManagerLink' => false,
@@ -397,7 +398,7 @@ class ComplianceController extends Controller
 		?string $severity = null,
 		?string $startDate = null,
 		?string $endDate = null,
-		?int $limit = 25,
+		?int $limit = Constants::DEFAULT_LIST_LIMIT,
 		?int $offset = 0
 	): JSONResponse {
 		try {
@@ -472,11 +473,15 @@ class ComplianceController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
+			$raw = $e->getMessage();
+			if (strpos($raw, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
+			} elseif (strpos($raw, 'Access denied') !== false) {
+				$errorMessage = $this->l10n->t('Access denied');
+			} else {
+				$errorMessage = $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			}
-			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
+			$status = strpos($raw, 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -518,11 +523,10 @@ class ComplianceController extends Controller
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -557,7 +561,7 @@ class ComplianceController extends Controller
 			if ($violation->getResolved()) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Violation is already resolved'
+					'error' => $this->l10n->t('Violation is already resolved')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -592,11 +596,10 @@ class ComplianceController extends Controller
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -623,10 +626,10 @@ class ComplianceController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -669,10 +672,10 @@ class ComplianceController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -710,10 +713,10 @@ class ComplianceController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage

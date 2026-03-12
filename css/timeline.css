@@ -139,6 +139,10 @@
 	background: color-mix(in srgb, var(--color-warning) 10%, transparent);
 }
 
+.timeline-item--holiday .timeline-item-icon {
+	background: color-mix(in srgb, var(--color-info) 10%, transparent);
+}
+
 .timeline-item-content {
 	flex: 1;
 	display: flex;

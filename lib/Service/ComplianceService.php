@@ -58,6 +58,16 @@ class ComplianceService
         $this->config = $config;
     }
 
+    private function getMaxDailyHours(): float
+    {
+        return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10')));
+    }
+
+    private function getMinRestPeriod(): float
+    {
+        return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'min_rest_period', '11')));
+    }
+
     /**
      * Check compliance before clocking in
      *
@@ -95,9 +105,9 @@ class ComplianceService
             }
             
             if ($lastEndTime) {
-                // Calculate when user can clock in again
+                $minRest = $this->getMinRestPeriod();
                 $earliestClockIn = clone $lastEndTime;
-                $earliestClockIn->modify('+11 hours');
+                $earliestClockIn->modify('+' . (int)$minRest . ' hours');
                 $now = new \DateTime();
                 $hoursRemaining = ($earliestClockIn->getTimestamp() - $now->getTimestamp()) / 3600;
                 
@@ -105,29 +115,27 @@ class ComplianceService
                     'type' => ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
                     'severity' => ComplianceViolation::SEVERITY_ERROR,
                     'message' => $this->l10n->t(
-                        'Minimum 11-hour rest period required between shifts (ArbZG §5). Your last shift ended at %s. You can clock in after %s (in %.1f hours).',
-                        [
-                            $lastEndTime->format('H:i'),
-                            $earliestClockIn->format('H:i'),
-                            max(0, $hoursRemaining)
-                        ]
+                        'Minimum %1$d-hour rest period required between shifts (ArbZG §5). Your last shift ended at %2$s. You can clock in after %3$s (in %4$.1f hours).',
+                        [(int)$minRest, $lastEndTime->format('H:i'), $earliestClockIn->format('H:i'), max(0.0, $hoursRemaining)]
                     )
                 ];
             } else {
+                $minRest = (int)$this->getMinRestPeriod();
                 $issues[] = [
                     'type' => ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
                     'severity' => ComplianceViolation::SEVERITY_ERROR,
-                    'message' => $this->l10n->t('Minimum 11-hour rest period required between shifts (ArbZG §5)')
+                    'message' => $this->l10n->t('Minimum %d-hour rest period required between shifts (ArbZG §5)', [$minRest])
                 ];
             }
         }
 
         // Check daily working hours limit
         if (!$this->checkDailyWorkingHoursLimit($userId)) {
+            $maxDaily = (int)$this->getMaxDailyHours();
             $issues[] = [
                 'type' => ComplianceViolation::TYPE_DAILY_HOURS_LIMIT_EXCEEDED,
                 'severity' => ComplianceViolation::SEVERITY_ERROR,
-                'message' => $this->l10n->t('Daily working hours limit reached (10 hours maximum)')
+                'message' => $this->l10n->t('Daily working hours limit reached (%d hours maximum)', [$maxDaily])
             ];
         }
 
@@ -356,14 +364,14 @@ class ComplianceService
     private function checkExcessiveWorkingHoursWithResult(TimeEntry $timeEntry): array
     {
         $violations = [];
-        // Use working duration (excluding breaks) - this is the actual work time according to ArbZG
+        $maxDaily = $this->getMaxDailyHours();
         $workingDuration = $timeEntry->getWorkingDurationHours();
 
-        if ($workingDuration !== null && $workingDuration > 10) {
+        if ($workingDuration !== null && $workingDuration > $maxDaily) {
             $violation = $this->violationMapper->createViolation(
                 $timeEntry->getUserId(),
                 ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
-                $this->l10n->t('Working hours exceeded 10 hours in a single day'),
+                $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily]),
                 $timeEntry->getEndTime() ?: new \DateTime(),
                 $timeEntry->getId(),
                 ComplianceViolation::SEVERITY_ERROR
@@ -373,7 +381,7 @@ class ComplianceService
                 'id' => $violation->getId(),
                 'type' => ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
                 'severity' => ComplianceViolation::SEVERITY_ERROR,
-                'message' => $this->l10n->t('Working hours exceeded 10 hours in a single day')
+                'message' => $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily])
             ];
             
             // Send notification
@@ -381,7 +389,7 @@ class ComplianceService
                 $this->notificationService->notifyComplianceViolation($timeEntry->getUserId(), [
                     'id' => $violation->getId(),
                     'type' => ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
-                    'message' => $this->l10n->t('Working hours exceeded 10 hours in a single day'),
+                    'message' => $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily]),
                     'date' => ($timeEntry->getEndTime() ?: new \DateTime())->format('Y-m-d'),
                     'severity' => ComplianceViolation::SEVERITY_ERROR
                 ]);
@@ -430,12 +438,13 @@ class ComplianceService
 
         $now = new \DateTime();
         $hoursSinceLastEntry = ($now->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
+        $minRest = $this->getMinRestPeriod();
 
-        return $hoursSinceLastEntry >= 11;
+        return $hoursSinceLastEntry >= $minRest;
     }
 
     /**
-     * Check if minimum rest period is met for a specific start time (11 hours between shifts)
+     * Check if minimum rest period is met for a specific start time (ArbZG §5)
      * 
      * This method is used for validating manual time entries before they are saved.
      * It checks if the provided start time violates the 11-hour rest period requirement
@@ -511,17 +520,15 @@ class ComplianceService
             return ['valid' => true, 'message' => null];
         }
 
-        // Consecutive days (difference = 1): Check 11-hour rest period (ArbZG §5)
+        $minRest = $this->getMinRestPeriod();
         $hoursSinceLastEntry = ($startTime->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
 
-        if ($hoursSinceLastEntry >= 11) {
-            // Rest period is met
+        if ($hoursSinceLastEntry >= $minRest) {
             return ['valid' => true, 'message' => null];
         }
         
-        // Rest period not met - calculate earliest possible start time
         $earliestStartTime = clone $lastEndTime;
-        $earliestStartTime->modify('+11 hours');
+        $earliestStartTime->modify('+' . (int)$minRest . ' hours');
         $hoursStillNeeded = ($earliestStartTime->getTimestamp() - $startTime->getTimestamp()) / 3600;
         
         // Format dates for display
@@ -531,13 +538,8 @@ class ComplianceService
         return [
             'valid' => false,
             'message' => $this->l10n->t(
-                'Minimum 11-hour rest period required between shifts (ArbZG §5). Your last shift ended on %s at %s. This entry cannot start before %s (%.1f hours required).',
-                [
-                    $lastEndDateFormatted,
-                    $lastEndTime->format('H:i'),
-                    $earliestStartDateFormatted,
-                    abs($hoursStillNeeded)
-                ]
+                'Minimum %1$d-hour rest period required between shifts (ArbZG §5). Your last shift ended on %2$s at %3$s. This entry cannot start before %4$s (%5$.1f hours required).',
+                [(int)$minRest, $lastEndDateFormatted, $lastEndTime->format('H:i'), $earliestStartDateFormatted, abs($hoursStillNeeded)]
             )
         ];
     }
@@ -556,8 +558,9 @@ class ComplianceService
         $tomorrow->modify('+1 day');
 
         $todayHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $today, $tomorrow);
+        $maxDaily = $this->getMaxDailyHours();
 
-        return $todayHours < 10; // Allow clocking in if under 10 hours
+        return $todayHours < $maxDaily;
     }
 
     /**
@@ -743,25 +746,24 @@ class ComplianceService
      */
     private function checkExcessiveWorkingHours(TimeEntry $timeEntry): void
     {
-        // Use working duration (excluding breaks) - this is the actual work time according to ArbZG
+        $maxDaily = $this->getMaxDailyHours();
         $workingDuration = $timeEntry->getWorkingDurationHours();
 
-        if ($workingDuration !== null && $workingDuration > 10) {
+        if ($workingDuration !== null && $workingDuration > $maxDaily) {
             $violation = $this->violationMapper->createViolation(
                 $timeEntry->getUserId(),
                 ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
-                $this->l10n->t('Working hours exceeded 10 hours in a single day'),
+                $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily]),
                 $timeEntry->getEndTime() ?: new \DateTime(),
                 $timeEntry->getId(),
                 ComplianceViolation::SEVERITY_ERROR
             );
             
-            // Send notification
             if ($this->notificationService) {
                 $this->notificationService->notifyComplianceViolation($timeEntry->getUserId(), [
                     'id' => $violation->getId(),
                     'type' => ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
-                    'message' => $this->l10n->t('Working hours exceeded 10 hours in a single day'),
+                    'message' => $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily]),
                     'date' => ($timeEntry->getEndTime() ?: new \DateTime())->format('Y-m-d'),
                     'severity' => ComplianceViolation::SEVERITY_ERROR
                 ]);
@@ -1060,7 +1062,12 @@ class ComplianceService
 
         // Score: 100 = perfect, reduced by severity-weighted violations (max -100)
         $score = 100;
-        $score -= min(100, ($critical * 25) + ($warning * 10) + ($info * 5));
+        $score -= min(
+			\OCA\ArbeitszeitCheck\Constants::COMPLIANCE_SCORE_MAX_DEDUCTION,
+			($critical * \OCA\ArbeitszeitCheck\Constants::COMPLIANCE_SCORE_CRITICAL_WEIGHT)
+			+ ($warning * \OCA\ArbeitszeitCheck\Constants::COMPLIANCE_SCORE_WARNING_WEIGHT)
+			+ ($info * \OCA\ArbeitszeitCheck\Constants::COMPLIANCE_SCORE_INFO_WEIGHT)
+		);
 
         // Check if we have analyzable data (time entries exist)
         $timeEntryCount = $this->timeEntryMapper->countByUser($userId);

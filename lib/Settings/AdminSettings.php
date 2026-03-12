@@ -45,7 +45,8 @@ class AdminSettings implements ISettings
 
 		$settings = [
 			'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
-			'requireBreakJustification' => $this->appConfig->getAppValueString('require_break_justification', '1') === '1',
+			'realtimeComplianceCheck' => $this->appConfig->getAppValueString('realtime_compliance_check', '1') === '1',
+			'complianceStrictMode' => $this->appConfig->getAppValueString('compliance_strict_mode', '0') === '1',
 			'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
 			'requireSubstituteTypes' => $requireSubstituteTypes,
 			'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
@@ -54,6 +55,7 @@ class AdminSettings implements ISettings
 			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
 			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
 			'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
+			'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
 		];

@@ -24,6 +24,7 @@ use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Constants;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -428,7 +429,7 @@ class ManagerController extends Controller
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
-	public function getPendingApprovals(?string $type = null, ?int $limit = 25, ?int $offset = 0): JSONResponse
+	public function getPendingApprovals(?string $type = null, ?int $limit = Constants::DEFAULT_LIST_LIMIT, ?int $offset = 0): JSONResponse
 	{
 		try {
 			$managerId = $this->getUserId();
@@ -515,7 +516,7 @@ class ManagerController extends Controller
 
 			// Apply pagination
 			$total = count($pendingApprovals);
-			$paginatedApprovals = array_slice($pendingApprovals, $offset ?? 0, $limit ?? 25);
+			$paginatedApprovals = array_slice($pendingApprovals, $offset ?? 0, $limit ?? Constants::DEFAULT_LIST_LIMIT);
 
 			return new JSONResponse([
 				'success' => true,

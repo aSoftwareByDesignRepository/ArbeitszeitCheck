@@ -110,7 +110,7 @@
                         ${Utils.escapeHtml(severityLabels[v.severity] || v.severity)}
                     </span>
                 </td>
-                <td>${v.date || '-'}</td>
+                <td>${Utils.escapeHtml(v.date || '-')}</td>
                 <td>${Utils.escapeHtml(v.description || '-')}</td>
                 <td>
                     <span class="badge badge--${v.resolved ? 'success' : 'error'}">

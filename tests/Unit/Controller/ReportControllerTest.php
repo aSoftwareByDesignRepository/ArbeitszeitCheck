@@ -12,8 +12,11 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
 use OCA\ArbeitszeitCheck\Controller\ReportController;
+use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
+use OCA\ArbeitszeitCheck\Db\TeamMemberMapper;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
+use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
@@ -56,11 +59,18 @@ class ReportControllerTest extends TestCase
 		$this->l10n->method('t')->willReturnCallback(fn ($s) => $s);
 		$this->request = $this->createMock(IRequest::class);
 
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$teamMemberMapper = $this->createMock(TeamMemberMapper::class);
+		$teamManagerMapper = $this->createMock(TeamManagerMapper::class);
+
 		$this->controller = new ReportController(
 			'arbeitszeitcheck',
 			$this->request,
 			$this->reportingService,
 			$this->permissionService,
+			$teamResolver,
+			$teamMemberMapper,
+			$teamManagerMapper,
 			$this->userSession,
 			$this->l10n
 		);
@@ -478,7 +488,7 @@ class ReportControllerTest extends TestCase
 	}
 
 	/**
-	 * Test team report returns error when no user IDs provided
+	 * Test team report returns error when no user IDs and no manager capability
 	 */
 	public function testTeamReportReturnsErrorWhenNoUserIds(): void
 	{
@@ -487,17 +497,18 @@ class ReportControllerTest extends TestCase
 		$user->method('getUID')->willReturn($userId);
 
 		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canAccessManagerDashboard')->with($userId)->willReturn(false);
 
 		$response = $this->controller->team();
 
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
-		$this->assertStringContainsString('User IDs must be provided', $data['error']);
+		$this->assertStringContainsString('No users to include', $data['error']);
 	}
 
 	/**
-	 * Test team report returns error when empty user IDs
+	 * Test team report returns error when empty user IDs provided
 	 */
 	public function testTeamReportReturnsErrorWhenEmptyUserIds(): void
 	{
@@ -506,13 +517,14 @@ class ReportControllerTest extends TestCase
 		$user->method('getUID')->willReturn($userId);
 
 		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canAccessManagerDashboard')->with($userId)->willReturn(false);
 
 		$response = $this->controller->team(null, null, '   ,  ,  ');
 
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
-		$this->assertEquals('No user IDs provided', $data['error']);
+		$this->assertStringContainsString('No users to include', $data['error']);
 	}
 
 	/**

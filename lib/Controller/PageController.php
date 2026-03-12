@@ -346,10 +346,12 @@ class PageController extends Controller
 		$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
 		$absenceCount = $this->absenceMapper->countByUser($userId);
 
-		// Calculate vacation days remaining from user settings
+		// Calculate vacation stats: remaining and used for current year only.
+		// Only vacation (type=vacation) absences count; sick leave etc. are excluded.
 		$currentYear = (int)date('Y');
 		$vacationStats = $this->absenceService->getVacationStats($userId, $currentYear);
-		$vacationDaysRemaining = $vacationStats['remaining'] ?? 25;
+		$vacationDaysRemaining = (float)($vacationStats['remaining'] ?? 0);
+		$vacationDaysUsedThisYear = (float)($vacationStats['used'] ?? 0);
 
 		// Current filter values for the form (European format for date inputs)
 		$filterStartDate = $filterStartDt ? $filterStartDt->format('d.m.Y') : '';
@@ -359,11 +361,32 @@ class PageController extends Controller
 		$colleagueIds = $this->teamResolver->getColleagueIds($userId);
 		$hasColleagues = count($colleagueIds) > 0;
 
+		// Which absence types require a substitute (admin setting)
+		$requireSubstituteJson = $this->config->getAppValue('arbeitszeitcheck', 'require_substitute_types', '[]');
+		$requireSubstituteTypes = json_decode($requireSubstituteJson, true);
+		$requireSubstituteTypes = is_array($requireSubstituteTypes) ? $requireSubstituteTypes : [];
+
 		$navFlags = $this->getNavigationFlags($userId);
+
+		// Pending requests count: must use full list so filter doesn't affect stats
+		$absencesForStats = empty($filters) ? $absences : $this->absenceMapper->findByUser($userId);
+		$pendingCount = count(array_filter($absencesForStats, function ($a) {
+			return in_array($a->getStatus(), ['pending', 'substitute_pending'], true);
+		}));
+
+		// Precompute working days for absences with days=NULL (HolidayCalendarService, state-aware)
+		$computedWorkingDays = [];
+		foreach ($absences as $a) {
+			if ($a->getDays() === null) {
+				$computedWorkingDays[$a->getId()] = $this->absenceService->getWorkingDaysForDisplay($a);
+			}
+		}
 
 		$params = [
 			'absences' => $absences,
+			'computedWorkingDays' => $computedWorkingDays,
 			'hasColleagues' => $hasColleagues,
+			'requireSubstituteTypes' => $requireSubstituteTypes,
 			'filterStartDate' => $filterStartDate,
 			'filterEndDate' => $filterEndDate,
 			'filterStatus' => $statusParam ?? '',
@@ -371,15 +394,9 @@ class PageController extends Controller
 				'total_time_entries' => $timeEntryCount,
 				'total_absences' => $absenceCount,
 				'vacation_days_remaining' => $vacationDaysRemaining,
-				'pending_requests' => count(array_filter($absences, function($absence) {
-					return in_array($absence->getStatus(), ['pending', 'substitute_pending'], true);
-				})),
-				'days_taken_this_year' => array_reduce($absences, function($sum, $absence) {
-					if ($absence->getStartDate() && $absence->getStartDate()->format('Y') === date('Y') && $absence->getStatus() === 'approved') {
-						return $sum + $absence->getDays();
-					}
-					return $sum;
-				}, 0)
+				'vacation_days_used_this_year' => $vacationDaysUsedThisYear,
+				'vacation_year' => $currentYear,
+				'pending_requests' => $pendingCount,
 			],
 			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
@@ -395,12 +412,14 @@ class PageController extends Controller
 			}
 			$response = new TemplateResponse('arbeitszeitcheck', 'absences', [
 				'absences' => [],
+				'computedWorkingDays' => [],
 				'hasColleagues' => false,
+				'requireSubstituteTypes' => [],
 				'filterStartDate' => '',
 				'filterEndDate' => '',
 				'filterStatus' => '',
 				'error' => $errorMessage,
-				'stats' => ['total_time_entries' => 0, 'total_absences' => 0, 'vacation_days_remaining' => 0, 'pending_requests' => 0, 'days_taken_this_year' => 0],
+				'stats' => ['total_time_entries' => 0, 'total_absences' => 0, 'vacation_days_remaining' => 0, 'vacation_days_used_this_year' => 0, 'vacation_year' => (int)date('Y'), 'pending_requests' => 0],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 				'showSubstitutionLink' => false,

@@ -67,7 +67,7 @@
     list-style: none;
 }
 
-/* Navigation Menu */
+/* Navigation Menu - scrollable so Manager stays reachable when Verwaltung is expanded */
 .nav-menu {
     margin: 0;
     padding: 1.5rem 0;
@@ -75,6 +75,8 @@
     position: relative;
     z-index: 1;
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .nav-menu li {

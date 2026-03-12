@@ -55,9 +55,9 @@ class AccessibilityTest extends TestCase {
 	 * Test that CSS has proper focus indicators
 	 */
 	public function testCssHasFocusIndicators(): void {
-		$cssFile = __DIR__ . '/../../src/styles/main.css';
+		$cssFile = __DIR__ . '/../../css/common/accessibility.css';
 
-		$this->assertFileExists($cssFile, 'Main CSS file should exist');
+		$this->assertFileExists($cssFile, 'Accessibility CSS file should exist');
 
 		$content = file_get_contents($cssFile);
 
@@ -135,7 +135,7 @@ class AccessibilityTest extends TestCase {
 	 * Test color contrast (basic check - would need more sophisticated testing in real scenario)
 	 */
 	public function testColorContrastSetup(): void {
-		$cssFile = __DIR__ . '/../../src/styles/main.css';
+		$cssFile = __DIR__ . '/../../css/common/accessibility.css';
 
 		$content = file_get_contents($cssFile);
 

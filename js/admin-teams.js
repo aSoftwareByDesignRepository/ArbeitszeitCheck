@@ -14,6 +14,43 @@
     const Messaging = window.ArbeitszeitCheckMessaging || {};
     const baseUrl = '/apps/arbeitszeitcheck';
 
+    /**
+     * Compatibility wrapper for Nextcloud's destructive confirmation dialog.
+     * Supports both the modern Promise-based API and the older callback-based API.
+     *
+     * @param {string} message
+     * @param {string} title
+     * @param {object} options
+     * @param {Function} onConfirm - called only when the user explicitly confirms
+     */
+    function confirmDestructiveCompat(message, title, options, onConfirm) {
+        if (typeof OC !== 'undefined' && OC.dialogs && typeof OC.dialogs.confirmDestructive === 'function') {
+            // Try promise-based API first
+            var result;
+            try {
+                result = OC.dialogs.confirmDestructive(message, title, options, function(confirmed) {
+                    // If the implementation is callback-based (old API), this callback will be used.
+                    if (confirmed) {
+                        onConfirm();
+                    }
+                });
+            } catch (e) {
+                result = undefined;
+            }
+
+            // If a thenable is returned, use the modern Promise API
+            if (result && typeof result.then === 'function') {
+                result.then(function(confirmed) {
+                    if (confirmed) {
+                        onConfirm();
+                    }
+                });
+            }
+        } else if (window.confirm(message)) {
+            onConfirm();
+        }
+    }
+
     function t(key, fallback) {
         if (typeof window.t === 'function') {
             return window.t('arbeitszeitcheck', key);
@@ -95,19 +132,19 @@
         const indent = depth * 16;
         let html = '<ul class="teams-tree__list" role="group">';
         nodes.forEach(function(node) {
-            const name = Utils.escapeHtml ? Utils.escapeHtml(node.name) : String(node.name).replace(/[&<>"']/g, function(c) {
+            const name = Utils.escapeHtml ? Utils.escapeHtml(node.name) : String(node.name || '').replace(/[&<>"']/g, function(c) {
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
             });
-            const safeName = node.name || '';
-            const editLabel = (t('Edit unit', 'Edit') + ' ' + safeName).trim();
-            const deleteLabel = (t('Delete unit', 'Delete unit') + ' ' + safeName).trim();
+            const displayName = node.name || '';
+            const editLabel = (t('Edit unit', 'Edit') + ' ' + name).trim();
+            const deleteLabel = (t('Delete unit', 'Delete unit') + ' ' + name).trim();
             const hasChildren = node.children && node.children.length > 0;
             const ariaExpanded = hasChildren ? ' aria-expanded="true"' : '';
             const selected = selectedTeamId === node.id ? ' teams-tree__item--selected' : '';
             html += '<li class="teams-tree__item' + selected + '" role="treeitem" tabindex="-1" data-team-id="' + node.id + '"' + ariaExpanded + ' aria-selected="' + (selectedTeamId === node.id) + '" style="padding-left: ' + (indent + 8) + 'px">';
             html += '<span class="teams-tree__label" tabindex="0" role="button">' + name + '</span>';
             html += '<span class="teams-tree__actions" role="group" aria-label="' + (t('Actions for unit', 'Actions')) + '">';
-            html += '<button type="button" class="button button--icon teams-tree__edit" data-team-id="' + node.id + '" data-team-name="' + (Utils.escapeHtml ? Utils.escapeHtml(safeName) : safeName) + '" aria-label="' + editLabel + '"><span class="icon icon-rename" aria-hidden="true"></span></button>';
+            html += '<button type="button" class="button button--icon teams-tree__edit" data-team-id="' + node.id + '" data-team-name="' + name + '" aria-label="' + editLabel + '"><span class="icon icon-rename" aria-hidden="true"></span></button>';
             html += '<button type="button" class="button button--icon teams-tree__delete" data-team-id="' + node.id + '" data-team-name="' + name + '" aria-label="' + deleteLabel + '"><span class="icon icon-delete" aria-hidden="true"></span></button>';
             html += '</span>';
             if (hasChildren) {
@@ -325,18 +362,17 @@
 
     function confirmDeleteTeam(id, name) {
         var message = t('Are you sure you want to delete the unit "%s"? Members and managers will be unassigned.', 'Are you sure you want to delete this unit?').replace('%s', name);
-        if (typeof OC !== 'undefined' && OC.dialogs && OC.dialogs.confirmDestructive) {
-            OC.dialogs.confirmDestructive(message, t('Delete unit', 'Delete unit'), {
-                type: OC.dialogs.YES_NO_BUTTONS,
+        confirmDestructiveCompat(
+            message,
+            t('Delete unit', 'Delete unit'),
+            {
+                type: OC.dialogs && OC.dialogs.YES_NO_BUTTONS,
                 confirm: t('Delete', 'Delete'),
                 confirmClasses: 'error',
                 cancel: t('Cancel', 'Cancel')
-            }).then(function(confirmed) {
-                if (confirmed) deleteTeam(id);
-            });
-        } else if (window.confirm(message)) {
-            deleteTeam(id);
-        }
+            },
+            function() { deleteTeam(id); }
+        );
     }
 
     function deleteTeam(id) {
@@ -648,18 +684,17 @@
 
     function confirmRemoveMember(teamId, userId, displayName) {
         var message = t('Remove "%s" from this team?', 'Remove this member?').replace('%s', displayName);
-        if (typeof OC !== 'undefined' && OC.dialogs && OC.dialogs.confirmDestructive) {
-            OC.dialogs.confirmDestructive(message, t('Remove member', 'Remove member'), {
-                type: OC.dialogs.YES_NO_BUTTONS,
+        confirmDestructiveCompat(
+            message,
+            t('Remove member', 'Remove member'),
+            {
+                type: OC.dialogs && OC.dialogs.YES_NO_BUTTONS,
                 confirm: t('Remove', 'Remove'),
                 confirmClasses: 'error',
                 cancel: t('Cancel', 'Cancel')
-            }).then(function(confirmed) {
-                if (confirmed) removeMember(teamId, userId);
-            });
-        } else if (window.confirm(message)) {
-            removeMember(teamId, userId);
-        }
+            },
+            function() { removeMember(teamId, userId); }
+        );
     }
 
     function removeMember(teamId, userId) {
@@ -678,18 +713,17 @@
 
     function confirmRemoveManager(teamId, userId, displayName) {
         var message = t('Remove "%s" as manager?', 'Remove this manager?').replace('%s', displayName);
-        if (typeof OC !== 'undefined' && OC.dialogs && OC.dialogs.confirmDestructive) {
-            OC.dialogs.confirmDestructive(message, t('Remove manager', 'Remove manager'), {
-                type: OC.dialogs.YES_NO_BUTTONS,
+        confirmDestructiveCompat(
+            message,
+            t('Remove manager', 'Remove manager'),
+            {
+                type: OC.dialogs && OC.dialogs.YES_NO_BUTTONS,
                 confirm: t('Remove', 'Remove'),
                 confirmClasses: 'error',
                 cancel: t('Cancel', 'Cancel')
-            }).then(function(confirmed) {
-                if (confirmed) removeManager(teamId, userId);
-            });
-        } else if (window.confirm(message)) {
-            removeManager(teamId, userId);
-        }
+            },
+            function() { removeManager(teamId, userId); }
+        );
     }
 
     function removeManager(teamId, userId) {

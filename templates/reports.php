@@ -30,7 +30,6 @@ Util::addScript('arbeitszeitcheck', 'common/utils');
 Util::addScript('arbeitszeitcheck', 'common/datepicker');
 Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 Util::addScript('arbeitszeitcheck', 'reports');
-Util::addScript('arbeitszeitcheck', 'reports');
 
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $isAdmin = $_['isAdmin'] ?? false;
@@ -160,7 +159,7 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                             </div>
 
                             <?php if ($useAppTeams): ?>
-                            <div class="form-group">
+                            <div class="form-group reports-scope-option-conditional" id="manager-specific-team-group">
                                 <div class="form-radio">
                                     <input type="radio"
                                            id="scope-manager-single-team"
@@ -373,6 +372,11 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
     window.ArbeitszeitCheck.l10n.dailyBreakdown = <?php echo json_encode($l->t('Daily breakdown'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.scopeRequired = <?php echo json_encode($l->t('Please choose who should be included in the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.teamRequired = <?php echo json_encode($l->t('Please select a team.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.dateRangeInvalid = <?php echo json_encode($l->t('Start date must be before or equal to end date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.exportScopeNotice = <?php echo json_encode($l->t('Export for team or organization scope is not yet available. Use Preview to view the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.reportParamsRequired = <?php echo json_encode($l->t('Please fill in report type, start date and end date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.invalidReportType = <?php echo json_encode($l->t('Invalid report type.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.errorTryAgain = <?php echo json_encode($l->t('An error occurred. Please try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     
     window.ArbeitszeitCheck.apiUrl = {
         daily: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.daily'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,

@@ -76,9 +76,9 @@
                 }
             },
             onError: function(_error) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'Error loading users') : 'Error loading users') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">' + ((window.t && window.t('arbeitszeitcheck', 'Error loading users')) || 'Error loading users') + '</td></tr>';
                 if (Messaging && Messaging.showError) {
-                    Messaging.showError(window.t ? window.t('arbeitszeitcheck', 'Failed to load users. Please try again.') : 'Failed to load users. Please try again.');
+                    Messaging.showError((window.t && window.t('arbeitszeitcheck', 'Failed to load users. Please try again.')) || 'Failed to load users. Please try again.');
                 }
             }
         });
@@ -182,7 +182,7 @@
                 }
             },
             onError: function(_error) {
-                Messaging.showError('Failed to load user details');
+                Messaging.showError((window.t && window.t('arbeitszeitcheck', 'Failed to load user details')) || 'Failed to load user details');
             }
         });
     }
@@ -204,10 +204,10 @@
      * Show history modal for a user
      */
     function showHistoryModal(userId, userName) {
-        const t = (s) => window.ArbeitszeitCheck?.l10n?.[s] || s;
-        const title = t('assignmentHistory') + ': ' + (userName || userId);
-        const closeLabel = t('close') || 'Close';
-        const loadingText = t('loading') + '…';
+        const t = (s, fallback) => window.ArbeitszeitCheck?.l10n?.[s] || (window.t && window.t('arbeitszeitcheck', fallback || s)) || fallback || s;
+        const title = t('assignmentHistory', 'Assignment history') + ': ' + (userName || userId);
+        const closeLabel = t('close', 'Close');
+        const loadingText = t('loading', 'Loading') + '…';
 
         const content = `
             <p class="history-modal__loading" id="history-modal-loading">${loadingText}</p>
@@ -283,7 +283,7 @@
                 const contentEl = document.getElementById('history-modal-content');
                 if (!loadingEl || !contentEl) return;
                 loadingEl.style.display = 'none';
-                contentEl.innerHTML = '<p class="history-modal__empty">' + t('error') + '</p>';
+                contentEl.innerHTML = '<p class="history-modal__empty">' + Utils.escapeHtml(t('errorLoadingHistory', 'Error loading assignment history')) + '</p>';
                 contentEl.style.display = 'block';
             }
         });
@@ -306,7 +306,8 @@
         const germanStateHelp = t('germanStateHelp');
         const germanStateDefault = t('germanStateDefault');
 
-        const vacation = user.vacationDaysPerYear ?? user.userWorkingTimeModel?.vacationDaysPerYear ?? 25;
+        const DEFAULT_VACATION_DAYS = 25; // German standard; must match Constants::DEFAULT_VACATION_DAYS_PER_YEAR
+        const vacation = user.vacationDaysPerYear ?? user.userWorkingTimeModel?.vacationDaysPerYear ?? DEFAULT_VACATION_DAYS;
         const startIso = user.workingTimeModelStartDate ?? user.userWorkingTimeModel?.startDate ?? null;
         const endIso = user.workingTimeModelEndDate ?? user.userWorkingTimeModel?.endDate ?? null;
         const startVal = (startIso && convertISOToEuropean(startIso)) || '';
