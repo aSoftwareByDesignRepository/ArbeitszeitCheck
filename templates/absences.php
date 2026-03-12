@@ -442,7 +442,7 @@ $requireSubstituteTypes = $_['requireSubstituteTypes'] ?? [];
                             <dt class="absence-detail-label"><?php p($l->t('Approval comment')); ?></dt>
                             <dd class="absence-detail-value"><?php
                                 $comment = $absence->getApproverComment();
-                                p($comment ?: $l->t('No approval comment available'));
+                                p($comment ? $l->t($comment) : $l->t('No approval comment available'));
                             ?></dd>
                         </div>
                     </dl>
@@ -663,8 +663,10 @@ $requireSubstituteTypes = $_['requireSubstituteTypes'] ?? [];
     window.ArbeitszeitCheck.apiUrl = {
         absences: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.index'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         create: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.store'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
-        update: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.updatePost', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>.replace('__ID__', ''),
-        delete: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.delete', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>.replace('__ID__', '')
+        show: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        edit: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.edit', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        update: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.updatePost', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        delete: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.delete', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
     };
     
     // Handle form submission for create/edit

@@ -415,6 +415,19 @@ template {
   scrollbar-color: var(--arbeitszeitcheck-color-gray-400) var(--arbeitszeitcheck-color-background-secondary);
 }
 
+/* Override Nextcloud select styles: margin 0, explicit padding for vertical centering */
+#content.app-arbeitszeitcheck select,
+#content.app-arbeitszeitcheck .form-select,
+#content[class*="app-"] select.form-select {
+  margin: 0 !important;
+  padding: 0.625rem 2.5rem 0.625rem 1rem !important;
+  min-height: 44px;
+  height: 44px;
+  line-height: 1.5;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
 /* Print Styles — black text on white for paper (standard; screen theme vars don't apply) */
 @media print {
   *,

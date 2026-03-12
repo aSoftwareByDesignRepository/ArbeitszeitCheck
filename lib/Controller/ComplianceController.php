@@ -204,6 +204,7 @@ class ComplianceController extends Controller
 		Util::addStyle('arbeitszeitcheck', 'common/responsive');
 		Util::addStyle('arbeitszeitcheck', 'navigation');
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'compliance-violations');
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');

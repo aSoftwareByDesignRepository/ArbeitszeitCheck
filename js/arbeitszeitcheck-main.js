@@ -709,21 +709,22 @@
             }
 
             // Edit buttons in table rows (for pending absences)
-            const editButtons = document.querySelectorAll('table tbody .btn-edit[data-absence-id]');
+            const editButtons = document.querySelectorAll('table tbody .btn-icon--edit[data-absence-id]');
             editButtons.forEach(button => {
                 button.addEventListener('click', (e) => {
                     e.preventDefault();
                     const absenceId = button.dataset.absenceId;
                     if (absenceId) {
-                        // Redirect to edit page
-                        const editUrl = OC.generateUrl('/apps/arbeitszeitcheck/absences/' + absenceId + '/edit');
+                        const editUrl = (this.config.apiUrl && this.config.apiUrl.edit)
+                            ? this.config.apiUrl.edit.replace('__ID__', absenceId)
+                            : OC.generateUrl('/apps/arbeitszeitcheck/absences/' + absenceId + '/edit');
                         window.location.href = editUrl;
                     }
                 });
             });
 
             // Cancel buttons in table rows (for pending absences)
-            const cancelButtons = document.querySelectorAll('table tbody .btn-cancel[data-absence-id]');
+            const cancelButtons = document.querySelectorAll('table tbody .btn-icon--cancel[data-absence-id]');
             cancelButtons.forEach(button => {
                 button.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -768,14 +769,15 @@
             });
 
             // View buttons in table rows (for approved/rejected absences)
-            const viewButtons = document.querySelectorAll('table tbody .btn-view[data-absence-id]');
+            const viewButtons = document.querySelectorAll('table tbody .btn-icon--view[data-absence-id]');
             viewButtons.forEach(button => {
                 button.addEventListener('click', (e) => {
                     e.preventDefault();
                     const absenceId = button.dataset.absenceId;
                     if (absenceId) {
-                        // Redirect to show/details page
-                        const showUrl = OC.generateUrl('/apps/arbeitszeitcheck/absences/' + absenceId);
+                        const showUrl = (this.config.apiUrl && this.config.apiUrl.show)
+                            ? this.config.apiUrl.show.replace('__ID__', absenceId)
+                            : OC.generateUrl('/apps/arbeitszeitcheck/absences/' + absenceId);
                         window.location.href = showUrl;
                     }
                 });

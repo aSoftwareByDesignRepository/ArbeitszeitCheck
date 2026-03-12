@@ -827,6 +827,8 @@ $error = $_['error'] ?? null;
 
     // L10n strings
     window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
+    window.ArbeitszeitCheck.l10n.skipToForm = <?php echo json_encode($l->t('Skip to form'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.skipToTimeEntryForm = <?php echo json_encode($l->t('Skip to time entry form'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.confirmDelete = <?php echo json_encode($l->t('Are you sure you want to delete this time entry?'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.confirmDeleteTimeEntry = <?php echo json_encode($l->t('Are you sure you want to delete this time entry?\n\nThis will permanently remove this record of your working time. This action cannot be undone.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.error = <?php echo json_encode($l->t('An error occurred'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

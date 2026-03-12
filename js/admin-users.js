@@ -351,11 +351,11 @@
                 </div>
                 <div class="form-group">
                     <label for="user-start-date" class="form-label">${startDateLabel}</label>
-                    <input type="text" id="user-start-date" name="startDate" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${startVal}" autocomplete="off">
+                    <input type="text" id="user-start-date" name="startDate" class="form-input datepicker-input" placeholder="${t('ddmmYYYY') || (window.t ? window.t('arbeitszeitcheck', 'dd.mm.yyyy') : 'dd.mm.yyyy')}" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${startVal}" autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label for="user-end-date" class="form-label">${endDateLabel}</label>
-                    <input type="text" id="user-end-date" name="endDate" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${endVal}" autocomplete="off">
+                    <input type="text" id="user-end-date" name="endDate" class="form-input datepicker-input" placeholder="${t('ddmmYYYY') || (window.t ? window.t('arbeitszeitcheck', 'dd.mm.yyyy') : 'dd.mm.yyyy')}" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${endVal}" autocomplete="off">
                     <p class="form-help">${t('endDateHelp')}</p>
                 </div>
                 <div class="form-actions">
