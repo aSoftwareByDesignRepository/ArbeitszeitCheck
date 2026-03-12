@@ -138,32 +138,13 @@
   margin: 0;
 }
 
-/* CSS Reset - Modern Normalize */
+/* CSS Reset - Modern Normalize (scoped where necessary by Nextcloud core)
+ * Do NOT override global html/body here to avoid impacting other apps.
+ */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
-}
-
-html {
-  line-height: 1.15;
-  -webkit-text-size-adjust: 100%;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  scroll-behavior: smooth;
-}
-
-body {
-  margin: 0;
-  font-family: var(--arbeitszeitcheck-font-family-sans);
-  font-size: var(--arbeitszeitcheck-font-size-base);
-  font-weight: var(--arbeitszeitcheck-font-weight-normal);
-  line-height: var(--arbeitszeitcheck-line-height-normal);
-  color: var(--arbeitszeitcheck-color-text);
-  background-color: var(--arbeitszeitcheck-color-background);
-  text-rendering: optimizeLegibility;
-  -webkit-font-feature-settings: "kern" 1;
-  font-feature-settings: "kern" 1;
 }
 
 /* Typography Reset */
@@ -518,20 +499,10 @@ template {
   }
 }
 
-/* Base Element Styles */
-html {
-  font-size: 16px;
-}
-
-body {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-main {
-  flex: 1;
-}
+/* Base Element Styles
+ * Global html/body layout is handled by Nextcloud core.
+ * Avoid redefining it here to prevent side effects in other apps.
+ */
 
 /* Semantic HTML Elements */
 article,

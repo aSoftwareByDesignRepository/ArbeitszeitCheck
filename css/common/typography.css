@@ -76,23 +76,20 @@
   --arbeitszeitcheck-link-transition: color 0.15s ease-in-out;
 }
 
-/* Base Typography */
-html {
-  font-family: var(--arbeitszeitcheck-font-family-sans);
-  font-size: 16px;
-  line-height: var(--arbeitszeitcheck-line-height-normal);
-  -webkit-text-size-adjust: 100%;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-body {
+/* Base Typography
+ * Scope base font styles to the arbeitszeitcheck app content container
+ * to avoid overriding global Nextcloud typography.
+ */
+#content.app-arbeitszeitcheck {
   font-family: var(--arbeitszeitcheck-font-family-sans);
   font-size: var(--arbeitszeitcheck-body-font-size);
   font-weight: var(--arbeitszeitcheck-body-font-weight);
   line-height: var(--arbeitszeitcheck-body-line-height);
   color: var(--arbeitszeitcheck-body-color);
   text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Heading Styles */
