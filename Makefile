@@ -22,6 +22,13 @@ release:
 clean:
 	rm -rf $(build_dir)
 
+# Generate tarball signature for App Store upload (single-line base64, no line breaks)
+# Paste the output into the App Store upload form's "Signature" field
+sign-tarball:
+	@test -f ~/.nextcloud/certificates/$(app_name).key || (echo "Error: Missing ~/.nextcloud/certificates/$(app_name).key"; exit 1)
+	@test -f $(release_dir)/$(app_name).tar.gz || (echo "Error: Run 'make release' first"; exit 1)
+	@openssl dgst -sha512 -sign $$HOME/.nextcloud/certificates/$(app_name).key $(release_dir)/$(app_name).tar.gz 2>/dev/null | base64 | tr -d '\n'; echo
+
 # Sign the app for Nextcloud App Store (requires certificate)
 # Generate cert: openssl req -nodes -newkey rsa:4096 -keyout ~/.nextcloud/certificates/arbeitszeitcheck.key -out ~/.nextcloud/certificates/arbeitszeitcheck.csr -subj "/CN=arbeitszeitcheck"
 # Store signed cert as ~/.nextcloud/certificates/arbeitszeitcheck.crt
