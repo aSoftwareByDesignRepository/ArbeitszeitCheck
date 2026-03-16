@@ -47,7 +47,7 @@ class Version1008Date20260312000001 extends SimpleMigrationStep
 				->addOrderBy('scope', 'ASC')
 				->addOrderBy('id', 'ASC');
 
-			$rows = $qb->executeQuery()->fetchAllAssociative();
+			$rows = $qb->executeQuery()->fetchAll();
 		} catch (\Throwable $e) {
 			$msg = (string)$e->getMessage();
 			// Table does not exist on a fresh install — nothing to deduplicate
