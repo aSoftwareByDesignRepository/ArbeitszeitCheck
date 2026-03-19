@@ -568,14 +568,14 @@
 						const teamScopes = ['admin_team', 'manager_team', 'manager_single_team'];
 						const reportType = reportTypeInput ? reportTypeInput.value : '';
 						const scope = reportScopeInput ? reportScopeInput.value : '';
-						const skipDownload = teamScopes.includes(scope) || reportType === 'team';
+						const isTeamScope = teamScopes.includes(scope) || reportType === 'team';
 						let html = `<p class="report-success">${esc(
 							(A.l10n && A.l10n.reportReady) || 'Report generated successfully.',
 						)}</p>`;
-						if (skipDownload) {
+						if (isTeamScope) {
 							html += `<p class="report-info" role="status">${esc(
 								(A.l10n && A.l10n.exportScopeNotice) ||
-								'Export for team or organization scope is not yet available. Use Preview to view the report.',
+								'The download will contain one row per team member matching this preview.',
 							)}</p>`;
 						}
 						html += renderReportHtml(data.report);
@@ -632,9 +632,48 @@
 				return;
 			}
 			const format = formatSelect ? formatSelect.value : 'csv';
-			// Map report types to export endpoints (team/org exports reuse the same endpoints,
-			// which are currently per-user and organization-safe – team/org downloads can
-			// be added later via dedicated export endpoints if needed).
+			const scope = reportScopeInput ? reportScopeInput.value : '';
+			const teamScopes = ['admin_team', 'manager_team', 'manager_single_team'];
+
+			// Team and manager scopes: export aggregated team report via team API
+			if (teamScopes.includes(scope)) {
+				const apiMap = A.apiUrl || {};
+				const teamApi = apiMap.team;
+				if (!teamApi) {
+					return;
+				}
+				const adminTeamSelect = document.getElementById('admin-team-select');
+				const managerTeamSelect = document.getElementById('manager-team-select');
+				try {
+					const urlObj = new URL(teamApi, window.location.origin);
+					// Use the same date range that was used for the preview
+					urlObj.searchParams.set('startDate', startIso);
+					urlObj.searchParams.set('endDate', endIso);
+					urlObj.searchParams.set('download', '1');
+					if (format) {
+						urlObj.searchParams.set('format', format);
+					}
+					if (scope === 'admin_team' && adminTeamSelect && adminTeamSelect.value) {
+						urlObj.searchParams.set('teamId', adminTeamSelect.value.trim());
+					}
+					if (scope === 'manager_single_team' && managerTeamSelect && managerTeamSelect.value) {
+						urlObj.searchParams.set('teamId', managerTeamSelect.value.trim());
+					}
+
+					const a = document.createElement('a');
+					a.href = urlObj.toString();
+					a.style.display = 'none';
+					a.setAttribute('download', '');
+					document.body.appendChild(a);
+					a.click();
+					document.body.removeChild(a);
+				} catch (e) {
+					// If URL construction fails, silently skip download to avoid breaking preview
+				}
+				return;
+			}
+
+			// Per-user / organization-wide exports use the dedicated export endpoints
 			let exportKey = 'timeEntries';
 			if (reportType === 'absence') {
 				exportKey = 'absences';
@@ -665,29 +704,11 @@
 			}
 		}
 
-		// Only trigger download when export would match preview. Export APIs support current-user only;
-		// for team/org scope the export would be wrong (current user vs team data). Don't mislead.
-		function shouldTriggerDownload() {
-			const scope = reportScopeInput ? reportScopeInput.value : '';
-			const reportType = reportTypeInput ? reportTypeInput.value : '';
-			const teamScopes = ['admin_team', 'manager_team', 'manager_single_team'];
-			if (teamScopes.includes(scope) || reportType === 'team') {
-				return false;
-			}
-			return true;
-		}
-
 		if (reportForm) {
 			reportForm.addEventListener('submit', (e) => {
 				e.preventDefault();
 				fetchAndShowReport();
-				if (shouldTriggerDownload()) {
-					downloadReport();
-				} else {
-					const notice = (A.l10n && A.l10n.exportScopeNotice) ||
-						'Export for team or organization scope is not yet available. Use Preview to view the report.';
-					announceToScreenReader(notice);
-				}
+				downloadReport();
 			});
 		}
 		if (previewBtn) {

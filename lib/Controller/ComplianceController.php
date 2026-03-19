@@ -135,11 +135,15 @@ class ComplianceController extends Controller
 			$recentViolations = $this->violationMapper->findByUser($userId, null, 10, 0);
 			$violationsData = [];
 			foreach ($recentViolations as $violation) {
+				$date = $violation->getDate();
 				$violationsData[] = [
 					'id' => $violation->getId(),
 					'type' => $violation->getViolationType(),
 					'severity' => $violation->getSeverity(),
-					'date' => $violation->getDate() ? $violation->getDate()->format('Y-m-d') : null,
+					// Human-readable, localized date for dashboard display (DD.MM.YYYY)
+					'date' => $date ? $date->format('d.m.Y') : null,
+					// Machine-friendly ISO date for charts / sorting
+					'dateIso' => $date ? $date->format('Y-m-d') : null,
 					'resolved' => $violation->getResolved(),
 					'description' => $violation->getDescription()
 				];

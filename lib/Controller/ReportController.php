@@ -21,6 +21,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
 use OCP\IL10N;
@@ -309,7 +310,7 @@ class ReportController extends Controller
 	 * @param string|null $endDate End date (Y-m-d format)
 	 * @param string|null $userIds Comma-separated user IDs (optional if teamId or manager scope)
 	 * @param string|null $teamId Team ID for app-owned teams (optional)
-	 * @return JSONResponse
+	 * @return JSONResponse|DataDownloadResponse
 	 */
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
@@ -318,7 +319,7 @@ class ReportController extends Controller
 		?string $endDate = null,
 		?string $userIds = null,
 		?string $teamId = null
-	): JSONResponse {
+	): JSONResponse|DataDownloadResponse {
 		try {
 			$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-30 days');
 			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
@@ -360,6 +361,31 @@ class ReportController extends Controller
 			}
 
 			$report = $this->reportingService->generateTeamReport($teamUserIds, $start, $end);
+
+			$download = (string)$this->request->getParam('download', '0') === '1';
+			if ($download) {
+				$format = (string)$this->request->getParam('format', 'csv');
+				$filenameBase = 'team-report-' . date('Y-m-d');
+
+				if ($format === 'json') {
+					$json = json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+					if ($json === false) {
+						throw new \Exception($this->l10n->t('Failed to encode report as JSON'));
+					}
+					return new DataDownloadResponse(
+						$json,
+						$filenameBase . '.json',
+						'application/json; charset=utf-8'
+					);
+				}
+
+				$csv = $this->buildTeamReportCsv($report);
+				return new DataDownloadResponse(
+					$csv,
+					$filenameBase . '.csv',
+					'text/csv; charset=utf-8'
+				);
+			}
 
 			return new JSONResponse([
 				'success' => true,
@@ -411,5 +437,63 @@ class ReportController extends Controller
 		}
 
 		throw new \Exception($this->l10n->t('Access denied. You can only view reports for yourself or your team members.'));
+	}
+
+	/**
+	 * Build a CSV payload for a team report.
+	 *
+	 * The CSV focuses on per-member aggregates so that it stays compact and
+	 * easy to consume in tools like Excel while matching the preview data.
+	 *
+	 * @param array $report
+	 * @return string
+	 */
+	private function buildTeamReportCsv(array $report): string
+	{
+		$headers = [
+			'user_id',
+			'display_name',
+			'total_hours',
+			'required_hours',
+			'overtime_hours',
+			'break_hours',
+			'violations_count',
+			'absence_days',
+			'entries_count',
+		];
+
+		$fp = fopen('php://temp', 'r+');
+		if ($fp === false) {
+			throw new \RuntimeException('Failed to open temporary stream for CSV export');
+		}
+
+		fputcsv($fp, $headers);
+
+		$members = $report['members'] ?? [];
+		if (is_array($members)) {
+			foreach ($members as $member) {
+				if (!is_array($member)) {
+					continue;
+				}
+				$row = [
+					$member['user_id'] ?? '',
+					$member['display_name'] ?? '',
+					isset($member['total_hours']) ? (string)$member['total_hours'] : '',
+					isset($member['required_hours']) ? (string)$member['required_hours'] : '',
+					isset($member['overtime_hours']) ? (string)$member['overtime_hours'] : '',
+					isset($member['break_hours']) ? (string)$member['break_hours'] : '',
+					isset($member['violations_count']) ? (string)$member['violations_count'] : '',
+					isset($member['absence_days']) ? (string)$member['absence_days'] : '',
+					isset($member['entries_count']) ? (string)$member['entries_count'] : '',
+				];
+				fputcsv($fp, $row);
+			}
+		}
+
+		rewind($fp);
+		$csv = stream_get_contents($fp);
+		fclose($fp);
+
+		return $csv === false ? '' : $csv;
 	}
 }
