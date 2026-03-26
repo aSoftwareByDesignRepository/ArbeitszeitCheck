@@ -17,6 +17,7 @@ use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
+use OCA\ArbeitszeitCheck\Constants;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -116,6 +117,7 @@ class ComplianceController extends Controller
 		Util::addStyle('arbeitszeitcheck', 'common/responsive');
 		Util::addStyle('arbeitszeitcheck', 'navigation');
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'compliance-violations');
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
@@ -133,21 +135,33 @@ class ComplianceController extends Controller
 			$recentViolations = $this->violationMapper->findByUser($userId, null, 10, 0);
 			$violationsData = [];
 			foreach ($recentViolations as $violation) {
+				$date = $violation->getDate();
 				$violationsData[] = [
 					'id' => $violation->getId(),
 					'type' => $violation->getViolationType(),
 					'severity' => $violation->getSeverity(),
-					'date' => $violation->getDate() ? $violation->getDate()->format('Y-m-d') : null,
+					// Human-readable, localized date for dashboard display (DD.MM.YYYY)
+					'date' => $date ? $date->format('d.m.Y') : null,
+					// Machine-friendly ISO date for charts / sorting
+					'dateIso' => $date ? $date->format('Y-m-d') : null,
 					'resolved' => $violation->getResolved(),
 					'description' => $violation->getDescription()
 				];
 			}
+
+			$isAdmin = $this->permissionService->isAdmin($userId);
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-dashboard', [
 				'complianceStatus' => $complianceStatus,
 				'recentViolations' => $violationsData,
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				// Navigation flags
+				'showSubstitutionLink' => false,
+				'showManagerLink' => $canAccessManagerDashboard,
+				'showReportsLink' => $canAccessManagerDashboard || $isAdmin,
+				'showAdminNav' => $isAdmin,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -161,8 +175,12 @@ class ComplianceController extends Controller
 				],
 				'recentViolations' => [],
 				'urlGenerator' => $this->urlGenerator,
-				'error' => null,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -190,6 +208,7 @@ class ComplianceController extends Controller
 		Util::addStyle('arbeitszeitcheck', 'common/responsive');
 		Util::addStyle('arbeitszeitcheck', 'navigation');
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'compliance-violations');
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
@@ -217,11 +236,18 @@ class ComplianceController extends Controller
 				];
 			}
 
+			$isAdmin = $this->permissionService->isAdmin($userId);
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
+
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-violations', [
 				'violations' => $violationsData,
 				'total' => count($violations),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => $canAccessManagerDashboard,
+				'showReportsLink' => $canAccessManagerDashboard || $isAdmin,
+				'showAdminNav' => $isAdmin,
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -229,8 +255,12 @@ class ComplianceController extends Controller
 				'violations' => [],
 				'total' => 0,
 				'urlGenerator' => $this->urlGenerator,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -290,6 +320,9 @@ class ComplianceController extends Controller
 				$reportData['by_severity'][$severity] = ($reportData['by_severity'][$severity] ?? 0) + 1;
 			}
 
+			$isAdmin = $this->permissionService->isAdmin($userId);
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
+
 			$response = new TemplateResponse(
 				'arbeitszeitcheck',
 				'compliance-reports',
@@ -300,6 +333,10 @@ class ComplianceController extends Controller
 					'endDate' => null,
 					'urlGenerator' => $this->urlGenerator,
 					'l' => $this->l10n,
+					'showSubstitutionLink' => false,
+					'showManagerLink' => $canAccessManagerDashboard,
+					'showReportsLink' => $canAccessManagerDashboard || $isAdmin,
+					'showAdminNav' => $isAdmin,
 				]
 			);
 			return $this->configureCSP($response);
@@ -314,8 +351,12 @@ class ComplianceController extends Controller
 				'startDate' => date('Y-m-d', strtotime('-30 days')),
 				'endDate' => date('Y-m-d'),
 				'urlGenerator' => $this->urlGenerator,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => false,
+				'showReportsLink' => false,
+				'showAdminNav' => false,
 			]);
 			return $this->configureCSP($response);
 		}
@@ -362,7 +403,7 @@ class ComplianceController extends Controller
 		?string $severity = null,
 		?string $startDate = null,
 		?string $endDate = null,
-		?int $limit = 25,
+		?int $limit = Constants::DEFAULT_LIST_LIMIT,
 		?int $offset = 0
 	): JSONResponse {
 		try {
@@ -437,11 +478,15 @@ class ComplianceController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
+			$raw = $e->getMessage();
+			if (strpos($raw, 'User not authenticated') !== false) {
 				$errorMessage = $this->l10n->t('User not authenticated');
+			} elseif (strpos($raw, 'Access denied') !== false) {
+				$errorMessage = $this->l10n->t('Access denied');
+			} else {
+				$errorMessage = $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			}
-			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
+			$status = strpos($raw, 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -483,11 +528,10 @@ class ComplianceController extends Controller
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -522,20 +566,15 @@ class ComplianceController extends Controller
 			if ($violation->getResolved()) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'Violation is already resolved'
+					'error' => $this->l10n->t('Violation is already resolved')
 				], Http::STATUS_BAD_REQUEST);
 			}
 
 			$oldValues = $violation->getSummary();
 
-			// Mark as resolved using mapper's resolveViolation method
-			// Note: resolvedBy field is int, but Nextcloud user IDs are strings
-			// We set it to a hash of the user ID for tracking purposes
-			$resolvedByHash = abs(crc32($userId)) % PHP_INT_MAX; // Convert string to positive int
-			$updatedViolation = $this->violationMapper->resolveViolation($id, $resolvedByHash);
+			$updatedViolation = $this->violationMapper->resolveViolation($id, $userId);
 
 			$newValues = $updatedViolation->getSummary();
-			$newValues['resolved_by_user_id'] = $userId;
 			$this->auditLogMapper->logAction(
 				$violationOwnerId,
 				'compliance_violation_resolved',
@@ -557,11 +596,10 @@ class ComplianceController extends Controller
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -588,10 +626,10 @@ class ComplianceController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
@@ -604,13 +642,29 @@ class ComplianceController extends Controller
 	 *
 	 * @param string|null $startDate Start date (Y-m-d format)
 	 * @param string|null $endDate End date (Y-m-d format)
+	 * @param string|null $userId When set to an empty string (`userId=`) and the caller is an admin,
+	 *                            the report is generated for all enabled users. Otherwise, generates for that user.
 	 * @return JSONResponse
 	 */
 	#[NoAdminRequired]
-	public function getReport(?string $startDate = null, ?string $endDate = null): JSONResponse
+	public function getReport(?string $startDate = null, ?string $endDate = null, ?string $userId = null): JSONResponse
 	{
 		try {
-			$userId = $this->getUserId();
+			$currentUserId = $this->getUserId();
+			$targetUserId = null;
+
+			// Special case: organization scope for admins is expressed as an empty string (`userId=`).
+			// We treat `userId=""` as "all users" and require admin privileges.
+			if ($userId === '') {
+				if (!$this->permissionService->isAdmin($currentUserId)) {
+					throw new \Exception($this->l10n->t('Access denied. You can only view compliance data for yourself or your team members.'));
+				}
+				$targetUserId = null;
+			} else {
+				// Default: current user (or an explicitly provided userId if a legacy caller passes it).
+				$targetUserId = $userId ?? $currentUserId;
+				$this->ensureCanAccessUserCompliance($currentUserId, $targetUserId);
+			}
 
 			// Parse and validate date params (Y-m-d format)
 			$startDt = $this->parseDateParam($startDate, 'start_date');
@@ -624,8 +678,18 @@ class ComplianceController extends Controller
 				$start->modify('-30 days');
 			}
 			$start->setTime(0, 0, 0);
+			if ($start > $end) {
+				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+			}
+			$days = (int)$end->diff($start)->format('%a');
+			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+				throw new \Exception($this->l10n->t(
+					'Export date range must not exceed %d days. Please narrow the range.',
+					[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
+				));
+			}
 
-			$report = $this->complianceService->generateComplianceReport($start, $end, $userId);
+			$report = $this->complianceService->generateComplianceReport($start, $end, $targetUserId);
 
 			return new JSONResponse([
 				'success' => true,
@@ -634,14 +698,65 @@ class ComplianceController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage
 			], Http::STATUS_BAD_REQUEST);
+		}
+	}
+
+	/**
+	 * Check whether the minimum rest period (ArbZG §5) is met for a given start time.
+	 *
+	 * Used by the frontend validation layer to give real-time feedback before the user
+	 * saves a new time entry. The authenticated user's ID is always used — the optional
+	 * `userId` query parameter from legacy JS callers is intentionally ignored to prevent
+	 * checking another user's rest period.
+	 *
+	 * @param string $startTime ISO-8601 start time of the new entry
+	 * @param int|null $excludeEntryId Entry ID to exclude from the check (when editing)
+	 * @return JSONResponse
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function checkRestPeriod(string $startTime, ?int $excludeEntryId = null): JSONResponse
+	{
+		try {
+			$userId = $this->getUserId();
+
+			$startDt = \DateTime::createFromFormat(\DateTime::ATOM, $startTime)
+				?: \DateTime::createFromFormat('Y-m-d\TH:i:s.u\Z', $startTime)
+				?: \DateTime::createFromFormat('Y-m-d\TH:i:s\Z', $startTime)
+				?: \DateTime::createFromFormat('Y-m-d\TH:i:sP', $startTime)
+				?: new \DateTime($startTime);
+
+			if ($startDt === false) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid start time format. Use ISO-8601 (e.g. 2024-01-15T09:00:00Z).')
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$result = $this->complianceService->checkRestPeriodForStartTime($userId, $startDt, $excludeEntryId);
+
+			return new JSONResponse([
+				'success' => true,
+				'valid' => $result['valid'],
+				'message' => $result['message'] ?? null,
+				'earliestStartTime' => isset($result['earliestStartTime'])
+					? $result['earliestStartTime']->format(\DateTime::ATOM)
+					: null,
+			]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('checkRestPeriod error: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
@@ -675,10 +790,10 @@ class ComplianceController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ComplianceController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
+			$raw = $e->getMessage();
+			$errorMessage = strpos($raw, 'User not authenticated') !== false
+				? $this->l10n->t('User not authenticated')
+				: $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
 				'error' => $errorMessage

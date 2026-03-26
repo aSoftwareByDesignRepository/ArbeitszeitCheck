@@ -54,7 +54,7 @@ gehosteten Nextcloud.
 - PHP 8.1–8.4
 	]]></description>
 
-	<version>1.1.2</version>
+	<version>1.1.5</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="info@software-by-design.de" homepage="https://software-by-design.de">Alexander Mäule</author>
 
@@ -77,6 +77,10 @@ gehosteten Nextcloud.
 		<!-- Optional integration with ProjectCheck app -->
 		<app min-version="2.0.0">projectcheck</app>
 	</optional-dependencies>
+
+	<commands>
+		<command>OCA\ArbeitszeitCheck\Command\GenerateTestDataCommand</command>
+	</commands>
 
 	<screenshot small-thumbnail="https://raw.githubusercontent.com/aSoftwareByDesignRepository/ArbeitszeitCheck/refs/heads/master/screenshots/arbeitszeitcheck-screenshot-01.png">
 		https://raw.githubusercontent.com/aSoftwareByDesignRepository/ArbeitszeitCheck/refs/heads/master/screenshots/arbeitszeitcheck-screenshot-01.png
@@ -133,6 +137,11 @@ gehosteten Nextcloud.
 		<personal>OCA\ArbeitszeitCheck\Settings\PersonalSettings</personal>
 	</settings>
 
+	<repair-steps>
+		<post-migration>
+			<step>OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays</step>
+		</post-migration>
+	</repair-steps>
 	<background-jobs>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\DailyComplianceCheckJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\ClockOutReminderJob</job>

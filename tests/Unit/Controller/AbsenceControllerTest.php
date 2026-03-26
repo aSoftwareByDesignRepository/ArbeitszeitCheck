@@ -153,9 +153,9 @@ class AbsenceControllerTest extends TestCase
 	}
 
 	/**
-	 * Test show returns absence when found
+	 * Test apiShow returns absence when found
 	 */
-	public function testShowReturnsAbsenceWhenFound(): void
+	public function testApiShowReturnsAbsenceWhenFound(): void
 	{
 		$userId = 'testuser';
 		$absenceId = 1;
@@ -172,7 +172,7 @@ class AbsenceControllerTest extends TestCase
 			->with($absenceId, $userId)
 			->willReturn($absence);
 
-		$response = $this->controller->show($absenceId);
+		$response = $this->controller->apiShow($absenceId);
 		$data = $response->getData();
 
 		$this->assertTrue($data['success']);
@@ -180,9 +180,9 @@ class AbsenceControllerTest extends TestCase
 	}
 
 	/**
-	 * Test show returns not found when absence doesn't exist
+	 * Test apiShow returns not found when absence doesn't exist
 	 */
-	public function testShowReturnsNotFoundWhenAbsenceMissing(): void
+	public function testApiShowReturnsNotFoundWhenAbsenceMissing(): void
 	{
 		$userId = 'testuser';
 		$absenceId = 999;
@@ -196,7 +196,7 @@ class AbsenceControllerTest extends TestCase
 			->with($absenceId, $userId)
 			->willReturn(null);
 
-		$response = $this->controller->show($absenceId);
+		$response = $this->controller->apiShow($absenceId);
 
 		$this->assertEquals(Http::STATUS_NOT_FOUND, $response->getStatus());
 		$data = $response->getData();

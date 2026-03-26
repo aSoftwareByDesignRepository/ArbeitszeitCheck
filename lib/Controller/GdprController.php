@@ -22,6 +22,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IUserSession;
 use OCP\IL10N;
@@ -38,6 +39,7 @@ class GdprController extends Controller
 	private AuditLogMapper $auditLogMapper;
 	private IUserSession $userSession;
 	private IL10N $l10n;
+	private IConfig $config;
 
 	public function __construct(
 		string $appName,
@@ -48,7 +50,8 @@ class GdprController extends Controller
 		ComplianceViolationMapper $violationMapper,
 		AuditLogMapper $auditLogMapper,
 		IUserSession $userSession,
-		IL10N $l10n
+		IL10N $l10n,
+		IConfig $config
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -58,6 +61,7 @@ class GdprController extends Controller
 		$this->auditLogMapper = $auditLogMapper;
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
+		$this->config = $config;
 	}
 
 	/**
@@ -226,11 +230,10 @@ class GdprController extends Controller
 			return new DataDownloadResponse($json, $filename, 'application/json; charset=utf-8');
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in GdprController::export: ' . $e->getMessage(), ["exception" => $e]);
-			// Return error as JSON file
-			$errorData = ['error' => $e->getMessage()];
-			$errorJson = json_encode($errorData, JSON_PRETTY_PRINT);
-			$filename = 'arbeitszeitcheck-gdpr-export-error-' . date('Y-m-d') . '.json';
-			return new DataDownloadResponse($errorJson, $filename, 'application/json; charset=utf-8');
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
@@ -251,9 +254,10 @@ class GdprController extends Controller
 			$userId = $user->getUID();
 			$now = new \DateTime();
 
-			// Legal retention period: 2 years minimum for time records (German labor law)
+			// Use admin-configured retention period (default 2 years; German labor law minimum)
+			$retentionYears = max(1, min(10, (int)$this->config->getAppValue('arbeitszeitcheck', 'retention_period', '2')));
 			$retentionDate = clone $now;
-			$retentionDate->modify('-2 years');
+			$retentionDate->modify('-' . $retentionYears . ' years');
 
 			// Get all time entries for user first
 			$allTimeEntries = $this->timeEntryMapper->findByUser($userId);
@@ -272,7 +276,7 @@ class GdprController extends Controller
 				$deletedCount++;
 			}
 
-			// Count entries that must be retained (within 2 years)
+			// Count entries that must be retained (within retention period)
 			$recentEntries = array_filter($allTimeEntries, function ($entry) use ($retentionDate) {
 				return $entry->getStartTime() >= $retentionDate;
 			});
@@ -298,16 +302,16 @@ class GdprController extends Controller
 				[
 					'deleted_time_entries' => $deletedCount,
 					'retained_time_entries' => $retainedCount,
-					'retention_period_years' => 2,
+					'retention_period_years' => $retentionYears,
 					'request_date' => $now->format('c')
 				]
 			);
 
 			$message = $this->l10n->n(
-				'Data deletion request processed. %d time entry deleted. %d entries retained due to legal 2-year retention requirement.',
-				'Data deletion request processed. %d time entries deleted. %d entries retained due to legal 2-year retention requirement.',
+				'Data deletion request processed. %1$d time entry deleted. %2$d entries retained due to %3$d-year retention requirement.',
+				'Data deletion request processed. %1$d time entries deleted. %2$d entries retained due to %3$d-year retention requirement.',
 				$deletedCount,
-				[$deletedCount, $retainedCount]
+				[$deletedCount, $retainedCount, $retentionYears]
 			);
 
 			return new JSONResponse([
@@ -315,14 +319,15 @@ class GdprController extends Controller
 				'message' => $message,
 				'deleted_entries' => $deletedCount,
 				'retained_entries' => $retainedCount,
-				'retention_period' => '2 years',
-				'note' => 'Some data must be retained for 2 years per German labor law (ArbZG) requirements. Audit logs and compliance violations are retained for legal compliance purposes.'
+				'retention_period' => $retentionYears . ' ' . $this->l10n->n('year', 'years', $retentionYears),
+				'note' => $this->l10n->t('Some data must be retained per configured retention period. Audit logs and compliance violations are retained for legal compliance purposes.')
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in GdprController::delete: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
-			], Http::STATUS_BAD_REQUEST);
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 }

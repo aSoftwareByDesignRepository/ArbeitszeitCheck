@@ -191,7 +191,24 @@ const ArbeitszeitCheckUtils = {
       }
     }
 
-    return fetch(typeof OC !== 'undefined' ? OC.generateUrl(url) : url, config)
+    const resolvedUrl = (() => {
+      if (typeof url !== 'string') {
+        return url;
+      }
+
+      // Keep fully-qualified and already-generated Nextcloud paths unchanged.
+      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//') || url.startsWith('/index.php/')) {
+        return url;
+      }
+
+      if (typeof OC !== 'undefined' && typeof OC.generateUrl === 'function') {
+        return OC.generateUrl(url);
+      }
+
+      return url;
+    })();
+
+    return fetch(resolvedUrl, config)
       .then(async response => {
         const data = await response.json().catch(() => null);
         if (!response.ok) {
@@ -212,6 +229,9 @@ const ArbeitszeitCheckUtils = {
       .catch(error => {
         if (onError) {
           onError(error);
+          // Most call sites rely on callbacks and do not attach .catch().
+          // Avoid unhandled promise rejections once the error callback ran.
+          return null;
         }
         throw error;
       });
@@ -331,11 +351,32 @@ const ArbeitszeitCheckUtils = {
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
-    
-    if (days > 0) return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-    if (hours > 0) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-    if (minutes > 0) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
-    return 'Just now';
+
+    const replaceVars = (template, vars = {}) =>
+      template.replace(/\{(\w+)\}/g, (_, key) => (vars && key in vars ? vars[key] : `{${key}}`));
+
+    const tFn = (typeof window !== 'undefined' && typeof window.t === 'function')
+      ? (s, vars) => window.t('arbeitszeitcheck', s, vars || {})
+      : (s, vars) => replaceVars(s, vars);
+
+    const nFn = (typeof window !== 'undefined' && typeof window.n === 'function')
+      ? (singular, plural, count, vars) => window.n('arbeitszeitcheck', singular, plural, count, vars || {})
+      : (singular, plural, count, vars) => {
+        const template = count === 1 ? singular : plural;
+        const allVars = { count, ...(vars || {}) };
+        return replaceVars(template, allVars);
+      };
+
+    if (days > 0) {
+      return nFn('{count} day ago', '{count} days ago', days, { count: days });
+    }
+    if (hours > 0) {
+      return nFn('{count} hour ago', '{count} hours ago', hours, { count: hours });
+    }
+    if (minutes > 0) {
+      return nFn('{count} minute ago', '{count} minutes ago', minutes, { count: minutes });
+    }
+    return tFn('Just now');
   },
 
   // ===== STRING UTILITIES =====
@@ -463,6 +504,7 @@ const ArbeitszeitCheckUtils = {
   // Timeline / calendar shared strings
   l10n.loadingTimeline = l10n.loadingTimeline || tt('Loading timeline...');
   l10n.noTimelineData = l10n.noTimelineData || tt('No timeline data available');
+  l10n.selectAtLeastOneFilter = l10n.selectAtLeastOneFilter || tt('Select at least one type to display in the timeline.');
   l10n.loadingCalendar = l10n.loadingCalendar || tt('Loading calendar...');
   l10n.noEntries = l10n.noEntries || tt('No entries for this day');
 

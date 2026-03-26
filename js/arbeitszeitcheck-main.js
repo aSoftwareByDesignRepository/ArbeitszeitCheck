@@ -17,6 +17,23 @@
         return div.innerHTML;
     }
 
+    /**
+     * Format a Date as YYYY-MM-DD using local calendar values only (no timezone shifts).
+     *
+     * Using toISOString() here would convert the local time to UTC which can
+     * move dates across day boundaries depending on the user's timezone.
+     * For calendar logic we always want the local civil date.
+     */
+    function formatLocalDateYmd(date) {
+        if (!(date instanceof Date)) {
+            return '';
+        }
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    }
+
     // Main application object
     const ArbeitszeitCheck = {
         config: window.ArbeitszeitCheck || {},
@@ -112,6 +129,39 @@
                         if (!isClockedIn) {
                             return;
                         }
+
+                        // Page Visibility API: when the tab is backgrounded and
+                        // then brought back into focus, re-sync from the backend so
+                        // that throttled setInterval ticks don't accumulate drift.
+                        // Remove any previously registered handler to avoid duplicates
+                        // on re-init (e.g. SPA-style page transitions).
+                        if (this._visibilityHandler) {
+                            document.removeEventListener('visibilitychange', this._visibilityHandler);
+                        }
+                        this._visibilityHandler = () => {
+                            if (document.visibilityState === 'visible' && isClockedIn && !isOnBreak) {
+                                // Force an immediate status sync to correct any drift
+                                this.getStatus()
+                                    .then(response => {
+                                        if (response && response.success && response.status) {
+                                            const newStatus = response.status.status || 'clocked_out';
+                                            isClockedIn = (newStatus === 'active' || newStatus === 'break');
+                                            isOnBreak   = (newStatus === 'break');
+                                            if (response.status.current_session_duration !== null
+                                                    && response.status.current_session_duration !== undefined) {
+                                                baseWorkingSeconds = Math.floor(response.status.current_session_duration);
+                                            }
+                                            lastUpdateTime = new Date().getTime();
+                                        }
+                                    })
+                                    .catch(() => {
+                                        // Non-fatal: reset lastUpdateTime so elapsed calculation
+                                        // starts fresh from the moment the tab becomes visible.
+                                        lastUpdateTime = new Date().getTime();
+                                    });
+                            }
+                        };
+                        document.addEventListener('visibilitychange', this._visibilityHandler);
 
                         // Update timer every second
                         this.timers.session = setInterval(() => {
@@ -401,7 +451,7 @@
             deleteButtons.forEach(button => {
                 button.addEventListener('click', (e) => {
                     e.preventDefault();
-                    if (confirm(this.config.l10n?.confirmDelete || 'Are you sure you want to delete this item?')) {
+                    if (confirm(this.config.l10n?.confirmDelete || (window.t && window.t('arbeitszeitcheck', 'Are you sure you want to delete this item?')) || 'Are you sure you want to delete this item?')) {
                         const endpoint = button.dataset.deleteEndpoint;
                         this.callApi(endpoint, 'DELETE');
                     }
@@ -602,10 +652,14 @@
          * Initialize absences page functionality
          */
         initAbsences: function() {
-            // Show success toast when redirected with ?created=1 or ?updated=1 (no JSON as success message)
+            // Show success/error toast when redirected with query params
             const params = new URLSearchParams(window.location.search);
             const created = params.get('created');
             const updated = params.get('updated');
+            const cancelled = params.get('cancelled');
+            const errorParam = params.get('error');
+            const shortened = params.get('shortened');
+            const shortenError = params.get('shorten_error');
             if (created === '1' || updated === '1') {
                 const msg = created === '1'
                     ? (window.t && window.t('arbeitszeitcheck', 'Absence request submitted successfully')) || 'Absence request submitted successfully'
@@ -615,6 +669,34 @@
                 }
                 params.delete('created');
                 params.delete('updated');
+            }
+            if (shortened === '1') {
+                const msg = (window.t && window.t('arbeitszeitcheck', 'Absence shortened successfully. Your actual last day of absence has been updated.')) || 'Absence shortened successfully. Your actual last day of absence has been updated.';
+                if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
+                    window.OC.Notification.showTemporary(msg, { type: 'success' });
+                }
+                params.delete('shortened');
+            }
+            if (shortenError) {
+                if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
+                    window.OC.Notification.showTemporary(shortenError, { type: 'error', timeout: 6000 });
+                }
+                params.delete('shorten_error');
+            }
+            if (cancelled === '1') {
+                const msg = (window.t && window.t('arbeitszeitcheck', 'Absence cancelled successfully.')) || 'Absence cancelled successfully.';
+                if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
+                    window.OC.Notification.showTemporary(msg, { type: 'success' });
+                }
+                params.delete('cancelled');
+            }
+            if (errorParam) {
+                if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
+                    window.OC.Notification.showTemporary(decodeURIComponent(errorParam), { type: 'error', timeout: 6000 });
+                }
+                params.delete('error');
+            }
+            if (created === '1' || updated === '1' || shortened === '1' || shortenError || cancelled === '1' || errorParam) {
                 const qs = params.toString();
                 const cleanUrl = window.location.pathname + (qs ? '?' + qs : '');
                 window.history.replaceState({}, '', cleanUrl);
@@ -639,32 +721,68 @@
                 }
             }
 
+            // Create/Edit form: update min date for start/end based on absence type
+            const absenceTypeSel = document.getElementById('absence-type');
+            const absenceStartInput = document.getElementById('absence-start-date');
+            const absenceEndInput = document.getElementById('absence-end-date');
+            if (absenceTypeSel && absenceStartInput && absenceEndInput) {
+                const applyMinDateForType = function() {
+                    const type = absenceTypeSel.value;
+                    const isSickLeave = type === 'sick_leave';
+                    const minVal = isSickLeave && absenceStartInput.getAttribute('data-datepicker-min-sick')
+                        ? absenceStartInput.getAttribute('data-datepicker-min-sick')
+                        : (function() {
+                            const d = new Date();
+                            const dd = String(d.getDate()).padStart(2, '0');
+                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                            return dd + '.' + mm + '.' + d.getFullYear();
+                        })();
+                    absenceStartInput.setAttribute('data-datepicker-min', minVal);
+                    absenceEndInput.setAttribute('data-datepicker-min', absenceEndInput.getAttribute('data-datepicker-min-sick') && isSickLeave
+                        ? absenceEndInput.getAttribute('data-datepicker-min-sick')
+                        : minVal);
+                };
+                absenceTypeSel.addEventListener('change', applyMinDateForType);
+                applyMinDateForType();
+            }
+
             // Filter button - toggle filter section (only when both exist)
             const filterBtn = document.getElementById('btn-filter');
             const filterSection = document.getElementById('filter-section');
             if (filterBtn && filterSection) {
+                // Ensure assistive technologies understand the toggle state
+                filterBtn.setAttribute('aria-controls', 'filter-section');
+                const applyFilterVisibility = (visible) => {
+                    filterSection.style.display = visible ? 'block' : 'none';
+                    filterSection.setAttribute('aria-hidden', visible ? 'false' : 'true');
+                    filterBtn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+                };
+                // Initialize ARIA state from current visibility
+                const initiallyVisible = filterSection.style.display !== 'none';
+                applyFilterVisibility(initiallyVisible);
                 filterBtn.addEventListener('click', () => {
                     const isVisible = filterSection.style.display !== 'none';
-                    filterSection.style.display = isVisible ? 'none' : 'block';
+                    applyFilterVisibility(!isVisible);
                 });
             }
 
             // Edit buttons in table rows (for pending absences)
-            const editButtons = document.querySelectorAll('table tbody .btn-edit[data-absence-id]');
+            const editButtons = document.querySelectorAll('table tbody .btn-icon--edit[data-absence-id]');
             editButtons.forEach(button => {
                 button.addEventListener('click', (e) => {
                     e.preventDefault();
                     const absenceId = button.dataset.absenceId;
                     if (absenceId) {
-                        // Redirect to edit page
-                        const editUrl = OC.generateUrl('/apps/arbeitszeitcheck/absences/' + absenceId + '/edit');
+                        const editUrl = (this.config.apiUrl && this.config.apiUrl.edit)
+                            ? this.config.apiUrl.edit.replace('__ID__', absenceId)
+                            : OC.generateUrl('/apps/arbeitszeitcheck/absences/' + absenceId + '/edit');
                         window.location.href = editUrl;
                     }
                 });
             });
 
             // Cancel buttons in table rows (for pending absences)
-            const cancelButtons = document.querySelectorAll('table tbody .btn-cancel[data-absence-id]');
+            const cancelButtons = document.querySelectorAll('table tbody .btn-icon--cancel[data-absence-id]');
             cancelButtons.forEach(button => {
                 button.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -697,8 +815,8 @@
                                 
                                 // Show success message
                                 const successMsg = this.config.l10n?.canceled || 
-                                    (window.t && window.t('arbeitszeitcheck', 'Absence request canceled successfully')) || 
-                                    'Absence request canceled successfully';
+                                    (window.t && window.t('arbeitszeitcheck', 'Absence request cancelled successfully')) || 
+                                    'Absence request cancelled successfully';
                                 this.showSuccess(successMsg);
                             })
                             .catch(error => {
@@ -709,14 +827,15 @@
             });
 
             // View buttons in table rows (for approved/rejected absences)
-            const viewButtons = document.querySelectorAll('table tbody .btn-view[data-absence-id]');
+            const viewButtons = document.querySelectorAll('table tbody .btn-icon--view[data-absence-id]');
             viewButtons.forEach(button => {
                 button.addEventListener('click', (e) => {
                     e.preventDefault();
                     const absenceId = button.dataset.absenceId;
                     if (absenceId) {
-                        // Redirect to show/details page
-                        const showUrl = OC.generateUrl('/apps/arbeitszeitcheck/absences/' + absenceId);
+                        const showUrl = (this.config.apiUrl && this.config.apiUrl.show)
+                            ? this.config.apiUrl.show.replace('__ID__', absenceId)
+                            : OC.generateUrl('/apps/arbeitszeitcheck/absences/' + absenceId);
                         window.location.href = showUrl;
                     }
                 });
@@ -924,10 +1043,12 @@
         },
 
         /**
-         * Set loading state on buttons and forms
+         * Set loading state on buttons and forms (includes clock-in/out/break for double-submit guard)
          */
         setLoadingState: function(loading) {
-            const buttons = document.querySelectorAll('button[data-api-action]');
+            const buttons = document.querySelectorAll(
+                'button[data-api-action], #btn-clock-in, #btn-start-break, #btn-end-break, .btn-clock-out'
+            );
             buttons.forEach(button => {
                 if (loading) {
                     button.disabled = true;
@@ -1015,18 +1136,102 @@
             return formatted;
         },
 
+        /** Cached timeline data for filter re-renders (set after successful load) */
+        _timelineData: null,
+
+        /** Session storage key for timeline filter preferences */
+        _timelineFiltersKey: 'arbeitszeitcheck-timeline-filters',
+
         /**
-         * Initialize timeline page
+         * Get current timeline filter state from checkboxes
+         * @returns {{ timeEntries: boolean, absences: boolean, holidays: boolean }}
          */
-        initTimeline: function() {
+        getTimelineFilterState: function() {
+            const timeEntries = document.getElementById('timeline-filter-time-entries');
+            const absences = document.getElementById('timeline-filter-absences');
+            const holidays = document.getElementById('timeline-filter-holidays');
+            return {
+                timeEntries: timeEntries ? timeEntries.checked : true,
+                absences: absences ? absences.checked : true,
+                holidays: holidays ? holidays.checked : true
+            };
+        },
+
+        /**
+         * Restore timeline filter state from sessionStorage
+         */
+        restoreTimelineFilters: function() {
+            try {
+                const raw = sessionStorage.getItem(this._timelineFiltersKey);
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (!saved || typeof saved !== 'object') return;
+                const timeEntries = document.getElementById('timeline-filter-time-entries');
+                const absences = document.getElementById('timeline-filter-absences');
+                const holidays = document.getElementById('timeline-filter-holidays');
+                if (timeEntries && saved.timeEntries !== undefined) timeEntries.checked = !!saved.timeEntries;
+                if (absences && saved.absences !== undefined) absences.checked = !!saved.absences;
+                if (holidays && saved.holidays !== undefined) holidays.checked = !!saved.holidays;
+            } catch (e) {
+                /* ignore parse/storage errors */
+            }
+        },
+
+        /**
+         * Persist timeline filter state to sessionStorage
+         */
+        persistTimelineFilters: function() {
+            try {
+                const state = this.getTimelineFilterState();
+                sessionStorage.setItem(this._timelineFiltersKey, JSON.stringify(state));
+            } catch (e) {
+                /* ignore storage errors */
+            }
+        },
+
+        /**
+         * Apply filters and re-render timeline (uses cached data)
+         */
+        applyTimelineFilters: function() {
+            const container = document.getElementById('timeline-container');
+            if (!container || !this._timelineData) {
+                return;
+            }
+            const filter = this.getTimelineFilterState();
+            const allUnchecked = !filter.timeEntries && !filter.absences && !filter.holidays;
+            if (allUnchecked) {
+                const msg = this.config.l10n?.selectAtLeastOneFilter || 'Select at least one type to display in the timeline.';
+                container.innerHTML = `
+                    <div class="timeline-empty" role="status" aria-live="polite">
+                        <p>${escapeHtml(msg)}</p>
+                    </div>
+                `;
+                return;
+            }
+            const entries = filter.timeEntries ? this._timelineData.timeEntries : [];
+            const absences = filter.absences ? this._timelineData.absences : [];
+            const holidays = filter.holidays ? this._timelineData.holidays : [];
+            this.renderTimeline(container, entries, absences, holidays);
+        },
+
+        /**
+         * Initialize timeline page (with max retry to avoid infinite loop)
+         */
+        initTimeline: function(retryCount = 0) {
+            const maxRetries = 20;
             const container = document.getElementById('timeline-container');
             if (!container) {
-                // Container not found, try again after a short delay
+                if (retryCount >= maxRetries) {
+                    console.warn('arbeitszeitcheck: timeline-container not found after ' + maxRetries + ' retries');
+                    return;
+                }
                 setTimeout(() => {
-                    this.initTimeline();
+                    this.initTimeline(retryCount + 1);
                 }, 100);
                 return;
             }
+
+            this.restoreTimelineFilters();
 
             const refreshBtn = document.getElementById('btn-refresh-timeline');
             if (refreshBtn) {
@@ -1034,8 +1239,20 @@
                     this.loadTimeline();
                 });
             }
-            
-            // Load timeline data on page load
+
+            const bindFilter = (id) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('change', () => {
+                        this.persistTimelineFilters();
+                        this.applyTimelineFilters();
+                    });
+                }
+            };
+            bindFilter('timeline-filter-time-entries');
+            bindFilter('timeline-filter-absences');
+            bindFilter('timeline-filter-holidays');
+
             this.loadTimeline();
         },
 
@@ -1049,15 +1266,17 @@
             }
 
             // Show loading state
+            const loadingMsg = this.config.l10n?.loadingTimeline || 'Loading timeline...';
             container.innerHTML = `
                 <div class="timeline-loading">
                     <div class="loading-spinner"></div>
-                    <p>${this.config.l10n?.loadingTimeline || 'Loading timeline...'}</p>
+                    <p>${escapeHtml(loadingMsg)}</p>
                 </div>
             `;
 
             const timeEntriesUrl = this.config.apiUrl?.timeEntries || '/apps/arbeitszeitcheck/api/time-entries';
             const absencesUrl = this.config.apiUrl?.absences || '/apps/arbeitszeitcheck/api/absences';
+            const holidaysUrl = this.config.apiUrl?.holidays || '/apps/arbeitszeitcheck/api/holidays';
 
             // Load both time entries and absences in parallel
             Promise.all([
@@ -1067,7 +1286,52 @@
                 // Ensure we have arrays
                 const entries = Array.isArray(timeEntries) ? timeEntries : [];
                 const abs = Array.isArray(absences) ? absences : [];
-                this.renderTimeline(container, entries, abs);
+
+                // Derive a safe date range from existing items (if any)
+                const allDates = [];
+                entries.forEach(entry => {
+                    const startTime = entry.start_time || entry.startTime;
+                    if (startTime) {
+                        const d = new Date(startTime);
+                        if (!isNaN(d.getTime())) {
+                            allDates.push(d);
+                        }
+                    }
+                });
+                abs.forEach(absence => {
+                    const startDate = absence.start_date || absence.startDate;
+                    if (startDate) {
+                        const d = new Date(startDate);
+                        if (!isNaN(d.getTime())) {
+                            allDates.push(d);
+                        }
+                    }
+                });
+
+                if (allDates.length === 0) {
+                    this._timelineData = { timeEntries: entries, absences: abs, holidays: [] };
+                    this.applyTimelineFilters();
+                    return;
+                }
+
+                const minTime = Math.min.apply(null, allDates.map(d => d.getTime()));
+                const maxTime = Math.max.apply(null, allDates.map(d => d.getTime()));
+                const start = new Date(minTime);
+                const end = new Date(maxTime);
+
+                const startDateYmd = formatLocalDateYmd(start);
+                const endDateYmd = formatLocalDateYmd(end);
+
+                this.fetchTimelineData(holidaysUrl, { start: startDateYmd, end: endDateYmd })
+                    .then((holidaysResponse) => {
+                        const holidays = Array.isArray(holidaysResponse && holidaysResponse.holidays) ? holidaysResponse.holidays : [];
+                        this._timelineData = { timeEntries: entries, absences: abs, holidays };
+                        this.applyTimelineFilters();
+                    })
+                    .catch(() => {
+                        this._timelineData = { timeEntries: entries, absences: abs, holidays: [] };
+                        this.applyTimelineFilters();
+                    });
             }).catch((error) => {
                 const errMsg = error && error.message ? escapeHtml(error.message) : (this.config.l10n?.error || 'An error occurred');
                 container.innerHTML = `
@@ -1105,8 +1369,16 @@
                 return response.json();
             })
             .then(data => {
+                // Unwrap Nextcloud OCS envelope if present
+                if (data && data.ocs && data.ocs.data) {
+                    data = data.ocs.data;
+                }
+
                 // Handle different response formats
                 if (Array.isArray(data)) {
+                    return data;
+                } else if (data && data.success && data.holidays && Array.isArray(data.holidays)) {
+                    // Format: {success: true, state: 'NW', holidays: [...]} – return full object so calendar can use .holidays
                     return data;
                 } else if (data && data.success && data.entries && Array.isArray(data.entries)) {
                     // Format: {success: true, entries: [...]}
@@ -1133,9 +1405,9 @@
         },
 
         /**
-         * Render timeline with time entries and absences
+         * Render timeline with time entries, absences, and holidays
          */
-        renderTimeline: function(container, timeEntries, absences) {
+        renderTimeline: function(container, timeEntries, absences, holidays) {
             // Combine and sort all items by date
             const items = [];
             
@@ -1163,13 +1435,33 @@
                 }
             });
 
+            // Add holidays (statutory, company, custom) as separate, read-only items
+            if (Array.isArray(holidays)) {
+                holidays.forEach(holiday => {
+                    if (!holiday || !holiday.date) {
+                        return;
+                    }
+                    // Treat holiday dates as local dates without time; append T00:00 to avoid timezone drift
+                    const dateObj = new Date(holiday.date + 'T00:00:00');
+                    if (isNaN(dateObj.getTime())) {
+                        return;
+                    }
+                    items.push({
+                        type: 'holiday',
+                        date: dateObj,
+                        data: holiday
+                    });
+                });
+            }
+
             // Sort by date (newest first)
             items.sort((a, b) => b.date - a.date);
 
             if (items.length === 0) {
+                const emptyMsg = this.config.l10n?.noTimelineData || 'No timeline data available';
                 container.innerHTML = `
-                    <div class="timeline-empty">
-                        <p>${this.config.l10n?.noTimelineData || 'No timeline data available'}</p>
+                    <div class="timeline-empty" role="status" aria-live="polite">
+                        <p>${escapeHtml(emptyMsg)}</p>
                     </div>
                 `;
                 return;
@@ -1235,6 +1527,8 @@
                         html += this.renderTimeEntryItem(item.data);
                     } else if (item.type === 'absence') {
                         html += this.renderAbsenceItem(item.data);
+                    } else if (item.type === 'holiday') {
+                        html += this.renderHolidayItem(item.data);
                     }
                 });
 
@@ -1363,6 +1657,17 @@
         },
 
         /**
+         * Return display label for absence (own absences: type label; substitute: "Covering for X")
+         */
+        getAbsenceDisplayLabel: function(absence) {
+            if (absence && absence.role === 'substitute' && absence.ownerDisplayName) {
+                const tmpl = (this.config.l10n && this.config.l10n.coveringFor) || 'Covering for %1$s';
+                return String(tmpl).replace('%1$s', absence.ownerDisplayName);
+            }
+            return this.getAbsenceTypeLabel(absence ? (absence.type || 'absence') : 'absence');
+        },
+
+        /**
          * Render an absence item for timeline
          */
         renderAbsenceItem: function(absence) {
@@ -1370,7 +1675,8 @@
             const endDate = absence.end_date || absence.endDate;
             const type = absence.type || 'unknown';
             const status = absence.status || 'pending';
-            const translatedType = this.getAbsenceTypeLabel(type);
+            const translatedType = this.getAbsenceDisplayLabel(absence);
+            const isCoverage = absence && absence.role === 'substitute';
 
             const start = startDate ? new Date(startDate) : null;
             const end = endDate ? new Date(endDate) : null;
@@ -1420,8 +1726,8 @@
             const badgeClass = status === 'approved' ? 'success' : status === 'rejected' || status === 'substitute_declined' ? 'error' : 'warning';
 
             return `
-                <div class="timeline-item timeline-item--absence">
-                    <div class="timeline-item-icon">📅</div>
+                <div class="timeline-item timeline-item--absence${isCoverage ? ' timeline-item--coverage' : ''}">
+                    <div class="timeline-item-icon">${isCoverage ? '👤' : '📅'}</div>
                     <div class="timeline-item-content">
                         <div class="timeline-item-header">
                             <span class="timeline-item-type">${escapeHtml(translatedType)}</span>
@@ -1436,6 +1742,45 @@
         },
 
         /**
+         * Render a holiday item for the timeline (statutory, company, or custom)
+         */
+        renderHolidayItem: function(holiday) {
+            const dateStr = holiday && typeof holiday.date === 'string' ? holiday.date : '';
+            const name = (holiday && typeof holiday.name === 'string' && holiday.name !== '') ? holiday.name : '';
+            const scope = (holiday && typeof holiday.scope === 'string') ? holiday.scope : '';
+
+            let scopeLabel;
+            if (scope === 'statutory') {
+                scopeLabel = this.config.l10n?.publicHoliday
+                    || (window.t && window.t('arbeitszeitcheck', 'Public holiday'))
+                    || 'Public holiday';
+            } else if (scope === 'company') {
+                scopeLabel = this.config.l10n?.companyHoliday
+                    || (window.t && window.t('arbeitszeitcheck', 'Company holiday'))
+                    || 'Company holiday';
+            } else {
+                scopeLabel = this.config.l10n?.customHoliday
+                    || (window.t && window.t('arbeitszeitcheck', 'Custom holiday'))
+                    || 'Custom holiday';
+            }
+
+            const displayName = name !== '' ? name : scopeLabel;
+            const ariaLabel = `${scopeLabel}: ${displayName}${dateStr ? ' (' + dateStr + ')' : ''}`;
+
+            return `
+                <div class="timeline-item timeline-item--holiday" aria-label="${escapeHtml(ariaLabel)}">
+                    <div class="timeline-item-icon">🎉</div>
+                    <div class="timeline-item-content">
+                        <div class="timeline-item-header">
+                            <span class="timeline-item-type">${escapeHtml(scopeLabel)}</span>
+                            <span class="timeline-item-date">${escapeHtml(displayName)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        },
+
+        /**
          * Initialize calendar page
          */
         initCalendar: function() {
@@ -1443,6 +1788,7 @@
             this.calendarData = {
                 timeEntries: [],
                 absences: [],
+                holidays: [],
                 currentDate: new Date(monthStr + '-01'),
                 currentView: this.config.currentView || 'month'
             };
@@ -1487,21 +1833,34 @@
         },
 
         /**
+         * Build a correct API path for Nextcloud (uses OC.generateUrl when available)
+         * @param {string} path - Path like /apps/arbeitszeitcheck/api/holidays
+         * @returns {string}
+         */
+        _buildApiPath: function(path) {
+            if (typeof OC !== 'undefined' && OC.generateUrl) {
+                return OC.generateUrl(path.startsWith('/') ? path : '/' + path);
+            }
+            return path.startsWith('/') ? path : '/' + path;
+        },
+
+        /**
          * Load calendar data from API for the currently displayed period (month or week)
          */
         loadCalendarData: function() {
             // Use runtime config so apiUrl is set even when main script ran before calendar inline script
             const apiUrl = (typeof window !== 'undefined' && window.ArbeitszeitCheck && window.ArbeitszeitCheck.apiUrl) || this.config.apiUrl || {};
-            const timeEntriesPath = apiUrl.calendar || '/apps/arbeitszeitcheck/api/time-entries';
-            const absencesPath = apiUrl.absences || '/apps/arbeitszeitcheck/api/absences';
+            const timeEntriesPath = apiUrl.calendar || this._buildApiPath('/apps/arbeitszeitcheck/api/time-entries');
+            const absencesPath = apiUrl.absences || this._buildApiPath('/apps/arbeitszeitcheck/api/absences');
+            const holidaysPath = apiUrl.holidays || this._buildApiPath('/apps/arbeitszeitcheck/api/holidays');
 
             const d = this.calendarData.currentDate;
             const year = d.getFullYear();
             const month = d.getMonth();
             const firstDay = new Date(year, month, 1);
             const lastDay = new Date(year, month + 1, 0);
-            const startDate = firstDay.toISOString().split('T')[0];
-            const endDate = lastDay.toISOString().split('T')[0];
+            const startDate = formatLocalDateYmd(firstDay);
+            const endDate = formatLocalDateYmd(lastDay);
 
             const monthViewEl = document.getElementById('calendar-month-view');
             const weekViewEl = document.getElementById('calendar-week-view');
@@ -1528,13 +1887,24 @@
 
             const timeEntriesParams = { start_date: startDate, end_date: endDate, limit: '500' };
             const absencesParams = { limit: '500' };
+            const holidaysParams = { start: startDate, end: endDate };
 
             Promise.all([
                 this.fetchTimelineData(timeEntriesPath, timeEntriesParams),
-                this.fetchTimelineData(absencesPath, absencesParams)
-            ]).then(([timeEntries, absences]) => {
+                this.fetchTimelineData(absencesPath, absencesParams),
+                this.fetchTimelineData(holidaysPath, holidaysParams)
+            ]).then(([timeEntries, absences, holidaysResponse]) => {
                 this.calendarData.timeEntries = Array.isArray(timeEntries) ? timeEntries : [];
                 this.calendarData.absences = Array.isArray(absences) ? absences : [];
+                // Extract holidays array robustly: {success,holidays}, {ocs:{data:{holidays}}}, or direct array
+                let holidaysArray = [];
+                if (Array.isArray(holidaysResponse)) {
+                    holidaysArray = holidaysResponse;
+                } else if (holidaysResponse && typeof holidaysResponse === 'object') {
+                    holidaysArray = Array.isArray(holidaysResponse.holidays) ? holidaysResponse.holidays
+                        : (Array.isArray(holidaysResponse.ocs?.data?.holidays) ? holidaysResponse.ocs.data.holidays : []);
+                }
+                this.calendarData.holidays = Array.isArray(holidaysArray) ? holidaysArray : [];
                 this.renderCalendar();
             }).catch((error) => {
                 const container = document.getElementById('calendar-month-view');
@@ -1608,17 +1978,37 @@
             // Days of the month
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month, day);
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateYmd(date);
                 const dayData = this.getDayData(dateKey);
                 
                 const classes = ['calendar-day'];
                 if (dayData.hasTimeEntry) classes.push('calendar-day--has-entry');
-                if (dayData.hasAbsence) classes.push('calendar-day--has-absence');
+                if (dayData.hasAbsence) {
+                    classes.push('calendar-day--has-absence');
+                    const firstAbsence = dayData.absences[0];
+                    if (firstAbsence && firstAbsence.role === 'substitute') {
+                        classes.push('calendar-day--has-coverage');
+                    }
+                }
                 if (dayData.isToday) classes.push('calendar-day--today');
                 if (dayData.isWeekend) classes.push('calendar-day--weekend');
 
-                // Build day content with more useful information
+                // Mark public holidays and company holidays; collect names for display
+                const holidays = Array.isArray(this.calendarData.holidays) ? this.calendarData.holidays : [];
+                const dayHolidays = holidays.filter(h => h && h.date === dateKey);
+                const isHoliday = dayHolidays.some(h => h.scope === 'statutory');
+                const isCompanyHoliday = dayHolidays.some(h => h.scope === 'company' || h.scope === 'custom');
+                if (isHoliday) classes.push('calendar-day--holiday');
+                if (isCompanyHoliday) classes.push('calendar-day--company-holiday');
+
+                // Build day content with day number and optional holiday label
                 let dayContent = `<div class="calendar-day-number">${day}</div>`;
+                if (dayHolidays.length > 0) {
+                    const firstHolidayName = dayHolidays[0].name ? String(dayHolidays[0].name).trim() : '';
+                    if (firstHolidayName) {
+                        dayContent += `<span class="calendar-day-holiday-label" aria-hidden="true">${escapeHtml(firstHolidayName)}</span>`;
+                    }
+                }
                 
                 // Show hours worked if available
                 if (dayData.hours > 0) {
@@ -1630,18 +2020,20 @@
                     const absence = dayData.absences[0];
                     const type = absence.type || 'absence';
                     const status = absence.status || 'pending';
-                    
-                    // Use emoji or text indicator for absence type
+                    const isCoverage = absence.role === 'substitute';
+
+                    // Use emoji or text indicator: 👤 for coverage (substitute), else absence type
                     let absenceIndicator = '';
-                    if (type === 'vacation' || type === 'holiday') {
+                    if (isCoverage) {
+                        absenceIndicator = '👤';
+                    } else if (type === 'vacation' || type === 'holiday') {
                         absenceIndicator = '🏖️';
                     } else if (type === 'sick' || type === 'sick_leave') {
                         absenceIndicator = '🏥';
                     } else {
                         absenceIndicator = '📅';
                     }
-                    
-                    // Add status indicator
+
                     if (status === 'pending' || status === 'substitute_pending') {
                         absenceIndicator += ' ⏳';
                     } else if (status === 'approved') {
@@ -1649,9 +2041,9 @@
                     } else if (status === 'rejected' || status === 'substitute_declined') {
                         absenceIndicator += ' ✗';
                     }
-                    
-                    const typeLabel = this.getAbsenceTypeLabel(type);
-                    dayContent += `<div class="calendar-day-absence" title="${escapeHtml(typeLabel)}">${absenceIndicator}</div>`;
+
+                    const displayLabel = this.getAbsenceDisplayLabel(absence);
+                    dayContent += `<div class="calendar-day-absence" title="${escapeHtml(displayLabel)}">${absenceIndicator}</div>`;
                 }
                 
                 // Show entry count if multiple entries
@@ -1659,7 +2051,13 @@
                     dayContent += `<div class="calendar-day-entry-count" title="${dayData.entries.length} ${this.config.l10n?.timeEntries || 'entries'}">${dayData.entries.length}×</div>`;
                 }
                 const dayAriaLabel = this.getDayCellAriaLabel(dateKey, dayData);
-                html += `<div class="${classes.join(' ')}" data-date="${dateKey}" role="button" tabindex="0" aria-label="${escapeHtml(dayAriaLabel)}">${dayContent}</div>`;
+                const holidayLabels = dayHolidays
+                    .map(h => h.name)
+                    .filter(Boolean)
+                    .join(', ');
+                const ariaLabel = holidayLabels ? `${dayAriaLabel} – ${holidayLabels}` : dayAriaLabel;
+
+                html += `<div class="${classes.join(' ')}" data-date="${dateKey}" role="button" tabindex="0" aria-label="${escapeHtml(ariaLabel)}">${dayContent}</div>`;
             }
 
             html += '</div></div>';
@@ -1716,14 +2114,14 @@
             
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month, day);
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateYmd(date);
                 const dayData = this.getDayData(dateKey);
                 
                 if (dayData.hours > 0) {
                     totalHours += dayData.hours;
                     workingDays++;
                 }
-                if (dayData.hasAbsence) {
+                if (dayData.hasOwnAbsence) {
                     absenceDays++;
                 }
             }
@@ -1751,17 +2149,25 @@
             // Weekday headers
             html += '<div class="calendar-week-header">';
             const weekdays = this.config.l10n?.weekdays || ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const holidays = Array.isArray(this.calendarData.holidays) ? this.calendarData.holidays : [];
             for (let i = 0; i < 7; i++) {
                 const date = new Date(weekStart);
                 date.setDate(weekStart.getDate() + i);
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateYmd(date);
                 const dayData = this.getDayData(dateKey);
-                
+                const isHoliday = holidays.some(h => h && h.date === dateKey && h.scope === 'statutory');
+                const isCompanyHoliday = holidays.some(h => h && h.date === dateKey && h.scope !== 'statutory');
+                const weekDayClasses = ['calendar-week-day'];
+                if (isHoliday) weekDayClasses.push('calendar-day--holiday');
+                if (isCompanyHoliday) weekDayClasses.push('calendar-day--company-holiday');
+                const holidayNames = holidays.filter(h => h && h.date === dateKey).map(h => h.name).filter(Boolean).join(', ');
+                const holidayHtml = holidayNames ? `<div class="week-day-holiday" aria-hidden="true">${escapeHtml(holidayNames)}</div>` : '';
                 html += `
-                    <div class="calendar-week-day" data-date="${dateKey}">
+                    <div class="${weekDayClasses.join(' ')}" data-date="${dateKey}">
                         <div class="week-day-name">${weekdays[i]}</div>
                         <div class="week-day-number">${date.getDate()}</div>
                         ${dayData.hours > 0 ? `<div class="week-day-hours">${dayData.hours.toFixed(1)}h</div>` : ''}
+                        ${holidayHtml}
                     </div>
                 `;
             }
@@ -1771,6 +2177,7 @@
             container.innerHTML = html;
 
             // Add click and keyboard handlers
+            const holidaysForAria = Array.isArray(this.calendarData.holidays) ? this.calendarData.holidays : [];
             container.querySelectorAll('.calendar-week-day[data-date]').forEach(dayEl => {
                 const openDay = () => {
                     const date = dayEl.dataset.date;
@@ -1780,7 +2187,10 @@
                 dayEl.setAttribute('tabindex', '0');
                 const dateKey = dayEl.dataset.date;
                 const dayData = this.getDayData(dateKey);
-                dayEl.setAttribute('aria-label', this.getDayCellAriaLabel(dateKey, dayData));
+                let ariaLabel = this.getDayCellAriaLabel(dateKey, dayData);
+                const hLabels = holidaysForAria.filter(h => h && h.date === dateKey).map(h => h.name).filter(Boolean).join(', ');
+                if (hLabels) ariaLabel = ariaLabel.replace(/\.\s*$/, '') + ' – ' + hLabels + '.';
+                dayEl.setAttribute('aria-label', ariaLabel);
                 dayEl.addEventListener('click', openDay);
                 dayEl.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -1832,9 +2242,12 @@
                 }
             });
 
+            const hasOwnAbsence = dayAbsences.some(a => !a.role || a.role !== 'substitute');
+
             return {
                 hasTimeEntry: dayEntries.length > 0,
                 hasAbsence: dayAbsences.length > 0,
+                hasOwnAbsence,
                 hours: totalHours,
                 entries: dayEntries,
                 absences: dayAbsences,
@@ -1857,8 +2270,8 @@
             if (dayData.isToday) label += ', ' + (this.config.l10n?.today || 'Today');
             if (dayData.hours > 0) label += ', ' + dayData.hours.toFixed(1) + ' ' + (this.config.l10n?.hours || 'hours');
             if (dayData.hasAbsence && dayData.absences.length > 0) {
-                const typeLabel = this.getAbsenceTypeLabel(dayData.absences[0].type || 'absence');
-                label += ', ' + typeLabel;
+                const displayLabel = this.getAbsenceDisplayLabel(dayData.absences[0]);
+                label += ', ' + displayLabel;
             }
             label += '. ' + (this.config.l10n?.clickForDetails || 'Click for details');
             return label;
@@ -1969,6 +2382,11 @@
             
             if (!panel || !label || !content) return;
 
+            // Remember the element that opened the panel so we can restore focus on close
+            if (typeof document !== 'undefined' && document.activeElement) {
+                this.calendarData.lastActiveDayElement = document.activeElement;
+            }
+
             const date = new Date(dateKey);
             const dayData = this.getDayData(dateKey);
 
@@ -1980,9 +2398,26 @@
             label.textContent = `${weekdayName}, ${day}.${month}.${year}`;
 
             let html = '';
-            
-            if (dayData.entries.length === 0 && dayData.absences.length === 0) {
-                html = `<p>${this.config.l10n?.noEntries || 'No entries for this day'}</p>`;
+
+            // Holiday info
+            const holidays = Array.isArray(this.calendarData.holidays) ? this.calendarData.holidays : [];
+            const holidayNames = holidays
+                .filter(h => h.date === dateKey)
+                .map(h => h.name)
+                .filter(Boolean);
+            if (holidayNames.length > 0) {
+                const label = this.config.l10n?.holiday || (window.t ? window.t('arbeitszeitcheck', 'Holiday') : 'Holiday');
+                const namesText = holidayNames.join(', ');
+                html += `
+                    <div class="day-details-section">
+                        <h4>${escapeHtml(label)}</h4>
+                        <p>${escapeHtml(namesText)}</p>
+                    </div>
+                `;
+            }
+
+            if (dayData.entries.length === 0 && dayData.absences.length === 0 && holidayNames.length === 0) {
+                html += `<p>${this.config.l10n?.noEntries || 'No entries for this day'}</p>`;
             } else {
                 if (dayData.entries.length > 0) {
                     const timeEntriesLabel = this.config.l10n?.timeEntries || 'Time Entries';
@@ -2023,8 +2458,8 @@
                     const absencesLabel = this.config.l10n?.absences || 'Absences';
                     html += `<div class="day-details-section"><h4>${absencesLabel}</h4><ul>`;
                     dayData.absences.forEach(absence => {
-                        const translatedType = this.getAbsenceTypeLabel(absence.type || 'absence');
-                        html += `<li>${escapeHtml(translatedType)}</li>`;
+                        const displayLabel = this.getAbsenceDisplayLabel(absence);
+                        html += `<li>${escapeHtml(displayLabel)}</li>`;
                     });
                     html += '</ul></div>';
                 }
@@ -2042,6 +2477,10 @@
             if (panel) {
                 panel.style.display = 'none';
             }
+            // Restore focus to the last active day tile to keep keyboard users oriented
+            if (this.calendarData && this.calendarData.lastActiveDayElement && typeof this.calendarData.lastActiveDayElement.focus === 'function') {
+                this.calendarData.lastActiveDayElement.focus();
+            }
         },
 
         /**
@@ -2054,6 +2493,12 @@
                 }
             });
             this.timers = {};
+
+            // Remove Page Visibility API listener if registered
+            if (this._visibilityHandler) {
+                document.removeEventListener('visibilitychange', this._visibilityHandler);
+                this._visibilityHandler = null;
+            }
         }
     };
 
@@ -2074,4 +2519,4 @@
     // Expose to global scope for debugging
     window.ArbeitszeitCheckApp = ArbeitszeitCheck;
 
-})(window, OC);
+})(window, (typeof window !== 'undefined' && window.OC) ? window.OC : {});

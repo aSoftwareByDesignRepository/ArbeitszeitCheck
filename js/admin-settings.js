@@ -47,33 +47,44 @@
         const formData = Utils.serializeForm(form);
 
         // Normalize requireSubstituteTypes[] to requireSubstituteTypes array for backend
-        if (formData['requireSubstituteTypes[]'] !== undefined) {
-            formData.requireSubstituteTypes = Array.isArray(formData['requireSubstituteTypes[]'])
-                ? formData['requireSubstituteTypes[]']
-                : [formData['requireSubstituteTypes[]']];
-            delete formData['requireSubstituteTypes[]'];
-        }
+        // Always send (empty array when none checked) so unchecked state is persisted
+        const raw = formData['requireSubstituteTypes[]'];
+        formData.requireSubstituteTypes = raw === undefined
+            ? []
+            : (Array.isArray(raw) ? raw : [raw]);
+        delete formData['requireSubstituteTypes[]'];
 
-        // Convert checkboxes to boolean (unchecked = not in form, so default false)
-        formData.autoComplianceCheck = formData.autoComplianceCheck === 'on' || formData.autoComplianceCheck === true;
-        formData.requireBreakJustification = formData.requireBreakJustification === 'on' || formData.requireBreakJustification === true;
-        formData.enableViolationNotifications = formData.enableViolationNotifications === 'on' || formData.enableViolationNotifications === true;
-        formData.sendIcalApprovedAbsences = formData.sendIcalApprovedAbsences === 'on' || formData.sendIcalApprovedAbsences === true;
-        formData.sendIcalToSubstitute = formData.sendIcalToSubstitute === 'on' || formData.sendIcalToSubstitute === true;
+        // Convert checkboxes to boolean (unchecked = not in form; checked sends "on" or value e.g. "1")
+        function isChecked(v) { return v === 'on' || v === '1' || v === 1 || v === true; }
+        formData.autoComplianceCheck = isChecked(formData.autoComplianceCheck);
+        formData.realtimeComplianceCheck = isChecked(formData.realtimeComplianceCheck);
+        formData.complianceStrictMode = isChecked(formData.complianceStrictMode);
+        formData.enableViolationNotifications = isChecked(formData.enableViolationNotifications);
+        formData.exportMidnightSplitEnabled = isChecked(formData.exportMidnightSplitEnabled);
+        formData.sendIcalApprovedAbsences = isChecked(formData.sendIcalApprovedAbsences);
+        formData.sendIcalToSubstitute = isChecked(formData.sendIcalToSubstitute);
+        formData.sendIcalToManagers = isChecked(formData.sendIcalToManagers);
+        formData.sendEmailSubstitutionRequest = isChecked(formData.sendEmailSubstitutionRequest);
+        formData.sendEmailSubstituteApprovedToEmployee = isChecked(formData.sendEmailSubstituteApprovedToEmployee);
+        formData.sendEmailSubstituteApprovedToManager = isChecked(formData.sendEmailSubstituteApprovedToManager);
+        formData.statutoryAutoReseed = isChecked(formData.statutoryAutoReseed);
 
-        // Convert numbers
-        formData.maxDailyHours = parseFloat(formData.maxDailyHours);
-        formData.minRestPeriod = parseFloat(formData.minRestPeriod);
-        formData.defaultWorkingHours = parseFloat(formData.defaultWorkingHours);
-        formData.retentionPeriod = parseInt(formData.retentionPeriod);
+        // Convert numbers (use defaults on invalid/empty)
+        const num = (v, def) => { const n = parseFloat(v); return (Number.isFinite(n) ? n : def); };
+        const int = (v, def) => { const n = parseInt(String(v), 10); return (Number.isInteger(n) ? n : def); };
+        formData.maxDailyHours = num(formData.maxDailyHours, 10);
+        formData.minRestPeriod = num(formData.minRestPeriod, 11);
+        formData.defaultWorkingHours = num(formData.defaultWorkingHours, 8);
+        formData.retentionPeriod = int(formData.retentionPeriod, 2);
 
         // Validate
         if (!validateForm(formData)) {
             return;
         }
 
-        // Submit
-        Utils.ajax('/apps/arbeitszeitcheck/api/admin/settings', {
+        // Submit (use server-generated URL for subpath compatibility)
+        const apiUrl = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminSettingsApiUrl) || '/apps/arbeitszeitcheck/api/admin/settings';
+        Utils.ajax(apiUrl, {
             method: 'POST',
             data: formData,
             onSuccess: function(data) {
@@ -94,22 +105,26 @@
      */
     function validateForm(data) {
         if (data.maxDailyHours < 1 || data.maxDailyHours > 24) {
-            Messaging.showError('Maximum daily hours must be between 1 and 24');
+            const msg = (window.t && window.t('arbeitszeitcheck', 'Maximum daily hours must be between 1 and 24')) || 'Maximum daily hours must be between 1 and 24';
+            Messaging.showError(msg);
             return false;
         }
 
         if (data.minRestPeriod < 1 || data.minRestPeriod > 24) {
-            Messaging.showError('Minimum rest period must be between 1 and 24 hours');
+            const msg = (window.t && window.t('arbeitszeitcheck', 'Minimum rest period must be between 1 and 24 hours')) || 'Minimum rest period must be between 1 and 24 hours';
+            Messaging.showError(msg);
             return false;
         }
 
         if (data.defaultWorkingHours < 1 || data.defaultWorkingHours > 24) {
-            Messaging.showError('Default working hours must be between 1 and 24');
+            const msg = (window.t && window.t('arbeitszeitcheck', 'Default working hours must be between 1 and 24')) || 'Default working hours must be between 1 and 24';
+            Messaging.showError(msg);
             return false;
         }
 
         if (data.retentionPeriod < 1 || data.retentionPeriod > 10) {
-            Messaging.showError('Retention period must be between 1 and 10 years');
+            const msg = (window.t && window.t('arbeitszeitcheck', 'Retention period must be between 1 and 10 years')) || 'Retention period must be between 1 and 10 years';
+            Messaging.showError(msg);
             return false;
         }
 

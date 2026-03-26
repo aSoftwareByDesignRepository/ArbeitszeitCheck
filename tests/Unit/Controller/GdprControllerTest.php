@@ -20,6 +20,7 @@ use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -58,6 +59,9 @@ class GdprControllerTest extends TestCase
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
 
+	/** @var IConfig|\PHPUnit\Framework\MockObject\MockObject */
+	private $config;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -70,6 +74,8 @@ class GdprControllerTest extends TestCase
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->l10n = $this->createMock(IL10N::class);
 		$this->request = $this->createMock(IRequest::class);
+		$this->config = $this->createMock(IConfig::class);
+		$this->config->method('getAppValue')->willReturn('2');
 
 		$this->controller = new GdprController(
 			'arbeitszeitcheck',
@@ -80,7 +86,8 @@ class GdprControllerTest extends TestCase
 			$this->violationMapper,
 			$this->auditLogMapper,
 			$this->userSession,
-			$this->l10n
+			$this->l10n,
+			$this->config
 		);
 	}
 

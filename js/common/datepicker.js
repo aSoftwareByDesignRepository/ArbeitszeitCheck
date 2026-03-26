@@ -36,10 +36,28 @@ function convertISOToEuropean(dateString) {
 	return dateString;
 }
 
+function parseDDMMYYYYToDate(val) {
+	if (!val || !/^\d{2}\.\d{2}\.\d{4}$/.test(val)) return null;
+	var p = val.split('.');
+	return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+}
+
+function parseMinDateFromElement(el) {
+	var minVal = el && el.getAttribute && el.getAttribute('data-datepicker-min');
+	if (!minVal || minVal === 'today') return minVal === 'today' ? new Date() : null;
+	if (/^\d{2}\.\d{2}\.\d{4}$/.test(minVal)) {
+		var p = minVal.split('.');
+		return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+	}
+	if (/^\d{4}-\d{2}-\d{2}$/.test(minVal)) return new Date(minVal);
+	return null;
+}
+
 /**
  * Initialize datepicker on input (dd.mm.yyyy format, calendar popup)
  * @param {HTMLElement|string} input - Input element or selector
- * @param {Object} options - { maxDate, minDate }
+ * @param {Object} options - { maxDate, minDate, getInitialMonth: () => Date|null }
+ *   getInitialMonth: when opening, if provided and returns a Date, the calendar shows that month
  * @returns {Object} Datepicker instance
  */
 function initializeDatepicker(input, options = {}) {
@@ -54,12 +72,8 @@ function initializeDatepicker(input, options = {}) {
 		t('July'), t('August'), t('September'), t('October'), t('November'), t('December')];
 	const dayNames = [t('Mon'), t('Tue'), t('Wed'), t('Thu'), t('Fri'), t('Sat'), t('Sun')];
 
-	let selectedDate = null;
-	if (element.value && /^\d{2}\.\d{2}\.\d{4}$/.test(element.value)) {
-		const p = element.value.split('.');
-		selectedDate = new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
-	}
-	let currentDate = selectedDate || new Date();
+	let selectedDate = parseDDMMYYYYToDate(element.value);
+	let currentDate = selectedDate ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1) : new Date();
 	currentDate.setHours(0, 0, 0, 0);
 
 	let calendarOpen = false;
@@ -119,10 +133,17 @@ function initializeDatepicker(input, options = {}) {
 				dayCell.style.color = 'var(--color-primary-element-text)';
 			}
 
-			const disabled = (options.minDate && date < options.minDate) || (options.maxDate && date > options.maxDate);
+			var minDate = options.minDate;
+			if (element.getAttribute && (!minDate || options.useDynamicMin)) {
+				var dyn = parseMinDateFromElement(element);
+				if (dyn) minDate = dyn;
+			}
+			const disabled = (minDate && date < minDate) || (options.maxDate && date > options.maxDate);
 			if (disabled) {
 				dayCell.style.opacity = '0.3';
 				dayCell.style.cursor = 'not-allowed';
+				dayCell.setAttribute('aria-disabled', 'true');
+				dayCell.setAttribute('tabindex', '-1');
 			} else {
 				dayCell.addEventListener('click', function () {
 					selectedDate = new Date(date);
@@ -150,6 +171,22 @@ function initializeDatepicker(input, options = {}) {
 	function openCalendar() {
 		if (calendarOpen) return;
 
+		/* Re-read input value in case it was updated externally */
+		selectedDate = parseDDMMYYYYToDate(element.value);
+		if (selectedDate) {
+			currentDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+		} else if (typeof options.getInitialMonth === 'function') {
+			var ref = options.getInitialMonth();
+			if (ref && ref instanceof Date && !isNaN(ref.getTime())) {
+				currentDate = new Date(ref.getFullYear(), ref.getMonth(), 1);
+			} else {
+				currentDate = new Date();
+			}
+		} else {
+			currentDate = new Date();
+		}
+		currentDate.setHours(0, 0, 0, 0);
+
 		const container = document.createElement('div');
 		container.className = 'arbeitszeitcheck-datepicker';
 		container.style.cssText = 'position:fixed;z-index:10000;background:var(--color-main-background);border:1px solid var(--color-border);border-radius:8px;padding:12px;box-shadow:var(--arbeitszeitcheck-shadow-md, 0 4px 12px var(--color-border));min-width:280px;';
@@ -172,7 +209,7 @@ function initializeDatepicker(input, options = {}) {
 		nextBtn.type = 'button';
 		nextBtn.innerHTML = '›';
 		nextBtn.style.cssText = 'background:none;border:none;font-size:20px;cursor:pointer;padding:4px 8px;color:var(--color-main-text);';
-		nextBtn.setAttribute('aria-label', 'Next month');
+		nextBtn.setAttribute('aria-label', t('Next month'));
 
 		const cal = document.createElement('div');
 		cal.className = 'arbeitszeitcheck-datepicker-calendar';
@@ -281,13 +318,36 @@ function initializeDatepicker(input, options = {}) {
 			convertISOToEuropean: convertISOToEuropean
 		};
 
+		function parseDateFromAttr(val) {
+			if (!val || val === 'today') return val === 'today' ? new Date() : null;
+			if (/^\d{2}\.\d{2}\.\d{4}$/.test(val)) {
+				var p = val.split('.');
+				return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+			}
+			if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return new Date(val);
+			return null;
+		}
+
 		function initAll() {
 			document.querySelectorAll('.datepicker-input').forEach(function (el) {
 				if (el.dataset.datepickerInit) return;
 				el.dataset.datepickerInit = '1';
 				var opts = {};
-				if (el.getAttribute('data-datepicker-min') === 'today') opts.minDate = new Date();
-				if (el.getAttribute('data-datepicker-max') === 'today') opts.maxDate = new Date();
+				var minVal = el.getAttribute('data-datepicker-min');
+				var maxVal = el.getAttribute('data-datepicker-max');
+				var minDate = minVal === 'today' ? new Date() : parseDateFromAttr(minVal);
+				var maxDate = maxVal === 'today' ? new Date() : parseDateFromAttr(maxVal);
+				if (minDate) opts.minDate = minDate;
+				if (maxDate) opts.maxDate = maxDate;
+				var syncId = el.getAttribute('data-datepicker-sync-month-with');
+				if (syncId) {
+					opts.getInitialMonth = function () {
+						var other = document.getElementById(syncId);
+						if (!other || !other.value) return null;
+						return parseDDMMYYYYToDate(other.value);
+					};
+				}
+				if (el.getAttribute('data-datepicker-min-sick')) opts.useDynamicMin = true;
 				initializeDatepicker(el, opts);
 			});
 		}

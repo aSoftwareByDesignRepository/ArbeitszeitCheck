@@ -13,16 +13,19 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\AppInfo;
 
 use OCA\ArbeitszeitCheck\Capabilities;
+use OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays;
 use OCA\ArbeitszeitCheck\Listener\LoadSidebarScripts;
 use OCA\ArbeitszeitCheck\Listener\CSPListener;
 use OCA\ArbeitszeitCheck\Listener\UserDeletedListener;
 use OCA\ArbeitszeitCheck\Notification\Notifier;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
+use OCA\ArbeitszeitCheck\Service\HolidayCalendarService;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
 use OCA\ArbeitszeitCheck\Service\AbsenceIcalMailService;
+use OCA\ArbeitszeitCheck\Service\AbsenceNotificationMailService;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\DatevExportService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
@@ -35,7 +38,6 @@ use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\IDBConnection;
-use OCP\Notification\IManager as INotificationManager;
 use OCP\Security\CSP\AddContentSecurityPolicyEvent;
 use OCP\User\Events\UserDeletedEvent;
 
@@ -97,6 +99,12 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\HolidayMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\HolidayMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+
 		$context->registerService(\OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper::class, function($c) {
 			return new \OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper(
 				$c->query(IDBConnection::class)
@@ -125,6 +133,13 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(BackfillAbsenceDays::class, function($c) {
+			return new BackfillAbsenceDays(
+				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
+				$c->query(HolidayCalendarService::class)
+			);
+		});
+
 		// Register CSPService
 		$context->registerService(CSPService::class, function($c) {
 			return new CSPService(
@@ -150,7 +165,9 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
 				$c->query(ProjectCheckIntegrationService::class),
 				$c->query(ComplianceService::class),
-				$c->query(\OCP\IL10N::class)
+				$c->query(\OCP\IL10N::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class)
 			);
 		});
 
@@ -160,6 +177,19 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IConfig::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(\OCP\IUserManager::class),
+				$c->query(TeamResolverService::class),
+				$c->query(\Psr\Log\LoggerInterface::class)
+			);
+		});
+
+		$context->registerService(AbsenceNotificationMailService::class, function($c) {
+			return new AbsenceNotificationMailService(
+				$c->query(\OCP\Mail\IMailer::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IL10N::class),
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\OCP\IURLGenerator::class),
+				$c->query(TeamResolverService::class),
 				$c->query(\Psr\Log\LoggerInterface::class)
 			);
 		});
@@ -172,10 +202,13 @@ class Application extends App implements IBootstrap {
 				$c->query(TeamResolverService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
 				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IDBConnection::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(NotificationService::class),
-				$c->query(AbsenceIcalMailService::class)
+				$c->query(AbsenceIcalMailService::class),
+				$c->query(HolidayCalendarService::class),
+				$c->query(AbsenceNotificationMailService::class)
 			);
 		});
 
@@ -187,7 +220,20 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\IL10N::class),
-				$c->query(NotificationService::class)
+				$c->query(NotificationService::class),
+				$c->query(HolidayCalendarService::class),
+				$c->query(\OCP\IConfig::class)
+			);
+		});
+
+		$context->registerService(HolidayCalendarService::class, function($c) {
+			return new HolidayCalendarService(
+				$c->query(\OCA\ArbeitszeitCheck\Db\HolidayMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\ICacheFactory::class),
+				$c->query(\OCP\IL10N::class),
+				$c->query(\Psr\Log\LoggerInterface::class)
 			);
 		});
 
@@ -196,7 +242,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\Notification\IManager::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class),
-				$c->query(\OCP\IUserManager::class)
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\OCP\IConfig::class)
 			);
 		});
 
@@ -205,7 +252,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
-				$c->query(\OCP\IL10N::class)
+				$c->query(\OCP\IL10N::class),
+				$c->query(HolidayCalendarService::class)
 			);
 		});
 
@@ -224,7 +272,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper::class),
 				$c->query(OvertimeService::class),
 				$c->query(\OCP\IUserManager::class),
-				$c->query(\OCP\IL10N::class)
+				$c->query(\OCP\IL10N::class),
+				$c->query(HolidayCalendarService::class)
 			);
 		});
 
@@ -255,10 +304,6 @@ class Application extends App implements IBootstrap {
 	 * @inheritDoc
 	 */
 	public function boot(IBootContext $context): void {
-		$context->injectFn(function (INotificationManager $notificationManager) {
-			$notificationManager->registerNotifierService(Notifier::class);
-		});
-
 		// Load CSS and JS files ONLY on arbeitszeitcheck routes to avoid leaking into other apps
 		// Use a safer approach that doesn't fail if IRequest is not available (e.g., during migrations)
 		try {

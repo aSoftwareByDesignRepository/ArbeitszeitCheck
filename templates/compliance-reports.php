@@ -50,10 +50,11 @@ $endDate = $_['endDate'] ?? date('Y-m-d');
             <?php if (!empty($reportData['by_type'])): ?>
                 <div class="section">
                     <div class="section-header">
-                        <h3><?php p($l->t('Violations by Type')); ?></h3>
+                        <h3><?php p($l->t('Problems by Type')); ?></h3>
+                        <p><?php p($l->t('See what kinds of working time problems occurred')); ?></p>
                     </div>
-                    <div class="table-responsive" role="region" aria-label="<?php p($l->t('Violations by type')); ?>">
-                        <table class="table" role="table" aria-label="<?php p($l->t('Violations by type')); ?>">
+                    <div class="table-responsive" role="region" aria-label="<?php p($l->t('Problems by Type')); ?>">
+                        <table class="table" role="table" aria-label="<?php p($l->t('Problems by Type')); ?>">
                             <thead>
                                 <tr>
                                     <th scope="col"><?php p($l->t('Type')); ?></th>
@@ -61,10 +62,23 @@ $endDate = $_['endDate'] ?? date('Y-m-d');
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach (($reportData['by_type'] ?? []) as $type => $count): ?>
+                                <?php foreach (($reportData['by_type'] ?? []) as $typeKey => $count): ?>
+                                    <?php
+                                    $typeLabel = match ($typeKey) {
+                                        'missing_break' => $l->t('Missing break'),
+                                        'excessive_working_hours' => $l->t('Excessive working hours'),
+                                        'insufficient_rest_period' => $l->t('Insufficient rest period'),
+                                        'daily_hours_limit_exceeded' => $l->t('Daily hours limit exceeded'),
+                                        'weekly_hours_limit_exceeded' => $l->t('Weekly hours limit exceeded'),
+                                        'night_work' => $l->t('Night work'),
+                                        'sunday_work' => $l->t('Sunday work'),
+                                        'holiday_work' => $l->t('Holiday work'),
+                                        default => $typeKey,
+                                    };
+                                    ?>
                                     <tr>
-                                        <td><?php p($type); ?></td>
-                                        <td><?php p($count); ?></td>
+                                        <td><?php p($typeLabel); ?></td>
+                                        <td><?php p((string)$count); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -80,11 +94,11 @@ $endDate = $_['endDate'] ?? date('Y-m-d');
                         <h3><?php p($l->t('Problems by How Serious')); ?></h3>
                         <p><?php p($l->t('See how serious the problems were')); ?></p>
                     </div>
-                    <div class="table-responsive" role="region" aria-label="<?php p($l->t('Problems by how serious')); ?>">
-                        <table class="table" role="table" aria-label="<?php p($l->t('Problems by how serious')); ?>">
+                    <div class="table-responsive" role="region" aria-label="<?php p($l->t('Problems by How Serious')); ?>">
+                        <table class="table" role="table" aria-label="<?php p($l->t('Problems by How Serious')); ?>">
                             <thead>
                                 <tr>
-                                    <th scope="col"><?php p($l->t('Severity')); ?></th>
+                                    <th scope="col"><?php p($l->t('How Serious')); ?></th>
                                     <th scope="col"><?php p($l->t('Count')); ?></th>
                                 </tr>
                             </thead>

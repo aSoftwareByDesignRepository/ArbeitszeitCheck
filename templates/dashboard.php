@@ -86,7 +86,7 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
         <!-- Welcome Message for First-Time Users -->
         <?php if (($_['isFirstTimeUser'] ?? false) === true): ?>
             <div class="section">
-                <div class="card alert alert--info" role="dialog" aria-labelledby="welcome-title">
+                <div class="card alert alert--info" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
                     <div class="card-header">
                         <h3 id="welcome-title" class="card-title">
                             <span class="alert-icon" aria-hidden="true">👋</span>
@@ -471,12 +471,12 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                         // Do NOT show if entry is already approved or older than 2 weeks
                                         $isApproved = $entry->getApprovedBy() !== null;
                                         $entryDate = $entry->getStartTime();
-                                        $twoWeeksAgo = new \DateTime();
-                                        $twoWeeksAgo->modify('-14 days');
-                                        $twoWeeksAgo->setTime(0, 0, 0); // Start of day
-                                        $isWithinTwoWeeks = $entryDate && $entryDate >= $twoWeeksAgo;
+                                        $editCutoff = new \DateTime();
+                                        $editCutoff->modify('-' . \OCA\ArbeitszeitCheck\Constants::EDIT_WINDOW_DAYS . ' days');
+                                        $editCutoff->setTime(0, 0, 0);
+                                        $isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
 
-                                        $canEdit = !$isApproved && $isWithinTwoWeeks && (
+                                        $canEdit = !$isApproved && $isWithinEditWindow && (
                                             $entry->getIsManualEntry()
                                             || $entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_PENDING_APPROVAL
                                             || ($entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())

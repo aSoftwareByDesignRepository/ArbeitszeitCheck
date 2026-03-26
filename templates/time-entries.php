@@ -45,7 +45,7 @@ $error = $_['error'] ?? null;
 <?php include __DIR__ . '/common/navigation.php'; ?>
 
 <div id="app-content">
-    <div id="app-content-wrapper">
+    <div id="app-content-wrapper" role="main" aria-label="<?php p($l->t('Time Entries')); ?>">
         <!-- Breadcrumb Navigation -->
         <div class="breadcrumb-container">
             <nav class="breadcrumb" aria-label="<?php p($l->t('Breadcrumb')); ?>">
@@ -136,7 +136,7 @@ $error = $_['error'] ?? null;
                 <div class="card card--elevated">
                     <form id="time-entry-form" 
                           class="form" 
-                          method="GET" 
+                          method="POST" 
                           action="#"
                           novalidate
                           role="form"
@@ -169,7 +169,7 @@ $error = $_['error'] ?? null;
 
                         <!-- Date and Time Section -->
                         <div class="form-section" role="group" aria-labelledby="date-time-section-title">
-                            <h3 id="date-time-section-title" class="form-section-title"><?php p($l->t('Date & Time')); ?></h3>
+                            <h3 id="date-time-section-title" class="form-section-title"><?php p($l->t('Date and time')); ?></h3>
                             <div class="form-grid form-grid--2">
                                 <div class="form-group">
                                     <label for="entry-date" id="entry-date-label" class="form-label">
@@ -730,12 +730,12 @@ $error = $_['error'] ?? null;
                                             // Do NOT show if entry is already approved or older than 2 weeks
                                             $isApproved = $entry->getApprovedBy() !== null;
                                             $entryDate = $entry->getStartTime();
-                                            $twoWeeksAgo = new \DateTime();
-                                            $twoWeeksAgo->modify('-14 days');
-                                            $twoWeeksAgo->setTime(0, 0, 0); // Start of day
-                                            $isWithinTwoWeeks = $entryDate && $entryDate >= $twoWeeksAgo;
+                                            $editCutoff = new \DateTime();
+                                            $editCutoff->modify('-' . \OCA\ArbeitszeitCheck\Constants::EDIT_WINDOW_DAYS . ' days');
+                                            $editCutoff->setTime(0, 0, 0);
+                                            $isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
 
-                                            $canEdit = !$isApproved && $isWithinTwoWeeks && (
+                                            $canEdit = !$isApproved && $isWithinEditWindow && (
                                                 $entry->getIsManualEntry()
                                                 || $entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_PENDING_APPROVAL
                                                 || ($entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())
@@ -827,6 +827,8 @@ $error = $_['error'] ?? null;
 
     // L10n strings
     window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
+    window.ArbeitszeitCheck.l10n.skipToForm = <?php echo json_encode($l->t('Skip to form'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.skipToTimeEntryForm = <?php echo json_encode($l->t('Skip to time entry form'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.confirmDelete = <?php echo json_encode($l->t('Are you sure you want to delete this time entry?'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.confirmDeleteTimeEntry = <?php echo json_encode($l->t('Are you sure you want to delete this time entry?\n\nThis will permanently remove this record of your working time. This action cannot be undone.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.error = <?php echo json_encode($l->t('An error occurred'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

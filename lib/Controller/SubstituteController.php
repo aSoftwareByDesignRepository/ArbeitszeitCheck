@@ -15,6 +15,7 @@ namespace OCA\ArbeitszeitCheck\Controller;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -42,6 +43,7 @@ class SubstituteController extends Controller
 	private IUserManager $userManager;
 	private IURLGenerator $urlGenerator;
 	private IL10N $l10n;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		string $appName,
@@ -52,7 +54,8 @@ class SubstituteController extends Controller
 		IUserManager $userManager,
 		IURLGenerator $urlGenerator,
 		CSPService $cspService,
-		IL10N $l10n
+		IL10N $l10n,
+		PermissionService $permissionService
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
@@ -61,6 +64,7 @@ class SubstituteController extends Controller
 		$this->userManager = $userManager;
 		$this->urlGenerator = $urlGenerator;
 		$this->l10n = $l10n;
+		$this->permissionService = $permissionService;
 		$this->setCspService($cspService);
 	}
 
@@ -77,6 +81,21 @@ class SubstituteController extends Controller
 	{
 		$user = $this->userManager->get($userId);
 		return $user ? $user->getDisplayName() : $userId;
+	}
+
+	private function getTypeLabel(string $type): string
+	{
+		$map = [
+			'vacation' => $this->l10n->t('Vacation'),
+			'sick_leave' => $this->l10n->t('Sick Leave'),
+			'personal_leave' => $this->l10n->t('Personal Leave'),
+			'parental_leave' => $this->l10n->t('Parental Leave'),
+			'special_leave' => $this->l10n->t('Special Leave'),
+			'unpaid_leave' => $this->l10n->t('Unpaid Leave'),
+			'home_office' => $this->l10n->t('Home Office'),
+			'business_trip' => $this->l10n->t('Business Trip'),
+		];
+		return $map[$type] ?? $type;
 	}
 
 	/**
@@ -117,6 +136,11 @@ class SubstituteController extends Controller
 				'requests' => $items,
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				// Navigation flags
+				'showSubstitutionLink' => \count($requests) > 0,
+				'showManagerLink' => $this->permissionService->canAccessManagerDashboard($userId),
+				'showReportsLink' => $this->permissionService->canAccessManagerDashboard($userId) || $this->permissionService->isAdmin($userId),
+				'showAdminNav' => $this->permissionService->isAdmin($userId),
 			]);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
@@ -143,6 +167,7 @@ class SubstituteController extends Controller
 			foreach ($requests as $absence) {
 				$summary = $absence->getSummary();
 				$summary['displayName'] = $this->getDisplayName($absence->getUserId());
+				$summary['typeLabel'] = $this->getTypeLabel($absence->getType());
 				$items[] = $summary;
 			}
 
@@ -154,7 +179,7 @@ class SubstituteController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('SubstituteController::getPending: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -183,7 +208,7 @@ class SubstituteController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('SubstituteController::approve: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -217,7 +242,7 @@ class SubstituteController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('SubstituteController::decline: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}

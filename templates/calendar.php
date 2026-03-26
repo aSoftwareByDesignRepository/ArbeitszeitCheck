@@ -26,8 +26,8 @@ Util::addStyle('arbeitszeitcheck', 'common/responsive');
 Util::addStyle('arbeitszeitcheck', 'common/accessibility');
 Util::addStyle('arbeitszeitcheck', 'navigation');
 Util::addStyle('arbeitszeitcheck', 'calendar');
-Util::addScript('arbeitszeitcheck', 'common/utils');
-Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
+Util::addScript('arbeitszeitcheck', 'common/utils', 'core');
+Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main', 'core');
 
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $currentMonth = $_['currentMonth'] ?? date('Y-m');
@@ -73,7 +73,7 @@ $currentMonth = $_['currentMonth'] ?? date('Y-m');
         <!-- Calendar Navigation -->
         <section class="section calendar-section" aria-labelledby="current-period-label" aria-label="<?php p($l->t('Calendar view')); ?>">
             <div class="calendar-nav">
-                <button id="btn-prev-period" class="btn-nav" type="button" aria-label="<?php p($l->t('Previous month')); ?>">
+                <button id="btn-prev-period" class="btn-nav" type="button" aria-label="<?php p($l->t('Previous month')); ?>" title="<?php p($l->t('Previous month')); ?>">
                     ◀ <?php p($l->t('Previous')); ?>
                 </button>
                 <h3 id="current-period-label" class="period-label">
@@ -87,7 +87,7 @@ $currentMonth = $_['currentMonth'] ?? date('Y-m');
                     p($monthNames[$monthNum] . ' ' . date('Y', strtotime($currentMonth . '-01')));
                     ?>
                 </h3>
-                <button id="btn-next-period" class="btn-nav" type="button" aria-label="<?php p($l->t('Next month')); ?>">
+                <button id="btn-next-period" class="btn-nav" type="button" aria-label="<?php p($l->t('Next month')); ?>" title="<?php p($l->t('Next month')); ?>">
                     <?php p($l->t('Next')); ?> ▶
                 </button>
             </div>
@@ -110,16 +110,32 @@ $currentMonth = $_['currentMonth'] ?? date('Y-m');
             <!-- Calendar Legend -->
             <div class="calendar-legend" aria-labelledby="calendar-legend-heading">
                 <h4 id="calendar-legend-heading"><?php p($l->t('Legend')); ?></h4>
-                <div class="legend-items">
-                    <div class="legend-item">
+                <div class="legend-items" role="list">
+                    <div class="legend-item" role="listitem">
                         <span class="legend-color legend-color--entry" aria-hidden="true"></span>
                         <span class="legend-label"><?php p($l->t('Day with time entries')); ?></span>
                     </div>
-                    <div class="legend-item">
+                    <div class="legend-item" role="listitem">
                         <span class="legend-color legend-color--absence" aria-hidden="true"></span>
                         <span class="legend-label"><?php p($l->t('Day with absence')); ?></span>
                     </div>
-                    <div class="legend-item">
+                    <div class="legend-item" role="listitem">
+                        <span class="legend-color legend-color--coverage" aria-hidden="true"></span>
+                        <span class="legend-label"><?php p($l->t('Covering for colleague')); ?></span>
+                    </div>
+                    <div class="legend-item" role="listitem">
+                        <span class="legend-color legend-color--holiday" aria-hidden="true"></span>
+                        <span class="legend-label">
+                            <?php p($l->t('Public holiday')); ?>
+                        </span>
+                    </div>
+                    <div class="legend-item" role="listitem">
+                        <span class="legend-color legend-color--company-holiday" aria-hidden="true"></span>
+                        <span class="legend-label">
+                            <?php p($l->t('Company holiday')); ?>
+                        </span>
+                    </div>
+                    <div class="legend-item" role="listitem">
                         <span class="legend-color legend-color--today" aria-hidden="true"></span>
                         <span class="legend-label"><?php p($l->t('Today')); ?></span>
                     </div>
@@ -173,9 +189,25 @@ $currentMonth = $_['currentMonth'] ?? date('Y-m');
     window.ArbeitszeitCheck.l10n.totalHours = <?php echo json_encode($l->t('Total Hours'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.workingDays = <?php echo json_encode($l->t('Working Days'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.error = <?php echo json_encode($l->t('An error occurred'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    
+    window.ArbeitszeitCheck.l10n.holiday = <?php echo json_encode($l->t('Public holiday'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.breakTime = <?php echo json_encode($l->t('Break Time'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.coveringFor = <?php echo json_encode($l->t('Covering for %1$s', ['%1$s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.absenceTypes = {
+        vacation: <?php echo json_encode($l->t('Vacation'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        holiday: <?php echo json_encode($l->t('Vacation'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        sick: <?php echo json_encode($l->t('Sick Leave'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        sick_leave: <?php echo json_encode($l->t('Sick Leave'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        personal_leave: <?php echo json_encode($l->t('Personal Leave'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        parental_leave: <?php echo json_encode($l->t('Parental Leave'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        special_leave: <?php echo json_encode($l->t('Special Leave'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        unpaid_leave: <?php echo json_encode($l->t('Unpaid Leave'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        home_office: <?php echo json_encode($l->t('Home Office'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        business_trip: <?php echo json_encode($l->t('Business Trip'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+    };
+
     window.ArbeitszeitCheck.apiUrl = {
         calendar: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.time_entry.apiIndex'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
-        absences: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.index'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+        absences: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.index'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        holidays: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.holiday.index'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
     };
 </script>

@@ -31,6 +31,7 @@ $total = $_['total'] ?? 0;
             <!-- Search and Filters -->
             <div class="section-content">
                 <div class="flex flex--between flex--gap mb-3">
+                    <label for="user-search" class="visually-hidden"><?php p($l->t('Search users')); ?></label>
                     <input type="text" id="user-search" class="form-input" 
                         placeholder="<?php p($l->t('Search users...')); ?>">
                     <button type="button" id="refresh-users" class="btn btn--secondary">
@@ -130,6 +131,35 @@ $total = $_['total'] ?? 0;
 </div>
 </div><!-- /#arbeitszeitcheck-app -->
 
+<?php
+// Prepare holiday / Bundesland states for use in the edit-user modal
+$holidayStates = [
+    'BW' => 'Baden‑Württemberg',
+    'BY' => 'Bayern',
+    'BE' => 'Berlin',
+    'BB' => 'Brandenburg',
+    'HB' => 'Bremen',
+    'HH' => 'Hamburg',
+    'HE' => 'Hessen',
+    'MV' => 'Mecklenburg‑Vorpommern',
+    'NI' => 'Niedersachsen',
+    'NW' => 'Nordrhein‑Westfalen',
+    'RP' => 'Rheinland‑Pfalz',
+    'SL' => 'Saarland',
+    'SN' => 'Sachsen',
+    'ST' => 'Sachsen‑Anhalt',
+    'SH' => 'Schleswig‑Holstein',
+    'TH' => 'Thüringen',
+];
+$holidayStatesForJs = [];
+foreach ($holidayStates as $code => $name) {
+    $holidayStatesForJs[] = [
+        'code' => $code,
+        'label' => $l->t($name),
+    ];
+}
+?>
+
 <!-- Initialize JavaScript -->
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
     window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
@@ -165,4 +195,11 @@ $total = $_['total'] ?? 0;
     window.ArbeitszeitCheck.l10n.validFrom = <?php echo json_encode($l->t('Valid from'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.validTo = <?php echo json_encode($l->t('Valid to'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.status = <?php echo json_encode($l->t('Status'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.germanStateLabel = <?php echo json_encode($l->t('Federal state for holidays / calendar'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.germanStateHelp = <?php echo json_encode($l->t('Select the federal state whose holiday calendar applies to this person. If not set, the global default state is used.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.germanStateDefault = <?php echo json_encode($l->t('Use global default state'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.failedToLoadUserDetails = <?php echo json_encode($l->t('Failed to load user details'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.errorLoadingHistory = <?php echo json_encode($l->t('Error loading assignment history'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.ddmmYYYY = <?php echo json_encode($l->t('dd.mm.yyyy'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.states = <?php echo json_encode($holidayStatesForJs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>

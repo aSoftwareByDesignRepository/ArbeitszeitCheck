@@ -11,16 +11,22 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
+use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Db\Team;
 use OCA\ArbeitszeitCheck\Db\TeamMapper;
 use OCA\ArbeitszeitCheck\Db\TeamMemberMapper;
 use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
 use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Db\Holiday;
+use OCA\ArbeitszeitCheck\Db\HolidayMapper;
+use OCA\ArbeitszeitCheck\Service\HolidayCalendarService;
+use OCA\ArbeitszeitCheck\Service\HolidayService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -33,16 +39,21 @@ use OCP\IRequest;
 use OCP\IUserManager;
 use OCP\IUser;
 use OCP\IUserSession;
+use OCP\IURLGenerator;
 use OCP\IL10N;
 use OCP\Util;
 
 /**
- * AdminController
+ * Admin controller – all routes require admin privileges.
+ *
+ * Admin access is enforced by Nextcloud middleware when NoAdminRequired
+ * is not present. Do not add NoAdminRequired to any method in this class.
  */
 class AdminController extends Controller
 {
 	use CSPTrait;
 
+	/** Max date range for admin exports (prevents heavy queries / DoS) */
 	private TimeEntryMapper $timeEntryMapper;
 	private ComplianceViolationMapper $violationMapper;
 	private UserWorkingTimeModelMapper $userWorkingTimeModelMapper;
@@ -51,10 +62,14 @@ class AdminController extends Controller
 	private IUserManager $userManager;
 	private IAppConfig $appConfig;
 	private IL10N $l10n;
+	private UserSettingsMapper $userSettingsMapper;
 	private TeamMapper $teamMapper;
 	private TeamMemberMapper $teamMemberMapper;
 	private TeamManagerMapper $teamManagerMapper;
 	private IUserSession $userSession;
+	private IURLGenerator $urlGenerator;
+	private HolidayMapper $holidayMapper;
+	private HolidayCalendarService $holidayCalendarService;
 
 	public function __construct(
 		string $appName,
@@ -66,12 +81,16 @@ class AdminController extends Controller
 		AuditLogMapper $auditLogMapper,
 		IUserManager $userManager,
 		IAppConfig $appConfig,
+		UserSettingsMapper $userSettingsMapper,
 		TeamMapper $teamMapper,
 		TeamMemberMapper $teamMemberMapper,
 		TeamManagerMapper $teamManagerMapper,
 		IUserSession $userSession,
 		CSPService $cspService,
-		IL10N $l10n
+		IL10N $l10n,
+		IURLGenerator $urlGenerator,
+		HolidayMapper $holidayMapper,
+		HolidayCalendarService $holidayCalendarService
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -81,11 +100,15 @@ class AdminController extends Controller
 		$this->auditLogMapper = $auditLogMapper;
 		$this->userManager = $userManager;
 		$this->appConfig = $appConfig;
+		$this->userSettingsMapper = $userSettingsMapper;
 		$this->teamMapper = $teamMapper;
 		$this->teamMemberMapper = $teamMemberMapper;
 		$this->teamManagerMapper = $teamManagerMapper;
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
+		$this->urlGenerator = $urlGenerator;
+		$this->holidayMapper = $holidayMapper;
+		$this->holidayCalendarService = $holidayCalendarService;
 		$this->setCspService($cspService);
 	}
 
@@ -135,6 +158,24 @@ class AdminController extends Controller
 			'isDefault' => $model->getIsDefault(),
 			'createdAt' => $created ? $created->format('c') : null,
 			'updatedAt' => $updated ? $updated->format('c') : null,
+		];
+	}
+
+	/**
+	 * Convert Holiday entity to JSON-serializable array for audit log.
+	 */
+	private function holidayToAuditValues(Holiday $holiday): array
+	{
+		$date = $holiday->getDate();
+
+		return [
+			'id' => $holiday->getId(),
+			'state' => $holiday->getState(),
+			'date' => $date ? $date->format('Y-m-d') : null,
+			'name' => $holiday->getName(),
+			'kind' => $holiday->getKind(),
+			'scope' => $holiday->getScope(),
+			'source' => $holiday->getSource(),
 		];
 	}
 
@@ -213,7 +254,12 @@ class AdminController extends Controller
 					'unresolved_violations' => $unresolvedCount
 				],
 				'recent_violations' => $violationsData,
+				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => true,
+				'showReportsLink' => true,
+				'showAdminNav' => true,
 			]);
 			return $this->configureCSP($response, 'admin');
 		} catch (\Throwable $e) {
@@ -224,8 +270,13 @@ class AdminController extends Controller
 					'unresolved_violations' => 0
 				],
 				'recent_violations' => [],
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'showSubstitutionLink' => false,
+				'showManagerLink' => true,
+				'showReportsLink' => true,
+				'showAdminNav' => true,
 			]);
 			return $this->configureCSP($response, 'admin');
 		}
@@ -302,7 +353,12 @@ class AdminController extends Controller
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-users', [
 			'users' => $usersData,
 			'total' => $totalCount,
+			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => true,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
@@ -328,6 +384,7 @@ class AdminController extends Controller
 		Util::addStyle('arbeitszeitcheck', 'common/responsive');
 		Util::addStyle('arbeitszeitcheck', 'navigation');
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'admin-settings');
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
@@ -343,23 +400,641 @@ class AdminController extends Controller
 		}
 		$settings = [
 			'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
-			'requireBreakJustification' => $this->appConfig->getAppValueString('require_break_justification', '1') === '1',
+			'realtimeComplianceCheck' => $this->appConfig->getAppValueString('realtime_compliance_check', '1') === '1',
+			'complianceStrictMode' => $this->appConfig->getAppValueString('compliance_strict_mode', '0') === '1',
 			'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+			'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
 			'requireSubstituteTypes' => $requireSubstituteTypes,
 			'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
 			'sendIcalToSubstitute' => $this->appConfig->getAppValueString('send_ical_to_substitute', '0') === '1',
+			'sendIcalToManagers' => $this->appConfig->getAppValueString('send_ical_to_managers', '0') === '1',
+			'sendEmailSubstitutionRequest' => $this->appConfig->getAppValueString('send_email_substitution_request', '1') === '1',
+			'sendEmailSubstituteApprovedToEmployee' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_employee', '1') === '1',
+			'sendEmailSubstituteApprovedToManager' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_manager', '1') === '1',
 			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
 			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
 			'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
+			'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8')
 		];
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
 			'settings' => $settings,
+			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => true,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 		return $this->configureCSP($response, 'admin');
+	}
+
+	/**
+	 * Admin holidays / calendars page (admin-only by default)
+	 *
+	 * Dedicated UI to explain and manage holiday calendars per state.
+	 */
+	#[NoCSRFRequired]
+	public function holidays(): TemplateResponse
+	{
+		// One-time legacy migration: import old company_holidays JSON into at_holidays
+		$this->migrateLegacyCompanyHolidaysIfNeeded();
+
+		Util::addTranslations('arbeitszeitcheck');
+
+		Util::addStyle('arbeitszeitcheck', 'common/colors');
+		Util::addStyle('arbeitszeitcheck', 'common/typography');
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'common/accessibility');
+		Util::addStyle('arbeitszeitcheck', 'common/app-layout');
+		Util::addStyle('arbeitszeitcheck', 'common/responsive');
+		Util::addStyle('arbeitszeitcheck', 'navigation');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'admin-holidays');
+
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/datepicker');
+		Util::addScript('arbeitszeitcheck', 'common/components');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
+		Util::addScript('arbeitszeitcheck', 'admin-holidays');
+
+		$defaultState = $this->appConfig->getAppValueString('german_state', 'NW');
+
+		$urlGenerator = $this->urlGenerator;
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-holidays', [
+			'defaultState' => $defaultState,
+			'urlGenerator' => $urlGenerator,
+			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => true,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
+		]);
+
+		return $this->configureCSP($response, 'admin');
+	}
+
+	/**
+	 * Get additional company holidays configuration (legacy, app-wide list).
+	 *
+	 * New code should use getStateHolidays() which is backed by at_holidays.
+	 *
+	 * @return JSONResponse
+	 */
+	#[NoCSRFRequired]
+	public function getCompanyHolidays(): JSONResponse
+	{
+		try {
+			$json = $this->appConfig->getAppValueString('company_holidays', '[]');
+			$items = json_decode($json, true);
+			if (!is_array($items)) {
+				$items = [];
+			}
+
+			// Normalize items
+			$holidays = [];
+			foreach ($items as $item) {
+				if (!is_array($item)) {
+					continue;
+				}
+				$date = isset($item['date']) ? (string)$item['date'] : '';
+				$name = isset($item['name']) ? (string)$item['name'] : '';
+				if ($date === '' || $name === '') {
+					continue;
+				}
+				$holidays[] = [
+					'date' => $date,
+					'name' => $name,
+					'scope' => isset($item['scope']) ? (string)$item['scope'] : '',
+					'kind' => isset($item['kind']) && $item['kind'] === 'half' ? 'half' : 'full',
+				];
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'holidays' => $holidays,
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Create or update a single company holiday entry (identified by date).
+	 *
+	 * @return JSONResponse
+	 */
+	#[NoCSRFRequired]
+	public function saveCompanyHoliday(): JSONResponse
+	{
+		try {
+			$params = $this->request->getParams();
+			$date = isset($params['date']) ? trim((string)$params['date']) : '';
+			$name = isset($params['name']) ? trim((string)$params['name']) : '';
+			$scope = isset($params['scope']) ? trim((string)$params['scope']) : '';
+			$kind = isset($params['kind']) && (string)$params['kind'] === 'half' ? 'half' : 'full';
+
+			if ($date === '' || $name === '') {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Date and name are required for a holiday'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			// Basic date validation (ISO yyyy-mm-dd)
+			try {
+				$d = new \DateTime($date);
+				// Normalize format
+				$date = $d->format('Y-m-d');
+			} catch (\Throwable $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid date format. Expected yyyy-mm-dd.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			// Load existing entries
+			$json = $this->appConfig->getAppValueString('company_holidays', '[]');
+			$items = json_decode($json, true);
+			if (!is_array($items)) {
+				$items = [];
+			}
+
+			// Upsert by date
+			$found = false;
+			foreach ($items as &$item) {
+				if (isset($item['date']) && (string)$item['date'] === $date) {
+					$item['name'] = $name;
+					$item['scope'] = $scope;
+					$item['kind'] = $kind;
+					$found = true;
+					break;
+				}
+			}
+			unset($item);
+
+			if (!$found) {
+				$items[] = [
+					'date' => $date,
+					'name' => $name,
+					'scope' => $scope,
+					'kind' => $kind,
+				];
+			}
+
+			$this->appConfig->setAppValueString('company_holidays', json_encode($items));
+
+			return new JSONResponse([
+				'success' => true,
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Delete a company holiday identified by date.
+	 *
+	 * @return JSONResponse
+	 */
+	#[NoCSRFRequired]
+	public function deleteCompanyHoliday(): JSONResponse
+	{
+		try {
+			$date = isset($this->request->getParams()['date']) ? trim((string)$this->request->getParams()['date']) : '';
+			if ($date === '') {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Date is required to delete a holiday'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$json = $this->appConfig->getAppValueString('company_holidays', '[]');
+			$items = json_decode($json, true);
+			if (!is_array($items)) {
+				$items = [];
+			}
+
+			$newItems = [];
+			foreach ($items as $item) {
+				if (!is_array($item) || !isset($item['date']) || (string)$item['date'] !== $date) {
+					$newItems[] = $item;
+				}
+			}
+
+			$this->appConfig->setAppValueString('company_holidays', json_encode($newItems));
+
+			return new JSONResponse([
+				'success' => true,
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Get holidays for a given state and year (backed by at_holidays).
+	 *
+	 * @param string $state
+	 * @param int $year
+	 * @return JSONResponse
+	 */
+	#[NoCSRFRequired]
+	public function getStateHolidays(string $state, int $year): JSONResponse
+	{
+		try {
+			$this->migrateLegacyCompanyHolidaysIfNeeded();
+
+			$state = strtoupper(trim($state));
+			if ($state === '') {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('State is required'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			if ($year < 1970 || $year > 2100) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid year'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$start = new \DateTimeImmutable(sprintf('%04d-01-01', $year));
+			$end = new \DateTimeImmutable(sprintf('%04d-12-31', $year));
+
+			// Use HolidayCalendarService as primary source (DB-backed, incl. any
+			// manually erfasste Firmen-/Custom-Feiertage).
+			$dtoList = $this->holidayCalendarService->getHolidaysForRange(
+				$state,
+				new \DateTime($start->format('Y-m-d')),
+				new \DateTime($end->format('Y-m-d'))
+			);
+
+			// Sicherheitsnetz: Stelle sicher, dass alle gesetzlichen
+			// Basis-Feiertage des Jahres immer sichtbar sind, selbst wenn es
+			// einmal zu Problemen beim Seeding oder manuellen Änderungen kam.
+			// Gesetzliche Feiertage werden hier NICHT aus der DB gelöscht,
+			// sondern bei Bedarf nur "virtuell" ergänzt.
+			$existingStatutoryByDate = [];
+			foreach ($dtoList as $item) {
+				if (
+					isset($item['scope'], $item['date'])
+					&& $item['scope'] === Holiday::SCOPE_STATUTORY
+					&& is_string($item['date'])
+				) {
+					$existingStatutoryByDate[$item['date']] = true;
+				}
+			}
+
+			try {
+				$baseHolidays = HolidayService::getGermanPublicHolidaysForYear($year);
+			} catch (\Throwable $e) {
+				$baseHolidays = [];
+			}
+
+			foreach ($baseHolidays as $dateStr => $name) {
+				if (isset($existingStatutoryByDate[$dateStr])) {
+					continue;
+				}
+				$dtoList[] = [
+					'id' => null,
+					'state' => $state,
+					'date' => $dateStr,
+					'name' => $this->l10n->t($name),
+					'kind' => Holiday::KIND_FULL,
+					'scope' => Holiday::SCOPE_STATUTORY,
+					'source' => Holiday::SOURCE_GENERATED,
+					'weight' => 1.0,
+				];
+			}
+
+			// Konsistente Sortierung nach Datum
+			usort($dtoList, static function (array $a, array $b): int {
+				return strcmp((string)($a['date'] ?? ''), (string)($b['date'] ?? ''));
+			});
+
+			return new JSONResponse([
+				'success' => true,
+				'state' => $state,
+				'year' => $year,
+				'holidays' => $dtoList,
+				'period' => [
+					'start' => $start->format('Y-m-d'),
+					'end' => $end->format('Y-m-d'),
+				],
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Create or update a state holiday (backed by at_holidays).
+	 *
+	 * @return JSONResponse
+	 */
+	#[NoCSRFRequired]
+	public function saveStateHoliday(): JSONResponse
+	{
+		try {
+			$this->migrateLegacyCompanyHolidaysIfNeeded();
+
+			// Support both traditional form-encoded requests and modern JSON bodies
+			$params = $this->request->getParams();
+			if ($params === [] || $params === null) {
+				$contentType = (string)$this->request->getHeader('Content-Type');
+				if (str_contains($contentType, 'application/json')) {
+					$raw = @file_get_contents('php://input');
+					if (is_string($raw) && $raw !== '') {
+						$decoded = json_decode($raw, true);
+						if (is_array($decoded)) {
+							$params = $decoded;
+						}
+					}
+				}
+				if (!is_array($params)) {
+					$params = [];
+				}
+			}
+			$id = isset($params['id']) ? (int)$params['id'] : 0;
+			$state = isset($params['state']) ? strtoupper(trim((string)$params['state'])) : '';
+			$date = isset($params['date']) ? trim((string)$params['date']) : '';
+			$name = isset($params['name']) ? trim((string)$params['name']) : '';
+			$kind = isset($params['kind']) && (string)$params['kind'] === Holiday::KIND_HALF ? Holiday::KIND_HALF : Holiday::KIND_FULL;
+			$scope = isset($params['scope']) ? trim((string)$params['scope']) : Holiday::SCOPE_COMPANY;
+
+			if ($state === '' || $date === '' || $name === '') {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('State, date, and name are required for a holiday'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			try {
+				$dateObj = new \DateTime($date);
+				$dateObj->setTime(0, 0, 0);
+			} catch (\Throwable $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid date format. Expected yyyy-mm-dd.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			if (!in_array($scope, [Holiday::SCOPE_STATUTORY, Holiday::SCOPE_COMPANY, Holiday::SCOPE_CUSTOM], true)) {
+				$scope = Holiday::SCOPE_COMPANY;
+			}
+
+			$holiday = new Holiday();
+			$oldValues = null;
+			if ($id > 0) {
+				$holiday->setId($id);
+				// Load existing holiday for audit log (best-effort).
+				try {
+					$existing = $this->holidayMapper->findById($id);
+					$oldValues = $this->holidayToAuditValues($existing);
+				} catch (\Throwable) {
+					$oldValues = null;
+				}
+			}
+			if ($holiday->getCreatedAt() === null) {
+				$holiday->setCreatedAt(new \DateTime());
+			}
+
+			$holiday->setState($state);
+			$holiday->setDate($dateObj);
+			$holiday->setName($name);
+			$holiday->setKind($kind);
+			$holiday->setScope($scope);
+			$holiday->setSource(Holiday::SOURCE_MANUAL);
+			$holiday->setUpdatedAt(new \DateTime());
+
+			if (!$holiday->isValid()) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Holiday definition is invalid'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			if ($id > 0) {
+				$holiday = $this->holidayMapper->update($holiday);
+				$action = 'state_holiday_updated';
+			} else {
+				$holiday = $this->holidayMapper->insert($holiday);
+				$action = 'state_holiday_created';
+			}
+
+			// Ensure subsequent reads see the updated set of holidays
+			$this->holidayCalendarService->clearCacheForStateYear($state, (int)$dateObj->format('Y'));
+
+			// Audit log
+			$newValues = $this->holidayToAuditValues($holiday);
+			$performedBy = $this->getPerformedBy();
+			$this->auditLogMapper->logAction(
+				$performedBy,
+				$action,
+				'state_holiday',
+				$holiday->getId(),
+				$oldValues,
+				$newValues,
+				$performedBy
+			);
+
+			return new JSONResponse([
+				'success' => true,
+				'holiday' => [
+					'id' => $holiday->getId(),
+					'state' => $holiday->getState(),
+					'date' => $holiday->getDate() ? $holiday->getDate()->format('Y-m-d') : null,
+					'name' => $holiday->getName(),
+					'kind' => $holiday->getKind(),
+					'scope' => $holiday->getScope(),
+					'source' => $holiday->getSource(),
+				],
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Delete a state holiday by ID (backed by at_holidays).
+	 *
+	 * @param int $id
+	 * @return JSONResponse
+	 */
+	#[NoCSRFRequired]
+	public function deleteStateHoliday(int $id): JSONResponse
+	{
+		try {
+			if ($id <= 0) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid holiday ID'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			// Resolve state/year before deletion so we can clear the cache precisely.
+			$state = '';
+			$year = null;
+			$oldValues = null;
+			try {
+				$existing = $this->holidayMapper->findById($id);
+				if ($existing !== null) {
+					$oldValues = $this->holidayToAuditValues($existing);
+					$state = $existing->getState();
+					$date = $existing->getDate();
+					if ($date !== null) {
+						$year = (int)$date->format('Y');
+					}
+				}
+			} catch (DoesNotExistException $e) {
+				// Idempotent delete: if the holiday is already gone, treat this
+				// as success to keep the admin UI robust and avoid confusing 404s.
+				return new JSONResponse([
+					'success' => true,
+				]);
+			}
+
+			$this->holidayMapper->deleteById($id);
+
+			if ($state !== '' && $year !== null) {
+				$this->holidayCalendarService->clearCacheForStateYear($state, $year);
+			}
+
+			// Audit log: deletion
+			$performedBy = $this->getPerformedBy();
+			$this->auditLogMapper->logAction(
+				$performedBy,
+				'state_holiday_deleted',
+				'state_holiday',
+				$id,
+				$oldValues,
+				null,
+				$performedBy
+			);
+
+			return new JSONResponse([
+				'success' => true,
+			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Holiday not found'),
+			], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * One-time migration of legacy app config "company_holidays" into at_holidays.
+	 * After successful migration a flag "company_holidays_migrated" is set so this
+	 * method becomes a cheap no-op.
+	 */
+	private function migrateLegacyCompanyHolidaysIfNeeded(): void
+	{
+		try {
+			$alreadyMigrated = $this->appConfig->getAppValueString('company_holidays_migrated', '0') === '1';
+			if ($alreadyMigrated) {
+				return;
+			}
+
+			$json = $this->appConfig->getAppValueString('company_holidays', '[]');
+			$items = json_decode($json, true);
+			if (!is_array($items) || $items === []) {
+				$this->appConfig->setAppValueString('company_holidays_migrated', '1');
+				return;
+			}
+
+			$states = [
+				'BW', 'BY', 'BE', 'BB', 'HB', 'HH', 'HE', 'MV',
+				'NI', 'NW', 'RP', 'SL', 'SN', 'ST', 'SH', 'TH',
+			];
+
+			$now = new \DateTime();
+
+			foreach ($items as $item) {
+				if (!is_array($item)) {
+					continue;
+				}
+				$dateStr = isset($item['date']) ? (string)$item['date'] : '';
+				$name = isset($item['name']) ? trim((string)$item['name']) : '';
+				if ($dateStr === '' || $name === '') {
+					continue;
+				}
+				$kind = (isset($item['kind']) && (string)$item['kind'] === 'half') ? Holiday::KIND_HALF : Holiday::KIND_FULL;
+
+				try {
+					$date = new \DateTime($dateStr);
+					$date->setTime(0, 0, 0);
+				} catch (\Throwable) {
+					continue;
+				}
+
+				foreach ($states as $state) {
+					$existing = $this->holidayMapper->findByStateAndRange($state, $date, $date);
+					$duplicate = false;
+					foreach ($existing as $existingHoliday) {
+						if ($existingHoliday->getScope() === Holiday::SCOPE_COMPANY
+							&& $existingHoliday->getName() === $name) {
+							$duplicate = true;
+							break;
+						}
+					}
+					if ($duplicate) {
+						continue;
+					}
+
+					$holiday = new Holiday();
+					$holiday->setState($state);
+					$holiday->setDate(clone $date);
+					$holiday->setName($name);
+					$holiday->setKind($kind);
+					$holiday->setScope(Holiday::SCOPE_COMPANY);
+					$holiday->setSource(Holiday::SOURCE_MANUAL);
+					$holiday->setCreatedAt(clone $now);
+					$holiday->setUpdatedAt(clone $now);
+
+					if (!$holiday->isValid()) {
+						continue;
+					}
+
+					try {
+						$this->holidayMapper->insert($holiday);
+					} catch (\Throwable) {
+						// ignore individual insert errors, continue with others
+					}
+				}
+			}
+
+			$this->appConfig->setAppValueString('company_holidays_migrated', '1');
+		} catch (\Throwable) {
+			// Never break admin UI because of a failed migration; it can be retried later.
+		}
 	}
 
 	/**
@@ -407,7 +1082,12 @@ class AdminController extends Controller
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'working-time-models', [
 			'models' => $modelsData,
+			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => true,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
@@ -475,7 +1155,12 @@ class AdminController extends Controller
 			'total' => count($logs),
 			'startDate' => $startDate->format('d.m.Y'),
 			'endDate' => $endDate->format('d.m.Y'),
+			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => true,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 		return $this->configureCSP($response, 'admin');
 	}
@@ -496,14 +1181,19 @@ class AdminController extends Controller
 			}
 			$settings = [
 				'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
-				'requireBreakJustification' => $this->appConfig->getAppValueString('require_break_justification', '1') === '1',
 				'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+				'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
 				'requireSubstituteTypes' => $requireSubstituteTypes,
 				'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
 				'sendIcalToSubstitute' => $this->appConfig->getAppValueString('send_ical_to_substitute', '0') === '1',
+				'sendIcalToManagers' => $this->appConfig->getAppValueString('send_ical_to_managers', '0') === '1',
+				'sendEmailSubstitutionRequest' => $this->appConfig->getAppValueString('send_email_substitution_request', '1') === '1',
+				'sendEmailSubstituteApprovedToEmployee' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_employee', '1') === '1',
+				'sendEmailSubstituteApprovedToManager' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_manager', '1') === '1',
 				'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
 				'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
 				'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
+				'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 				'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 				'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8')
 			];
@@ -515,7 +1205,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -536,14 +1226,19 @@ class AdminController extends Controller
 				'autoComplianceCheck' => 'auto_compliance_check',
 				'realtimeComplianceCheck' => 'realtime_compliance_check',
 				'complianceStrictMode' => 'compliance_strict_mode',
-				'requireBreakJustification' => 'require_break_justification',
 				'enableViolationNotifications' => 'enable_violation_notifications',
+				'exportMidnightSplitEnabled' => 'export_midnight_split_enabled',
 				'requireSubstituteTypes' => 'require_substitute_types',
 				'sendIcalApprovedAbsences' => 'send_ical_approved_absences',
 				'sendIcalToSubstitute' => 'send_ical_to_substitute',
+				'sendIcalToManagers' => 'send_ical_to_managers',
+				'sendEmailSubstitutionRequest' => 'send_email_substitution_request',
+				'sendEmailSubstituteApprovedToEmployee' => 'send_email_substitute_approved_to_employee',
+				'sendEmailSubstituteApprovedToManager' => 'send_email_substitute_approved_to_manager',
 				'maxDailyHours' => 'max_daily_hours',
 				'minRestPeriod' => 'min_rest_period',
 				'germanState' => 'german_state',
+				'statutoryAutoReseed' => 'statutory_auto_reseed',
 				'retentionPeriod' => 'retention_period',
 				'defaultWorkingHours' => 'default_working_hours'
 			];
@@ -556,7 +1251,13 @@ class AdminController extends Controller
 					$value = $params[$paramKey];
 
 					// Validate and convert value based on type
-					if ($paramKey === 'autoComplianceCheck' || $paramKey === 'realtimeComplianceCheck' || $paramKey === 'complianceStrictMode' || $paramKey === 'requireBreakJustification' || $paramKey === 'enableViolationNotifications' || $paramKey === 'sendIcalApprovedAbsences' || $paramKey === 'sendIcalToSubstitute') {
+					if (in_array($paramKey, [
+						'autoComplianceCheck', 'realtimeComplianceCheck', 'complianceStrictMode', 'enableViolationNotifications',
+						'exportMidnightSplitEnabled',
+						'sendIcalApprovedAbsences', 'sendIcalToSubstitute', 'sendIcalToManagers',
+						'sendEmailSubstitutionRequest', 'sendEmailSubstituteApprovedToEmployee', 'sendEmailSubstituteApprovedToManager',
+						'statutoryAutoReseed'
+					], true)) {
 						$value = ($value === true || $value === 'true' || $value === '1') ? '1' : '0';
 					} elseif ($paramKey === 'maxDailyHours' || $paramKey === 'minRestPeriod' || $paramKey === 'defaultWorkingHours') {
 						$value = (string)max(0, (float)$value);
@@ -570,7 +1271,7 @@ class AdminController extends Controller
 						if ($paramKey === 'minRestPeriod' && ((float)$value < 1 || (float)$value > 24)) {
 							return new JSONResponse([
 								'success' => false,
-								'error' => 'Minimum rest period must be between 1 and 24 hours'
+								'error' => $this->l10n->t('Minimum rest period must be between 1 and 24 hours')
 							], Http::STATUS_BAD_REQUEST);
 						}
 					} elseif ($paramKey === 'retentionPeriod') {
@@ -618,7 +1319,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -675,7 +1376,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -711,10 +1412,10 @@ class AdminController extends Controller
 					}
 				}
 
-				// Get user statistics
+				// Get user statistics (per-user: does this user have entries today?)
 				$today = new \DateTime();
 				$today->setTime(0, 0, 0);
-				$hasTimeEntriesToday = $this->timeEntryMapper->countDistinctUsersByDate($today) > 0;
+				$hasTimeEntriesToday = $this->timeEntryMapper->hasEntriesOnDate($userId, $today);
 
 				$usersData[] = [
 					'userId' => $userId,
@@ -749,7 +1450,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -767,7 +1468,7 @@ class AdminController extends Controller
 			if (!$user) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'User not found'
+					'error' => $this->l10n->t('User not found')
 				], Http::STATUS_NOT_FOUND);
 			}
 
@@ -786,6 +1487,11 @@ class AdminController extends Controller
 
 			// Get all available working time models
 			$allModels = $this->workingTimeModelMapper->findAll();
+
+			// Resolve Bundesland / holiday calendar for this user:
+			// per-user setting (german_state) falls back to global default.
+			$defaultState = $this->appConfig->getAppValueString('german_state', 'NW');
+			$userGermanState = $this->userSettingsMapper->getStringSetting($userId, 'german_state', $defaultState);
 
 			$startDate = $currentModel ? $currentModel->getStartDate() : null;
 			$endDate = $currentModel ? $currentModel->getEndDate() : null;
@@ -807,6 +1513,7 @@ class AdminController extends Controller
 					'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
 					'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
 					'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
+					'germanState' => $userGermanState,
 					'userWorkingTimeModel' => $currentModel ? $currentModel->getSummary() : null,
 					'availableWorkingTimeModels' => array_map(function ($model) {
 						return [
@@ -822,7 +1529,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -845,6 +1552,7 @@ class AdminController extends Controller
 			$vacationDaysPerYear = isset($params['vacationDaysPerYear']) ? (int)$params['vacationDaysPerYear'] : null;
 			$startDate = $params['startDate'] ?? null;
 			$endDate = $params['endDate'] ?? null;
+			$germanState = isset($params['germanState']) ? (string)$params['germanState'] : null;
 
 			if ($vacationDaysPerYear !== null && ($vacationDaysPerYear < 0 || $vacationDaysPerYear > 366)) {
 				return new JSONResponse([
@@ -858,7 +1566,7 @@ class AdminController extends Controller
 			if (!$user) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => 'User not found'
+					'error' => $this->l10n->t('User not found')
 				], Http::STATUS_NOT_FOUND);
 			}
 
@@ -876,6 +1584,17 @@ class AdminController extends Controller
 					return new JSONResponse([
 						'success' => false,
 						'error' => $this->l10n->t('Validation failed. Please check your input.')
+					], Http::STATUS_BAD_REQUEST);
+				}
+			}
+
+			// Validate germanState if provided (optional; empty string means "use global default")
+			if ($germanState !== null && $germanState !== '') {
+				$validStates = ['NW', 'BY', 'BW', 'HE', 'NI', 'RP', 'SL', 'BE', 'BB', 'HB', 'HH', 'MV', 'SN', 'ST', 'SH', 'TH'];
+				if (!in_array($germanState, $validStates, true)) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Invalid German state code')
 					], Http::STATUS_BAD_REQUEST);
 				}
 			}
@@ -930,7 +1649,7 @@ class AdminController extends Controller
 				$newModel = new \OCA\ArbeitszeitCheck\Db\UserWorkingTimeModel();
 				$newModel->setUserId($userId);
 				$newModel->setWorkingTimeModelId($workingTimeModelId);
-				$newModel->setVacationDaysPerYear($vacationDaysPerYear ?? 25);
+				$newModel->setVacationDaysPerYear($vacationDaysPerYear ?? Constants::DEFAULT_VACATION_DAYS_PER_YEAR);
 				$newModel->setStartDate(new \DateTime($startDate ?? 'now'));
 				if ($endDate) {
 					$newModel->setEndDate(new \DateTime($endDate));
@@ -984,6 +1703,16 @@ class AdminController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
+			// Persist per-user Bundesland / holiday calendar selection.
+			// Empty string clears the user-specific setting and falls back to global default.
+			if ($germanState !== null) {
+				if ($germanState === '') {
+					$this->userSettingsMapper->deleteSetting($userId, 'german_state');
+				} else {
+					$this->userSettingsMapper->setSetting($userId, 'german_state', $germanState);
+				}
+			}
+
 			return new JSONResponse([
 				'success' => true,
 				'userWorkingTimeModel' => $updated !== null ? $updated->getSummary() : null
@@ -991,7 +1720,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1044,7 +1773,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1077,7 +1806,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1111,12 +1840,12 @@ class AdminController extends Controller
 		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => 'Working time model not found'
+				'error' => $this->l10n->t('Working time model not found')
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1135,9 +1864,10 @@ class AdminController extends Controller
 			$model = new \OCA\ArbeitszeitCheck\Db\WorkingTimeModel();
 			$model->setName($params['name'] ?? '');
 			$model->setDescription($params['description'] ?? null);
+			$defaultDaily = max(0.5, min(24.0, (float)$this->appConfig->getAppValueString('default_working_hours', '8')));
 			$model->setType($this->normalizeWorkingTimeModelType($params['type'] ?? ''));
 			$model->setWeeklyHours(isset($params['weeklyHours']) ? (float)$params['weeklyHours'] : 40.0);
-			$model->setDailyHours(isset($params['dailyHours']) ? (float)$params['dailyHours'] : 8.0);
+			$model->setDailyHours(isset($params['dailyHours']) ? (float)$params['dailyHours'] : $defaultDaily);
 			$model->setIsDefault(isset($params['isDefault']) ? (bool)$params['isDefault'] : false);
 			$model->setCreatedAt(new \DateTime());
 			$model->setUpdatedAt(new \DateTime());
@@ -1202,7 +1932,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1301,12 +2031,12 @@ class AdminController extends Controller
 		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => 'Working time model not found'
+				'error' => $this->l10n->t('Working time model not found')
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1352,12 +2082,12 @@ class AdminController extends Controller
 		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => 'Working time model not found'
+				'error' => $this->l10n->t('Working time model not found')
 			], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1413,7 +2143,7 @@ class AdminController extends Controller
 				default => $this->exportAsCsv($data, $filename)
 			};
 		} catch (\Throwable $e) {
-			throw new \Exception('Failed to export users: ' . $e->getMessage());
+			throw new \Exception($this->l10n->t('Failed to export users.'));
 		}
 	}
 
@@ -1496,6 +2226,23 @@ class AdminController extends Controller
 				$startDate->setTime(0, 0, 0);
 			}
 
+			if ($startDate > $endDate) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Start date must be before or equal to end date')
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			// Enforce max date range to prevent heavy queries
+			$diff = $startDate->diff($endDate);
+			$days = (int) $diff->format('%a');
+			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Date range must not exceed %d days. Please narrow the range.', [Constants::MAX_EXPORT_DATE_RANGE_DAYS])
+				], Http::STATUS_BAD_REQUEST);
+			}
+
 			// Build filters
 			$filters = [];
 			if (isset($params['user_id']) && $params['user_id']) {
@@ -1558,7 +2305,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1591,7 +2338,7 @@ class AdminController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $e->getMessage()
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
@@ -1627,6 +2374,20 @@ class AdminController extends Controller
 				$startDate = clone $endDate;
 				$startDate->modify('-30 days');
 				$startDate->setTime(0, 0, 0);
+			}
+
+			if ($startDate > $endDate) {
+				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+			}
+
+			// Enforce max date range to prevent heavy queries
+			$diff = $startDate->diff($endDate);
+			$days = (int) $diff->format('%a');
+			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+				throw new \Exception($this->l10n->t(
+					'Export date range must not exceed %d days. Please narrow the range.',
+					[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
+				));
 			}
 
 			// Build filters
@@ -1675,7 +2436,7 @@ class AdminController extends Controller
 			};
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::exportAuditLogs: ' . $e->getMessage(), ["exception" => $e]);
-			throw new \Exception($this->l10n->t('Failed to export audit logs: %s', [$e->getMessage()]));
+			throw new \Exception($this->l10n->t('Failed to export audit logs.'));
 		}
 	}
 
@@ -1702,14 +2463,17 @@ class AdminController extends Controller
 		Util::addScript('arbeitszeitcheck', 'common/messaging');
 		Util::addScript('arbeitszeitcheck', 'admin-teams');
 
-		$urlGenerator = \OCP\Server::get(\OCP\IURLGenerator::class);
-		$l = \OCP\Util::getL10N('arbeitszeitcheck');
 		return new TemplateResponse('arbeitszeitcheck', 'admin-teams', [
-			'urlGenerator' => $urlGenerator,
-			'l' => $l,
+			'urlGenerator' => $this->urlGenerator,
+			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => true,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
 		]);
 	}
 
+	#[NoCSRFRequired]
 	public function getTeams(): JSONResponse
 	{
 		try {
@@ -1728,6 +2492,47 @@ class AdminController extends Controller
 		}
 	}
 
+	/**
+	 * Get a summary of what will be affected if a team is deleted.
+	 *
+	 * Returns counts of members, managers, and direct sub-teams. This is used
+	 * by the admin UI to present a clear, WCAG-compliant confirmation dialog
+	 * before performing the destructive action.
+	 */
+	#[NoCSRFRequired]
+	public function getTeamDeleteImpact(int $id): JSONResponse
+	{
+		try {
+			$team = $this->teamMapper->find($id);
+
+			$members = $this->teamMemberMapper->findByTeamId($id);
+			$managers = $this->teamManagerMapper->findByTeamId($id);
+			$children = $this->teamMapper->findByParentId($id);
+
+			return new JSONResponse([
+				'success' => true,
+				'impact' => [
+					'teamId' => $team->getId(),
+					'teamName' => $team->getName(),
+					'memberCount' => count($members),
+					'managerCount' => count($managers),
+					'childTeamCount' => count($children),
+				],
+			]);
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Team not found'),
+			], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::getTeamDeleteImpact: ' . $e->getMessage(), ['exception' => $e]);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	/** @param Team[] $teams */
 	private function buildTeamTree(array $teams, ?int $parentId): array
 	{
@@ -1743,6 +2548,7 @@ class AdminController extends Controller
 		return $out;
 	}
 
+	#[NoCSRFRequired]
 	public function createTeam(): JSONResponse
 	{
 		try {
@@ -1775,10 +2581,11 @@ class AdminController extends Controller
 			return new JSONResponse(['success' => true, 'team' => $inserted->getSummary()], Http::STATUS_CREATED);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::createTeam: ' . $e->getMessage(), ['exception' => $e]);
-			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function updateTeam(int $id): JSONResponse
 	{
 		try {
@@ -1817,10 +2624,11 @@ class AdminController extends Controller
 			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::updateTeam: ' . $e->getMessage(), ['exception' => $e]);
-			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function deleteTeam(int $id): JSONResponse
 	{
 		try {
@@ -1851,10 +2659,11 @@ class AdminController extends Controller
 			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::deleteTeam: ' . $e->getMessage(), ['exception' => $e]);
-			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function getTeamMembers(int $id): JSONResponse
 	{
 		try {
@@ -1871,6 +2680,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function addTeamMember(int $id): JSONResponse
 	{
 		try {
@@ -1905,10 +2715,11 @@ class AdminController extends Controller
 			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::addTeamMember: ' . $e->getMessage(), ['exception' => $e]);
-			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function removeTeamMember(int $id, string $userId): JSONResponse
 	{
 		try {
@@ -1930,6 +2741,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function getTeamManagers(int $id): JSONResponse
 	{
 		try {
@@ -1946,6 +2758,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function addTeamManager(int $id): JSONResponse
 	{
 		try {
@@ -1980,10 +2793,11 @@ class AdminController extends Controller
 			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Team not found')], Http::STATUS_NOT_FOUND);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::addTeamManager: ' . $e->getMessage(), ['exception' => $e]);
-			return new JSONResponse(['success' => false, 'error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function removeTeamManager(int $id, string $userId): JSONResponse
 	{
 		try {
@@ -2005,12 +2819,14 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoCSRFRequired]
 	public function getTeamsUseAppTeams(): JSONResponse
 	{
 		$use = $this->appConfig->getAppValueString('use_app_teams', '0') === '1';
 		return new JSONResponse(['success' => true, 'useAppTeams' => $use]);
 	}
 
+	#[NoCSRFRequired]
 	public function setTeamsUseAppTeams(): JSONResponse
 	{
 		$params = $this->request->getParams();

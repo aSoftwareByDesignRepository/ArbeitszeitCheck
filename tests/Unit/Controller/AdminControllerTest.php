@@ -174,8 +174,8 @@ class AdminControllerTest extends TestCase
 			->willReturnCallback(function (string $key, string $default = '') {
 				$values = [
 					'auto_compliance_check' => '1',
-					'require_break_justification' => '1',
 					'enable_violation_notifications' => '1',
+					'export_midnight_split_enabled' => '1',
 					'max_daily_hours' => '10',
 					'min_rest_period' => '11',
 					'german_state' => 'NW',

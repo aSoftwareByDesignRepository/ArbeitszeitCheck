@@ -24,15 +24,27 @@
 }
 
 .page-header-section {
-	padding: 0;
+	padding: var(--space-3, 0.75rem) 0 var(--space-2, 0.5rem);
 	background: transparent;
 	border: none;
 	box-shadow: none;
-	margin-bottom: var(--space-8, 2rem);
+	margin-bottom: var(--space-5, 1.25rem);
 }
 
 .page-header-section .header-content {
-	margin-bottom: var(--space-6, 1.5rem);
+	margin-bottom: 0;
+	align-items: center;
+	gap: var(--space-4, 1rem);
+}
+
+.page-header-section .header-actions {
+	gap: var(--space-2, 0.5rem);
+}
+
+.page-header-section .view-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1, 0.25rem);
 }
 
 /* Calendar Navigation */
@@ -148,12 +160,13 @@
 
 .calendar-day {
 	min-height: 100px;
+	min-width: 0; /* Allow shrink in grid */
 	padding: var(--space-2, 0.5rem);
-	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+	border: 2px solid var(--arbeitszeitcheck-color-border, var(--color-border));
 	border-radius: var(--radius-base, 4px);
 	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, var(--arbeitszeitcheck-color-background)));
 	cursor: pointer;
-	transition: all 0.2s ease;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 	position: relative;
 	display: flex;
 	flex-direction: column;
@@ -164,7 +177,6 @@
 .calendar-day:hover {
 	background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover, var(--arbeitszeitcheck-color-background-secondary)));
 	border-color: var(--arbeitszeitcheck-color-primary, var(--color-primary));
-	transform: translateY(-2px);
 	box-shadow: var(--arbeitszeitcheck-shadow-md);
 }
 
@@ -192,6 +204,18 @@
 	background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover, var(--arbeitszeitcheck-color-background-secondary)));
 }
 
+.calendar-day--holiday {
+	background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+	border-color: var(--color-warning);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-warning) 40%, transparent);
+}
+
+.calendar-day--company-holiday {
+	background: color-mix(in srgb, var(--color-info) 12%, transparent);
+	border-color: var(--color-info);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-info) 35%, transparent);
+}
+
 .calendar-day--has-entry {
 	border-left: 3px solid var(--arbeitszeitcheck-color-primary, var(--color-primary));
 }
@@ -200,11 +224,28 @@
 	border-left: 3px solid var(--arbeitszeitcheck-color-warning, var(--color-warning));
 }
 
+/* Coverage day: user is substituting (not absent) – primary color */
+.calendar-day--has-coverage {
+	border-left-color: var(--arbeitszeitcheck-color-primary, var(--color-primary));
+}
+
 .calendar-day-number {
 	font-weight: 600;
 	font-size: 1rem;
 	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, var(--arbeitszeitcheck-color-text)));
 	margin-bottom: var(--space-1, 0.25rem);
+}
+
+.calendar-day-holiday-label {
+	display: block;
+	font-size: 0.7rem;
+	line-height: 1.2;
+	color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text-tertiary)));
+	margin-top: var(--space-1, 0.25rem);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
 }
 
 .calendar-day-hours {
@@ -269,30 +310,42 @@
 	font-weight: 500;
 }
 
-/* Calendar Legend */
+.week-day-holiday {
+	font-size: 0.75rem;
+	color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--color-text-tertiary)));
+	font-weight: 500;
+	margin-top: var(--space-1, 0.25rem);
+	line-height: 1.2;
+}
+
+/* Calendar Legend – WCAG 2.1 AA, clear grouping */
 .calendar-legend {
-	padding: 1.5rem;
-	border-top: 1px solid var(--color-border);
-	margin-top: 1rem;
+	padding: var(--space-6, 1.5rem);
+	border-top: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+	margin-top: var(--space-6, 1.5rem);
+	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, transparent));
+	border-radius: var(--radius-base, 4px);
 }
 
 .calendar-legend h4 {
-	margin: 0 0 1rem 0;
+	margin: 0 0 var(--space-4, 1rem) 0;
 	font-size: 1rem;
 	font-weight: 600;
-	color: var(--color-main-text);
+	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+	line-height: 1.4;
 }
 
 .legend-items {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 1.5rem;
+	gap: var(--space-4, 1rem) var(--space-6, 1.5rem);
 }
 
 .legend-item {
 	display: flex;
 	align-items: center;
-	gap: 0.5rem;
+	gap: var(--space-3, 0.75rem);
+	min-height: 2.75rem;
 }
 
 .legend-color {
@@ -312,9 +365,24 @@
 	border-left: 4px solid var(--arbeitszeitcheck-color-warning, var(--color-warning));
 }
 
+.legend-color--coverage {
+	background: transparent;
+	border-left: 4px solid var(--arbeitszeitcheck-color-primary, var(--color-primary));
+}
+
 .legend-color--today {
 	background: color-mix(in srgb, var(--arbeitszeitcheck-color-primary, var(--color-primary)) 15%, transparent);
 	border: 2px solid var(--arbeitszeitcheck-color-primary, var(--color-primary));
+}
+
+.legend-color--holiday {
+	background: var(--color-warning);
+	border: 1px solid color-mix(in srgb, var(--color-warning) 60%, var(--color-border) 40%);
+}
+
+.legend-color--company-holiday {
+	background: var(--color-info);
+	border: 1px solid color-mix(in srgb, var(--color-info) 60%, var(--color-border) 40%);
 }
 
 .legend-label {
@@ -405,6 +473,16 @@
 	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text, var(--arbeitszeitcheck-color-text)));
 }
 
+/* Focus styles for keyboard navigation (WCAG 2.1 AA) */
+.calendar-day:focus-visible,
+.calendar-week-day:focus-visible,
+.btn-nav:focus-visible,
+.btn-close:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
 /* View Toggle */
 .view-toggle {
 	display: flex;
@@ -429,8 +507,8 @@
 	}
 
 	.calendar-day {
-		min-height: 60px;
-		padding: var(--space-1, 0.25rem);
+		min-height: 72px; /* Touch target ~44px + content, WCAG 2.5.5 */
+		padding: var(--space-2, 0.5rem);
 	}
 
 	.calendar-weekdays {
@@ -443,6 +521,25 @@
 
 	.day-details-panel {
 		width: 100%;
+		max-width: 100%;
+	}
+
+	.calendar-legend {
+		padding: var(--space-4, 1rem);
+	}
+
+	.legend-items {
+		flex-direction: column;
+		gap: var(--space-2, 0.5rem);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.calendar-day,
+	.calendar-week-day,
+	.btn-nav,
+	.btn-close {
+		transition: none;
 	}
 }
 

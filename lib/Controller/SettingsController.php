@@ -14,6 +14,8 @@ namespace OCA\ArbeitszeitCheck\Controller;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Service\CSPService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
+use OCP\IURLGenerator;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -37,6 +39,8 @@ class SettingsController extends Controller
 	private UserSettingsMapper $userSettingsMapper;
 	private AuditLogMapper $auditLogMapper;
 	private IL10N $l10n;
+	private IURLGenerator $urlGenerator;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		string $appName,
@@ -45,13 +49,17 @@ class SettingsController extends Controller
 		UserSettingsMapper $userSettingsMapper,
 		AuditLogMapper $auditLogMapper,
 		IL10N $l10n,
-		CSPService $cspService
+		CSPService $cspService,
+		IURLGenerator $urlGenerator,
+		PermissionService $permissionService
 	) {
 		parent::__construct($appName, $request);
 		$this->userSession = $userSession;
 		$this->userSettingsMapper = $userSettingsMapper;
 		$this->auditLogMapper = $auditLogMapper;
 		$this->l10n = $l10n;
+		$this->urlGenerator = $urlGenerator;
+		$this->permissionService = $permissionService;
 		$this->setCspService($cspService);
 	}
 
@@ -109,6 +117,17 @@ class SettingsController extends Controller
 	}
 
 	/**
+	 * Legacy API (CamelCase alias): Nextcloud routes may call `indexApi()` when the route is defined as `index_api`.
+	 *
+	 * @return JSONResponse
+	 */
+	#[NoAdminRequired]
+	public function indexApi(): JSONResponse
+	{
+		return $this->index_api();
+	}
+
+	/**
 	 * Personal settings page
 	 */
 	#[NoAdminRequired]
@@ -137,8 +156,33 @@ class SettingsController extends Controller
 		Util::addScript('arbeitszeitcheck', 'common/validation');
 		Util::addScript('arbeitszeitcheck', 'settings');
 
+		$user = $this->userSession->getUser();
+		$userId = $user ? $user->getUID() : null;
+
+		$showManagerLink = false;
+		$showReportsLink = false;
+		$showAdminNav = false;
+		$showSubstitutionLink = false;
+
+		if ($userId !== null) {
+			try {
+				$showManagerLink = $this->permissionService->canAccessManagerDashboard($userId);
+				$showReportsLink = $showManagerLink || $this->permissionService->isAdmin($userId);
+				$showAdminNav = $this->permissionService->isAdmin($userId);
+			} catch (\Throwable $e) {
+				$showManagerLink = false;
+				$showReportsLink = false;
+				$showAdminNav = false;
+			}
+		}
+
 		$response = new TemplateResponse('arbeitszeitcheck', 'personal-settings', [
 			'l' => $this->l10n,
+			'urlGenerator' => $this->urlGenerator,
+			'showSubstitutionLink' => $showSubstitutionLink,
+			'showManagerLink' => $showManagerLink,
+			'showReportsLink' => $showReportsLink,
+			'showAdminNav' => $showAdminNav,
 		]);
 		return $this->configureCSP($response);
 	}

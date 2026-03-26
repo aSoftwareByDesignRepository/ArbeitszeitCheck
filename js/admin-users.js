@@ -76,9 +76,9 @@
                 }
             },
             onError: function(_error) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center">' + (window.t ? window.t('arbeitszeitcheck', 'Error loading users') : 'Error loading users') + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">' + ((window.t && window.t('arbeitszeitcheck', 'Error loading users')) || 'Error loading users') + '</td></tr>';
                 if (Messaging && Messaging.showError) {
-                    Messaging.showError(window.t ? window.t('arbeitszeitcheck', 'Failed to load users. Please try again.') : 'Failed to load users. Please try again.');
+                    Messaging.showError((window.t && window.t('arbeitszeitcheck', 'Failed to load users. Please try again.')) || 'Failed to load users. Please try again.');
                 }
             }
         });
@@ -182,7 +182,7 @@
                 }
             },
             onError: function(_error) {
-                Messaging.showError('Failed to load user details');
+                Messaging.showError((window.t && window.t('arbeitszeitcheck', 'Failed to load user details')) || 'Failed to load user details');
             }
         });
     }
@@ -204,10 +204,10 @@
      * Show history modal for a user
      */
     function showHistoryModal(userId, userName) {
-        const t = (s) => (window.t && window.t('arbeitszeitcheck', s)) || window.ArbeitszeitCheck?.l10n?.[s] || s;
-        const title = t('assignmentHistory') + ': ' + (userName || userId);
-        const closeLabel = t('close') || 'Close';
-        const loadingText = t('loading') + '…';
+        const t = (s, fallback) => window.ArbeitszeitCheck?.l10n?.[s] || (window.t && window.t('arbeitszeitcheck', fallback || s)) || fallback || s;
+        const title = t('assignmentHistory', 'Assignment history') + ': ' + (userName || userId);
+        const closeLabel = t('close', 'Close');
+        const loadingText = t('loading', 'Loading') + '…';
 
         const content = `
             <p class="history-modal__loading" id="history-modal-loading">${loadingText}</p>
@@ -283,7 +283,7 @@
                 const contentEl = document.getElementById('history-modal-content');
                 if (!loadingEl || !contentEl) return;
                 loadingEl.style.display = 'none';
-                contentEl.innerHTML = '<p class="history-modal__empty">' + t('error') + '</p>';
+                contentEl.innerHTML = '<p class="history-modal__empty">' + Utils.escapeHtml(t('errorLoadingHistory', 'Error loading assignment history')) + '</p>';
                 contentEl.style.display = 'block';
             }
         });
@@ -293,7 +293,7 @@
      * Show edit user modal with working time models loaded
      */
     function showEditUserModalWithModels(user, models) {
-        const t = (s) => (window.t && window.t('arbeitszeitcheck', s)) || window.ArbeitszeitCheck?.l10n?.[s] || s;
+        const t = (s) => window.ArbeitszeitCheck?.l10n?.[s] || s;
         const title = t('editUser') + ': ' + (user.displayName || user.userId);
         const saveLabel = t('save');
         const cancelLabel = t('cancel');
@@ -302,17 +302,29 @@
         const startDateLabel = t('startDate');
         const endDateLabel = t('endDateOptional');
         const noModelLabel = t('noModel');
+        const germanStateLabel = t('germanStateLabel');
+        const germanStateHelp = t('germanStateHelp');
+        const germanStateDefault = t('germanStateDefault');
 
-        const vacation = user.vacationDaysPerYear ?? user.userWorkingTimeModel?.vacationDaysPerYear ?? 25;
+        const DEFAULT_VACATION_DAYS = 25; // German standard; must match Constants::DEFAULT_VACATION_DAYS_PER_YEAR
+        const vacation = user.vacationDaysPerYear ?? user.userWorkingTimeModel?.vacationDaysPerYear ?? DEFAULT_VACATION_DAYS;
         const startIso = user.workingTimeModelStartDate ?? user.userWorkingTimeModel?.startDate ?? null;
         const endIso = user.workingTimeModelEndDate ?? user.userWorkingTimeModel?.endDate ?? null;
         const startVal = (startIso && convertISOToEuropean(startIso)) || '';
         const endVal = (endIso && convertISOToEuropean(endIso)) || '';
+        const currentState = user.germanState || '';
 
         let modelOptions = `<option value="">${noModelLabel}</option>`;
         models.forEach(model => {
             const selected = user.workingTimeModel && user.workingTimeModel.id === model.id ? 'selected' : '';
             modelOptions += `<option value="${model.id}" ${selected}>${Utils.escapeHtml(model.name)}</option>`;
+        });
+
+        const states = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.states) || [];
+        let stateOptions = `<option value="">${Utils.escapeHtml(germanStateDefault)}</option>`;
+        states.forEach(state => {
+            const selected = currentState === state.code ? 'selected' : '';
+            stateOptions += `<option value="${Utils.escapeHtml(state.code)}" ${selected}>${Utils.escapeHtml(state.label)}</option>`;
         });
 
         const formContent = `
@@ -326,17 +338,24 @@
                     <p id="user-model-help" class="form-help">${t('selectWorkScheduleHelp')}</p>
                 </div>
                 <div class="form-group">
+                    <label for="user-german-state" class="form-label">${germanStateLabel}</label>
+                    <select id="user-german-state" name="germanState" class="form-select" aria-describedby="user-german-state-help">
+                        ${stateOptions}
+                    </select>
+                    <p id="user-german-state-help" class="form-help">${germanStateHelp}</p>
+                </div>
+                <div class="form-group">
                     <label for="user-vacation-days" class="form-label">${vacationDaysLabel}</label>
                     <input type="number" id="user-vacation-days" name="vacationDaysPerYear" class="form-input" min="0" max="365" value="${vacation}" aria-describedby="user-vacation-help">
                     <p id="user-vacation-help" class="form-help">${t('vacationDaysHelp')}</p>
                 </div>
                 <div class="form-group">
                     <label for="user-start-date" class="form-label">${startDateLabel}</label>
-                    <input type="text" id="user-start-date" name="startDate" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${startVal}" autocomplete="off">
+                    <input type="text" id="user-start-date" name="startDate" class="form-input datepicker-input" placeholder="${t('ddmmYYYY') || (window.t ? window.t('arbeitszeitcheck', 'dd.mm.yyyy') : 'dd.mm.yyyy')}" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${startVal}" autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label for="user-end-date" class="form-label">${endDateLabel}</label>
-                    <input type="text" id="user-end-date" name="endDate" class="form-input datepicker-input" placeholder="dd.mm.yyyy" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${endVal}" autocomplete="off">
+                    <input type="text" id="user-end-date" name="endDate" class="form-input datepicker-input" placeholder="${t('ddmmYYYY') || (window.t ? window.t('arbeitszeitcheck', 'dd.mm.yyyy') : 'dd.mm.yyyy')}" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${endVal}" autocomplete="off">
                     <p class="form-help">${t('endDateHelp')}</p>
                 </div>
                 <div class="form-actions">
@@ -399,7 +418,8 @@
             workingTimeModelId: formData.get('workingTimeModelId') ? parseInt(formData.get('workingTimeModelId')) : null,
             vacationDaysPerYear: formData.get('vacationDaysPerYear') ? parseInt(formData.get('vacationDaysPerYear')) : null,
             startDate: toISO(formData.get('startDate') || '') || null,
-            endDate: toISO(formData.get('endDate') || '') || null
+            endDate: toISO(formData.get('endDate') || '') || null,
+            germanState: (formData.get('germanState') || '').toString()
         };
 
         Utils.ajax('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model', {

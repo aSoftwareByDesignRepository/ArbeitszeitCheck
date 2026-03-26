@@ -115,6 +115,22 @@ class AbsenceMapper extends QBMapper
 	}
 
 	/**
+	 * Find absences where days is NULL (legacy records before working-days backfill).
+	 * Used by repair step to backfill working days using state-aware holiday logic.
+	 *
+	 * @return Absence[]
+	 */
+	public function findWithNullDays(): array
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->isNull('days'))
+			->orderBy('id', 'ASC');
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Find absences by status
 	 *
 	 * @param string $status
@@ -195,6 +211,24 @@ class AbsenceMapper extends QBMapper
 	}
 
 	/**
+	 * Find all absences where the given user is configured as substitute.
+	 * Used for cleanup and notifications when a substitute account is deleted.
+	 *
+	 * @param string $substituteUserId
+	 * @return Absence[]
+	 */
+	public function findBySubstituteUser(string $substituteUserId): array
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('substitute_user_id', $qb->createNamedParameter($substituteUserId)))
+			->orderBy('start_date', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Find active absences (currently ongoing)
 	 *
 	 * @param string|null $userId Optional user filter
@@ -250,7 +284,10 @@ class AbsenceMapper extends QBMapper
 	}
 
 	/**
-	 * Get total vacation days used by a user in a year
+	 * Get total vacation days used by a user in a year.
+	 * - Counts absences entirely within the year (start >= Jan 1 and end <= Dec 31) via SUM(days).
+	 * - For absences spanning year boundaries, the service layer allocates days per year via
+	 *   findVacationApprovedSpanningYearBoundary and computeWorkingDaysPerYearForUser.
 	 *
 	 * @param string $userId
 	 * @param int $year
@@ -277,6 +314,36 @@ class AbsenceMapper extends QBMapper
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting vacation days used: ' . $e->getMessage(), ['exception' => $e]);
 			return 0.0;
 		}
+	}
+
+	/**
+	 * Find approved vacation absences that span the year boundary (start before year or end after year).
+	 * Used to allocate working days to the correct year for accurate vacation stats.
+	 *
+	 * @param string $userId
+	 * @param int $year
+	 * @return Absence[]
+	 */
+	public function findVacationApprovedSpanningYearBoundary(string $userId, int $year): array
+	{
+		$yearStart = new \DateTime("$year-01-01");
+		$yearEnd = new \DateTime("$year-12-31");
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(Absence::TYPE_VACATION)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_APPROVED)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($yearEnd->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($yearStart->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->lt('start_date', $qb->createNamedParameter($yearStart->format('Y-m-d'), IQueryBuilder::PARAM_STR)),
+				$qb->expr()->gt('end_date', $qb->createNamedParameter($yearEnd->format('Y-m-d'), IQueryBuilder::PARAM_STR))
+			))
+			->orderBy('start_date', 'ASC');
+
+		return $this->findEntities($qb);
 	}
 
 	/**

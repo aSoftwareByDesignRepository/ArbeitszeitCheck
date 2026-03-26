@@ -14,8 +14,11 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Service;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
+use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
+use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
+use OCP\IConfig;
 use OCP\IL10N;
 use PHPUnit\Framework\TestCase;
 
@@ -50,13 +53,26 @@ class TimeTrackingServiceTest extends TestCase {
 		$this->auditLogMapper = $this->createMock(AuditLogMapper::class);
 		$this->projectCheckService = $this->createMock(ProjectCheckIntegrationService::class);
 		$this->l10n = $this->createMock(IL10N::class);
+		$complianceService = $this->createMock(ComplianceService::class);
+		$complianceService->method('checkComplianceBeforeClockIn')->willReturn([]);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(fn ($app, $key, $default) => match ($key) {
+			'max_daily_hours' => '10',
+			'min_rest_period' => '11',
+			default => $default
+		});
+		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$userSettingsMapper->method('getStringSetting')->willReturn('1');
 
 		$this->service = new TimeTrackingService(
 			$this->timeEntryMapper,
 			$this->violationMapper,
 			$this->auditLogMapper,
 			$this->projectCheckService,
-			$this->l10n
+			$complianceService,
+			$this->l10n,
+			$config,
+			$userSettingsMapper
 		);
 	}
 
@@ -91,17 +107,18 @@ class TimeTrackingServiceTest extends TestCase {
 		$projectId = 'proj123';
 		$description = 'Working on project';
 
-		// Mock that user is not clocked in
 		$this->timeEntryMapper->expects($this->once())
 			->method('findActiveByUser')
 			->with($userId)
 			->willReturn(null);
 
-		// Mock that user is not on break
 		$this->timeEntryMapper->expects($this->once())
 			->method('findOnBreakByUser')
 			->with($userId)
 			->willReturn(null);
+
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')
+			->willReturn(0.0);
 
 		// Mock project validation
 		$this->projectCheckService->expects($this->once())

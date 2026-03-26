@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Service;
 
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
+use OCP\IConfig;
 use OCP\IL10N;
 use OCP\IUserManager;
 use OCP\Notification\IManager as INotificationManager;
@@ -26,17 +27,20 @@ class NotificationService
 	private IL10N $l10n;
 	private UserSettingsMapper $userSettingsMapper;
 	private IUserManager $userManager;
+	private IConfig $config;
 
 	public function __construct(
 		INotificationManager $notificationManager,
 		IL10N $l10n,
 		UserSettingsMapper $userSettingsMapper,
-		IUserManager $userManager
+		IUserManager $userManager,
+		IConfig $config
 	) {
 		$this->notificationManager = $notificationManager;
 		$this->l10n = $l10n;
 		$this->userSettingsMapper = $userSettingsMapper;
 		$this->userManager = $userManager;
+		$this->config = $config;
 	}
 
 	/**
@@ -48,6 +52,10 @@ class NotificationService
 	 */
 	public function notifyComplianceViolation(string $userId, array $violationData): void
 	{
+		if ($this->config->getAppValue('arbeitszeitcheck', 'enable_violation_notifications', '1') !== '1') {
+			return;
+		}
+
 		$notification = $this->notificationManager->createNotification();
 		$notification->setApp('arbeitszeitcheck')
 			->setUser($userId)

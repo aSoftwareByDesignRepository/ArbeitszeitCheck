@@ -30,19 +30,30 @@ $total = $_['total'] ?? 0;
             </div>
 
             <!-- Filters -->
-            <div class="section-content mb-3">
-                <div class="flex flex--gap">
-                    <input type="text" id="start-date" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
-                    <input type="text" id="end-date" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly>
-                    <select id="severity-filter" class="form-select">
-                        <option value=""><?php p($l->t('All Severities')); ?></option>
-                        <option value="low"><?php p($l->t('Low')); ?></option>
-                        <option value="medium"><?php p($l->t('Medium')); ?></option>
-                        <option value="high"><?php p($l->t('High')); ?></option>
-                    </select>
-                    <button type="button" id="apply-filters" class="btn btn--primary">
-                        <?php p($l->t('Apply Filters')); ?>
-                    </button>
+            <div class="section-content mb-3 compliance-violations__filters">
+                <div class="compliance-violations__filters-grid" role="group" aria-label="<?php p($l->t('Filter options')); ?>">
+                    <div class="compliance-violations__filter-field">
+                        <label for="start-date" class="compliance-violations__filter-label"><?php p($l->t('Start Date')); ?></label>
+                        <input type="text" id="start-date" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly aria-label="<?php p($l->t('Start date for filter')); ?>">
+                    </div>
+                    <div class="compliance-violations__filter-field">
+                        <label for="end-date" class="compliance-violations__filter-label"><?php p($l->t('End Date')); ?></label>
+                        <input type="text" id="end-date" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly aria-label="<?php p($l->t('End date for filter')); ?>">
+                    </div>
+                    <div class="compliance-violations__filter-field">
+                        <label for="severity-filter" class="compliance-violations__filter-label"><?php p($l->t('Severity')); ?></label>
+                        <select id="severity-filter" class="form-select" aria-label="<?php p($l->t('Filter by severity')); ?>">
+                            <option value=""><?php p($l->t('All Severities')); ?></option>
+                            <option value="info"><?php p($l->t('Low')); ?></option>
+                            <option value="warning"><?php p($l->t('Medium')); ?></option>
+                            <option value="error"><?php p($l->t('High')); ?></option>
+                        </select>
+                    </div>
+                    <div class="compliance-violations__filter-actions">
+                        <button type="button" id="apply-filters" class="btn btn--primary" aria-label="<?php p($l->t('Apply filters and refresh list')); ?>">
+                            <?php p($l->t('Apply Filters')); ?>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -106,7 +117,7 @@ $total = $_['total'] ?? 0;
                                         </span>
                                     </td>
                                     <td><?php p($violation['date'] ?? '-'); ?></td>
-                                    <td><?php p($violation['description'] ?? '-'); ?></td>
+                                    <td><?php p($violation['description'] ? $l->t($violation['description']) : '-'); ?></td>
                                     <td>
                                         <?php if ($violation['resolved']): ?>
                                             <span class="badge badge--success"><?php p($l->t('Resolved')); ?></span>

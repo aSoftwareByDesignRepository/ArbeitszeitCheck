@@ -32,14 +32,17 @@
 
         loadingEl.classList.remove('visually-hidden');
         loadingEl.setAttribute('aria-hidden', 'false');
+        loadingEl.setAttribute('aria-busy', 'true');
         itemsEl.setAttribute('aria-hidden', 'true');
         emptyEl.classList.add('visually-hidden');
 
-        Utils.ajax('/apps/arbeitszeitcheck/api/substitution-requests', {
+        const apiList = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.list) || '/apps/arbeitszeitcheck/api/substitution-requests';
+        Utils.ajax(apiList, {
             method: 'GET',
             onSuccess: function(data) {
                 loadingEl.classList.add('visually-hidden');
                 loadingEl.setAttribute('aria-hidden', 'true');
+                loadingEl.setAttribute('aria-busy', 'false');
                 const list = (data && data.requests) ? data.requests : [];
                 if (list.length === 0) {
                     emptyEl.classList.remove('visually-hidden');
@@ -55,6 +58,7 @@
             onError: function() {
                 loadingEl.classList.add('visually-hidden');
                 loadingEl.setAttribute('aria-hidden', 'true');
+                loadingEl.setAttribute('aria-busy', 'false');
                 emptyEl.classList.remove('visually-hidden');
                 emptyEl.querySelector('p').textContent = t('Error loading substitution requests.', 'Error loading substitution requests.');
                 emptyEl.querySelector('.substitution-requests-empty__hint')?.remove();
@@ -65,15 +69,16 @@
     function renderCard(req) {
         const id = req.id;
         const displayName = escapeHtml(req.displayName || req.userId || '');
-        const type = escapeHtml(req.type || 'absence');
+        const typeLabel = escapeHtml(req.typeLabel || req.type || '');
         const start = req.startDate || '';
         const end = req.endDate || '';
         const days = req.days != null ? req.days : '';
+        const dayLabel = (days === 1 || days === 1.0) ? t('day', 'day') : t('days', 'days');
         return (
             '<div class="substitution-request-card" data-absence-id="' + escapeHtml(String(id)) + '" role="article">' +
             '  <div class="substitution-request-card__body">' +
             '    <p class="substitution-request-card__title"><strong>' + displayName + '</strong> ' + t('asks you to cover', 'asks you to cover') + '</p>' +
-            '    <p class="substitution-request-card__meta">' + type + ': ' + escapeHtml(start) + ' – ' + escapeHtml(end) + (days ? ' (' + escapeHtml(String(days)) + ' ' + t('days', 'days') + ')' : '') + '</p>' +
+            '    <p class="substitution-request-card__meta">' + typeLabel + ': ' + escapeHtml(start) + ' – ' + escapeHtml(end) + (days !== '' ? ' (' + escapeHtml(String(days)) + ' ' + dayLabel + ')' : '') + '</p>' +
             '    <div class="substitution-request-card__actions">' +
             '      <button type="button" class="btn btn--primary btn-approve-substitution" data-absence-id="' + escapeHtml(String(id)) + '" aria-label="' + t('Approve', 'Approve') + ' ' + displayName + '">' + t('Approve', 'Approve') + '</button>' +
             '      <button type="button" class="btn btn--secondary btn-decline-substitution" data-absence-id="' + escapeHtml(String(id)) + '" aria-label="' + t('Decline', 'Decline') + ' ' + displayName + '">' + t('Decline', 'Decline') + '</button>' +
@@ -99,7 +104,8 @@
     }
 
     function approveRequest(absenceId) {
-        const url = '/apps/arbeitszeitcheck/api/substitution-requests/' + absenceId + '/approve';
+        const base = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.approve) || '/apps/arbeitszeitcheck/api/substitution-requests/' + absenceId + '/approve';
+        const url = base.replace('__ID__', String(absenceId));
         Utils.ajax(url, {
             method: 'POST',
             data: {},
@@ -154,7 +160,8 @@
     }
 
     function declineRequest(absenceId, comment) {
-        const url = '/apps/arbeitszeitcheck/api/substitution-requests/' + absenceId + '/decline';
+        const base = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.decline) || '/apps/arbeitszeitcheck/api/substitution-requests/' + absenceId + '/decline';
+        const url = base.replace('__ID__', String(absenceId));
         Utils.ajax(url, {
             method: 'POST',
             data: { comment: comment || '' },

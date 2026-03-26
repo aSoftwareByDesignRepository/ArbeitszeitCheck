@@ -412,32 +412,31 @@
   width: 100%;
 }
 
-/* Form Select — uses Nextcloud theme icon for arrow (light/dark compatible) */
+/* Form Select — uses Nextcloud theme icon for arrow (light/dark compatible)
+ * Explicit padding ensures vertical centering; overrides Nextcloud core select styles */
 .form-select,
 .form-group select {
   background-image: var(--icon-triangle-s-dark, url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b6b6b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e"));
-  background-position: right var(--space-2) center;
+  background-position: right 0.75rem center;
   background-repeat: no-repeat;
-  background-size: 1.5em 1.5em;
-  padding-right: var(--space-8);
+  background-size: 1.25em 1.25em;
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  /* Match input height (44px) for consistent vertical rhythm */
+  /* 44px height, symmetric vertical padding for clean text centering */
   height: 44px;
-  line-height: 44px;
+  padding: 0.625rem 2.5rem 0.625rem 1rem;
+  line-height: 1.5;
+  font-size: 1rem;
   box-sizing: border-box;
-  vertical-align: middle;
 }
 
 .form-input.form-select {
-  padding: 0 1rem;
-  padding-right: 2.5rem;
+  padding: 0.625rem 2.5rem 0.625rem 1rem;
   background-position: right 0.75rem center;
   background-size: 1.25em 1.25em;
   height: 44px;
-  line-height: 44px;
-  vertical-align: middle;
+  line-height: 1.5;
 }
 
 .form-select::-ms-expand {
@@ -483,6 +482,22 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   height: 1rem;
   margin: 0;
   cursor: pointer;
+  /* Ensure consistent, theme-aware background and border across light/dark themes */
+  background-color: var(--arbeitszeitcheck-color-form-background, var(--color-main-background));
+  border: 1px solid var(--arbeitszeitcheck-color-form-border, var(--color-border));
+  border-radius: 3px;
+  box-sizing: border-box;
+  /* Use accent-color where supported so the checkmark matches the primary color */
+  accent-color: var(--color-primary-element);
+}
+
+/* Ensure checkbox/radio labels are vertically centered with the control */
+.form-checkbox .form-label,
+.form-radio .form-label,
+.form-checkbox label,
+.form-radio label {
+  margin-bottom: 0;
+  line-height: 1.3;
 }
 
 .form-checkbox input[type="checkbox"]:focus,
@@ -883,6 +898,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 /* Modal */
 .modal {
   background-color: var(--arbeitszeitcheck-color-modal-background);
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text)));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2xl);
   max-width: 90vw;
@@ -999,6 +1015,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 /* Modal Body */
 .modal-body {
   padding: var(--space-4);
+  color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text)));
   overflow-y: auto;
   flex: 1;
 }
@@ -1024,6 +1041,27 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 
 .modal-footer--space-between {
   justify-content: space-between;
+}
+
+/* ===== CONFIRM DIALOG ===== */
+
+.confirm-dialog .modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.confirm-dialog__icon {
+  font-size: var(--arbeitszeitcheck-font-size-2xl);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.confirm-dialog__message {
+  margin: 0;
+  color: var(--color-main-text);
+  font-size: var(--arbeitszeitcheck-font-size-base);
+  line-height: var(--arbeitszeitcheck-line-height-relaxed);
 }
 
 /* ===== ALERT COMPONENTS ===== */
@@ -1381,6 +1419,17 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   /* Nextcloud theme variables only (no hex fallbacks for theme compatibility) */
   background-color: var(--color-background-hover);
   color: var(--color-main-text);
+  /* Ensure badges are always crisp, never faded */
+  opacity: 1;
+  box-shadow: none;
+  filter: none;
+}
+
+/* In-app override to defeat any global badge dimming from core themes */
+#content.app-arbeitszeitcheck .badge {
+  opacity: 1 !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 .badge--primary {
@@ -1393,23 +1442,23 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   color: var(--color-text-maxcontrast);
 }
 
-/* Badges — darkened backgrounds for WCAG 2.1 AA contrast with white text */
+/* Badges — use semantic colors with strong, high-contrast fills across all themes */
 .badge--success {
-  background-color: var(--color-background-dark);
-  color: var(--color-success);
-  border: 1px solid var(--color-success);
+  background-color: color-mix(in srgb, var(--arbeitszeitcheck-color-success-dark) 50%, var(--arbeitszeitcheck-color-gray-900) 50%);
+  color: var(--color-primary-text);
+  border: 1px solid var(--arbeitszeitcheck-color-success-dark);
 }
 
 .badge--warning {
-  background-color: var(--color-background-dark);
-  color: var(--color-warning);
-  border: 1px solid var(--color-warning);
+  background-color: color-mix(in srgb, var(--arbeitszeitcheck-color-warning-dark) 45%, var(--arbeitszeitcheck-color-gray-900) 55%);
+  color: var(--color-primary-text);
+  border: 1px solid var(--arbeitszeitcheck-color-warning-dark);
 }
 
 .badge--error {
-  background-color: var(--color-background-dark);
-  color: var(--color-error);
-  border: 1px solid var(--color-error);
+  background-color: color-mix(in srgb, var(--arbeitszeitcheck-color-error-dark) 45%, var(--arbeitszeitcheck-color-gray-900) 55%);
+  color: var(--color-primary-text);
+  border: 1px solid var(--arbeitszeitcheck-color-error-dark);
 }
 
 /* Avatar — scoped to app content to avoid overriding Nextcloud header (avatardiv, account-menu__avatar) */
@@ -2014,89 +2063,133 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 
 /* ===== SUBSTITUTION REQUESTS (Vertretungs-Freigabe) ===== */
 .substitution-requests-page .substitution-requests__header {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-8, 2rem);
+  padding: var(--space-6);
+  background: var(--arbeitszeitcheck-color-background-elevated);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+}
+
+.substitution-requests-page .substitution-requests__list {
+  padding: var(--space-6);
 }
 
 .substitution-requests__title {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  line-height: 1.2;
-  margin: 0 0 var(--space-2);
+  line-height: 1.3;
+  margin: 0 0 var(--space-3);
+  color: var(--arbeitszeitcheck-color-main-text);
 }
 
 .substitution-requests__desc {
   margin: 0;
-  color: var(--arbeitszeitcheck-color-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--arbeitszeitcheck-color-text-maxcontrast);
 }
 
 .substitution-requests-content {
-  margin-top: var(--space-4);
+  margin-top: var(--space-5);
+  min-height: 80px;
 }
 
 .substitution-requests-loading {
   margin: 0;
-  padding: var(--space-4);
-  color: var(--arbeitszeitcheck-color-text-secondary);
+  padding: var(--space-6);
+  font-size: 0.9375rem;
+  color: var(--arbeitszeitcheck-color-text-maxcontrast);
+  text-align: center;
 }
 
 .substitution-requests-items {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 .substitution-request-card {
-  background: var(--arbeitszeitcheck-color-background-card, var(--color-main-background));
+  background: var(--arbeitszeitcheck-color-background-elevated);
   border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
-  border-radius: var(--radius-base);
-  padding: var(--space-4);
+  border-radius: var(--radius-xl, 12px);
+  padding: var(--space-6, 1.5rem);
   box-shadow: var(--arbeitszeitcheck-shadow-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .substitution-request-card { transition: none; }
+}
+
+.substitution-request-card:focus-within {
+  box-shadow: 0 0 0 2px var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
 }
 
 .substitution-request-card__body {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  justify-content: space-between;
+  flex-direction: column;
+  gap: var(--space-4, 1rem);
 }
 
 .substitution-request-card__title {
   margin: 0;
-  font-size: var(--arbeitszeitcheck-font-size-base);
-  flex: 1 1 100%;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--arbeitszeitcheck-color-main-text);
 }
 
 .substitution-request-card__meta {
   margin: 0;
-  font-size: var(--arbeitszeitcheck-font-size-sm);
-  color: var(--arbeitszeitcheck-color-text-secondary);
-  flex: 1 1 100%;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--arbeitszeitcheck-color-text-maxcontrast);
 }
 
+/* WCAG 2.1 AA 2.5.5: min 44x44px touch targets */
 .substitution-request-card__actions {
   display: flex;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: var(--space-3);
   flex: 1 1 100%;
   margin-top: var(--space-2);
 }
 
+.substitution-request-card__actions .btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--space-2) var(--space-4);
+}
+
 .substitution-requests-empty {
-  padding: var(--space-8) var(--space-4);
+  padding: var(--space-10, 2.5rem) var(--space-6);
   text-align: center;
-  color: var(--arbeitszeitcheck-color-text-secondary);
 }
 
 .substitution-requests-empty p {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+  color: var(--arbeitszeitcheck-color-main-text);
 }
 
+.substitution-requests-empty p:last-child { margin-bottom: 0; }
+
 .substitution-requests-empty__hint {
-  font-size: var(--arbeitszeitcheck-font-size-sm);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--arbeitszeitcheck-color-text-maxcontrast);
 }
 
 @media (min-width: 640px) {
-  .substitution-request-card__title { flex: 1 1 auto; }
+  .substitution-request-card__body {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .substitution-request-card__title { flex: 1 1 auto; min-width: 0; }
   .substitution-request-card__meta { flex: 0 0 auto; }
   .substitution-request-card__actions { flex: 0 0 auto; margin-top: 0; }
   .substitution-requests__title { font-size: 2rem; }

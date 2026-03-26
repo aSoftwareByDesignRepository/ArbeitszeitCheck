@@ -1,3 +1,49 @@
+## 1.1.4 – 2026-03-25
+
+### Behoben
+- **Routing/Kompatibilität**: `indexApi()`-Kompatibilitätsaliases für Legacy-Endpunkte ergänzt, um 500-Fehler in den Nextcloud-Logs zu verhindern.
+- **PHP-Fatals**: Konstruktor-Signaturprobleme in `AbsenceService` und `ComplianceService` behoben (konnte die App beim Laden von Services oder beim Speichern von Einstellungen zum Absturz bringen).
+- **Reports-Sicherheit**: Vorschau-Endpunkte gehärtet (`start <= end` Validierung + maximale Zeitraumbegrenzung) um DoS-Risiken durch untrusted Parameter zu reduzieren.
+- **Admin-“Gesamte Organisation”**: Admin-Organisation-Scope korrekt verarbeitet (`userId=""` = alle aktivierten Nutzer) inklusive passender Zugriffsprüfung, damit Preview/Download konsistent bleiben.
+- **Reports-Rendering**: Preview-Darstellung für **Abwesenheiten** und **Compliance** verbessert, sodass sie zur tatsächlichen Ergebnisstruktur passt.
+
+### Geändert
+- **Reports-UI-Semantik**: Team-Scope auf Team-Overview-/Export-Semantik eingeschränkt (verhindert irreführende Preview/Downloads).
+- **Organisation-Download Hinweis**: UI-Hinweis ergänzt, dass Organisation-Download erst vollständig unterstützt ist, sobald dedizierte Organization-Export-Endpunkte verfügbar sind.
+
+## 1.1.3 – 2025-03-14
+### Behoben
+- **ArbZG-Compliance**: Pausenprüfung korrigiert (9h/45min-Zweig erreichbar; Prüfung ≥9h vor ≥6h)
+- **Manager-Logik**: `employeeHasManager()` nutzt nun `getManagerIdsForEmployee()` statt `getColleagueIds()`
+- **Berichte**: `getTeamHoursSummary()` berücksichtigt Periodenparameter (Woche/Monat)
+- **Admin-Benutzer**: `hasTimeEntriesToday` pro Benutzer statt systemweit
+- **UserSettingsMapper**: Falsy-Null/Leerstring-Behandlung in getIntegerSetting, getFloatSetting, getStringSetting
+- **Routing**: exportUsers-Route vor getUser verschoben (Shadowing behoben)
+- **Version1009-Migration**: MySQL-Backticks durch portablen QueryBuilder ersetzt; OCP\DB\Types
+- **Doppelte Notifier-Registrierung**: Aus Application.php boot() entfernt
+- **API-Sicherheit**: Generische Fehlermeldungen statt roher Exceptions (SubstituteController, GdprController)
+- **PDF-Export**: HTTP 422 mit klarer Meldung statt stillem CSV-Fallback
+- **LIKE-Injection**: WorkingTimeModelMapper::searchByName() verwendet escapeLikeParameter()
+- **XSS**: Modal-Titel in components.js escaped; compliance-violations.js innerHTML escaped
+- **Admin-Einstellungen**: CSRF-requesttoken ergänzt
+- **AbsenceService DI**: Konstruktorargument-Reihenfolge (IDBConnection) korrigiert
+- Admin-Feiertage und -Einstellungen: englische Quellstrings für l10n
+- UserDeletedListener: TeamMemberMapper und TeamManagerMapper per Injection
+- XSS: Team-Namen in admin-teams.js bereinigt
+
+### Geändert
+- **CSS**: Shadow-Light-Variable, scopierte Resets, Dark-Mode color-mix, semantische Farben, Navigationshöhe/z-index
+- **Uhr-Buttons**: Doppel-Submit-Guard (deaktiviert während API-Aufrufen)
+- **initTimeline()**: Max-Retry (20) gegen Endlosschleife
+- **Barrierefreiheit**: aria-label auf Header-Buttons, Label für Admin-Suche, aria-modal im Willkommens-Dialog, englische l10n-Keys in Navigation
+- **Dokumentation**: Interne Docs entfernt; docs/README ergänzt; Repo-URLs korrigiert
+- **Manager-Dashboard**: l10n von PHP an JS übergeben für Übersetzungen
+- Constants.php; benutzerfreundliche Fehlermeldungen
+- **Zeiteintrags-Export**: Optional (per Admin-Einstellung) können Einträge, die über Mitternacht laufen, im CSV/JSON-Export rein darstellungsbezogen in zwei Kalendertage segmentiert werden (vor/nach 00:00). Die zugrundeliegende Arbeitszeit- und ArbZG-Compliance-Berechnung bleibt unverändert auf Basis des originalen, unsplitteten Zeiteintrags.
+
+### Hinzugefügt
+- **Version1010-Migration**: Zusammengesetzte Indizes auf at_entries, at_violations, at_holidays, at_absences
+
 ## 1.1.2 – 2025-03-07
 ### Geändert
 - Langfristiges Refactoring: Ersetzung aller `\OC::$server`-Verwendungen durch OCP-APIs und Konstruktor-Injection

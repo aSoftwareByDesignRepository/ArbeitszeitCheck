@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Service;
 
 use OCA\ArbeitszeitCheck\Db\Absence;
+use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCP\IConfig;
 use OCP\IL10N;
 use OCP\Mail\IMailer;
@@ -27,23 +28,32 @@ class AbsenceIcalMailService
 {
 	private const CONFIG_SEND_ICAL = 'send_ical_approved_absences';
 	private const CONFIG_SEND_ICAL_TO_SUBSTITUTE = 'send_ical_to_substitute';
+	private const CONFIG_SEND_ICAL_TO_MANAGERS = 'send_ical_to_managers';
 
 	public function __construct(
 		private IMailer $mailer,
 		private IConfig $config,
 		private IL10N $l10n,
 		private IUserManager $userManager,
+		private TeamResolverService $teamResolver,
 		private ?LoggerInterface $logger = null,
 	) {
 	}
 
+	/** Absence types for which we do NOT send iCal (privacy-sensitive / critical). */
+	private const SKIP_ICAL_TYPES = [Absence::TYPE_SICK_LEAVE];
+
 	/**
 	 * Send iCal email to the absence owner and optionally to the substitute.
-	 * Only sends if admin setting is enabled and recipient has a valid email.
+	 * Only sends for non-critical absences (no sick leave). Respects admin settings.
 	 * Failures are logged but do not throw (approval must not fail if mail fails).
 	 */
 	public function sendIcalForApprovedAbsence(Absence $absence): void
 	{
+		if (in_array($absence->getType(), self::SKIP_ICAL_TYPES, true)) {
+			return;
+		}
+
 		$appName = 'arbeitszeitcheck';
 		if ($this->config->getAppValue($appName, self::CONFIG_SEND_ICAL, '1') !== '1') {
 			return;
@@ -70,17 +80,46 @@ class AbsenceIcalMailService
 				}
 			}
 		}
+
+		// Optionally send to managers / team leads of the employee
+		if ($this->config->getAppValue($appName, self::CONFIG_SEND_ICAL_TO_MANAGERS, '0') === '1') {
+			$managerIds = $this->teamResolver->getManagerIdsForEmployee($absence->getUserId());
+			if (!empty($managerIds)) {
+				foreach ($managerIds as $managerId) {
+					$manager = $this->userManager->get($managerId);
+					if ($manager === null || !$manager->isEnabled()) {
+						continue;
+					}
+					$this->sendOneIcalEmail(
+						$absence,
+						$manager->getEMailAddress(),
+						$manager->getDisplayName(),
+						$icalBody,
+						true
+					);
+				}
+			}
+		}
 	}
 
 	/**
 	 * Send iCal email to the substitute when they approve the substitution (Vertretungs-Freigabe).
 	 * Gives the substitute a calendar reminder so they do not forget the coverage period.
-	 * Only sends if admin setting is enabled and substitute has a valid email.
+	 * Only sends for non-critical absences (no sick leave). Respects admin setting.
 	 */
 	public function sendIcalToSubstituteOnSubstitutionApproval(Absence $absence): void
 	{
+		if (in_array($absence->getType(), self::SKIP_ICAL_TYPES, true)) {
+			return;
+		}
+
 		$appName = 'arbeitszeitcheck';
 		if ($this->config->getAppValue($appName, self::CONFIG_SEND_ICAL, '1') !== '1') {
+			return;
+		}
+		// Respect the dedicated admin toggle for substitutes to avoid sending
+		// coverage iCals when this feature is disabled.
+		if ($this->config->getAppValue($appName, self::CONFIG_SEND_ICAL_TO_SUBSTITUTE, '0') !== '1') {
 			return;
 		}
 
@@ -281,20 +320,23 @@ class AbsenceIcalMailService
 		$uidSuffix = $asSubstitute ? '-sub' : '';
 		$uid = 'arbeitszeitcheck-absence-' . $absence->getId() . $uidSuffix . '@' . ((string) $this->config->getSystemValue('mail_domain', 'localhost'));
 
+		$owner = $this->userManager->get($absence->getUserId());
+		$ownerName = $owner ? $owner->getDisplayName() : $absence->getUserId();
+		$typeLabel = $this->getTypeLabel($absence->getType());
 		if ($asSubstitute) {
-			$owner = $this->userManager->get($absence->getUserId());
-			$ownerName = $owner ? $owner->getDisplayName() : $absence->getUserId();
-			$summary = $this->escapeIcalText($this->l10n->t('Covering for %1$s', [$ownerName]));
+			$summaryRaw = $this->l10n->t('Covering for %1$s (%2$s)', [$ownerName, $typeLabel]);
 		} else {
-			$typeLabel = $this->getTypeLabel($absence->getType());
-			$summary = $this->escapeIcalText($typeLabel);
+			$summaryRaw = $this->l10n->t('%1$s: %2$s', [$ownerName, $typeLabel]);
 		}
+		$summary = $this->escapeIcalText($summaryRaw);
 		$description = $summary;
 		$reason = $absence->getReason();
 		if ($reason !== null && trim($reason) !== '') {
 			$description = $this->escapeIcalText(trim($reason));
 		}
 
+		$summaryLine = 'SUMMARY:' . $summary;
+		$descLine = 'DESCRIPTION:' . $description;
 		$lines = [
 			'BEGIN:VCALENDAR',
 			'VERSION:2.0',
@@ -306,8 +348,8 @@ class AbsenceIcalMailService
 			'DTSTAMP:' . $dtStamp,
 			'DTSTART;VALUE=DATE:' . $dtStart,
 			'DTEND;VALUE=DATE:' . $dtEnd,
-			'SUMMARY:' . $summary,
-			'DESCRIPTION:' . $description,
+			$this->foldIcalLine($summaryLine),
+			$this->foldIcalLine($descLine),
 			'STATUS:CONFIRMED',
 			'TRANSP:OPAQUE',
 			'END:VEVENT',
@@ -324,5 +366,31 @@ class AbsenceIcalMailService
 	{
 		$text = str_replace(['\\', ';', ',', "\r\n", "\n", "\r"], ['\\\\', '\\;', '\\,', '\\n', '\\n', '\\n'], $text);
 		return $text;
+	}
+
+	/**
+	 * Fold a content line per RFC 5545 (max 75 octets per line, UTF-8 safe)
+	 */
+	private function foldIcalLine(string $line): string
+	{
+		$maxOctets = 75;
+		if (strlen($line) <= $maxOctets) {
+			return $line;
+		}
+		$result = '';
+		$offset = 0;
+		$len = strlen($line);
+		$first = true;
+		while ($offset < $len) {
+			if (!$first) {
+				$result .= "\r\n ";
+			}
+			$take = $maxOctets - ($first ? 0 : 1);
+			$chunk = mb_strcut($line, $offset, $take, 'UTF-8');
+			$result .= $chunk;
+			$offset += strlen($chunk);
+			$first = false;
+		}
+		return $result;
 	}
 }

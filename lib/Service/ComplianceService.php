@@ -17,6 +17,7 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
+use OCP\IConfig;
 use OCP\IL10N;
 use OCP\IUserManager;
 
@@ -32,58 +33,8 @@ class ComplianceService
     private IUserManager $userManager;
     private IL10N $l10n;
     private ?NotificationService $notificationService;
-
-    // German public holidays by state (Bundesland)
-    private const GERMAN_PUBLIC_HOLIDAYS = [
-        'BW' => [ // Baden-Württemberg
-            '01-01', '01-06', '03-15', '05-01', '05-29', '06-08', '06-19', '10-03', '11-01', '12-25', '12-26'
-        ],
-        'BY' => [ // Bayern
-            '01-01', '01-06', '04-07', '05-01', '05-29', '06-08', '06-19', '08-15', '10-03', '11-01', '12-25', '12-26'
-        ],
-        'BE' => [ // Berlin
-            '01-01', '05-01', '05-08', '10-03', '12-25', '12-26'
-        ],
-        'BB' => [ // Brandenburg
-            '01-01', '03-08', '05-01', '05-08', '05-29', '06-08', '06-19', '10-03', '12-25', '12-26'
-        ],
-        'HB' => [ // Bremen
-            '01-01', '05-01', '10-03', '12-25', '12-26'
-        ],
-        'HH' => [ // Hamburg
-            '01-01', '05-01', '10-03', '12-25', '12-26'
-        ],
-        'HE' => [ // Hessen
-            '01-01', '05-01', '06-08', '06-19', '10-03', '12-25', '12-26'
-        ],
-        'MV' => [ // Mecklenburg-Vorpommern
-            '01-01', '05-01', '05-08', '05-29', '06-08', '06-19', '10-03', '10-31', '11-01', '12-25', '12-26'
-        ],
-        'NI' => [ // Niedersachsen
-            '01-01', '05-01', '06-08', '06-19', '10-03', '11-01', '12-25', '12-26'
-        ],
-        'NW' => [ // Nordrhein-Westfalen
-            '01-01', '05-01', '05-29', '06-08', '06-19', '10-03', '11-01', '12-25', '12-26'
-        ],
-        'RP' => [ // Rheinland-Pfalz
-            '01-01', '05-01', '05-29', '06-08', '06-19', '08-15', '10-03', '11-01', '12-25', '12-26'
-        ],
-        'SL' => [ // Saarland
-            '01-01', '05-01', '05-29', '06-08', '06-19', '08-15', '10-03', '11-01', '12-25', '12-26'
-        ],
-        'SN' => [ // Sachsen
-            '01-01', '05-01', '05-08', '05-29', '06-08', '06-19', '10-03', '10-31', '11-01', '12-25', '12-26'
-        ],
-        'ST' => [ // Sachsen-Anhalt
-            '01-01', '03-08', '05-01', '05-08', '05-29', '06-08', '06-19', '10-03', '10-31', '11-01', '12-25', '12-26'
-        ],
-        'SH' => [ // Schleswig-Holstein
-            '01-01', '05-01', '05-08', '05-29', '06-08', '06-19', '10-03', '12-25', '12-26'
-        ],
-        'TH' => [ // Thüringen
-            '01-01', '05-01', '05-08', '05-29', '06-08', '06-19', '10-03', '10-31', '11-01', '12-25', '12-26'
-        ]
-    ];
+    private HolidayCalendarService $holidayCalendarService;
+    private IConfig $config;
 
     public function __construct(
         TimeEntryMapper $timeEntryMapper,
@@ -92,7 +43,9 @@ class ComplianceService
         UserWorkingTimeModelMapper $userWorkingTimeModelMapper,
         IUserManager $userManager,
         IL10N $l10n,
-        ?NotificationService $notificationService = null
+        ?NotificationService $notificationService,
+        HolidayCalendarService $holidayCalendarService,
+        IConfig $config
     ) {
         $this->timeEntryMapper = $timeEntryMapper;
         $this->violationMapper = $violationMapper;
@@ -101,6 +54,18 @@ class ComplianceService
         $this->userManager = $userManager;
         $this->l10n = $l10n;
         $this->notificationService = $notificationService;
+        $this->holidayCalendarService = $holidayCalendarService;
+        $this->config = $config;
+    }
+
+    private function getMaxDailyHours(): float
+    {
+        return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10')));
+    }
+
+    private function getMinRestPeriod(): float
+    {
+        return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'min_rest_period', '11')));
     }
 
     /**
@@ -140,9 +105,9 @@ class ComplianceService
             }
             
             if ($lastEndTime) {
-                // Calculate when user can clock in again
+                $minRest = $this->getMinRestPeriod();
                 $earliestClockIn = clone $lastEndTime;
-                $earliestClockIn->modify('+11 hours');
+                $earliestClockIn->modify('+' . (int)$minRest . ' hours');
                 $now = new \DateTime();
                 $hoursRemaining = ($earliestClockIn->getTimestamp() - $now->getTimestamp()) / 3600;
                 
@@ -150,29 +115,27 @@ class ComplianceService
                     'type' => ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
                     'severity' => ComplianceViolation::SEVERITY_ERROR,
                     'message' => $this->l10n->t(
-                        'Minimum 11-hour rest period required between shifts (ArbZG §5). Your last shift ended at %s. You can clock in after %s (in %.1f hours).',
-                        [
-                            $lastEndTime->format('H:i'),
-                            $earliestClockIn->format('H:i'),
-                            max(0, $hoursRemaining)
-                        ]
+                        'Minimum %1$d-hour rest period required between shifts (ArbZG §5). Your last shift ended at %2$s. You can clock in after %3$s (in %4$.1f hours).',
+                        [(int)$minRest, $lastEndTime->format('H:i'), $earliestClockIn->format('H:i'), max(0.0, $hoursRemaining)]
                     )
                 ];
             } else {
+                $minRest = (int)$this->getMinRestPeriod();
                 $issues[] = [
                     'type' => ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
                     'severity' => ComplianceViolation::SEVERITY_ERROR,
-                    'message' => $this->l10n->t('Minimum 11-hour rest period required between shifts (ArbZG §5)')
+                    'message' => $this->l10n->t('Minimum %d-hour rest period required between shifts (ArbZG §5)', [$minRest])
                 ];
             }
         }
 
         // Check daily working hours limit
         if (!$this->checkDailyWorkingHoursLimit($userId)) {
+            $maxDaily = (int)$this->getMaxDailyHours();
             $issues[] = [
                 'type' => ComplianceViolation::TYPE_DAILY_HOURS_LIMIT_EXCEEDED,
                 'severity' => ComplianceViolation::SEVERITY_ERROR,
-                'message' => $this->l10n->t('Daily working hours limit reached (10 hours maximum)')
+                'message' => $this->l10n->t('Daily working hours limit reached (%d hours maximum)', [$maxDaily])
             ];
         }
 
@@ -333,34 +296,8 @@ class ComplianceService
         $duration = $timeEntry->getDurationHours();
         $breakDuration = $timeEntry->getBreakDurationHours();
 
-        if ($duration >= 6 && $breakDuration < 0.5) { // 30 minutes break required
-            $violation = $this->violationMapper->createViolation(
-                $timeEntry->getUserId(),
-                ComplianceViolation::TYPE_MISSING_BREAK,
-                $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work'),
-                $timeEntry->getEndTime() ?: new \DateTime(),
-                $timeEntry->getId(),
-                ComplianceViolation::SEVERITY_ERROR
-            );
-            
-            $violations[] = [
-                'id' => $violation->getId(),
-                'type' => ComplianceViolation::TYPE_MISSING_BREAK,
-                'severity' => ComplianceViolation::SEVERITY_ERROR,
-                'message' => $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work')
-            ];
-            
-            // Send notification
-            if ($this->notificationService) {
-                $this->notificationService->notifyComplianceViolation($timeEntry->getUserId(), [
-                    'id' => $violation->getId(),
-                    'type' => ComplianceViolation::TYPE_MISSING_BREAK,
-                    'message' => $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work'),
-                    'date' => ($timeEntry->getEndTime() ?: new \DateTime())->format('Y-m-d'),
-                    'severity' => ComplianceViolation::SEVERITY_ERROR
-                ]);
-            }
-        } elseif ($duration >= 9 && $breakDuration < 0.75) { // 45 minutes break required
+        // ArbZG §4: Check 9h (45 min break) first — otherwise duration >= 6 would catch it
+        if ($duration >= 9 && $breakDuration < 0.75) { // 45 minutes break required
             $violation = $this->violationMapper->createViolation(
                 $timeEntry->getUserId(),
                 ComplianceViolation::TYPE_MISSING_BREAK,
@@ -387,6 +324,33 @@ class ComplianceService
                     'severity' => ComplianceViolation::SEVERITY_ERROR
                 ]);
             }
+        } elseif ($duration >= 6 && $breakDuration < 0.5) { // 30 minutes break required
+            $violation = $this->violationMapper->createViolation(
+                $timeEntry->getUserId(),
+                ComplianceViolation::TYPE_MISSING_BREAK,
+                $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work'),
+                $timeEntry->getEndTime() ?: new \DateTime(),
+                $timeEntry->getId(),
+                ComplianceViolation::SEVERITY_ERROR
+            );
+
+            $violations[] = [
+                'id' => $violation->getId(),
+                'type' => ComplianceViolation::TYPE_MISSING_BREAK,
+                'severity' => ComplianceViolation::SEVERITY_ERROR,
+                'message' => $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work')
+            ];
+
+            // Send notification
+            if ($this->notificationService) {
+                $this->notificationService->notifyComplianceViolation($timeEntry->getUserId(), [
+                    'id' => $violation->getId(),
+                    'type' => ComplianceViolation::TYPE_MISSING_BREAK,
+                    'message' => $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work'),
+                    'date' => ($timeEntry->getEndTime() ?: new \DateTime())->format('Y-m-d'),
+                    'severity' => ComplianceViolation::SEVERITY_ERROR
+                ]);
+            }
         }
 
         return $violations;
@@ -401,14 +365,14 @@ class ComplianceService
     private function checkExcessiveWorkingHoursWithResult(TimeEntry $timeEntry): array
     {
         $violations = [];
-        // Use working duration (excluding breaks) - this is the actual work time according to ArbZG
+        $maxDaily = $this->getMaxDailyHours();
         $workingDuration = $timeEntry->getWorkingDurationHours();
 
-        if ($workingDuration !== null && $workingDuration > 10) {
+        if ($workingDuration !== null && $workingDuration > $maxDaily) {
             $violation = $this->violationMapper->createViolation(
                 $timeEntry->getUserId(),
                 ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
-                $this->l10n->t('Working hours exceeded 10 hours in a single day'),
+                $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily]),
                 $timeEntry->getEndTime() ?: new \DateTime(),
                 $timeEntry->getId(),
                 ComplianceViolation::SEVERITY_ERROR
@@ -418,7 +382,7 @@ class ComplianceService
                 'id' => $violation->getId(),
                 'type' => ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
                 'severity' => ComplianceViolation::SEVERITY_ERROR,
-                'message' => $this->l10n->t('Working hours exceeded 10 hours in a single day')
+                'message' => $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily])
             ];
             
             // Send notification
@@ -426,7 +390,7 @@ class ComplianceService
                 $this->notificationService->notifyComplianceViolation($timeEntry->getUserId(), [
                     'id' => $violation->getId(),
                     'type' => ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
-                    'message' => $this->l10n->t('Working hours exceeded 10 hours in a single day'),
+                    'message' => $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily]),
                     'date' => ($timeEntry->getEndTime() ?: new \DateTime())->format('Y-m-d'),
                     'severity' => ComplianceViolation::SEVERITY_ERROR
                 ]);
@@ -475,12 +439,13 @@ class ComplianceService
 
         $now = new \DateTime();
         $hoursSinceLastEntry = ($now->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
+        $minRest = $this->getMinRestPeriod();
 
-        return $hoursSinceLastEntry >= 11;
+        return $hoursSinceLastEntry >= $minRest;
     }
 
     /**
-     * Check if minimum rest period is met for a specific start time (11 hours between shifts)
+     * Check if minimum rest period is met for a specific start time (ArbZG §5)
      * 
      * This method is used for validating manual time entries before they are saved.
      * It checks if the provided start time violates the 11-hour rest period requirement
@@ -556,17 +521,15 @@ class ComplianceService
             return ['valid' => true, 'message' => null];
         }
 
-        // Consecutive days (difference = 1): Check 11-hour rest period (ArbZG §5)
+        $minRest = $this->getMinRestPeriod();
         $hoursSinceLastEntry = ($startTime->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
 
-        if ($hoursSinceLastEntry >= 11) {
-            // Rest period is met
+        if ($hoursSinceLastEntry >= $minRest) {
             return ['valid' => true, 'message' => null];
         }
         
-        // Rest period not met - calculate earliest possible start time
         $earliestStartTime = clone $lastEndTime;
-        $earliestStartTime->modify('+11 hours');
+        $earliestStartTime->modify('+' . (int)$minRest . ' hours');
         $hoursStillNeeded = ($earliestStartTime->getTimestamp() - $startTime->getTimestamp()) / 3600;
         
         // Format dates for display
@@ -576,14 +539,10 @@ class ComplianceService
         return [
             'valid' => false,
             'message' => $this->l10n->t(
-                'Minimum 11-hour rest period required between shifts (ArbZG §5). Your last shift ended on %s at %s. This entry cannot start before %s (%.1f hours required).',
-                [
-                    $lastEndDateFormatted,
-                    $lastEndTime->format('H:i'),
-                    $earliestStartDateFormatted,
-                    abs($hoursStillNeeded)
-                ]
-            )
+                'Minimum %1$d-hour rest period required between shifts (ArbZG §5). Your last shift ended on %2$s at %3$s. This entry cannot start before %4$s (%5$.1f hours required).',
+                [(int)$minRest, $lastEndDateFormatted, $lastEndTime->format('H:i'), $earliestStartDateFormatted, abs($hoursStillNeeded)]
+            ),
+            'earliestStartTime' => $earliestStartTime,
         ];
     }
 
@@ -601,8 +560,9 @@ class ComplianceService
         $tomorrow->modify('+1 day');
 
         $todayHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $today, $tomorrow);
+        $maxDaily = $this->getMaxDailyHours();
 
-        return $todayHours < 10; // Allow clocking in if under 10 hours
+        return $todayHours < $maxDaily;
     }
 
     /**
@@ -737,27 +697,8 @@ class ComplianceService
         $duration = $timeEntry->getDurationHours();
         $breakDuration = $timeEntry->getBreakDurationHours();
 
-        if ($duration >= 6 && $breakDuration < 0.5) { // 30 minutes break required
-            $violation = $this->violationMapper->createViolation(
-                $timeEntry->getUserId(),
-                ComplianceViolation::TYPE_MISSING_BREAK,
-                $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work'),
-                $timeEntry->getEndTime() ?: new \DateTime(),
-                $timeEntry->getId(),
-                ComplianceViolation::SEVERITY_ERROR
-            );
-            
-            // Send notification
-            if ($this->notificationService) {
-                $this->notificationService->notifyComplianceViolation($timeEntry->getUserId(), [
-                    'id' => $violation->getId(),
-                    'type' => ComplianceViolation::TYPE_MISSING_BREAK,
-                    'message' => $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work'),
-                    'date' => ($timeEntry->getEndTime() ?: new \DateTime())->format('Y-m-d'),
-                    'severity' => ComplianceViolation::SEVERITY_ERROR
-                ]);
-            }
-        } elseif ($duration >= 9 && $breakDuration < 0.75) { // 45 minutes break required
+        // ArbZG §4: Check 9h (45 min break) first — otherwise duration >= 6 would catch it
+        if ($duration >= 9 && $breakDuration < 0.75) { // 45 minutes break required
             $violation = $this->violationMapper->createViolation(
                 $timeEntry->getUserId(),
                 ComplianceViolation::TYPE_MISSING_BREAK,
@@ -777,6 +718,26 @@ class ComplianceService
                     'severity' => ComplianceViolation::SEVERITY_ERROR
                 ]);
             }
+        } elseif ($duration >= 6 && $breakDuration < 0.5) { // 30 minutes break required
+            $violation = $this->violationMapper->createViolation(
+                $timeEntry->getUserId(),
+                ComplianceViolation::TYPE_MISSING_BREAK,
+                $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work'),
+                $timeEntry->getEndTime() ?: new \DateTime(),
+                $timeEntry->getId(),
+                ComplianceViolation::SEVERITY_ERROR
+            );
+
+            // Send notification
+            if ($this->notificationService) {
+                $this->notificationService->notifyComplianceViolation($timeEntry->getUserId(), [
+                    'id' => $violation->getId(),
+                    'type' => ComplianceViolation::TYPE_MISSING_BREAK,
+                    'message' => $this->l10n->t('Mandatory 30-minute break missing after 6 hours of work'),
+                    'date' => ($timeEntry->getEndTime() ?: new \DateTime())->format('Y-m-d'),
+                    'severity' => ComplianceViolation::SEVERITY_ERROR
+                ]);
+            }
         }
     }
 
@@ -788,25 +749,24 @@ class ComplianceService
      */
     private function checkExcessiveWorkingHours(TimeEntry $timeEntry): void
     {
-        // Use working duration (excluding breaks) - this is the actual work time according to ArbZG
+        $maxDaily = $this->getMaxDailyHours();
         $workingDuration = $timeEntry->getWorkingDurationHours();
 
-        if ($workingDuration !== null && $workingDuration > 10) {
+        if ($workingDuration !== null && $workingDuration > $maxDaily) {
             $violation = $this->violationMapper->createViolation(
                 $timeEntry->getUserId(),
                 ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
-                $this->l10n->t('Working hours exceeded 10 hours in a single day'),
+                $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily]),
                 $timeEntry->getEndTime() ?: new \DateTime(),
                 $timeEntry->getId(),
                 ComplianceViolation::SEVERITY_ERROR
             );
             
-            // Send notification
             if ($this->notificationService) {
                 $this->notificationService->notifyComplianceViolation($timeEntry->getUserId(), [
                     'id' => $violation->getId(),
                     'type' => ComplianceViolation::TYPE_EXCESSIVE_WORKING_HOURS,
-                    'message' => $this->l10n->t('Working hours exceeded 10 hours in a single day'),
+                    'message' => $this->l10n->t('Working hours exceeded %d hours in a single day', [(int)$maxDaily]),
                     'date' => ($timeEntry->getEndTime() ?: new \DateTime())->format('Y-m-d'),
                     'severity' => ComplianceViolation::SEVERITY_ERROR
                 ]);
@@ -878,8 +838,16 @@ class ComplianceService
             );
         }
 
-        // Check if work was done on public holiday
-        $isHoliday = $this->isGermanPublicHoliday($startTime);
+        // Check if work was done on public holiday (state-aware, via HolidayCalendarService)
+        $isHoliday = false;
+        try {
+            $isHoliday = $this->holidayCalendarService->isHolidayForUser(
+                $timeEntry->getUserId(),
+                (clone $startTime)->setTime(0, 0, 0)
+            );
+        } catch (\Throwable) {
+            // If holiday lookup fails, we fall back to "not a holiday" to avoid false positives.
+        }
 
         if ($isHoliday) {
             $this->violationMapper->createViolation(
@@ -930,89 +898,21 @@ class ComplianceService
      * Check if a date is a German public holiday
      *
      * @param \DateTime $date
-     * @param string|null $state German state code (e.g., 'NW' for Nordrhein-Westfalen)
+     * @param string|null $state Optional German state code (e.g., 'NW' for Nordrhein-Westfalen)
      * @return bool
      */
     public function isGermanPublicHoliday(\DateTime $date, ?string $state = null): bool
     {
-        $year = (int)$date->format('Y');
-        $dateString = $date->format('m-d');
+        $checkDate = (clone $date)->setTime(0, 0, 0);
 
-        // Use default state if not specified (could be configurable per user/company)
-        $state = $state ?: 'NW'; // Default to Nordrhein-Westfalen
-
-        if (!isset(self::GERMAN_PUBLIC_HOLIDAYS[$state])) {
-            $state = 'NW'; // Fallback to NRW
+        if ($state !== null && $state !== '') {
+            return $this->holidayCalendarService->isHolidayForState($state, $checkDate);
         }
 
-        $holidays = self::GERMAN_PUBLIC_HOLIDAYS[$state];
+        // Legacy-style call without explicit state falls back to the app default state.
+        $defaultState = $this->config->getAppValue('arbeitszeitcheck', 'german_state', 'NW');
 
-        // Check fixed holidays
-        if (in_array($dateString, $holidays)) {
-            return true;
-        }
-
-        // Check variable holidays (Easter-based)
-        $variableHolidays = $this->calculateVariableHolidays($year);
-
-        foreach ($variableHolidays as $holiday) {
-            if ($holiday === $dateString) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Calculate variable German public holidays (Easter-based)
-     *
-     * @param int $year
-     * @return array
-     */
-    private function calculateVariableHolidays(int $year): array
-    {
-        // Calculate Easter date using Gauss algorithm (simplified)
-        $a = $year % 19;
-        $b = intdiv($year, 100);
-        $c = $year % 100;
-        $d = intdiv($b, 4);
-        $e = $b % 4;
-        $f = intdiv($b + 8, 25);
-        $g = intdiv($b - $f + 1, 3);
-        $h = (19 * $a + $b - $d - $g + 15) % 30;
-        $i = intdiv($c, 4);
-        $k = $c % 4;
-        $l = (32 + 2 * $e + 2 * $i - $h - $k) % 7;
-        $m = intdiv($a + 11 * $h + 22 * $l, 451);
-        $month = intdiv($h + $l - 7 * $m + 114, 31);
-        $day = (($h + $l - 7 * $m + 114) % 31) + 1;
-
-        $easterDate = new \DateTime("$year-$month-$day");
-
-        // Calculate holidays based on Easter
-        $goodFriday = clone $easterDate;
-        $goodFriday->modify('-2 days');
-
-        $easterMonday = clone $easterDate;
-        $easterMonday->modify('+1 day');
-
-        $ascensionDay = clone $easterDate;
-        $ascensionDay->modify('+39 days');
-
-        $whitMonday = clone $easterDate;
-        $whitMonday->modify('+50 days');
-
-        $corpusChristi = clone $easterDate;
-        $corpusChristi->modify('+60 days');
-
-        return [
-            $goodFriday->format('m-d'),
-            $easterMonday->format('m-d'),
-            $ascensionDay->format('m-d'),
-            $whitMonday->format('m-d'),
-            $corpusChristi->format('m-d')
-        ];
+        return $this->holidayCalendarService->isHolidayForState($defaultState, $checkDate);
     }
 
     /**
@@ -1165,7 +1065,12 @@ class ComplianceService
 
         // Score: 100 = perfect, reduced by severity-weighted violations (max -100)
         $score = 100;
-        $score -= min(100, ($critical * 25) + ($warning * 10) + ($info * 5));
+        $score -= min(
+			\OCA\ArbeitszeitCheck\Constants::COMPLIANCE_SCORE_MAX_DEDUCTION,
+			($critical * \OCA\ArbeitszeitCheck\Constants::COMPLIANCE_SCORE_CRITICAL_WEIGHT)
+			+ ($warning * \OCA\ArbeitszeitCheck\Constants::COMPLIANCE_SCORE_WARNING_WEIGHT)
+			+ ($info * \OCA\ArbeitszeitCheck\Constants::COMPLIANCE_SCORE_INFO_WEIGHT)
+		);
 
         // Check if we have analyzable data (time entries exist)
         $timeEntryCount = $this->timeEntryMapper->countByUser($userId);

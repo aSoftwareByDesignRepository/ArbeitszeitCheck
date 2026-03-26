@@ -58,7 +58,7 @@
         skipLink.href = '#time-entry-form';
         skipLink.className = 'sr-only-focusable';
         skipLink.textContent = window.ArbeitszeitCheck?.l10n?.skipToForm || 'Skip to form';
-        skipLink.setAttribute('aria-label', window.ArbeitszeitCheck?.l10n?.skipToForm || 'Skip to time entry form');
+        skipLink.setAttribute('aria-label', window.ArbeitszeitCheck?.l10n?.skipToTimeEntryForm || window.ArbeitszeitCheck?.l10n?.skipToForm || 'Skip to time entry form');
         
         // Insert at the beginning of the page
         const firstElement = document.body.firstChild;

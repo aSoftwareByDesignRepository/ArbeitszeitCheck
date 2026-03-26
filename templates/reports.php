@@ -29,11 +29,16 @@ Util::addStyle('arbeitszeitcheck', 'reports');
 Util::addScript('arbeitszeitcheck', 'common/utils');
 Util::addScript('arbeitszeitcheck', 'common/datepicker');
 Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
+Util::addScript('arbeitszeitcheck', 'reports');
 
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $isAdmin = $_['isAdmin'] ?? false;
 $isManager = $_['isManager'] ?? false;
 $canAccessReports = $isAdmin || $isManager;
+
+// Whether app-owned teams are enabled (controls whether manager-specific team selection makes sense)
+$config = \OCP\Server::get(\OCP\IConfig::class);
+$useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') === '1';
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -60,8 +65,8 @@ $canAccessReports = $isAdmin || $isManager;
             </div>
         </header>
 
-        <!-- Step 1: Report Type Selection -->
-        <section id="report-type-section" class="reports-section section" aria-labelledby="report-type-heading" aria-label="<?php p($l->t('Select report type')); ?>">
+        <!-- Step 1: Scope & Report Type Selection -->
+        <section id="report-type-section" class="reports-section section" aria-labelledby="report-scope-heading" aria-label="<?php p($l->t('Select what you want to see')); ?>">
             <?php if (!$canAccessReports): ?>
                 <div class="empty-state">
                     <h3 class="empty-state__title" id="report-type-heading"><?php p($l->t('Reports are only available for administrators and managers')); ?></h3>
@@ -70,10 +75,131 @@ $canAccessReports = $isAdmin || $isManager;
                     </p>
                 </div>
             <?php else: ?>
-            <div class="report-selection-section">
-                <h3 id="report-type-heading" class="reports-section__title"><?php p($l->t('Select Report Type')); ?></h3>
-                <p class="reports-section__desc"><?php p($l->t('Choose the kind of report you need. Then set the date range below.')); ?></p>
-                <div class="report-types-grid">
+
+            <!-- Scope selection: who should be included -->
+            <div class="report-scope-section">
+                <h3 id="report-scope-heading" class="reports-section__title"><?php p($l->t('Who should be included in the report?')); ?></h3>
+                <p class="reports-section__desc">
+                    <?php
+                    if ($isAdmin) {
+                        p($l->t('Choose whether you want a report for the whole organization or for a specific team.'));
+                    } else {
+                        p($l->t('Choose whether you want a report for everyone you manage.'));
+                    }
+                    ?>
+                </p>
+
+                <form id="report-scope-form" class="report-scope-form" aria-label="<?php p($l->t('Select report scope')); ?>">
+                    <fieldset class="form-fieldset" aria-labelledby="scope-legend">
+                        <legend id="scope-legend" class="form-legend"><?php p($l->t('Report scope')); ?></legend>
+
+                        <?php if ($isAdmin): ?>
+                            <div class="form-group">
+                                <div class="form-radio">
+                                    <input type="radio"
+                                           id="scope-organization"
+                                           name="report_scope"
+                                           value="organization"
+                                           checked
+                                           aria-describedby="scope-organization-help">
+                                    <label for="scope-organization" class="form-label">
+                                        <?php p($l->t('Whole organization')); ?>
+                                    </label>
+                                </div>
+                                <p id="scope-organization-help" class="form-help">
+                                    <?php p($l->t('Includes all active employees in your Nextcloud instance.')); ?>
+                                </p>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="form-radio">
+                                    <input type="radio"
+                                           id="scope-admin-team"
+                                           name="report_scope"
+                                           value="admin_team"
+                                           aria-describedby="scope-admin-team-help">
+                                    <label for="scope-admin-team" class="form-label">
+                                        <?php p($l->t('Specific team')); ?>
+                                    </label>
+                                </div>
+                                <p id="scope-admin-team-help" class="form-help">
+                                    <?php p($l->t('Limit the report to one department or team that you configure in the administration area.')); ?>
+                                </p>
+
+                                <label for="admin-team-select" class="form-label visually-hidden">
+                                    <?php p($l->t('Select team')); ?>
+                                </label>
+                                <select id="admin-team-select"
+                                        name="admin_team_id"
+                                        class="form-select"
+                                        aria-describedby="admin-team-select-help"
+                                        disabled>
+                                    <option value=""><?php p($l->t('Select a team')); ?></option>
+                                </select>
+                                <p id="admin-team-select-help" class="form-help">
+                                    <?php p($l->t('Only available if you have configured app-owned teams.')); ?>
+                                </p>
+                            </div>
+                        <?php else: ?>
+                            <div class="form-group">
+                                <div class="form-radio">
+                                    <input type="radio"
+                                           id="scope-my-team"
+                                           name="report_scope"
+                                           value="manager_team"
+                                           checked
+                                           aria-describedby="scope-my-team-help">
+                                    <label for="scope-my-team" class="form-label">
+                                        <?php p($l->t('Everyone I manage')); ?>
+                                    </label>
+                                </div>
+                                <p id="scope-my-team-help" class="form-help">
+                                    <?php p($l->t('Includes all people you are responsible for as a manager.')); ?>
+                                </p>
+                            </div>
+
+                            <?php if ($useAppTeams): ?>
+                            <div class="form-group reports-scope-option-conditional" id="manager-specific-team-group">
+                                <div class="form-radio">
+                                    <input type="radio"
+                                           id="scope-manager-single-team"
+                                           name="report_scope"
+                                           value="manager_single_team"
+                                           aria-describedby="scope-manager-single-team-help"
+                                           disabled>
+                                    <label for="scope-manager-single-team" class="form-label">
+                                        <?php p($l->t('Specific managed team')); ?>
+                                    </label>
+                                </div>
+                                <p id="scope-manager-single-team-help" class="form-help">
+                                    <?php p($l->t('If you manage more than one team, you can choose one here.')); ?>
+                                </p>
+
+                                <label for="manager-team-select" class="form-label visually-hidden">
+                                    <?php p($l->t('Select managed team')); ?>
+                                </label>
+                                <select id="manager-team-select"
+                                        name="manager_team_id"
+                                        class="form-select"
+                                        aria-describedby="manager-team-select-help"
+                                        disabled>
+                                    <option value=""><?php p($l->t('Select a team you manage')); ?></option>
+                                </select>
+                                <p id="manager-team-select-help" class="form-help">
+                                    <?php p($l->t('This list is filled automatically if app-owned teams are enabled.')); ?>
+                                </p>
+                            </div>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </fieldset>
+                </form>
+            </div>
+
+            <div class="report-selection-section" aria-labelledby="report-type-heading">
+                <h3 id="report-type-heading" class="reports-section__title"><?php p($l->t('What kind of report do you need?')); ?></h3>
+                <p class="reports-section__desc"><?php p($l->t('First choose the scope above, then pick the type of report.')); ?></p>
+
+                <div class="report-types-grid" role="list">
                     <div class="report-type-card" data-report-type="daily">
                         <div class="report-type-icon">📊</div>
                         <h4><?php p($l->t('Daily Report')); ?></h4>
@@ -120,12 +246,16 @@ $canAccessReports = $isAdmin || $isManager;
 
             <!-- Step 2: Report Parameters -->
             <div id="report-parameters" class="reports-section report-parameters-section" style="display: none;" aria-labelledby="report-parameters-heading">
-                <h3 id="report-parameters-heading" class="reports-section__title"><?php p($l->t('Set date range')); ?></h3>
-                <p class="reports-section__desc"><?php p($l->t('Pick the start and end date for your report.')); ?></p>
+                <h3 id="report-parameters-heading" class="reports-section__title"><?php p($l->t('Set time period and format')); ?></h3>
+                <p class="reports-section__desc">
+                    <?php p($l->t('Pick the time period for your report. For daily or weekly reports, we will adjust the dates automatically.')); ?>
+                </p>
                 <form id="report-form" class="report-form" aria-label="<?php p($l->t('Report parameters')); ?>">
                     <input type="hidden" id="report-type" name="report_type" value="">
+                    <input type="hidden" id="report-scope" name="report_scope" value="">
+                    <input type="hidden" id="report-team-users" name="report_team_users" value="">
                     
-                    <div class="form-group">
+                    <div class="form-group" id="start-date-group">
                         <label for="start-date" class="form-label">
                             <?php p($l->t('Start Date')); ?>
                             <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
@@ -144,7 +274,7 @@ $canAccessReports = $isAdmin || $isManager;
                         </p>
                     </div>
                     
-                    <div class="form-group">
+                    <div class="form-group" id="end-date-group">
                         <label for="end-date" class="form-label">
                             <?php p($l->t('End Date')); ?>
                             <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
@@ -192,7 +322,7 @@ $canAccessReports = $isAdmin || $isManager;
                                 class="btn btn--primary"
                                 aria-label="<?php p($l->t('Generate and download the report')); ?>"
                                 title="<?php p($l->t('Click to create the report and download it to your computer')); ?>">
-                            <?php p($l->t('Generate & Download')); ?>
+                            <?php p($l->t('Generate and download')); ?>
                         </button>
                         <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.index')); ?>"
                            class="btn btn--secondary"
@@ -218,11 +348,13 @@ $canAccessReports = $isAdmin || $isManager;
 </div>
 </div><!-- /#arbeitszeitcheck-app -->
 
-<!-- Initialize JavaScript -->
+<!-- Initialize JavaScript: keep configuration inline, move behaviour into bundled reports.js -->
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
     window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.page = 'reports';
     window.ArbeitszeitCheck.canAccessReports = <?php echo json_encode($canAccessReports, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.isAdmin = <?php echo json_encode($isAdmin, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.isManager = <?php echo json_encode($isManager, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     
     window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
     window.ArbeitszeitCheck.l10n.error = <?php echo json_encode($l->t('An error occurred'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -238,6 +370,14 @@ $canAccessReports = $isAdmin || $isManager;
     window.ArbeitszeitCheck.l10n.users = <?php echo json_encode($l->t('Users'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.name = <?php echo json_encode($l->t('Name'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.dailyBreakdown = <?php echo json_encode($l->t('Daily breakdown'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.scopeRequired = <?php echo json_encode($l->t('Please choose who should be included in the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.teamRequired = <?php echo json_encode($l->t('Please select a team.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.dateRangeInvalid = <?php echo json_encode($l->t('Start date must be before or equal to end date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.exportScopeNotice = <?php echo json_encode($l->t('Export for team or organization scope is not yet available. Use Preview to view the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.exportOrganizationScopeNotice = <?php echo json_encode($l->t('Export for organization scope is not yet available. Use Preview to view the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.reportParamsRequired = <?php echo json_encode($l->t('Please fill in report type, start date and end date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.invalidReportType = <?php echo json_encode($l->t('Invalid report type.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.errorTryAgain = <?php echo json_encode($l->t('An error occurred. Please try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     
     window.ArbeitszeitCheck.apiUrl = {
         daily: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.daily'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
@@ -245,7 +385,8 @@ $canAccessReports = $isAdmin || $isManager;
         monthly: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.monthly'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         overtime: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.overtime'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         absence: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.absence'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
-        compliance: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.compliance.getReport'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+        compliance: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.compliance.getReport'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        team: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.team'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
     };
     // Export endpoints that trigger real file downloads
     window.ArbeitszeitCheck.exportUrl = {
@@ -253,268 +394,5 @@ $canAccessReports = $isAdmin || $isManager;
         absences: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.absences'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         compliance: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.compliance'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
     };
-    
-    <?php if ($canAccessReports): ?>
-    // Initialize reports functionality
-    document.addEventListener('DOMContentLoaded', function() {
-        const reportCards = document.querySelectorAll('.report-type-card');
-        const reportButtons = document.querySelectorAll('.btn-select-report');
-        const reportParameters = document.getElementById('report-parameters');
-        const reportForm = document.getElementById('report-form');
-        const reportTypeInput = document.getElementById('report-type');
-        const startDateInput = document.getElementById('start-date');
-        const endDateInput = document.getElementById('end-date');
-        const formatSelect = document.getElementById('format');
-        const previewBtn = document.getElementById('btn-preview-report');
-        const generateBtn = document.getElementById('btn-generate-report');
-        
-        // Handle report card clicks
-        reportCards.forEach(card => {
-            card.addEventListener('click', function(e) {
-                // Don't trigger if clicking the button
-                if (e.target.classList.contains('btn-select-report')) {
-                    return;
-                }
-                const button = card.querySelector('.btn-select-report');
-                if (button) {
-                    button.click();
-                }
-            });
-        });
-        
-        // Handle report button clicks
-        reportButtons.forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const reportType = this.dataset.report;
-                if (reportType && reportTypeInput) {
-                    reportTypeInput.value = reportType;
-                    
-                    // Show parameters section
-                    if (reportParameters) {
-                        reportParameters.style.display = 'block';
-                        reportParameters.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
-                    
-                    // Set default dates (last 30 days) in dd.mm.yyyy format
-                    const today = new Date();
-                    const thirtyDaysAgo = new Date();
-                    thirtyDaysAgo.setDate(today.getDate() - 30);
-                    function toDDMMYYYY(d) {
-                        const day = String(d.getDate()).padStart(2,'0');
-                        const month = String(d.getMonth()+1).padStart(2,'0');
-                        const year = d.getFullYear();
-                        return day + '.' + month + '.' + year;
-                    }
-                    if (startDateInput) startDateInput.value = toDDMMYYYY(thirtyDaysAgo);
-                    if (endDateInput) endDateInput.value = toDDMMYYYY(today);
-                }
-            });
-        });
-        
-        // Request token for API calls (avoids CSRF issues; endpoints also have NoCSRFRequired)
-        function getRequestToken() {
-            return (typeof OC !== 'undefined' && OC.requestToken) ? OC.requestToken
-                : (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || '';
-        }
-        // Build report URL with correct params per type (API expects specific param names)
-        function buildReportUrl(apiUrl, reportType, startDate, endDate) {
-            const url = new URL(apiUrl, window.location.origin);
-            if (reportType === 'daily') {
-                url.searchParams.set('date', startDate);
-            } else if (reportType === 'weekly') {
-                url.searchParams.set('weekStart', startDate);
-            } else if (reportType === 'monthly') {
-                url.searchParams.set('month', startDate.substring(0, 7));
-            } else {
-                url.searchParams.set('startDate', startDate);
-                url.searchParams.set('endDate', endDate);
-            }
-            return url.toString();
-        }
-        function announceToScreenReader(message) {
-            var live = document.getElementById('report-preview-live');
-            if (live) {
-                live.textContent = '';
-                live.setAttribute('aria-live', 'polite');
-                setTimeout(function() { live.textContent = message; }, 100);
-            }
-        }
-        function esc(s) {
-            if (s == null) return '';
-            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        }
-        // Format period for display (API returns object { start, end } or string)
-        function formatPeriod(period) {
-            if (period == null) return '';
-            if (typeof period === 'string') return period;
-            if (typeof period === 'object' && period.start != null && period.end != null) {
-                return (period.start + ' – ' + period.end);
-            }
-            if (typeof period === 'object' && (period.start != null || period.end != null)) {
-                return (period.start || '') + (period.end ? ' – ' + period.end : '');
-            }
-            return '';
-        }
-        // Render report data as HTML (never show raw JSON). Handles daily, weekly, monthly, overtime, absence, compliance.
-        function renderReportHtml(report) {
-            if (!report) return '';
-            var L = window.ArbeitszeitCheck.l10n || {};
-            var html = '<div class="report-result">';
-            if (report.date) html += '<p class="report-meta"><strong>' + (L.date || 'Date') + ':</strong> ' + esc(report.date) + '</p>';
-            var periodStr = formatPeriod(report.period);
-            if (periodStr) html += '<p class="report-meta"><strong>' + (L.period || 'Period') + ':</strong> ' + esc(periodStr) + '</p>';
-            if (report.total_hours != null) html += '<p class="report-meta"><strong>' + (L.totalHours || 'Total hours') + ':</strong> ' + esc(report.total_hours) + '</p>';
-            if (report.totalHours != null && report.total_hours === undefined) html += '<p class="report-meta"><strong>' + (L.totalHours || 'Total hours') + ':</strong> ' + esc(report.totalHours) + '</p>';
-            if (report.total_violations != null) html += '<p class="report-meta"><strong>' + (L.violations || 'Violations') + ':</strong> ' + esc(report.total_violations) + '</p>';
-            if (report.violations_count != null) html += '<p class="report-meta"><strong>' + (L.violations || 'Violations') + ':</strong> ' + esc(report.violations_count) + '</p>';
-            if (report.total_overtime != null) html += '<p class="report-meta"><strong>' + (L.overtime || 'Overtime') + ':</strong> ' + esc(report.total_overtime) + ' h</p>';
-            if (report.entries && report.entries.length) {
-                html += '<table class="report-table"><thead><tr><th>' + (L.date || 'Date') + '</th><th>' + (L.hours || 'Hours') + '</th></tr></thead><tbody>';
-                report.entries.forEach(function(entry) {
-                    html += '<tr><td>' + esc(entry.date || entry.start || '-') + '</td><td>' + esc(entry.hours != null ? entry.hours : (entry.duration || '-')) + '</td></tr>';
-                });
-                html += '</tbody></table>';
-            }
-            if (report.users && report.users.length) {
-                html += '<h4 class="report-subhead">' + (L.users || 'Users') + '</h4><table class="report-table"><thead><tr><th>' + (L.name || 'Name') + '</th><th>' + (L.hours || 'Hours') + '</th><th>' + (L.overtime || 'Overtime') + '</th></tr></thead><tbody>';
-                report.users.forEach(function(u) {
-                    html += '<tr><td>' + esc(u.display_name || u.user_id || '-') + '</td><td>' + esc(u.total_hours != null ? u.total_hours : (u.total_hours_worked != null ? u.total_hours_worked : '-')) + '</td><td>' + esc(u.overtime_hours != null ? u.overtime_hours : '-') + '</td></tr>';
-                });
-                html += '</tbody></table>';
-            }
-            if (report.daily_breakdown && Object.keys(report.daily_breakdown).length) {
-                html += '<h4 class="report-subhead">' + (L.dailyBreakdown || 'Daily breakdown') + '</h4><table class="report-table"><thead><tr><th>' + (L.date || 'Date') + '</th><th>' + (L.hours || 'Hours') + '</th></tr></thead><tbody>';
-                Object.keys(report.daily_breakdown).sort().forEach(function(d) {
-                    var day = report.daily_breakdown[d];
-                    html += '<tr><td>' + esc(day.date || d) + '</td><td>' + esc(day.total_hours != null ? day.total_hours : '-') + '</td></tr>';
-                });
-                html += '</tbody></table>';
-            }
-            if (report.summary) html += '<p class="report-summary">' + esc(report.summary) + '</p>';
-            html += '</div>';
-            return html;
-        }
-        // Shared: fetch report and show in preview (or show error in preview). Both Preview and Generate use this.
-        function fetchAndShowReport() {
-            var reportType = reportTypeInput ? reportTypeInput.value : '';
-            var dp = window.ArbeitszeitCheckDatepicker;
-            var toISO = dp ? dp.convertEuropeanToISO : function(s) { return s; };
-            var startDate = toISO(startDateInput ? startDateInput.value : '');
-            var endDate = toISO(endDateInput ? endDateInput.value : '');
-            var previewSection = document.getElementById('report-preview');
-            var previewContent = document.getElementById('report-preview-content');
-            if (!previewSection || !previewContent) return;
-            if (!reportType || !startDate || !endDate) {
-                announceToScreenReader((window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.error) || 'An error occurred');
-                previewContent.innerHTML = '<p class="report-error" role="alert">' + esc(window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.error ? window.ArbeitszeitCheck.l10n.error : 'Please fill in report type, start date and end date.') + '</p>';
-                previewSection.style.display = 'block';
-                previewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                var h = document.getElementById('report-preview-heading');
-                if (h) h.focus();
-                return;
-            }
-            var apiUrl = window.ArbeitszeitCheck && window.ArbeitszeitCheck.apiUrl ? window.ArbeitszeitCheck.apiUrl[reportType] : null;
-            if (!apiUrl) {
-                previewContent.innerHTML = '<p class="report-error" role="alert">' + esc(window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.error ? window.ArbeitszeitCheck.l10n.error : 'Invalid report type.') + '</p>';
-                previewSection.style.display = 'block';
-                previewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                return;
-            }
-            var url = buildReportUrl(apiUrl, reportType, startDate, endDate);
-            var requestToken = getRequestToken();
-            var originalPreviewText = previewBtn ? previewBtn.textContent : '';
-            var originalGenerateText = generateBtn ? generateBtn.textContent : '';
-            if (previewBtn) { previewBtn.disabled = true; previewBtn.textContent = (window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.generating) || 'Generating...'; }
-            if (generateBtn) { generateBtn.disabled = true; generateBtn.textContent = (window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.generating) || 'Generating...'; }
-            previewContent.innerHTML = '<p class="report-loading" aria-busy="true">' + esc((window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.generating) || 'Generating report...') + '</p>';
-            previewSection.style.display = 'block';
-            announceToScreenReader((window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.generating) || 'Generating report...');
-            fetch(url, { method: 'GET', headers: { requesttoken: requestToken } })
-                .then(function(res) { return res.text().then(function(text) { return { ok: res.ok, status: res.status, text: text }; }); })
-                .then(function(result) {
-                    var data = null;
-                    try { data = result.text ? JSON.parse(result.text) : null; } catch (err) { }
-                    if (previewBtn) { previewBtn.disabled = false; previewBtn.textContent = originalPreviewText; }
-                    if (generateBtn) { generateBtn.disabled = false; generateBtn.textContent = originalGenerateText; }
-                    if (result.ok && data && data.success && data.report) {
-                        previewContent.innerHTML = '<p class="report-success">' + esc((window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.reportReady) || 'Report generated successfully.') + '</p>' + renderReportHtml(data.report);
-                        announceToScreenReader((window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.reportReady) || 'Report generated successfully.');
-                        previewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        var heading = document.getElementById('report-preview-heading');
-                        if (heading) heading.focus();
-                    } else {
-                        var msg = (data && data.error) ? data.error : (result.status === 403 || result.status === 401 ? (window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.sessionExpired) || 'Your session may have expired. Please refresh the page and try again.' : (window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.error) || 'An error occurred');
-                        previewContent.innerHTML = '<p class="report-error" role="alert">' + esc(msg) + '</p>';
-                        announceToScreenReader(msg);
-                        previewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
-                })
-                .catch(function(err) {
-                    if (previewBtn) { previewBtn.disabled = false; previewBtn.textContent = originalPreviewText; }
-                    if (generateBtn) { generateBtn.disabled = false; generateBtn.textContent = originalGenerateText; }
-                    var msg = (window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.sessionExpired) || (window.ArbeitszeitCheck.l10n && window.ArbeitszeitCheck.l10n.error) || 'An error occurred. Please try again.';
-                    previewContent.innerHTML = '<p class="report-error" role="alert">' + esc(msg) + '</p>';
-                    announceToScreenReader(msg);
-                });
-        }
-        // Trigger a real file download using the export endpoints
-        function downloadReport() {
-            var reportType = reportTypeInput ? reportTypeInput.value : '';
-            if (!reportType || !startDateInput || !endDateInput) {
-                return;
-            }
-            var dp = window.ArbeitszeitCheckDatepicker;
-            var toISO = dp ? dp.convertEuropeanToISO : function(s) { return s; };
-            var startIso = toISO(startDateInput.value || '');
-            var endIso = toISO(endDateInput.value || '');
-            if (!startIso || !endIso) {
-                return;
-            }
-            var format = formatSelect ? formatSelect.value : 'csv';
-            // Map report types to export endpoints
-            var exportKey = 'timeEntries';
-            if (reportType === 'absence') {
-                exportKey = 'absences';
-            } else if (reportType === 'compliance') {
-                exportKey = 'compliance';
-            }
-            var exportBase = window.ArbeitszeitCheck && window.ArbeitszeitCheck.exportUrl
-                ? window.ArbeitszeitCheck.exportUrl[exportKey]
-                : null;
-            if (!exportBase) {
-                return;
-            }
-            try {
-                var urlObj = new URL(exportBase, window.location.origin);
-                if (startIso) urlObj.searchParams.set('startDate', startIso);
-                if (endIso) urlObj.searchParams.set('endDate', endIso);
-                if (format) urlObj.searchParams.set('format', format);
-                var a = document.createElement('a');
-                a.href = urlObj.toString();
-                a.style.display = 'none';
-                a.setAttribute('download', '');
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            } catch (e) {
-                // If URL construction fails, silently skip download to avoid breaking preview
-            }
-        }
-        if (reportForm) {
-            reportForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                fetchAndShowReport();
-                downloadReport();
-            });
-        }
-        if (previewBtn) {
-            previewBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                fetchAndShowReport();
-            });
-        }
-    });
-    <?php endif; ?>
 </script>
 

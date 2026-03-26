@@ -19,7 +19,9 @@ use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
+use OCP\IDBConnection;
 use OCP\IL10N;
+use OCA\ArbeitszeitCheck\Constants;
 use OCP\IUserManager;
 
 /**
@@ -33,10 +35,13 @@ class AbsenceService
 	private TeamResolverService $teamResolver;
 	private UserWorkingTimeModelMapper $userWorkingTimeModelMapper;
 	private IConfig $config;
+	private IDBConnection $db;
 	private IUserManager $userManager;
 	private IL10N $l10n;
 	private ?NotificationService $notificationService;
 	private ?AbsenceIcalMailService $absenceIcalMailService;
+	private ?AbsenceNotificationMailService $absenceNotificationMailService;
+	private HolidayCalendarService $holidayCalendarService;
 
 	public function __construct(
 		AbsenceMapper $absenceMapper,
@@ -45,10 +50,13 @@ class AbsenceService
 		TeamResolverService $teamResolver,
 		UserWorkingTimeModelMapper $userWorkingTimeModelMapper,
 		IConfig $config,
+		IDBConnection $db,
 		IUserManager $userManager,
 		IL10N $l10n,
-		?NotificationService $notificationService = null,
-		?AbsenceIcalMailService $absenceIcalMailService = null
+		?NotificationService $notificationService,
+		?AbsenceIcalMailService $absenceIcalMailService,
+		HolidayCalendarService $holidayCalendarService,
+		?AbsenceNotificationMailService $absenceNotificationMailService = null
 	) {
 		$this->absenceMapper = $absenceMapper;
 		$this->auditLogMapper = $auditLogMapper;
@@ -56,10 +64,13 @@ class AbsenceService
 		$this->teamResolver = $teamResolver;
 		$this->userWorkingTimeModelMapper = $userWorkingTimeModelMapper;
 		$this->config = $config;
+		$this->db = $db;
 		$this->userManager = $userManager;
 		$this->l10n = $l10n;
 		$this->notificationService = $notificationService;
 		$this->absenceIcalMailService = $absenceIcalMailService;
+		$this->holidayCalendarService = $holidayCalendarService;
+		$this->absenceNotificationMailService = $absenceNotificationMailService;
 	}
 
 	/**
@@ -87,41 +98,78 @@ class AbsenceService
 		$absence->setCreatedAt(new \DateTime());
 		$absence->setUpdatedAt(new \DateTime());
 
-		// Calculate working days
-		$workingDays = $absence->calculateWorkingDays();
+		// Calculate working days (Mon–Fri minus Feiertage inkl. Firmenfeiertage)
+		$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
 		$absence->setDays($workingDays);
 
-		$savedAbsence = $this->absenceMapper->insert($absence);
+		// All DB writes are atomic: if the audit log insertion fails, the absence
+		// insertion is rolled back and the user sees an error rather than having an
+		// absence in the DB with no audit trail.
+		$savedAbsence = null;
+		$autoApproved = false;
 
-		$this->auditLogMapper->logAction(
-			$userId,
-			'absence_created',
-			'absence',
-			$savedAbsence->getId(),
-			null,
-			$savedAbsence->getSummary()
-		);
+		$this->db->beginTransaction();
+		try {
+			$savedAbsence = $this->absenceMapper->insert($absence);
 
-		// Auto-approve when employee has no manager (no colleagues in team/groups)
-		if ($savedAbsence->getStatus() === Absence::STATUS_PENDING && !$this->employeeHasManager($userId)) {
-			return $this->autoApproveForNoManager($savedAbsence);
+			$this->auditLogMapper->logAction(
+				$userId,
+				'absence_created',
+				'absence',
+				$savedAbsence->getId(),
+				null,
+				$savedAbsence->getSummary()
+			);
+
+			// Auto-approve when employee has no manager (no colleagues in team/groups)
+			if ($savedAbsence->getStatus() === Absence::STATUS_PENDING && !$this->employeeHasManager($userId)) {
+				$savedAbsence = $this->doAutoApproveDbWork($savedAbsence);
+				$autoApproved = true;
+			}
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
 		}
 
-		// Notify substitute when they need to approve (Vertretungs-Freigabe)
-		if ($substituteUserId && $this->notificationService) {
-			$startDate = $savedAbsence->getStartDate();
-			$endDate = $savedAbsence->getEndDate();
-			$this->notificationService->notifySubstitutionRequest(
-				$substituteUserId,
-				$userId,
-				[
+		// Side effects (notifications / emails) always happen after the DB commit so
+		// that a) no DB lock is held while sending mail, and b) notifications are only
+		// dispatched when the data is actually persisted.
+		if ($autoApproved) {
+			if ($this->notificationService) {
+				$startDate = $savedAbsence->getStartDate();
+				$endDate = $savedAbsence->getEndDate();
+				$this->notificationService->notifyAbsenceApproved($savedAbsence->getUserId(), [
 					'id' => $savedAbsence->getId(),
 					'type' => $savedAbsence->getType(),
 					'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
 					'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
 					'days' => $savedAbsence->getDays()
-				]
-			);
+				]);
+			}
+			if ($this->absenceIcalMailService) {
+				$this->absenceIcalMailService->sendIcalForApprovedAbsence($savedAbsence);
+			}
+		} elseif ($substituteUserId) {
+			if ($this->notificationService) {
+				$startDate = $savedAbsence->getStartDate();
+				$endDate = $savedAbsence->getEndDate();
+				$this->notificationService->notifySubstitutionRequest(
+					$substituteUserId,
+					$userId,
+					[
+						'id' => $savedAbsence->getId(),
+						'type' => $savedAbsence->getType(),
+						'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
+						'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
+						'days' => $savedAbsence->getDays()
+					]
+				);
+			}
+			if ($this->absenceNotificationMailService) {
+				$this->absenceNotificationMailService->sendSubstitutionRequestToSubstitute($savedAbsence);
+			}
 		}
 
 		return $savedAbsence;
@@ -168,8 +216,8 @@ class AbsenceService
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
 
-		// Check if absence can be updated (pending or substitute_pending can be modified by owner)
-		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING], true)) {
+		// Check if absence can be updated (pending, substitute_pending, or substitute_declined can be modified by owner)
+		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_SUBSTITUTE_DECLINED], true)) {
 			throw new \Exception($this->l10n->t('Only pending absences can be updated'));
 		}
 
@@ -205,22 +253,60 @@ class AbsenceService
 		}
 		$this->validateAbsenceData($validateData, $userId, $id);
 
-		// Recalculate working days
-		$workingDays = $absence->calculateWorkingDays();
+		// Recalculate working days (Mon–Fri minus Feiertage inkl. Firmenfeiertage)
+		$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
 		$absence->setDays($workingDays);
 		$absence->setUpdatedAt(new \DateTime());
 
-		$updatedAbsence = $this->absenceMapper->update($absence);
+		// When resubmitting after substitute_declined: clear decline comment, set status, notify new substitute
+		$wasDeclined = $absence->getStatus() === Absence::STATUS_SUBSTITUTE_DECLINED;
+		$newSubstituteId = $absence->getSubstituteUserId();
 
-		// Log the action
-		$this->auditLogMapper->logAction(
-			$userId,
-			'absence_updated',
-			'absence',
-			$updatedAbsence->getId(),
-			$oldData,
-			$updatedAbsence->getSummary()
-		);
+		if ($wasDeclined) {
+			$absence->setApproverComment(null);
+			$absence->setStatus($newSubstituteId ? Absence::STATUS_SUBSTITUTE_PENDING : Absence::STATUS_PENDING);
+		}
+
+		$updatedAbsence = null;
+
+		$this->db->beginTransaction();
+		try {
+			$updatedAbsence = $this->absenceMapper->update($absence);
+
+			$this->auditLogMapper->logAction(
+				$userId,
+				'absence_updated',
+				'absence',
+				$updatedAbsence->getId(),
+				$oldData,
+				$updatedAbsence->getSummary()
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Side effects after commit
+		if ($wasDeclined && $newSubstituteId && $this->notificationService) {
+			$startDate = $updatedAbsence->getStartDate();
+			$endDate = $updatedAbsence->getEndDate();
+			$this->notificationService->notifySubstitutionRequest(
+				$newSubstituteId,
+				$updatedAbsence->getUserId(),
+				[
+					'id' => $updatedAbsence->getId(),
+					'type' => $updatedAbsence->getType(),
+					'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
+					'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
+					'days' => $updatedAbsence->getDays(),
+				]
+			);
+		}
+		if ($wasDeclined && $newSubstituteId && $this->absenceNotificationMailService) {
+			$this->absenceNotificationMailService->sendSubstitutionRequestToSubstitute($updatedAbsence);
+		}
 
 		return $updatedAbsence;
 	}
@@ -239,22 +325,184 @@ class AbsenceService
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
 
-		// Check if absence can be deleted (pending or substitute_pending can be deleted by owner)
-		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING], true)) {
+		// Check if absence can be deleted (pending, substitute_pending, or substitute_declined can be deleted by owner)
+		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_SUBSTITUTE_DECLINED], true)) {
 			throw new \Exception($this->l10n->t('Only pending absences can be deleted'));
 		}
 
-		$this->absenceMapper->delete($absence);
+		$this->db->beginTransaction();
+		try {
+			$this->absenceMapper->delete($absence);
 
-		// Log the action
-		$this->auditLogMapper->logAction(
-			$userId,
-			'absence_deleted',
-			'absence',
-			$id,
-			$absence->getSummary(),
-			null
-		);
+			$this->auditLogMapper->logAction(
+				$userId,
+				'absence_deleted',
+				'absence',
+				$id,
+				$absence->getSummary(),
+				null
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+	}
+
+	/**
+	 * Cancel an existing absence.
+	 *
+	 * Security / business rules:
+	 * - Only the owner can cancel their own absences (enforced via getAbsence()).
+	 * - Cancellation is only allowed if the absence has not started yet
+	 *   (start date strictly greater than today, in server timezone).
+	 * - Only absences in one of the "active" states can be cancelled:
+	 *   pending, substitute_pending, or approved.
+	 *
+	 * We keep the record (status = cancelled) for auditability instead of
+	 * deleting it, so reports and logs remain consistent.
+	 *
+	 * @param int $id Absence ID
+	 * @param string $userId User ID performing the cancellation
+	 * @return Absence
+	 * @throws \Exception
+	 */
+	public function cancelAbsence(int $id, string $userId): Absence
+	{
+		$absence = $this->getAbsence($id, $userId);
+		if (!$absence) {
+			throw new \Exception($this->l10n->t('Absence not found'));
+		}
+
+		$status = $absence->getStatus();
+		if (!in_array($status, [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_APPROVED], true)) {
+			throw new \Exception($this->l10n->t('This absence cannot be cancelled.'));
+		}
+
+		$startDate = $absence->getStartDate();
+		if (!$startDate) {
+			throw new \Exception($this->l10n->t('Start date is missing for this absence.'));
+		}
+
+		$today = new \DateTimeImmutable('today');
+		// Only allow cancellation before the first day of the absence
+		if ($startDate <= $today) {
+			throw new \Exception($this->l10n->t('You can only cancel absences that have not started yet.'));
+		}
+
+		$oldData = $absence->getSummary();
+
+		$absence->setStatus(Absence::STATUS_CANCELLED);
+		$absence->setUpdatedAt(new \DateTime());
+
+		$updatedAbsence = null;
+
+		$this->db->beginTransaction();
+		try {
+			$updatedAbsence = $this->absenceMapper->update($absence);
+
+			$this->auditLogMapper->logAction(
+				$userId,
+				'absence_cancelled',
+				'absence',
+				$updatedAbsence->getId(),
+				$oldData,
+				$updatedAbsence->getSummary()
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		return $updatedAbsence;
+	}
+
+	/**
+	 * Shorten an approved absence (early return).
+	 *
+	 * Security / business rules:
+	 * - Only the owner can shorten their own absences (enforced via getAbsence()).
+	 * - Only approved absences can be shortened.
+	 * - The absence must have started (start_date <= today) but not yet ended
+	 *   (end_date > today), i.e. the employee is currently in the absence period.
+	 * - The new end date must be strictly earlier than the original end date.
+	 * - The new end date must be >= start date.
+	 *
+	 * Recalculates working days for the new range and logs the change for audit.
+	 *
+	 * @param int $id Absence ID
+	 * @param string $userId User ID performing the change
+	 * @param string $newEndDate New end date (Y-m-d or d.m.Y)
+	 * @return Absence
+	 * @throws \Exception
+	 */
+	public function shortenAbsence(int $id, string $userId, string $newEndDate): Absence
+	{
+		$absence = $this->getAbsence($id, $userId);
+		if (!$absence) {
+			throw new \Exception($this->l10n->t('Absence not found'));
+		}
+
+		if ($absence->getStatus() !== Absence::STATUS_APPROVED) {
+			throw new \Exception($this->l10n->t('Only approved absences can be shortened.'));
+		}
+
+		$startDate = $absence->getStartDate();
+		$originalEndDate = $absence->getEndDate();
+		if (!$startDate || !$originalEndDate) {
+			throw new \Exception($this->l10n->t('Start date or end date is missing for this absence.'));
+		}
+
+		$today = new \DateTimeImmutable('today');
+		if ($startDate > $today) {
+			throw new \Exception($this->l10n->t('You can only shorten absences that have already started.'));
+		}
+		if ($originalEndDate <= $today) {
+			throw new \Exception($this->l10n->t('This absence has already ended. It cannot be shortened.'));
+		}
+
+		$newEnd = $this->parseDate($newEndDate);
+		$newEnd->setTime(0, 0, 0);
+
+		if ($newEnd < $startDate) {
+			throw new \Exception($this->l10n->t('The new end date cannot be before the start date.'));
+		}
+		if ($newEnd >= $originalEndDate) {
+			throw new \Exception($this->l10n->t('The new end date must be earlier than the original end date.'));
+		}
+
+		$oldData = $absence->getSummary();
+
+		$absence->setEndDate($newEnd);
+		$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $newEnd);
+		$absence->setDays($workingDays);
+		$absence->setUpdatedAt(new \DateTime());
+
+		$updatedAbsence = null;
+
+		$this->db->beginTransaction();
+		try {
+			$updatedAbsence = $this->absenceMapper->update($absence);
+
+			$this->auditLogMapper->logAction(
+				$userId,
+				'absence_shortened',
+				'absence',
+				$updatedAbsence->getId(),
+				$oldData,
+				$updatedAbsence->getSummary()
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		return $updatedAbsence;
 	}
 
 	/**
@@ -287,20 +535,29 @@ class AbsenceService
 		$absence->setApprovedAt(new \DateTime());
 		$absence->setUpdatedAt(new \DateTime());
 
-		$updatedAbsence = $this->absenceMapper->update($absence);
+		$updatedAbsence = null;
 
-		// Log the action
-		$this->auditLogMapper->logAction(
-			$approverId,
-			'absence_approved',
-			'absence',
-			$updatedAbsence->getId(),
-			$oldData,
-			$updatedAbsence->getSummary(),
-			$approverId
-		);
+		$this->db->beginTransaction();
+		try {
+			$updatedAbsence = $this->absenceMapper->update($absence);
 
-		// Send notification to the employee
+			$this->auditLogMapper->logAction(
+				$approverId,
+				'absence_approved',
+				'absence',
+				$updatedAbsence->getId(),
+				$oldData,
+				$updatedAbsence->getSummary(),
+				$approverId
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Side effects after commit
 		if ($this->notificationService) {
 			$startDate = $updatedAbsence->getStartDate();
 			$endDate = $updatedAbsence->getEndDate();
@@ -313,7 +570,6 @@ class AbsenceService
 			]);
 		}
 
-		// Send iCal email to employee (and optionally substitute) if enabled in admin settings
 		if ($this->absenceIcalMailService) {
 			$this->absenceIcalMailService->sendIcalForApprovedAbsence($updatedAbsence);
 		}
@@ -351,20 +607,29 @@ class AbsenceService
 		$absence->setApprovedAt(new \DateTime());
 		$absence->setUpdatedAt(new \DateTime());
 
-		$updatedAbsence = $this->absenceMapper->update($absence);
+		$updatedAbsence = null;
 
-		// Log the action
-		$this->auditLogMapper->logAction(
-			$approverId,
-			'absence_rejected',
-			'absence',
-			$updatedAbsence->getId(),
-			$oldData,
-			$updatedAbsence->getSummary(),
-			$approverId
-		);
+		$this->db->beginTransaction();
+		try {
+			$updatedAbsence = $this->absenceMapper->update($absence);
 
-		// Send notification to the employee
+			$this->auditLogMapper->logAction(
+				$approverId,
+				'absence_rejected',
+				'absence',
+				$updatedAbsence->getId(),
+				$oldData,
+				$updatedAbsence->getSummary(),
+				$approverId
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Side effect after commit
 		if ($this->notificationService) {
 			$startDate = $updatedAbsence->getStartDate();
 			$endDate = $updatedAbsence->getEndDate();
@@ -408,43 +673,78 @@ class AbsenceService
 		$oldData = $absence->getSummary();
 		$absence->setStatus(Absence::STATUS_PENDING);
 		$absence->setUpdatedAt(new \DateTime());
-		$updatedAbsence = $this->absenceMapper->update($absence);
 
-		$this->auditLogMapper->logAction(
-			$substituteUserId,
-			'absence_substitute_approved',
-			'absence',
-			$updatedAbsence->getId(),
-			$oldData,
-			$updatedAbsence->getSummary(),
-			$substituteUserId
-		);
+		$updatedAbsence = null;
+		$wasAutoApproved = false;
 
-		// Notify employee that substitute approved
-		if ($this->notificationService) {
-			$startDate = $updatedAbsence->getStartDate();
-			$endDate = $updatedAbsence->getEndDate();
-			$this->notificationService->notifySubstituteApproved(
-				$updatedAbsence->getUserId(),
+		$this->db->beginTransaction();
+		try {
+			$updatedAbsence = $this->absenceMapper->update($absence);
+
+			$this->auditLogMapper->logAction(
 				$substituteUserId,
-				[
+				'absence_substitute_approved',
+				'absence',
+				$updatedAbsence->getId(),
+				$oldData,
+				$updatedAbsence->getSummary(),
+				$substituteUserId
+			);
+
+			// When employee has no manager: auto-approve immediately (DB work only; notifications after commit)
+			if (!$this->employeeHasManager($absence->getUserId())) {
+				$updatedAbsence = $this->doAutoApproveDbWork($updatedAbsence);
+				$wasAutoApproved = true;
+			}
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Side effects after commit
+		if ($wasAutoApproved) {
+			if ($this->notificationService) {
+				$startDate = $updatedAbsence->getStartDate();
+				$endDate = $updatedAbsence->getEndDate();
+				$this->notificationService->notifyAbsenceApproved($updatedAbsence->getUserId(), [
 					'id' => $updatedAbsence->getId(),
 					'type' => $updatedAbsence->getType(),
 					'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
 					'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
 					'days' => $updatedAbsence->getDays()
-				]
-			);
-		}
+				]);
+			}
+			if ($this->absenceIcalMailService) {
+				$this->absenceIcalMailService->sendIcalForApprovedAbsence($updatedAbsence);
+			}
+		} else {
+			// Employee has manager: notify about substitute approval and that manager approval is pending
+			if ($this->notificationService) {
+				$startDate = $updatedAbsence->getStartDate();
+				$endDate = $updatedAbsence->getEndDate();
+				$this->notificationService->notifySubstituteApproved(
+					$updatedAbsence->getUserId(),
+					$substituteUserId,
+					[
+						'id' => $updatedAbsence->getId(),
+						'type' => $updatedAbsence->getType(),
+						'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
+						'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
+						'days' => $updatedAbsence->getDays()
+					]
+				);
+			}
 
-		// Send iCal to substitute so they can add coverage period to their calendar
-		if ($this->absenceIcalMailService) {
-			$this->absenceIcalMailService->sendIcalToSubstituteOnSubstitutionApproval($updatedAbsence);
-		}
+			if ($this->absenceNotificationMailService) {
+				$this->absenceNotificationMailService->sendSubstituteApprovedToEmployee($updatedAbsence);
+				$this->absenceNotificationMailService->sendSubstituteApprovedToManagers($updatedAbsence);
+			}
 
-		// Auto-approve when employee has no manager (no colleagues in team/groups)
-		if (!$this->employeeHasManager($absence->getUserId())) {
-			return $this->autoApproveForNoManager($updatedAbsence);
+			if ($this->absenceIcalMailService) {
+				$this->absenceIcalMailService->sendIcalToSubstituteOnSubstitutionApproval($updatedAbsence);
+			}
 		}
 
 		return $updatedAbsence;
@@ -480,19 +780,30 @@ class AbsenceService
 		$absence->setStatus(Absence::STATUS_SUBSTITUTE_DECLINED);
 		$absence->setApproverComment($comment);
 		$absence->setUpdatedAt(new \DateTime());
-		$updatedAbsence = $this->absenceMapper->update($absence);
 
-		$this->auditLogMapper->logAction(
-			$substituteUserId,
-			'absence_substitute_declined',
-			'absence',
-			$updatedAbsence->getId(),
-			$oldData,
-			$updatedAbsence->getSummary(),
-			$substituteUserId
-		);
+		$updatedAbsence = null;
 
-		// Notify employee that substitute declined
+		$this->db->beginTransaction();
+		try {
+			$updatedAbsence = $this->absenceMapper->update($absence);
+
+			$this->auditLogMapper->logAction(
+				$substituteUserId,
+				'absence_substitute_declined',
+				'absence',
+				$updatedAbsence->getId(),
+				$oldData,
+				$updatedAbsence->getSummary(),
+				$substituteUserId
+			);
+
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+
+		// Side effect after commit
 		if ($this->notificationService) {
 			$startDate = $updatedAbsence->getStartDate();
 			$endDate = $updatedAbsence->getEndDate();
@@ -569,7 +880,20 @@ class AbsenceService
 	public function getVacationStats(string $userId, int $year): array
 	{
 		try {
+			// 1. Sum days for absences entirely within the year
 			$usedDays = $this->absenceMapper->getVacationDaysUsed($userId, $year);
+
+			// 2. Add per-year portion for absences spanning the year boundary
+			$spanning = $this->absenceMapper->findVacationApprovedSpanningYearBoundary($userId, $year);
+			foreach ($spanning as $absence) {
+				$start = $absence->getStartDate();
+				$end = $absence->getEndDate();
+				if (!$start || !$end) {
+					continue;
+				}
+				$perYear = $this->holidayCalendarService->computeWorkingDaysPerYearForUser($userId, $start, $end);
+				$usedDays += (float)($perYear[$year] ?? 0);
+			}
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting vacation days used: ' . $e->getMessage(), ['exception' => $e]);
 			$usedDays = 0.0;
@@ -583,8 +907,7 @@ class AbsenceService
 		}
 
 		// Get total vacation entitlement from the assigned working time model (single source of truth),
-		// falling back to user setting or a safe default of 25 days.
-		$totalEntitlement = 25;
+		$totalEntitlement = Constants::DEFAULT_VACATION_DAYS_PER_YEAR;
 		try {
 			$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
 			if ($currentModel !== null && $currentModel->getVacationDaysPerYear() !== null) {
@@ -594,12 +917,12 @@ class AbsenceService
 				$totalEntitlement = $this->userSettingsMapper->getIntegerSetting(
 					$userId,
 					'vacation_days_per_year',
-					25
+					Constants::DEFAULT_VACATION_DAYS_PER_YEAR
 				);
 			}
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting vacation entitlement: ' . $e->getMessage(), ['exception' => $e]);
-			$totalEntitlement = 25;
+			$totalEntitlement = Constants::DEFAULT_VACATION_DAYS_PER_YEAR;
 		}
 
 		return [
@@ -634,27 +957,50 @@ class AbsenceService
 			throw new \Exception($this->l10n->t('Start date cannot be after end date'));
 		}
 
-		// Validate dates are not in the past (with small tolerance for same-day requests)
+		// Extract type early (needed for past-date and overlap logic)
+		$type = isset($data['type']) && !is_array($data['type']) ? (string)$data['type'] : (is_array($data['type'] ?? null) && !empty($data['type']) ? (string)reset($data['type']) : '');
+
+		// Validate dates: past start allowed only for sick leave (up to SICK_LEAVE_MAX_PAST_DAYS)
 		$today = new \DateTime();
 		$today->setTime(0, 0, 0);
-
 		if ($startDate < $today) {
-			throw new \Exception($this->l10n->t('Start date cannot be in the past'));
+			if ($type === Absence::TYPE_SICK_LEAVE) {
+				$cutoff = (clone $today)->modify('-' . Constants::SICK_LEAVE_MAX_PAST_DAYS . ' days');
+				if ($startDate < $cutoff) {
+					throw new \Exception($this->l10n->t('Sick leave start date cannot be more than %s days in the past.', [(string)Constants::SICK_LEAVE_MAX_PAST_DAYS]));
+				}
+			} else {
+				throw new \Exception($this->l10n->t('Start date cannot be in the past'));
+			}
 		}
 
 		// Check for overlapping absences (exclude current absence when updating)
 		$overlapping = $this->absenceMapper->findOverlapping($userId, $startDate, $endDate, $excludeAbsenceId);
 		if (!empty($overlapping)) {
-			throw new \Exception($this->l10n->t('Absence overlaps with existing absence'));
+			$first = $overlapping[0];
+			$overlapType = $first->getType();
+			$overlapStart = $first->getStartDate() ? $first->getStartDate()->format('d.m.Y') : '?';
+			$overlapEnd = $first->getEndDate() ? $first->getEndDate()->format('d.m.Y') : '?';
+			$typeLabels = [
+				'vacation' => $this->l10n->t('Vacation'),
+				'sick_leave' => $this->l10n->t('Sick Leave'),
+				'personal_leave' => $this->l10n->t('Personal Leave'),
+				'parental_leave' => $this->l10n->t('Parental Leave'),
+				'special_leave' => $this->l10n->t('Special Leave'),
+				'unpaid_leave' => $this->l10n->t('Unpaid Leave'),
+				'home_office' => $this->l10n->t('Home Office'),
+				'business_trip' => $this->l10n->t('Business Trip'),
+			];
+			$overlapTypeLabel = $typeLabels[$overlapType] ?? $this->l10n->t('Absence');
+			$baseMsg = $this->l10n->t('This period overlaps with an existing %1$s (%2$s – %3$s).', [$overlapTypeLabel, $overlapStart, $overlapEnd]);
+			if ($type === Absence::TYPE_SICK_LEAVE && $overlapType === Absence::TYPE_VACATION) {
+				$hint = $this->l10n->t('If you were sick during vacation, please shorten or cancel the vacation first, then submit a separate sick leave request.');
+				throw new \Exception($baseMsg . ' ' . $hint);
+			}
+			throw new \Exception($baseMsg);
 		}
 
-		// Ensure type is a string and whitelist allowed values
-		$type = $data['type'];
-		if (is_array($type)) {
-			$type = !empty($type) ? (string)reset($type) : '';
-		} else {
-			$type = (string)$type;
-		}
+		// Validate type
 		if (empty($type)) {
 			throw new \Exception($this->l10n->t('Absence type is required'));
 		}
@@ -675,8 +1021,20 @@ class AbsenceService
 
 		// Vacation entitlement: ensure user has enough remaining days
 		// (getVacationStats only counts approved absences; when updating, add back old absence's days)
-		if ($type === Absence::TYPE_VACATION) {
-			$requestedWorkingDaysPerYear = $this->computeWorkingDaysPerYear($startDate, $endDate);
+			if ($type === Absence::TYPE_VACATION) {
+			$requestedWorkingDaysPerYear = $this->computeWorkingDaysPerYear($startDate, $endDate, $userId);
+			// Fallback if HolidayCalendarService returns empty (e.g. config/state resolution failure)
+			if ($requestedWorkingDaysPerYear === []) {
+				$requestedWorkingDaysPerYear = HolidayService::computeWorkingDaysPerYear(
+					clone $startDate,
+					clone $endDate,
+					[]
+				);
+			}
+			$totalRequested = array_sum($requestedWorkingDaysPerYear);
+			if ($totalRequested < 0.01) {
+				throw new \Exception($this->l10n->t('Vacation must include at least one working day. The selected period contains only weekends or public holidays.'));
+			}
 			$addBackPerYear = [];
 			if ($excludeAbsenceId !== null) {
 				try {
@@ -685,7 +1043,7 @@ class AbsenceService
 						$oldStart = $oldAbsence->getStartDate();
 						$oldEnd = $oldAbsence->getEndDate();
 						if ($oldStart && $oldEnd) {
-							$addBackPerYear = $this->computeWorkingDaysPerYear($oldStart, $oldEnd);
+							$addBackPerYear = $this->computeWorkingDaysPerYear($oldStart, $oldEnd, $userId);
 						}
 					}
 				} catch (DoesNotExistException $e) {
@@ -760,7 +1118,7 @@ class AbsenceService
 				}
 				break;
 			case Absence::TYPE_SICK_LEAVE:
-				if ($days > 365) {
+				if ($days > Constants::MAX_ABSENCE_DAYS) {
 					throw new \Exception($this->l10n->t('Sick leave duration seems unreasonable'));
 				}
 				break;
@@ -780,13 +1138,13 @@ class AbsenceService
 				}
 				break;
 			case Absence::TYPE_UNPAID_LEAVE:
-				if ($days > 365) {
+				if ($days > Constants::MAX_ABSENCE_DAYS) {
 					throw new \Exception($this->l10n->t('Unpaid leave cannot exceed 365 days'));
 				}
 				break;
 			case Absence::TYPE_HOME_OFFICE:
 			case Absence::TYPE_BUSINESS_TRIP:
-				if ($days > 365) {
+				if ($days > Constants::MAX_ABSENCE_DAYS) {
 					throw new \Exception($this->l10n->t('Duration cannot exceed 365 days'));
 				}
 				break;
@@ -794,20 +1152,29 @@ class AbsenceService
 	}
 
 	/**
-	 * Whether the employee has at least one manager (colleague in same team/group who could approve).
+	 * Whether the employee has at least one manager who could approve.
+	 * Uses getManagerIdsForEmployee when app-owned teams are enabled.
+	 * Falls back to getColleagueIds for group-based mode (legacy setups).
 	 * Used to auto-approve absences when no one would see them in the manager dashboard.
 	 */
 	private function employeeHasManager(string $employeeUserId): bool
 	{
+		$managerIds = $this->teamResolver->getManagerIdsForEmployee($employeeUserId);
+		if (!empty($managerIds)) {
+			return true;
+		}
+		// Group-based mode: no explicit managers, fall back to colleagues for legacy
 		$colleagueIds = $this->teamResolver->getColleagueIds($employeeUserId);
 		return !empty($colleagueIds);
 	}
 
 	/**
-	 * Auto-approve an absence when the employee has no manager (no colleagues).
-	 * Ensures absences are not stuck in PENDING forever for solo users or users alone in their team.
+	 * Perform only the DB writes needed to auto-approve an absence (no notifications/emails).
+	 *
+	 * Call this inside an open transaction so the status update and the audit log are
+	 * committed atomically. Send notifications after the caller commits.
 	 */
-	private function autoApproveForNoManager(Absence $absence): Absence
+	private function doAutoApproveDbWork(Absence $absence): Absence
 	{
 		$oldData = $absence->getSummary();
 		$absence->setStatus(Absence::STATUS_APPROVED);
@@ -827,6 +1194,30 @@ class AbsenceService
 			$updatedAbsence->getSummary(),
 			'system'
 		);
+
+		return $updatedAbsence;
+	}
+
+	/**
+	 * Auto-approve an absence when the employee has no manager (no colleagues).
+	 * Ensures absences are not stuck in PENDING forever for solo users or users alone in their team.
+	 *
+	 * This method wraps `doAutoApproveDbWork` in its own transaction and then sends
+	 * notifications. Prefer calling `doAutoApproveDbWork` directly inside a caller-owned
+	 * transaction (e.g. createAbsence, approveBySubstitute) to keep everything atomic.
+	 */
+	private function autoApproveForNoManager(Absence $absence): Absence
+	{
+		$updatedAbsence = null;
+
+		$this->db->beginTransaction();
+		try {
+			$updatedAbsence = $this->doAutoApproveDbWork($absence);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
 
 		if ($this->notificationService) {
 			$startDate = $updatedAbsence->getStartDate();
@@ -856,6 +1247,11 @@ class AbsenceService
 	 */
 	private function parseDate(string $dateString): \DateTime
 	{
+		$dateString = trim($dateString);
+		if ($dateString === '') {
+			throw new \Exception($this->l10n->t('Date is required and cannot be empty'));
+		}
+
 		// Try German format first (dd.mm.yyyy)
 		if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateString, $matches)) {
 			$day = (int)$matches[1];
@@ -885,87 +1281,58 @@ class AbsenceService
 	 * @param \DateTime $end
 	 * @return array<int, float> year => working days
 	 */
-	private function computeWorkingDaysPerYear(\DateTime $start, \DateTime $end): array
+	private function computeWorkingDaysPerYear(\DateTime $start, \DateTime $end, string $userId): array
 	{
-		$start = clone $start;
-		$end = clone $end;
-		$result = [];
-		$startYear = (int)$start->format('Y');
-		$endYear = (int)$end->format('Y');
-		$holidays = [];
-		for ($y = $startYear; $y <= $endYear; $y++) {
-			$holidays[$y] = $this->getGermanPublicHolidaysForYear($y);
-		}
-		while ($start <= $end) {
-			if ($start->format('N') < 6) {
-				$dateStr = $start->format('Y-m-d');
-				$year = (int)$start->format('Y');
-				if (!isset($holidays[$year][$dateStr])) {
-					$result[$year] = ($result[$year] ?? 0) + 1;
-				}
-			}
-			$start->modify('+1 day');
-		}
-		foreach (array_keys($result) as $y) {
-			$result[$y] = (float)$result[$y];
-		}
-		return $result;
+		return $this->holidayCalendarService->computeWorkingDaysPerYearForUser($userId, $start, $end);
 	}
 
 	/**
-	 * Get German public holidays for a year (for working-days calculation)
+	 * Compute working days for a user absence, taking into account
+	 * company-wide holidays (full and half days).
+	 */
+	private function computeWorkingDaysForUser(string $userId, \DateTime $start, \DateTime $end): float
+	{
+		return $this->holidayCalendarService->computeWorkingDaysForUser($userId, $start, $end);
+	}
+
+	/**
+	 * Get working days for display (state-aware).
+	 * Uses stored days when set; otherwise computes via HolidayCalendarService
+	 * for consistency with vacation stats and company/state holidays.
+	 */
+	public function getWorkingDaysForDisplay(Absence $absence): float
+	{
+		if ($absence->getDays() !== null) {
+			return (float)$absence->getDays();
+		}
+		$start = $absence->getStartDate();
+		$end = $absence->getEndDate();
+		if (!$start || !$end) {
+			return 0.0;
+		}
+		return $this->holidayCalendarService->computeWorkingDaysForUser(
+			$absence->getUserId(),
+			$start,
+			$end
+		);
+	}
+
+	/**
+	 * Build a map of additional holiday weights (full/half Firmenfeiertage)
+	 * for the given date range and user.
 	 *
-	 * @param int $year
-	 * @return array<string, string> date (Y-m-d) => name
+	 * NOTE:
+	 * - Aktuell sind Firmenfeiertage organisationsweit konfiguriert
+	 *   (ohne Bundeslandspezifik). Pro-User-Bundesland wirkt sich daher
+	 *   nur auf spätere, state-spezifische Erweiterungen aus.
+	 *
+	 * @return array<string,float> date (Y-m-d) => weight
 	 */
-	private function getGermanPublicHolidaysForYear(int $year): array
+	private function buildExtraHolidayWeights(\DateTime $start, \DateTime $end, string $userId): array
 	{
-		$holidays = [];
-		$holidays[$year . '-01-01'] = 'New Year';
-		$easterDays = function_exists('easter_days') ? \easter_days($year) : $this->easterDaysGauss($year);
-		$march21 = new \DateTime($year . '-03-21');
-		$easter = clone $march21;
-		$easter->modify('+' . $easterDays . ' days');
-		$easter->modify('-2 days');
-		$holidays[$easter->format('Y-m-d')] = 'Good Friday';
-		$easter->modify('+3 days');
-		$holidays[$easter->format('Y-m-d')] = 'Easter Monday';
-		$easter->modify('+38 days');
-		$holidays[$easter->format('Y-m-d')] = 'Ascension';
-		$easter->modify('+11 days');
-		$holidays[$easter->format('Y-m-d')] = 'Whit Monday';
-		$easter->modify('+10 days');
-		$holidays[$easter->format('Y-m-d')] = 'Corpus Christi';
-		$holidays[$year . '-05-01'] = 'Labour Day';
-		$holidays[$year . '-10-03'] = 'Unity Day';
-		$holidays[$year . '-10-31'] = 'Reformation Day';
-		$holidays[$year . '-11-01'] = 'All Saints';
-		$holidays[$year . '-12-25'] = 'Christmas';
-		$holidays[$year . '-12-26'] = 'Second Christmas';
-		return $holidays;
-	}
-
-	/**
-	 * Gauss algorithm for Easter (fallback when easter_days not available)
-	 */
-	private function easterDaysGauss(int $year): int
-	{
-		$a = $year % 19;
-		$b = (int)($year / 100);
-		$c = $year % 100;
-		$d = (int)($b / 4);
-		$e = $b % 4;
-		$f = (int)(($b + 8) / 25);
-		$g = (int)(($b - $f + 1) / 3);
-		$h = (19 * $a + $b - $d - $g + 15) % 30;
-		$i = (int)($c / 4);
-		$k = $c % 4;
-		$l = (32 + 2 * $e + 2 * $i - $h - $k) % 7;
-		$m = (int)(($a + 11 * $h + 22 * $l) / 451);
-		$month = (int)(($h + $l - 7 * $m + 114) / 31);
-		$day = (($h + $l - 7 * $m + 114) % 31) + 1;
-		$march21 = new \DateTime($year . '-03-21');
-		$easterDate = new \DateTime("$year-$month-$day");
-		return (int)$march21->diff($easterDate)->days;
+		// Legacy helper is kept for backward compatibility with Absence::calculateWorkingDays()
+		// and will internally delegate to HolidayCalendarService in future iterations if needed.
+		unset($start, $end, $userId);
+		return [];
 	}
 }

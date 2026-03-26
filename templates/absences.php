@@ -38,6 +38,9 @@ $absence = $_['absence'] ?? null;
 $error = $_['error'] ?? null;
 $currentUserId = $_['currentUserId'] ?? '';
 $usersUrl = $_['usersUrl'] ?? '';
+$substituteDisplayName = $_['substituteDisplayName'] ?? null;
+$requireSubstituteTypes = $_['requireSubstituteTypes'] ?? [];
+$colleagues = $_['colleagues'] ?? [];
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -49,7 +52,16 @@ $usersUrl = $_['usersUrl'] ?? '';
             <nav class="breadcrumb" aria-label="<?php p($l->t('Breadcrumb')); ?>">
                 <ol>
                     <li><a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.index')); ?>"><?php p($l->t('Dashboard')); ?></a></li>
+                    <li><a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.absences')); ?>"><?php p($l->t('Absences')); ?></a></li>
+                    <?php if ($mode === 'view' && $absence): ?>
+                    <li aria-current="page"><?php p($l->t('Absence details')); ?></li>
+                    <?php elseif ($mode === 'create'): ?>
+                    <li aria-current="page"><?php p($l->t('Request Time Off')); ?></li>
+                    <?php elseif ($mode === 'edit' && $absence): ?>
+                    <li aria-current="page"><?php p($l->t('Edit Absence Request')); ?></li>
+                    <?php else: ?>
                     <li aria-current="page"><?php p($l->t('Absences')); ?></li>
+                    <?php endif; ?>
                 </ol>
             </nav>
         </div>
@@ -63,6 +75,8 @@ $usersUrl = $_['usersUrl'] ?? '';
                             p($l->t('Request Time Off'));
                         } elseif ($mode === 'edit') {
                             p($l->t('Edit Absence Request'));
+                        } elseif ($mode === 'view') {
+                            p($l->t('Absence Details'));
                         } else {
                             p($l->t('Absences'));
                         }
@@ -72,6 +86,8 @@ $usersUrl = $_['usersUrl'] ?? '';
                             p($l->t('Request a new absence. Your manager will review and approve or reject your request.'));
                         } elseif ($mode === 'edit') {
                             p($l->t('Edit your absence request. You can only edit pending requests.'));
+                        } elseif ($mode === 'view') {
+                            p($l->t('See all important details for this absence in one simple overview.'));
                         } else {
                             p($l->t('Manage vacation, sick leave, and other absences'));
                         }
@@ -139,19 +155,23 @@ $usersUrl = $_['usersUrl'] ?? '';
             <section class="section section--form" aria-labelledby="form-title" aria-describedby="form-desc">
                 <h3 id="form-title" class="section__title visually-hidden"><?php p($l->t('Absence request details')); ?></h3>
                 <p id="form-desc" class="section__desc visually-hidden"><?php p($l->t('Fill in the type, dates, and optional reason and substitute.')); ?></p>
-                <?php if ($error): ?>
-                    <div class="alert alert--error" role="alert" aria-live="polite" id="absence-form-error">
-                        <p><?php p($error); ?></p>
-                    </div>
-                <?php endif; ?>
+                <p class="form-required-note" aria-hidden="false">
+                    <span class="form-required" aria-hidden="true">*</span>
+                    <?php p($l->t('Required field')); ?>
+                </p>
+                <div class="alert alert--error" role="alert" aria-live="polite" id="absence-form-error"<?php echo $error ? '' : ' style="display: none;"'; ?>>
+                    <p id="absence-form-error-text"><?php echo $error ? htmlspecialchars($error, ENT_QUOTES, 'UTF-8') : ''; ?></p>
+                </div>
                 
-                <form id="absence-form" class="form" method="POST" action="<?php 
+                <form id="absence-form" class="form absence-request-form" method="POST" action="<?php 
                     if ($mode === 'create') {
                         p($urlGenerator->linkToRoute('arbeitszeitcheck.absence.store'));
                     } else {
                         p($urlGenerator->linkToRoute('arbeitszeitcheck.absence.updatePost', ['id' => $absence->getId()]));
                     }
                 ?>">
+                    <section class="absence-form-section absence-form-section--main" aria-labelledby="absence-form-section-main-title">
+                        <h3 id="absence-form-section-main-title" class="absence-form-section__title absence-form-section__title--main"><?php p($l->t('Request details')); ?></h3>
                     <div class="form-group">
                         <label for="absence-type" class="form-label">
                             <?php p($l->t('Type')); ?> <span class="form-required">*</span>
@@ -186,6 +206,10 @@ $usersUrl = $_['usersUrl'] ?? '';
                         <p class="form-help"><?php p($l->t('Select the type of absence you want to request')); ?></p>
                     </div>
 
+                    <?php
+                    $todayFormatted = (new DateTime())->format('d.m.Y');
+                    $sickMinDate = (new DateTime())->modify('-7 days')->format('d.m.Y');
+                    ?>
                     <div class="form-group">
                         <label for="absence-start-date" class="form-label">
                             <?php p($l->t('Start Date')); ?> <span class="form-required">*</span>
@@ -194,7 +218,9 @@ $usersUrl = $_['usersUrl'] ?? '';
                                id="absence-start-date"
                                name="start_date"
                                class="form-input datepicker-input"
-                               data-datepicker-min="today"
+                               data-datepicker-min="<?php echo $todayFormatted; ?>"
+                               data-datepicker-min-sick="<?php echo $sickMinDate; ?>"
+                               data-datepicker-sync-month-with="absence-end-date"
                                value="<?php p($absence ? $absence->getStartDate()->format('d.m.Y') : ''); ?>"
                                placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
                                pattern="\d{2}\.\d{2}\.\d{4}"
@@ -211,7 +237,9 @@ $usersUrl = $_['usersUrl'] ?? '';
                                id="absence-end-date"
                                name="end_date"
                                class="form-input datepicker-input"
-                               data-datepicker-min="today"
+                               data-datepicker-min="<?php echo $todayFormatted; ?>"
+                               data-datepicker-min-sick="<?php echo $sickMinDate; ?>"
+                               data-datepicker-sync-month-with="absence-start-date"
                                value="<?php p($absence ? $absence->getEndDate()->format('d.m.Y') : ''); ?>"
                                placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
                                pattern="\d{2}\.\d{2}\.\d{4}"
@@ -232,25 +260,28 @@ $usersUrl = $_['usersUrl'] ?? '';
                         <p class="form-help"><?php p($l->t('You can provide additional information about your absence request')); ?></p>
                     </div>
 
-                    <?php if (($_['hasColleagues'] ?? true)): ?>
-                    <div class="form-group form-group--substitute">
-                        <label for="absence-substitute" class="form-label">
-                            <?php p($l->t('Substitute')); ?>
+                    <!-- Vertretung: always shown so every user sees the field; list filled via API -->
+                    <div class="form-group form-group--substitute absence-form-section absence-form-section--substitute" id="absence-substitute-group">
+                        <h3 class="absence-form-section__title" id="absence-substitute-section-title"><?php p($l->t('Substitute (Vertretung)')); ?></h3>
+                        <label for="absence-substitute" class="form-label" id="absence-substitute-label">
+                            <?php p($l->t('Who will cover for you?')); ?>
                         </label>
                         <select id="absence-substitute"
                                 name="substitute_user_id"
                                 class="form-select"
-                                aria-describedby="absence-substitute-help"
-                                data-placeholder="<?php p($l->t('Select who will cover for you (optional)')); ?>">
+                                aria-describedby="absence-substitute-help absence-substitute-status"
+                                aria-required="false"
+                                aria-busy="false">
                             <option value=""><?php p($l->t('None')); ?></option>
-                            <!-- Options filled by JavaScript from /api/users -->
+                            <!-- Options filled by JavaScript from /api/colleagues -->
                         </select>
                         <p id="absence-substitute-help" class="form-help"><?php p($l->t('Choose a colleague from your team who will cover your tasks during your absence. Only team members appear in this list.')); ?></p>
+                        <p id="absence-substitute-status" class="form-help form-help--status" aria-live="polite" role="status"></p>
                         <p id="absence-substitute-empty" class="form-help form-help--info" style="display: none;" role="status"><?php p($l->t('No team members found. Add yourself to a team or group to select a substitute.')); ?></p>
+                        <p id="absence-substitute-error" class="form-help form-help--error" style="display: none;" role="alert"><?php p($l->t('Could not load team members. Please try again.')); ?></p>
+                        <p id="absence-substitute-required-msg" class="form-help form-help--error" style="display: none;" role="alert"><?php p($l->t('A substitute is required for this absence type. Please select who will cover for you.')); ?></p>
                     </div>
-                    <?php else: ?>
-                    <p class="form-help form-help--info" role="status"><?php p($l->t('No team members in your team. You cannot select a substitute. Add yourself to a team to enable this option.')); ?></p>
-                    <?php endif; ?>
+                    </section>
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn--primary">
@@ -262,23 +293,235 @@ $usersUrl = $_['usersUrl'] ?? '';
                     </div>
                 </form>
             </section>
+        <?php elseif ($mode === 'view' && $absence): ?>
+            <?php
+            $start = $absence->getStartDate();
+            $end = $absence->getEndDate();
+            $days = $absence->getDays();
+            if ($days === null) {
+                $days = $_['displayDays'] ?? ($_['computedWorkingDays'][$absence->getId()] ?? $absence->calculateWorkingDays());
+            }
+            $today = new \DateTimeImmutable('today');
+            $canCancel = $start > $today
+                && !in_array($absence->getStatus(), ['cancelled', 'rejected', 'substitute_declined'], true);
+            ?>
+            <!-- Read-only Absence Details -->
+            <section class="section section--detail absence-detail-view" aria-labelledby="detail-title">
+                <h3 id="detail-title" class="section__title visually-hidden"><?php p($l->t('Absence details')); ?></h3>
+
+                <!-- Header: type, status, period summary -->
+                <div class="absence-detail-hero">
+                    <div class="absence-detail-badges" role="group" aria-label="<?php p($l->t('Type and status')); ?>">
+                        <span class="absence-type-badge type-<?php p($absence->getType()); ?>">
+                            <?php
+                            $typeKey = $absence->getType();
+                            $typeLabel = match($typeKey) {
+                                'vacation' => $l->t('Vacation'),
+                                'sick' => $l->t('Sick Leave'),
+                                'sick_leave' => $l->t('Sick Leave'),
+                                'personal_leave' => $l->t('Personal Leave'),
+                                'parental_leave' => $l->t('Parental Leave'),
+                                'special_leave' => $l->t('Special Leave'),
+                                'unpaid_leave' => $l->t('Unpaid Leave'),
+                                'home_office' => $l->t('Home Office'),
+                                'business_trip' => $l->t('Business Trip'),
+                                default => $l->t('Absence')
+                            };
+                            p($typeLabel);
+                            ?>
+                        </span>
+                        <span class="badge badge--<?php
+                            echo match($absence->getStatus()) {
+                                'approved' => 'success',
+                                'pending' => 'warning',
+                                'substitute_pending' => 'warning',
+                                'rejected' => 'error',
+                                'substitute_declined' => 'error',
+                                'cancelled' => 'secondary',
+                                default => 'secondary'
+                            };
+                        ?>">
+                            <?php
+                            $statusKey = $absence->getStatus();
+                            $statusLabel = match($statusKey) {
+                                'approved' => $l->t('Approved'),
+                                'pending' => $l->t('Awaiting manager approval'),
+                                'substitute_pending' => $l->t('Awaiting substitute approval'),
+                                'rejected' => $l->t('Rejected'),
+                                'substitute_declined' => $l->t('Declined by substitute'),
+                                'cancelled' => $l->t('Cancelled'),
+                                default => $l->t(ucfirst(str_replace('_', ' ', $statusKey)))
+                            };
+                            p($statusLabel);
+                            ?>
+                        </span>
+                    </div>
+                    <p class="absence-detail-period" aria-label="<?php p($l->t('Period and duration')); ?>">
+                        <?php p($start->format('d.m.Y')); ?><?php echo ' – '; ?><?php p($end->format('d.m.Y')); ?>
+                        <span class="absence-detail-period-sep" aria-hidden="true">·</span>
+                        <?php p($l->n('%n working day', '%n working days', (int)$days)); ?>
+                    </p>
+                </div>
+
+                <?php
+                $canEditAfterDecline = $absence->getStatus() === 'substitute_declined';
+                ?>
+                <?php if ($canEditAfterDecline): ?>
+                    <div class="absence-detail-actions absence-detail-actions--top" role="group" aria-label="<?php p($l->t('Actions after substitute declined')); ?>">
+                        <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.absence.edit', ['id' => $absence->getId()])); ?>" class="btn btn--primary" aria-label="<?php p($l->t('Edit to select a different substitute')); ?>">
+                            <?php p($l->t('Edit and select different substitute')); ?>
+                        </a>
+                        <p class="absence-detail-hint"><?php p($l->t('You can edit to select a different substitute or delete this request from the overview.')); ?></p>
+                    </div>
+                <?php elseif ($canCancel): ?>
+                    <div class="absence-detail-actions absence-detail-actions--top">
+                        <form method="POST"
+                              action="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.absence.cancel', ['id' => $absence->getId()])); ?>"
+                              class="js-confirm-form">
+                            <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
+                            <button type="submit"
+                                    class="btn btn--secondary btn--danger js-confirm-submit"
+                                    data-confirm-title="<?php p($l->t('Cancel absence')); ?>"
+                                    data-confirm-message="<?php p($l->t('Do you really want to cancel this absence? This cannot be undone.')); ?>"
+                                    data-confirm-variant="danger"
+                                    data-confirm-label="<?php p($l->t('Yes, cancel absence')); ?>"
+                                    aria-label="<?php p($l->t('Cancel this absence request')); ?>">
+                                <?php p($l->t('Cancel absence')); ?>
+                            </button>
+                        </form>
+                    </div>
+                <?php endif; ?>
+
+                <?php
+                $canShorten = $absence->getStatus() === 'approved'
+                    && $start <= $today
+                    && $end > $today;
+                ?>
+                <?php if ($canShorten): ?>
+                <div class="absence-detail-section absence-detail-shorten" role="region" aria-labelledby="shorten-heading">
+                    <h4 id="shorten-heading" class="absence-detail-section__title"><?php p($l->t('I returned early')); ?></h4>
+                    <p class="absence-detail-shorten__desc"><?php p($l->t('Set the actual last day of your absence so your records and your substitute\'s calendar stay accurate.')); ?></p>
+                    <form id="form-shorten-absence" class="form form--inline absence-detail-shorten__form" method="POST"
+                          action="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.absence.shortenForm', ['id' => $absence->getId()])); ?>">
+                        <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
+                        <div class="form-group">
+                            <label for="shorten-end-date" class="form-label"><?php p($l->t('New end date')); ?></label>
+                            <input type="text"
+                                   id="shorten-end-date"
+                                   name="end_date"
+                                   class="form-input datepicker-input"
+                                   data-datepicker-min="<?php p($start->format('d.m.Y')); ?>"
+                                   data-datepicker-max="<?php p((clone $end)->modify('-1 day')->format('d.m.Y')); ?>"
+                                   value="<?php p((new \DateTime())->format('d.m.Y')); ?>"
+                                   placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
+                                   pattern="\d{2}\.\d{2}\.\d{4}"
+                                   maxlength="10"
+                                   required
+                                   aria-required="true"
+                                   aria-describedby="shorten-help">
+                            <p id="shorten-help" class="form-help"><?php p($l->t('Pick the day you actually returned. Must be before the original end date.')); ?></p>
+                        </div>
+                        <div class="form-group form-group--actions">
+                            <button type="submit" class="btn btn--primary" aria-label="<?php p($l->t('Update end date and shorten absence')); ?>">
+                                <?php p($l->t('Update end date')); ?>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <?php endif; ?>
+
+                <!-- Dates & Duration -->
+                <div class="absence-detail-section" role="region" aria-labelledby="absence-detail-dates-heading">
+                    <h4 id="absence-detail-dates-heading" class="absence-detail-section__title"><?php p($l->t('Dates and duration')); ?></h4>
+                    <dl class="absence-detail-list">
+                        <div class="absence-detail-row">
+                            <dt class="absence-detail-label"><?php p($l->t('Period')); ?></dt>
+                            <dd class="absence-detail-value"><?php p($start->format('d.m.Y')); ?> – <?php p($end->format('d.m.Y')); ?></dd>
+                        </div>
+                        <div class="absence-detail-row">
+                            <dt class="absence-detail-label"><?php p($l->t('Working days')); ?></dt>
+                            <dd class="absence-detail-value"><?php p((string)$days); ?></dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Details: Reason, Substitute, Approval comment -->
+                <div class="absence-detail-section" role="region" aria-labelledby="absence-detail-info-heading">
+                    <h4 id="absence-detail-info-heading" class="absence-detail-section__title"><?php p($l->t('Details')); ?></h4>
+                    <dl class="absence-detail-list">
+                        <div class="absence-detail-row">
+                            <dt class="absence-detail-label"><?php p($l->t('Reason')); ?></dt>
+                            <dd class="absence-detail-value"><?php
+                                $reason = $absence->getReason();
+                                p($reason ?: $l->t('No additional reason provided'));
+                            ?></dd>
+                        </div>
+                        <div class="absence-detail-row">
+                            <dt class="absence-detail-label"><?php p($l->t('Substitute')); ?></dt>
+                            <dd class="absence-detail-value"><?php p($substituteDisplayName ?? $absence->getSubstituteUserId() ?? $l->t('None')); ?></dd>
+                        </div>
+                        <div class="absence-detail-row">
+                            <dt class="absence-detail-label"><?php p($absence->getStatus() === 'substitute_declined' ? $l->t('Reason for declining') : $l->t('Approval comment')); ?></dt>
+                            <dd class="absence-detail-value"><?php
+                                $comment = $absence->getApproverComment();
+                                p($comment ?: $l->t('No approval comment available'));
+                            ?></dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Audit trail: Created, Last updated, Approved at -->
+                <div class="absence-detail-section" role="region" aria-labelledby="absence-detail-audit-heading">
+                    <h4 id="absence-detail-audit-heading" class="absence-detail-section__title"><?php p($l->t('History')); ?></h4>
+                    <dl class="absence-detail-list">
+                        <div class="absence-detail-row">
+                            <dt class="absence-detail-label"><?php p($l->t('Created')); ?></dt>
+                            <dd class="absence-detail-value"><?php p($absence->getCreatedAt()->format('d.m.Y H:i')); ?></dd>
+                        </div>
+                        <div class="absence-detail-row">
+                            <dt class="absence-detail-label"><?php p($l->t('Last updated')); ?></dt>
+                            <dd class="absence-detail-value"><?php p($absence->getUpdatedAt()->format('d.m.Y H:i')); ?></dd>
+                        </div>
+                        <?php if ($absence->getApprovedAt() !== null): ?>
+                        <div class="absence-detail-row">
+                            <dt class="absence-detail-label"><?php p($l->t('Approved at')); ?></dt>
+                            <dd class="absence-detail-value"><?php p($absence->getApprovedAt()->format('d.m.Y H:i')); ?></dd>
+                        </div>
+                        <?php endif; ?>
+                    </dl>
+                </div>
+
+                <div class="absence-detail-actions">
+                    <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.absences')); ?>" class="btn btn--secondary">
+                        <?php p($l->t('Back to overview')); ?>
+                    </a>
+                </div>
+            </section>
         <?php else: ?>
-            <!-- Stats Cards -->
+            <!-- Stats Cards: Vacation only (sick leave etc. excluded) -->
             <section class="section section--stats" aria-labelledby="stats-title">
-                <h3 id="stats-title" class="section__title visually-hidden"><?php p($l->t('Your absence overview')); ?></h3>
+                <h3 id="stats-title" class="section__title stats-section-title">
+                    <?php p($l->t('Vacation balance') . ' ' . (string)($stats['vacation_year'] ?? date('Y'))); ?>
+                </h3>
+                <p id="stats-desc" class="stats-section-desc visually-hidden">
+                    <?php p($l->t('Remaining vacation days for this year. Only approved vacation (not sick leave or other absences) is deducted.')); ?>
+                </p>
                 <?php if (!empty($stats)): ?>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <span class="stat-label"><?php p($l->t('Vacation Days Remaining')); ?></span>
-                            <span class="stat-value"><?php p($stats['vacation_days_remaining'] ?? 0); ?></span>
+                    <div class="stats-grid" role="group" aria-labelledby="stats-title" aria-describedby="stats-desc">
+                        <div class="stat-card stat-card--remaining">
+                            <span class="stat-label" id="stat-remaining-label"><?php p($l->t('Remaining')); ?></span>
+                            <span class="stat-value" aria-labelledby="stat-remaining-label"><?php p((string)round($stats['vacation_days_remaining'] ?? 0, 1)); ?></span>
+                            <span class="stat-sublabel"><?php p($l->t('vacation days')); ?></span>
                         </div>
-                        <div class="stat-card">
-                            <span class="stat-label"><?php p($l->t('Pending Requests')); ?></span>
-                            <span class="stat-value"><?php p($stats['pending_requests'] ?? 0); ?></span>
+                        <div class="stat-card stat-card--used">
+                            <span class="stat-label" id="stat-used-label"><?php p($l->t('Used this year')); ?></span>
+                            <span class="stat-value stat-value--secondary" aria-labelledby="stat-used-label"><?php p((string)round($stats['vacation_days_used_this_year'] ?? 0, 1)); ?></span>
+                            <span class="stat-sublabel"><?php p($l->t('vacation days')); ?></span>
                         </div>
-                        <div class="stat-card">
-                            <span class="stat-label"><?php p($l->t('Days Taken This Year')); ?></span>
-                            <span class="stat-value"><?php p($stats['days_taken_this_year'] ?? 0); ?></span>
+                        <div class="stat-card stat-card--pending">
+                            <span class="stat-label" id="stat-pending-label"><?php p($l->t('Pending requests')); ?></span>
+                            <span class="stat-value stat-value--secondary" aria-labelledby="stat-pending-label"><?php p((string)($stats['pending_requests'] ?? 0)); ?></span>
+                            <span class="stat-sublabel"><?php p($l->t('awaiting approval')); ?></span>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -303,7 +546,7 @@ $usersUrl = $_['usersUrl'] ?? '';
                         <tbody>
                             <?php if (!empty($absences)): ?>
                                 <?php foreach (($absences ?? []) as $absence): ?>
-                                    <tr data-absence-id="<?php p($absence->getId()); ?>">
+                                    <tr data-absence-id="<?php p($absence->getId()); ?>" data-status="<?php p($absence->getStatus()); ?>">
                                         <td data-label="<?php p($l->t('Type')); ?>">
                                             <span class="absence-type-badge type-<?php p($absence->getType()); ?>">
                                                 <?php 
@@ -326,14 +569,28 @@ $usersUrl = $_['usersUrl'] ?? '';
                                         </td>
                                         <td data-label="<?php p($l->t('Start Date')); ?>"><?php p($absence->getStartDate()->format('d.m.Y')); ?></td>
                                         <td data-label="<?php p($l->t('End Date')); ?>"><?php p($absence->getEndDate()->format('d.m.Y')); ?></td>
-                                        <td data-label="<?php p($l->t('Days')); ?>"><?php p($absence->getDays()); ?></td>
+                                        <td data-label="<?php p($l->t('Days')); ?>"><?php
+                                            $d = $absence->getDays();
+                                            $displayD = $d !== null ? (float)$d : (float)(($_['computedWorkingDays'] ?? [])[$absence->getId()] ?? $absence->calculateWorkingDays());
+                                            p((string)round($displayD, 1));
+                                        ?></td>
                                         <td class="reason-cell" data-label="<?php p($l->t('Reason')); ?>">
                                             <?php 
                                             $reason = $absence->getReason();
-                                            p($reason ? substr($reason, 0, 50) : '-'); 
-                                            ?>
-                                            <?php if ($reason && strlen($reason) > 50): ?>
-                                                <span class="reason-more">...</span>
+                                            if (!$reason): ?>
+                                                <span class="text-muted">-</span>
+                                            <?php elseif (strlen($reason) <= 60): ?>
+                                                <?php p($reason); ?>
+                                            <?php else: ?>
+                                                <span class="reason-truncated" aria-expanded="false">
+                                                    <span class="reason-truncated__short"><?php p(substr($reason, 0, 60)); ?>&hellip;</span>
+                                                    <span class="reason-truncated__full" hidden><?php p($reason); ?></span>
+                                                    <button type="button"
+                                                            class="btn btn--tertiary btn--sm reason-truncated__toggle"
+                                                            aria-label="<?php p($l->t('Show full reason')); ?>">
+                                                        <?php p($l->t('more')); ?>
+                                                    </button>
+                                                </span>
                                             <?php endif; ?>
                                         </td>
                                         <td data-label="<?php p($l->t('Status')); ?>">
@@ -362,25 +619,25 @@ $usersUrl = $_['usersUrl'] ?? '';
                                             </span>
                                         </td>
                                         <td class="actions-cell" data-label="<?php p($l->t('Actions')); ?>">
-                                            <?php if (in_array($absence->getStatus(), ['pending', 'substitute_pending'], true)): ?>
-                                                <button type="button" class="btn-icon btn-edit" 
+                                            <?php if (in_array($absence->getStatus(), ['pending', 'substitute_pending', 'substitute_declined'], true)): ?>
+                                                <button type="button" class="btn-icon btn-icon--edit" 
                                                         data-absence-id="<?php p($absence->getId()); ?>"
                                                         aria-label="<?php p($l->t('Edit this absence request')); ?>"
                                                         title="<?php p($l->t('Edit')); ?>">
-                                                    <span aria-hidden="true">✏️</span>
+                                                    <span class="icon icon-rename" aria-hidden="true"></span>
                                                 </button>
-                                                <button type="button" class="btn-icon btn-cancel" 
+                                                <button type="button" class="btn-icon btn-icon--cancel" 
                                                         data-absence-id="<?php p($absence->getId()); ?>"
                                                         aria-label="<?php p($l->t('Cancel this absence request')); ?>"
                                                         title="<?php p($l->t('Cancel')); ?>">
-                                                    <span aria-hidden="true">❌</span>
+                                                    <span class="icon icon-delete" aria-hidden="true"></span>
                                                 </button>
                                             <?php else: ?>
-                                                <button type="button" class="btn-icon btn-view" 
+                                                <button type="button" class="btn-icon btn-icon--view" 
                                                         data-absence-id="<?php p($absence->getId()); ?>"
                                                         aria-label="<?php p($l->t('View details of this absence')); ?>"
                                                         title="<?php p($l->t('View Details')); ?>">
-                                                    <span aria-hidden="true">👁️</span>
+                                                    <span class="icon icon-details" aria-hidden="true"></span>
                                                 </button>
                                             <?php endif; ?>
                                         </td>
@@ -420,7 +677,9 @@ $usersUrl = $_['usersUrl'] ?? '';
     window.ArbeitszeitCheck.mode = <?php echo json_encode($mode, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.currentUserId = <?php echo json_encode($currentUserId ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.usersUrl = <?php echo json_encode($usersUrl ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.colleagues = <?php echo json_encode($colleagues, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.selectedSubstituteId = <?php echo json_encode(($absence && $absence->getSubstituteUserId()) ? $absence->getSubstituteUserId() : '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.requireSubstituteTypes = <?php echo json_encode($requireSubstituteTypes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.absences = <?php echo json_encode(array_map(function($a) {
         return [
             'id' => $a->getId(),
@@ -437,8 +696,10 @@ $usersUrl = $_['usersUrl'] ?? '';
     window.ArbeitszeitCheck.apiUrl = {
         absences: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.index'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         create: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.store'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
-        update: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.updatePost', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>.replace('__ID__', ''),
-        delete: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.delete', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>.replace('__ID__', '')
+        show: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        edit: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.edit', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        update: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.updatePost', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        delete: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.absence.delete', ['id' => '__ID__']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
     };
     
     // Handle form submission for create/edit
@@ -447,43 +708,103 @@ $usersUrl = $_['usersUrl'] ?? '';
         const form = document.getElementById('absence-form');
         const startDateInput = document.getElementById('absence-start-date');
         const endDateInput = document.getElementById('absence-end-date');
+        const typeSelect = document.getElementById('absence-type');
         const substituteSelect = document.getElementById('absence-substitute');
+        const substituteLabel = document.getElementById('absence-substitute-label');
+        const substituteRequiredMsg = document.getElementById('absence-substitute-required-msg');
+        const requireSubstituteTypes = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.requireSubstituteTypes) || [];
         const currentUserId = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.currentUserId) || '';
         const usersUrl = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.usersUrl) || '';
         const selectedSubstituteId = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.selectedSubstituteId) || '';
-        if (substituteSelect && usersUrl) {
-            var requestToken = (typeof OC !== 'undefined' && OC.requestToken) ? OC.requestToken : (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || '';
-            fetch(usersUrl, {
-                headers: { 'requesttoken': requestToken },
-                credentials: 'same-origin'
-            })
-                .then(function(r) {
-                    if (!r.ok) return null;
-                    return r.json();
+        if (substituteSelect) {
+            var substituteGroup = document.getElementById('absence-substitute-group');
+            var emptyHint = document.getElementById('absence-substitute-empty');
+            var errorHint = document.getElementById('absence-substitute-error');
+            var statusEl = document.getElementById('absence-substitute-status');
+            var loadingText = (window.t && window.t('arbeitszeitcheck', 'Loading team members…')) || 'Loading team members…';
+            var errorText = (window.t && window.t('arbeitszeitcheck', 'Could not load team members. Please try again.')) || 'Could not load team members. Please try again.';
+            var colleagues = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.colleagues) || [];
+
+            function setSubstituteState(loading, error, empty) {
+                if (substituteSelect) {
+                    substituteSelect.setAttribute('aria-busy', loading ? 'true' : 'false');
+                    substituteSelect.disabled = loading;
+                }
+                if (statusEl) {
+                    statusEl.textContent = loading ? loadingText : '';
+                    statusEl.style.display = loading ? 'block' : 'none';
+                }
+                if (errorHint) {
+                    errorHint.textContent = errorText;
+                    errorHint.style.display = error ? 'block' : 'none';
+                }
+                if (emptyHint) emptyHint.style.display = (empty && !error) ? 'block' : 'none';
+            }
+
+            function fillSubstituteOptions(users) {
+                var opts = substituteSelect.querySelectorAll('option:not([value=""])');
+                opts.forEach(function(o) { o.remove(); });
+                var count = 0;
+                (users || []).forEach(function(u) {
+                    if (u.userId === currentUserId) return;
+                    var opt = document.createElement('option');
+                    opt.value = u.userId;
+                    opt.textContent = u.displayName || u.display_name || u.userId;
+                    if (u.userId === selectedSubstituteId) opt.selected = true;
+                    substituteSelect.appendChild(opt);
+                    count++;
+                });
+                if (emptyHint) emptyHint.style.display = count === 0 ? 'block' : 'none';
+            }
+
+            if (Array.isArray(colleagues) && colleagues.length > 0) {
+                setSubstituteState(false, false, false);
+                fillSubstituteOptions(colleagues);
+            } else if (usersUrl) {
+                setSubstituteState(true, false, false);
+                var requestToken = (typeof OC !== 'undefined' && OC.requestToken) ? OC.requestToken : (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || '';
+                fetch(usersUrl, {
+                    headers: { 'requesttoken': requestToken },
+                    credentials: 'same-origin'
                 })
-                .then(function(data) {
-                    var opts = substituteSelect.querySelectorAll('option[value!=""]');
-                    opts.forEach(function(o) { o.remove(); });
-                    var emptyHint = document.getElementById('absence-substitute-empty');
-                    if (!data || !Array.isArray(data.users)) {
-                        if (emptyHint) emptyHint.style.display = 'block';
-                        return;
-                    }
-                    var count = 0;
-                    data.users.forEach(function(u) {
-                        if (u.userId === currentUserId) return;
-                        var opt = document.createElement('option');
-                        opt.value = u.userId;
-                        opt.textContent = u.displayName || u.display_name || u.userId;
-                        if (u.userId === selectedSubstituteId) opt.selected = true;
-                        substituteSelect.appendChild(opt);
-                        count++;
+                    .then(function(r) {
+                        if (!r.ok) {
+                            setSubstituteState(false, false, true);
+                            return null;
+                        }
+                        return r.json().catch(function() { return null; });
+                    })
+                    .then(function(data) {
+                        setSubstituteState(false, false, false);
+                        var users = (data && Array.isArray(data.users)) ? data.users : [];
+                        fillSubstituteOptions(users);
+                    })
+                    .catch(function() {
+                        setSubstituteState(false, false, true);
                     });
-                    if (emptyHint) emptyHint.style.display = count === 0 ? 'block' : 'none';
-                })
-                .catch(function() {});
+            } else {
+                setSubstituteState(false, false, true);
+            }
         }
-        
+
+        function updateSubstituteRequiredState() {
+            if (!typeSelect || !substituteSelect || !substituteLabel || !substituteRequiredMsg) return;
+            const type = typeSelect.value || '';
+            const required = requireSubstituteTypes.indexOf(type) !== -1;
+            substituteSelect.setAttribute('aria-required', required ? 'true' : 'false');
+            substituteSelect.required = required;
+            if (substituteLabel) {
+                var base = <?php echo json_encode($l->t('Substitute'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+                var reqLabel = <?php echo json_encode($l->t('required'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+                substituteLabel.innerHTML = base + (required ? ' <span class="form-required" aria-label="' + reqLabel + '">*</span>' : '');
+            }
+            substituteRequiredMsg.style.display = 'none';
+        }
+        if (typeSelect) {
+            typeSelect.addEventListener('change', updateSubstituteRequiredState);
+            updateSubstituteRequiredState();
+        }
+
         // Validate end date is not before start date
         function parseDDMMYYYY(s) {
             if (!s || !/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return null;
@@ -506,23 +827,50 @@ $usersUrl = $_['usersUrl'] ?? '';
         
         if (startDateInput) {
             startDateInput.addEventListener('change', function() {
-                if (endDateInput.value) {
+                if (!endDateInput.value && startDateInput.value && /^\d{2}\.\d{2}\.\d{4}$/.test(startDateInput.value)) {
+                    endDateInput.value = startDateInput.value;
+                    endDateInput.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (endDateInput.value) {
                     validateDates();
                 }
             });
         }
-        
+
         if (endDateInput) {
-            endDateInput.addEventListener('change', validateDates);
+            endDateInput.addEventListener('change', function() {
+                if (!startDateInput.value && endDateInput.value && /^\d{2}\.\d{2}\.\d{4}$/.test(endDateInput.value)) {
+                    startDateInput.value = endDateInput.value;
+                    startDateInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                validateDates();
+            });
         }
         
+        function hideFormError() {
+            var errEl = document.getElementById('absence-form-error');
+            if (errEl) { errEl.style.display = 'none'; }
+        }
+        if (typeSelect) typeSelect.addEventListener('change', hideFormError);
+        if (startDateInput) startDateInput.addEventListener('input', hideFormError);
+        if (endDateInput) endDateInput.addEventListener('input', hideFormError);
+
         if (form) {
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
-                
+                hideFormError();
                 if (!validateDates()) {
                     return;
                 }
+                var type = typeSelect ? typeSelect.value : '';
+                var subRequired = requireSubstituteTypes.indexOf(type) !== -1;
+                if (subRequired && substituteSelect && (!substituteSelect.value || substituteSelect.value === '')) {
+                    if (substituteRequiredMsg) substituteRequiredMsg.style.display = 'block';
+                    substituteSelect.setAttribute('aria-invalid', 'true');
+                    substituteSelect.focus();
+                    return;
+                }
+                if (substituteSelect) substituteSelect.setAttribute('aria-invalid', 'false');
+                if (substituteRequiredMsg) substituteRequiredMsg.style.display = 'none';
                 
                 const formData = new FormData(form);
                 const dp = window.ArbeitszeitCheckDatepicker;
@@ -570,6 +918,11 @@ $usersUrl = $_['usersUrl'] ?? '';
                                 : ((window.t && window.t('arbeitszeitcheck', 'Absence request updated')) || 'Absence request updated');
                             if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
                                 window.OC.Notification.showTemporary(successMsg, { type: 'success' });
+                            } else {
+                                // Fallback so users always get feedback, even if Nextcloud notifications are unavailable
+                                try {
+                                    alert(successMsg);
+                                } catch (e) {}
                             }
                             window.location.href = response.redirected ? response.url : listUrl;
                             return;
@@ -578,22 +931,91 @@ $usersUrl = $_['usersUrl'] ?? '';
                             let errMsg = (window.t && window.t('arbeitszeitcheck', 'Failed to submit absence request')) || 'Failed to submit absence request';
                             try {
                                 const j = JSON.parse(text);
-                                if (j && j.error) errMsg = j.error;
+                                if (j && typeof j.error === 'string' && j.error) errMsg = j.error;
                             } catch (e) { /* ignore */ }
+                            var errEl = document.getElementById('absence-form-error');
+                            var errText = document.getElementById('absence-form-error-text');
+                            if (errEl && errText) {
+                                errText.textContent = errMsg;
+                                errEl.style.display = 'block';
+                                errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }
                             if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
-                                window.OC.Notification.showTemporary(errMsg, { type: 'error' });
+                                window.OC.Notification.showTemporary(errMsg, { type: 'error', timeout: 8000 });
+                            } else {
+                                try { alert(errMsg); } catch (e) {}
                             }
                         });
                     })
                     .catch(function(err) {
                         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText; }
                         const errMsg = (err && err.message) || (window.t && window.t('arbeitszeitcheck', 'Failed to submit absence request')) || 'Failed to submit absence request';
+                        var errEl = document.getElementById('absence-form-error');
+                        var errText = document.getElementById('absence-form-error-text');
+                        if (errEl && errText) {
+                            errText.textContent = errMsg;
+                            errEl.style.display = 'block';
+                            errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
                         if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
-                            window.OC.Notification.showTemporary(errMsg, { type: 'error' });
+                            window.OC.Notification.showTemporary(errMsg, { type: 'error', timeout: 8000 });
+                        } else {
+                            try { alert(errMsg); } catch (e) {}
                         }
                     });
             });
         }
     });
     <?php endif; ?>
+
+    // ===== REASON EXPAND/COLLAPSE =====
+    document.querySelectorAll('.reason-truncated__toggle').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const container = btn.closest('.reason-truncated');
+            if (!container) return;
+            const short = container.querySelector('.reason-truncated__short');
+            const full  = container.querySelector('.reason-truncated__full');
+            const expanded = container.getAttribute('aria-expanded') === 'true';
+            container.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            if (short) short.hidden = !expanded;
+            if (full)  full.hidden  =  expanded;
+            btn.textContent = expanded
+                ? (window.t ? window.t('arbeitszeitcheck', 'more') : 'more')
+                : (window.t ? window.t('arbeitszeitcheck', 'less') : 'less');
+            btn.setAttribute('aria-label', expanded
+                ? (window.t ? window.t('arbeitszeitcheck', 'Show full reason') : 'Show full reason')
+                : (window.t ? window.t('arbeitszeitcheck', 'Show less') : 'Show less'));
+        });
+    });
+
+    // ===== ACCESSIBLE CONFIRM DIALOGS =====
+    // Replace native confirm() on any .js-confirm-submit button.
+    // Uses ArbeitszeitCheckComponents.showConfirmDialog which returns a Promise.
+    document.querySelectorAll('.js-confirm-submit').forEach(function(btn) {
+        btn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            const form = btn.closest('form');
+            if (!form) return;
+
+            const comp = window.ArbeitszeitCheckComponents;
+            if (!comp || typeof comp.showConfirmDialog !== 'function') {
+                // Fallback: native confirm — should never happen since components.js is always loaded
+                if (window.confirm(btn.dataset.confirmMessage || '')) {
+                    form.submit();
+                }
+                return;
+            }
+
+            const confirmed = await comp.showConfirmDialog({
+                title:        btn.dataset.confirmTitle   || '',
+                message:      btn.dataset.confirmMessage || '',
+                variant:      btn.dataset.confirmVariant || 'info',
+                confirmLabel: btn.dataset.confirmLabel   || undefined,
+            });
+
+            if (confirmed) {
+                form.submit();
+            }
+        });
+    });
 </script>

@@ -14,6 +14,43 @@
     const Messaging = window.ArbeitszeitCheckMessaging || {};
     const baseUrl = '/apps/arbeitszeitcheck';
 
+    /**
+     * Compatibility wrapper for Nextcloud's destructive confirmation dialog.
+     * Supports both the modern Promise-based API and the older callback-based API.
+     *
+     * @param {string} message
+     * @param {string} title
+     * @param {object} options
+     * @param {Function} onConfirm - called only when the user explicitly confirms
+     */
+    function confirmDestructiveCompat(message, title, options, onConfirm) {
+        if (typeof OC !== 'undefined' && OC.dialogs && typeof OC.dialogs.confirmDestructive === 'function') {
+            // Try promise-based API first
+            var result;
+            try {
+                result = OC.dialogs.confirmDestructive(message, title, options, function(confirmed) {
+                    // If the implementation is callback-based (old API), this callback will be used.
+                    if (confirmed) {
+                        onConfirm();
+                    }
+                });
+            } catch (e) {
+                result = undefined;
+            }
+
+            // If a thenable is returned, use the modern Promise API
+            if (result && typeof result.then === 'function') {
+                result.then(function(confirmed) {
+                    if (confirmed) {
+                        onConfirm();
+                    }
+                });
+            }
+        } else if (window.confirm(message)) {
+            onConfirm();
+        }
+    }
+
     function t(key, fallback) {
         if (typeof window.t === 'function') {
             return window.t('arbeitszeitcheck', key);
@@ -95,19 +132,19 @@
         const indent = depth * 16;
         let html = '<ul class="teams-tree__list" role="group">';
         nodes.forEach(function(node) {
-            const name = Utils.escapeHtml ? Utils.escapeHtml(node.name) : String(node.name).replace(/[&<>"']/g, function(c) {
+            const name = Utils.escapeHtml ? Utils.escapeHtml(node.name) : String(node.name || '').replace(/[&<>"']/g, function(c) {
                 return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
             });
-            const safeName = node.name || '';
-            const editLabel = (t('Edit unit', 'Edit') + ' ' + safeName).trim();
-            const deleteLabel = (t('Delete unit', 'Delete unit') + ' ' + safeName).trim();
+            const displayName = node.name || '';
+            const editLabel = (t('Edit unit', 'Edit') + ' ' + name).trim();
+            const deleteLabel = (t('Delete unit', 'Delete unit') + ' ' + name).trim();
             const hasChildren = node.children && node.children.length > 0;
             const ariaExpanded = hasChildren ? ' aria-expanded="true"' : '';
             const selected = selectedTeamId === node.id ? ' teams-tree__item--selected' : '';
             html += '<li class="teams-tree__item' + selected + '" role="treeitem" tabindex="-1" data-team-id="' + node.id + '"' + ariaExpanded + ' aria-selected="' + (selectedTeamId === node.id) + '" style="padding-left: ' + (indent + 8) + 'px">';
             html += '<span class="teams-tree__label" tabindex="0" role="button">' + name + '</span>';
             html += '<span class="teams-tree__actions" role="group" aria-label="' + (t('Actions for unit', 'Actions')) + '">';
-            html += '<button type="button" class="button button--icon teams-tree__edit" data-team-id="' + node.id + '" data-team-name="' + (Utils.escapeHtml ? Utils.escapeHtml(safeName) : safeName) + '" aria-label="' + editLabel + '"><span class="icon icon-rename" aria-hidden="true"></span></button>';
+            html += '<button type="button" class="button button--icon teams-tree__edit" data-team-id="' + node.id + '" data-team-name="' + name + '" aria-label="' + editLabel + '"><span class="icon icon-rename" aria-hidden="true"></span></button>';
             html += '<button type="button" class="button button--icon teams-tree__delete" data-team-id="' + node.id + '" data-team-name="' + name + '" aria-label="' + deleteLabel + '"><span class="icon icon-delete" aria-hidden="true"></span></button>';
             html += '</span>';
             if (hasChildren) {
@@ -324,18 +361,113 @@
     }
 
     function confirmDeleteTeam(id, name) {
+        // Load a small impact summary so the confirmation dialog can explain
+        // clearly what will happen (members, managers, sub-teams).
+        Utils.ajax(baseUrl + '/api/admin/teams/' + id + '/delete-impact', {
+            method: 'GET',
+            onSuccess: function(data) {
+                if (!data || !data.success || !data.impact) {
+                    showSimpleDeleteConfirm(id, name);
+                    return;
+                }
+                showImpactDeleteModal(id, name, data.impact);
+            },
+            onError: function() {
+                // Fallback to a simple confirmation when impact cannot be loaded.
+                showSimpleDeleteConfirm(id, name);
+            }
+        });
+    }
+
+    function showSimpleDeleteConfirm(id, name) {
         var message = t('Are you sure you want to delete the unit "%s"? Members and managers will be unassigned.', 'Are you sure you want to delete this unit?').replace('%s', name);
-        if (typeof OC !== 'undefined' && OC.dialogs && OC.dialogs.confirmDestructive) {
-            OC.dialogs.confirmDestructive(message, t('Delete unit', 'Delete unit'), {
-                type: OC.dialogs.YES_NO_BUTTONS,
+        confirmDestructiveCompat(
+            message,
+            t('Delete unit', 'Delete unit'),
+            {
+                type: OC.dialogs && OC.dialogs.YES_NO_BUTTONS,
                 confirm: t('Delete', 'Delete'),
                 confirmClasses: 'error',
                 cancel: t('Cancel', 'Cancel')
-            }).then(function(confirmed) {
-                if (confirmed) deleteTeam(id);
+            },
+            function() { deleteTeam(id); }
+        );
+    }
+
+    function showImpactDeleteModal(id, name, impact) {
+        const title = t('Delete unit', 'Delete unit');
+        const memberCount = impact.memberCount || 0;
+        const managerCount = impact.managerCount || 0;
+        const childCount = impact.childTeamCount || 0;
+
+        const heading = t('Delete "%s"?', 'Delete unit').replace('%s', name);
+        const intro = t('Deleting this unit will unassign all members and managers from it. Sub-teams must be handled separately.', 'Deleting this unit will unassign all members and managers.');
+
+        const impactList = [
+            t('Members in this unit: %s', 'Members in this unit:').replace('%s', String(memberCount)),
+            t('Managers in this unit: %s', 'Managers in this unit:').replace('%s', String(managerCount)),
+            t('Direct sub-units: %s', 'Direct sub-units:').replace('%s', String(childCount))
+        ];
+
+        const content = `
+            <div class="modal-section">
+                <h2 id="team-delete-title" class="modal-title">${heading}</h2>
+                <p id="team-delete-intro" class="modal-text">${intro}</p>
+                <ul class="modal-list">
+                    <li>${impactList[0]}</li>
+                    <li>${impactList[1]}</li>
+                    <li>${impactList[2]}</li>
+                </ul>
+                <p class="modal-text">
+                    ${t('This action cannot be undone.', 'This action cannot be undone.')}
+                </p>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn--secondary" data-action="close-modal">${t('Cancel', 'Cancel')}</button>
+                <button type="button" class="btn btn--primary btn--danger" data-action="confirm-delete-team">
+                    ${t('Delete', 'Delete')}
+                </button>
+            </div>
+        `;
+
+        const modal = Components.createModal({
+            id: 'modal-delete-team',
+            title: title,
+            content: content,
+            size: 'md',
+            closable: true,
+            ariaLabelledBy: 'team-delete-title',
+            ariaDescribedBy: 'team-delete-intro',
+            onClose: function() {
+                const el = document.getElementById('modal-delete-team');
+                if (el && el.parentNode) {
+                    el.parentNode.remove();
+                }
+            }
+        });
+
+        document.body.appendChild(modal);
+        Components.openModal('modal-delete-team');
+
+        const modalEl = document.getElementById('modal-delete-team');
+        if (!modalEl) {
+            return;
+        }
+
+        const cancelBtn = modalEl.querySelector('[data-action="close-modal"]');
+        const confirmBtn = modalEl.querySelector('[data-action="confirm-delete-team"]');
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function() {
+                Components.closeModal(modalEl);
             });
-        } else if (window.confirm(message)) {
-            deleteTeam(id);
+        }
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function() {
+                Components.closeModal(modalEl);
+                deleteTeam(id);
+            });
+            confirmBtn.focus();
         }
     }
 
@@ -648,18 +780,17 @@
 
     function confirmRemoveMember(teamId, userId, displayName) {
         var message = t('Remove "%s" from this team?', 'Remove this member?').replace('%s', displayName);
-        if (typeof OC !== 'undefined' && OC.dialogs && OC.dialogs.confirmDestructive) {
-            OC.dialogs.confirmDestructive(message, t('Remove member', 'Remove member'), {
-                type: OC.dialogs.YES_NO_BUTTONS,
+        confirmDestructiveCompat(
+            message,
+            t('Remove member', 'Remove member'),
+            {
+                type: OC.dialogs && OC.dialogs.YES_NO_BUTTONS,
                 confirm: t('Remove', 'Remove'),
                 confirmClasses: 'error',
                 cancel: t('Cancel', 'Cancel')
-            }).then(function(confirmed) {
-                if (confirmed) removeMember(teamId, userId);
-            });
-        } else if (window.confirm(message)) {
-            removeMember(teamId, userId);
-        }
+            },
+            function() { removeMember(teamId, userId); }
+        );
     }
 
     function removeMember(teamId, userId) {
@@ -678,18 +809,17 @@
 
     function confirmRemoveManager(teamId, userId, displayName) {
         var message = t('Remove "%s" as manager?', 'Remove this manager?').replace('%s', displayName);
-        if (typeof OC !== 'undefined' && OC.dialogs && OC.dialogs.confirmDestructive) {
-            OC.dialogs.confirmDestructive(message, t('Remove manager', 'Remove manager'), {
-                type: OC.dialogs.YES_NO_BUTTONS,
+        confirmDestructiveCompat(
+            message,
+            t('Remove manager', 'Remove manager'),
+            {
+                type: OC.dialogs && OC.dialogs.YES_NO_BUTTONS,
                 confirm: t('Remove', 'Remove'),
                 confirmClasses: 'error',
                 cancel: t('Cancel', 'Cancel')
-            }).then(function(confirmed) {
-                if (confirmed) removeManager(teamId, userId);
-            });
-        } else if (window.confirm(message)) {
-            removeManager(teamId, userId);
-        }
+            },
+            function() { removeManager(teamId, userId); }
+        );
     }
 
     function removeManager(teamId, userId) {

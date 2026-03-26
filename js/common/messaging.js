@@ -18,8 +18,12 @@ const ArbeitszeitCheckMessaging = {
         title: title,
         duration: 3000
       });
-    } else if (window.OC && window.OC.Notification) {
+    } else if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
       window.OC.Notification.showTemporary(message);
+    } else {
+      try {
+        alert(message);
+      } catch (e) {}
     }
   },
 
@@ -34,8 +38,12 @@ const ArbeitszeitCheckMessaging = {
         title: title,
         duration: 5000
       });
-    } else if (window.OC && window.OC.Notification) {
+    } else if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
       window.OC.Notification.showTemporary(message);
+    } else {
+      try {
+        alert(message);
+      } catch (e) {}
     }
   },
 
@@ -50,8 +58,12 @@ const ArbeitszeitCheckMessaging = {
         title: title,
         duration: 4000
       });
-    } else if (window.OC && window.OC.Notification) {
+    } else if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
       window.OC.Notification.showTemporary(message);
+    } else {
+      try {
+        alert(message);
+      } catch (e) {}
     }
   },
 
@@ -66,8 +78,12 @@ const ArbeitszeitCheckMessaging = {
         title: title,
         duration: 3000
       });
-    } else if (window.OC && window.OC.Notification) {
+    } else if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
       window.OC.Notification.showTemporary(message);
+    } else {
+      try {
+        alert(message);
+      } catch (e) {}
     }
   },
 
@@ -82,8 +98,12 @@ const ArbeitszeitCheckMessaging = {
         title: title,
         duration: duration
       });
-    } else if (window.OC && window.OC.Notification) {
+    } else if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
       window.OC.Notification.showTemporary(message);
+    } else {
+      try {
+        alert(message);
+      } catch (e) {}
     }
   }
 };
