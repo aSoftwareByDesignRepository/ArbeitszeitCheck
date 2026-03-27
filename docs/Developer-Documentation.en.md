@@ -561,50 +561,52 @@ composer test
 
 ### JavaScript Tests
 
-JavaScript tests can be written using Jest or similar testing frameworks:
-
-```javascript
-// tests/js/example.test.js
-describe('Example JavaScript', () => {
-  beforeEach(() => {
-    // Setup DOM
-    document.body.innerHTML = '<div id="test-container"></div>';
-  });
-
-  it('handles click events', () => {
-    const button = document.createElement('button');
-    button.id = 'test-button';
-    document.body.appendChild(button);
-    
-    let clicked = false;
-    button.addEventListener('click', () => {
-      clicked = true;
-    });
-    
-    button.click();
-    expect(clicked).toBe(true);
-  });
-});
-```
-```
+JavaScript unit tests are run with **Vitest** (jsdom environment).
 
 Run tests:
 ```bash
 npm test
 ```
 
-### Accessibility Tests
+### E2E workflow tests (Playwright)
 
-```javascript
-import { axe, toHaveNoViolations } from 'jest-axe'
+E2E tests run against a real Nextcloud instance and cover role-based workflows.
 
-expect.extend(toHaveNoViolations)
+Environment variables required:
+- `NC_BASE_URL` (example: `http://localhost:8081`)
+- `NC_EMPLOYEE_USER` / `NC_EMPLOYEE_PASS`
+- `NC_MANAGER_USER` / `NC_MANAGER_PASS`
+- `NC_ADMIN_USER` / `NC_ADMIN_PASS` (for admin-only scenarios when added)
+- `NC_SUBSTITUTE_USER` / `NC_SUBSTITUTE_PASS`
 
-test('component is accessible', async () => {
-  const { container } = render(Component)
-  const results = await axe(container)
-  expect(results).toHaveNoViolations()
-})
+Run:
+```bash
+npm run e2e
+```
+
+### Docker-first commands (this repo)
+
+This repository runs Nextcloud in Docker. For day-to-day development, prefer `docker compose exec`.
+
+Run PHP tests inside the Nextcloud container:
+```bash
+docker compose exec -T nextcloud bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test"
+docker compose exec -T nextcloud bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test:unit"
+docker compose exec -T nextcloud bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test:integration"
+```
+
+Run JS unit tests inside the Nextcloud container:
+```bash
+docker compose exec -T nextcloud bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && npm ci && npm test"
+```
+
+Run E2E tests from your host machine (recommended) against the Dockerized Nextcloud at `http://localhost:8081`:
+```bash
+NC_BASE_URL="http://localhost:8081" \
+NC_EMPLOYEE_USER="employee1" NC_EMPLOYEE_PASS="..." \
+NC_MANAGER_USER="manager1" NC_MANAGER_PASS="..." \
+NC_SUBSTITUTE_USER="substitute1" NC_SUBSTITUTE_PASS="..." \
+npm run e2e
 ```
 
 ---

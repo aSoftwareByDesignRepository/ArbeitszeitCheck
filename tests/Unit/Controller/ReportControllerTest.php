@@ -12,11 +12,13 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
 use OCA\ArbeitszeitCheck\Controller\ReportController;
+use OCA\ArbeitszeitCheck\Db\TeamMember;
 use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
 use OCA\ArbeitszeitCheck\Db\TeamMemberMapper;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
@@ -48,6 +50,15 @@ class ReportControllerTest extends TestCase
 	/** @var IL10N|\PHPUnit\Framework\MockObject\MockObject */
 	private $l10n;
 
+	/** @var TeamResolverService|\PHPUnit\Framework\MockObject\MockObject */
+	private $teamResolver;
+
+	/** @var TeamMemberMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $teamMemberMapper;
+
+	/** @var TeamManagerMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $teamManagerMapper;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -59,18 +70,23 @@ class ReportControllerTest extends TestCase
 		$this->l10n->method('t')->willReturnCallback(fn ($s) => $s);
 		$this->request = $this->createMock(IRequest::class);
 
-		$teamResolver = $this->createMock(TeamResolverService::class);
-		$teamMemberMapper = $this->createMock(TeamMemberMapper::class);
-		$teamManagerMapper = $this->createMock(TeamManagerMapper::class);
+		// Default to allowing self-report access unless a test overrides it.
+		$this->permissionService->method('canViewUserReport')->willReturn(true);
+		$this->permissionService->method('isAdmin')->willReturn(false);
+		$this->permissionService->method('logPermissionDenied');
+
+		$this->teamResolver = $this->createMock(TeamResolverService::class);
+		$this->teamMemberMapper = $this->createMock(TeamMemberMapper::class);
+		$this->teamManagerMapper = $this->createMock(TeamManagerMapper::class);
 
 		$this->controller = new ReportController(
 			'arbeitszeitcheck',
 			$this->request,
 			$this->reportingService,
 			$this->permissionService,
-			$teamResolver,
-			$teamMemberMapper,
-			$teamManagerMapper,
+			$this->teamResolver,
+			$this->teamMemberMapper,
+			$this->teamManagerMapper,
 			$this->userSession,
 			$this->l10n
 		);
@@ -560,6 +576,167 @@ class ReportControllerTest extends TestCase
 		$data = $response->getData();
 
 		$this->assertTrue($data['success']);
+	}
+
+	/**
+	 * Test team report uses manager scope when userIds are not provided.
+	 */
+	public function testTeamReportUsesManagerScopeWhenNoUserIds(): void
+	{
+		$userId = 'manager1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canAccessManagerDashboard')->with($userId)->willReturn(true);
+		$this->teamResolver->expects($this->once())
+			->method('getTeamMemberIds')
+			->with($userId)
+			->willReturn(['userA', 'userB']);
+
+		$reportData = [
+			'start_date' => '2024-01-01',
+			'end_date' => '2024-01-31',
+			'team_members' => [],
+			'total_hours' => 0
+		];
+
+		$this->reportingService->expects($this->once())
+			->method('generateTeamReport')
+			->with(
+				['userA', 'userB'],
+				$this->isInstanceOf(\DateTime::class),
+				$this->isInstanceOf(\DateTime::class)
+			)
+			->willReturn($reportData);
+
+		$response = $this->controller->team();
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+	}
+
+	/**
+	 * Test team report rejects teamId outside manager scope.
+	 */
+	public function testTeamReportWithTeamIdDeniedWhenNotManaged(): void
+	{
+		$userId = 'manager1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->with($userId)->willReturn(false);
+		$this->permissionService->method('canAccessManagerDashboard')->with($userId)->willReturn(true);
+		$this->teamManagerMapper->expects($this->once())
+			->method('getTeamIdsForManager')
+			->with($userId)
+			->willReturn([10, 11]);
+		$this->reportingService->expects($this->never())->method('generateTeamReport');
+
+		$response = $this->controller->team('2024-01-01', '2024-01-31', null, '99');
+		$data = $response->getData();
+
+		$this->assertFalse($data['success']);
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertStringContainsString('Access denied', $data['error']);
+	}
+
+	/**
+	 * Test team report resolves teamId members for managed team.
+	 */
+	public function testTeamReportWithTeamIdUsesTeamMembersWhenManaged(): void
+	{
+		$userId = 'manager1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$memberA = new TeamMember();
+		$memberA->setUserId('userA');
+		$memberB = new TeamMember();
+		$memberB->setUserId('userB');
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->with($userId)->willReturn(false);
+		$this->permissionService->method('canAccessManagerDashboard')->with($userId)->willReturn(true);
+		$this->teamManagerMapper->expects($this->once())
+			->method('getTeamIdsForManager')
+			->with($userId)
+			->willReturn([10, 11]);
+		$this->teamMemberMapper->expects($this->once())
+			->method('findByTeamId')
+			->with(11)
+			->willReturn([$memberA, $memberB]);
+
+		$reportData = [
+			'start_date' => '2024-01-01',
+			'end_date' => '2024-01-31',
+			'team_members' => [],
+			'total_hours' => 0
+		];
+		$this->reportingService->expects($this->once())
+			->method('generateTeamReport')
+			->with(
+				['userA', 'userB'],
+				$this->isInstanceOf(\DateTime::class),
+				$this->isInstanceOf(\DateTime::class)
+			)
+			->willReturn($reportData);
+
+		$response = $this->controller->team('2024-01-01', '2024-01-31', null, '11');
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+	}
+
+	/**
+	 * Test manager scope can export team report as CSV download.
+	 */
+	public function testTeamReportManagerScopeDownloadCsv(): void
+	{
+		$userId = 'manager1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canAccessManagerDashboard')->with($userId)->willReturn(true);
+		$this->teamResolver->expects($this->once())
+			->method('getTeamMemberIds')
+			->with($userId)
+			->willReturn(['userA']);
+		$this->permissionService->method('canViewUserReport')->with($userId, 'userA')->willReturn(true);
+		$this->request->method('getParam')->willReturnMap([
+			['download', '0', '1'],
+			['format', 'csv', 'csv'],
+		]);
+
+		$reportData = [
+			'type' => 'team',
+			'members' => [[
+				'user_id' => 'userA',
+				'display_name' => 'User A',
+				'total_hours' => 8.5,
+				'required_hours' => 8.0,
+				'overtime_hours' => 0.5,
+				'break_hours' => 0.75,
+				'violations_count' => 0,
+				'absence_days' => 0,
+				'entries_count' => 1,
+			]],
+		];
+		$this->reportingService->expects($this->once())
+			->method('generateTeamReport')
+			->with(
+				['userA'],
+				$this->isInstanceOf(\DateTime::class),
+				$this->isInstanceOf(\DateTime::class)
+			)
+			->willReturn($reportData);
+
+		$response = $this->controller->team('2024-01-01', '2024-01-31');
+		$this->assertInstanceOf(DataDownloadResponse::class, $response);
+
+		$csv = (string)$response->render();
+		$this->assertStringContainsString('user_id,display_name,total_hours,required_hours,overtime_hours,break_hours,violations_count,absence_days,entries_count', $csv);
+		$this->assertStringContainsString('userA,"User A"', $csv);
 	}
 
 	/**

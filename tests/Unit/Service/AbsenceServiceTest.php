@@ -22,6 +22,7 @@ use OCA\ArbeitszeitCheck\Service\NotificationService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
@@ -64,6 +65,9 @@ class AbsenceServiceTest extends TestCase
 	/** @var UserWorkingTimeModelMapper|\PHPUnit\Framework\MockObject\MockObject */
 	private $userWorkingTimeModelMapper;
 
+	/** @var IDBConnection|\PHPUnit\Framework\MockObject\MockObject */
+	private $db;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -77,6 +81,7 @@ class AbsenceServiceTest extends TestCase
 		});
 		$this->config = $this->createMock(IConfig::class);
 		$this->config->method('getAppValue')->with('arbeitszeitcheck', 'require_substitute_types', '[]')->willReturn('[]');
+		$this->db = $this->createMock(IDBConnection::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->userWorkingTimeModelMapper = $this->createMock(UserWorkingTimeModelMapper::class);
 		$this->l10n = $this->createMock(IL10N::class);
@@ -95,6 +100,7 @@ class AbsenceServiceTest extends TestCase
 			$this->teamResolver,
 			$this->userWorkingTimeModelMapper,
 			$this->config,
+			$this->db,
 			$this->userManager,
 			$this->l10n,
 			$this->notificationService,

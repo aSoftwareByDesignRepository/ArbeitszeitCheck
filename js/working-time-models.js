@@ -375,7 +375,7 @@
             </div>
         `;
 
-        const modal = Components.createModal({
+        const _modal = Components.createModal({
             id: 'delete-model-modal',
             title: title,
             content: content,

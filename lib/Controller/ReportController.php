@@ -393,7 +393,7 @@ class ReportController extends Controller
 			$teamUserIds = [];
 
 			if ($userIds && trim($userIds) !== '') {
-				$teamUserIds = array_filter(array_map('trim', explode(',', $userIds)));
+				$teamUserIds = array_values(array_unique(array_filter(array_map('trim', explode(',', $userIds)))));
 			} elseif ($teamId !== null && $teamId !== '') {
 				$tid = (int) $teamId;
 				if ($tid <= 0) {
@@ -408,6 +408,7 @@ class ReportController extends Controller
 				$teamUserIds = $this->teamResolver->getTeamMemberIds($currentUserId);
 			}
 
+			$teamUserIds = array_values(array_unique($teamUserIds));
 			if (empty($teamUserIds)) {
 				return new JSONResponse([
 					'success' => false,

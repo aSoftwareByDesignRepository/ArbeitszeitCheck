@@ -1,3 +1,21 @@
+## 1.1.6 – 2026-03-27
+
+### Hinzugefügt
+
+- **Entwicklung**: CLI `occ arbeitszeitcheck:generate-test-data` für deterministische Demo-Daten (Zeiteinträge, Abwesenheiten, optional Verstöße, Demo-App-Team) zum Testen von UI, Berichten und Workflows.
+
+### Behoben
+
+- **Berichte-UI**: Berichtstyp-Karten werden bei teambezogenem Scope nicht mehr fälschlich deaktiviert.
+- **Berichte (Tests)**: CSV-Download-Test nutzt `DataDownloadResponse::render()` für den Dateiinhalt.
+- **Team-Berichte**: Nutzer-IDs werden vor Berechtigungsprüfung und Aggregation dedupliziert (keine Doppelzählung bei Mehrfach-Teams).
+- **Abwesenheits-Badges**: Besser lesbare, theme-sichere Kontraste für Urlaub / Krank / Homeoffice / Sonstiges.
+
+### Geändert
+
+- **Docker (Dev)**: Beispiel-Image `nextcloud:33` für lokale Stacks mit Nextcloud 33.x.
+- **Berichte-Layout**: Zu aggressive Vollbreiten-Regel für das Parameterformular zurückgenommen (verbessert Scroll/Layout).
+
 ## 1.1.4 – 2026-03-25
 
 ### Behoben

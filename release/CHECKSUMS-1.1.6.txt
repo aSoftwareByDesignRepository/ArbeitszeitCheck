@@ -1,0 +1,9 @@
+# ArbeitszeitCheck 1.1.6 — archive integrity
+# File: arbeitszeitcheck-1.1.6.tar.gz
+# Generated: 2026-03-27 (rebuild tarball before trusting checksums if sources change)
+
+SHA256:
+c658145272ea51334495f0d1275b7b6ad03c4af5f2e011a91cdc059f1a371ad6  arbeitszeitcheck-1.1.6.tar.gz
+
+SHA512:
+5ad3b314418eaa24ea71f725f06fb82c464156350b5648c5324e7001a539255a3a63da4c081783ce555eeb976df29cbc136fca63844960a6775c6793aea5eda3  arbeitszeitcheck-1.1.6.tar.gz

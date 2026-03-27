@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.6 - 2026-03-27
+
+### Added
+
+- **Development tooling**: `occ arbeitszeitcheck:generate-test-data` CLI for deterministic demo data (time entries, absences, optional violations, demo app team) to exercise UI, reports, and workflows locally.
+
+### Fixed
+
+- **Reports UI**: Report type cards are no longer incorrectly disabled when a team-related scope is selected (team scopes still use the team report API where applicable).
+- **Reports (tests)**: Team report CSV download test now reads download bodies via `DataDownloadResponse::render()` (Nextcloud API).
+- **Team reports**: Deduplicate user IDs before permission checks and aggregation to avoid double-counting when users appear in multiple teams.
+- **Absence type badges**: Stronger, theme-safe contrast for vacation / sick / home office / other badges (readable on pale Nextcloud palettes).
+
+### Changed
+
+- **Docker (dev)**: Example `nextcloud` image in `docker-compose.yml` set to `nextcloud:33` to match Nextcloud 33.x in local stacks.
+- **Reports layout**: Reverted an overly aggressive “full width” parameter form rule that could interfere with scrolling/layout on the reports page.
+
 ## 1.1.5 - 2026-03-26
 
 ### Fixed

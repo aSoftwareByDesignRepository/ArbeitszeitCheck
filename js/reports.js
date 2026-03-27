@@ -22,7 +22,7 @@
 		const reportForm = document.getElementById('report-form');
 		const reportTypeInput = document.getElementById('report-type');
 		const reportScopeInput = document.getElementById('report-scope');
-		const reportTeamUsersInput = document.getElementById('report-team-users');
+		const _reportTeamUsersInput = document.getElementById('report-team-users');
 		const startDateInput = document.getElementById('start-date');
 		const endDateInput = document.getElementById('end-date');
 		const formatSelect = document.getElementById('format');
@@ -169,25 +169,14 @@
 
 		// React to changes in scope radios and team selects
 		// Use both 'change' and 'input' so scope updates reliably (e.g. keyboard, click, assistive tech)
-		const teamScopes = ['admin_team', 'manager_team', 'manager_single_team'];
-		function applyReportTypeRestrictionsForScope(scope) {
-			const teamScope = teamScopes.includes(scope);
+		function applyReportTypeRestrictionsForScope(_scope) {
 			reportCards.forEach((card) => {
-				const reportType = card.getAttribute('data-report-type') || '';
 				const btn = card.querySelector('.btn-select-report');
 				if (!btn) return;
-
-				// Backend team endpoint is an aggregated "team overview".
-				// To keep preview/download semantics consistent, we restrict team scope to "overtime".
-				const allowed = !teamScope || reportType === 'overtime';
-				btn.disabled = !allowed;
-				btn.setAttribute('aria-disabled', String(!allowed));
+				// Keep report types selectable for all scopes.
+				btn.disabled = false;
+				btn.setAttribute('aria-disabled', 'false');
 			});
-
-			// Keep the selected report type consistent with the restrictions.
-			if (teamScope && reportTypeInput) {
-				reportTypeInput.value = 'overtime';
-			}
 		}
 
 		function handleScopeChange() {
@@ -253,6 +242,11 @@
 				e.stopPropagation();
 				const reportType = button.dataset.report;
 				if (reportType && reportTypeInput) {
+					reportCards.forEach((card) => card.classList.remove('is-selected'));
+					const selectedCard = button.closest('.report-type-card');
+					if (selectedCard) {
+						selectedCard.classList.add('is-selected');
+					}
 					reportTypeInput.value = reportType;
 
 					// Ensure scope is up to date before showing parameters
@@ -403,7 +397,7 @@
 
 					if (allAbsences.length) {
 						html += `<h4 class="report-subhead">${esc(L.details || 'Details')}</h4>`;
-						html += `<table class="report-table"><thead><tr><th>${esc(L.name || 'Name')}</th><th>${esc(L.type || 'Type')}</th><th>${esc(L.startDate || 'Start')}</th><th>${esc(L.endDate || 'End')}</th><th>${esc(L.days || 'Days')}</th><th>${esc(L.status || 'Status')}</th></tr></thead><tbody>`;
+						html += `<table class="report-table"><thead><tr><th>${esc(L.name || 'Name')}</th><th>${esc(L.type || 'Type')}</th><th>${esc(L.startDateCol || L.startDate || 'Start')}</th><th>${esc(L.endDateCol || L.endDate || 'End')}</th><th>${esc(L.days || 'Days')}</th><th>${esc(L.status || 'Status')}</th></tr></thead><tbody>`;
 						allAbsences.forEach((a) => {
 							html += `<tr><td>${esc(a.user_name)}</td><td>${esc(a.type)}</td><td>${esc(a.start)}</td><td>${esc(a.end)}</td><td>${esc(a.days)}</td><td>${esc(a.status)}</td></tr>`;
 						});
@@ -459,7 +453,13 @@
 					});
 				html += '</tbody></table>';
 			}
-			if (report.summary) html += `<p class="report-summary">${esc(report.summary)}</p>`;
+			if (report.summary) {
+				const readyMsg = (A.l10n && A.l10n.reportReady) ? String(A.l10n.reportReady).trim() : '';
+				const sum = String(report.summary).trim();
+				if (!readyMsg || sum !== readyMsg) {
+					html += `<p class="report-summary">${esc(report.summary)}</p>`;
+				}
+			}
 			html += '</div>';
 			return html;
 		}
@@ -718,12 +718,16 @@
 						const heading = document.getElementById('report-preview-heading');
 						if (heading) heading.focus();
 					} else {
-						const msg =
-							(data && data.error) ||
-							(result.status === 403 || result.status === 401
-								? (A.l10n && A.l10n.sessionExpired) ||
-								  'Your session may have expired. Please refresh the page and try again.'
-								: (A.l10n && A.l10n.error) || 'An error occurred');
+						let msg = (data && data.error) || '';
+						if (!msg) {
+							if (result.status === 403 || result.status === 401) {
+								msg =
+									(A.l10n && A.l10n.sessionExpired) ||
+									'Your session may have expired. Please refresh the page and try again.';
+							} else {
+								msg = (A.l10n && A.l10n.error) || 'An error occurred';
+							}
+						}
 						previewContent.innerHTML = `<p class="report-error" role="alert">${esc(msg)}</p>`;
 						announceToScreenReader(msg);
 						previewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

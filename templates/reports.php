@@ -196,50 +196,29 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
             </div>
 
             <div class="report-selection-section" aria-labelledby="report-type-heading">
-                <h3 id="report-type-heading" class="reports-section__title"><?php p($l->t('What kind of report do you need?')); ?></h3>
-                <p class="reports-section__desc"><?php p($l->t('First choose the scope above, then pick the type of report.')); ?></p>
+                <h3 id="report-type-heading" class="reports-section__title"><?php p($l->t('Choose an export')); ?></h3>
+                <p class="reports-section__desc"><?php p($l->t('Choose one of these exports, then set the period and format below.')); ?></p>
 
-                <div class="report-types-grid" role="list">
-                    <div class="report-type-card" data-report-type="daily">
-                        <div class="report-type-icon">📊</div>
-                        <h4><?php p($l->t('Daily Report')); ?></h4>
-                        <p><?php p($l->t('View working hours for a specific day')); ?></p>
-                        <button class="btn-select-report" data-report="daily"><?php p($l->t('Generate')); ?></button>
+                <div class="report-types-grid report-types-grid--simple" role="list">
+                    <div class="report-type-card report-type-card--primary" data-report-type="monthly">
+                        <div class="report-type-icon" aria-hidden="true">📈</div>
+                        <h4><?php p($l->t('Working Time Export')); ?></h4>
+                        <p><?php p($l->t('Export a clear overview of worked hours for the selected period.')); ?></p>
+                        <button class="btn-select-report" data-report="monthly"><?php p($l->t('Select')); ?></button>
                     </div>
 
-                    <div class="report-type-card" data-report-type="weekly">
-                        <div class="report-type-icon">📅</div>
-                        <h4><?php p($l->t('Weekly Report')); ?></h4>
-                        <p><?php p($l->t('Weekly summary of working time')); ?></p>
-                        <button class="btn-select-report" data-report="weekly"><?php p($l->t('Generate')); ?></button>
+                    <div class="report-type-card report-type-card--primary" data-report-type="absence">
+                        <div class="report-type-icon" aria-hidden="true">🏖️</div>
+                        <h4><?php p($l->t('Absence Export')); ?></h4>
+                        <p><?php p($l->t('Export vacation and absence data with totals and status.')); ?></p>
+                        <button class="btn-select-report" data-report="absence"><?php p($l->t('Select')); ?></button>
                     </div>
 
-                    <div class="report-type-card" data-report-type="monthly">
-                        <div class="report-type-icon">📈</div>
-                        <h4><?php p($l->t('Monthly Report')); ?></h4>
-                        <p><?php p($l->t('Monthly working time overview')); ?></p>
-                        <button class="btn-select-report" data-report="monthly"><?php p($l->t('Generate')); ?></button>
-                    </div>
-
-                    <div class="report-type-card" data-report-type="overtime">
-                        <div class="report-type-icon">⏰</div>
-                        <h4><?php p($l->t('Overtime Report')); ?></h4>
-                        <p><?php p($l->t('Overtime balance and history')); ?></p>
-                        <button class="btn-select-report" data-report="overtime"><?php p($l->t('Generate')); ?></button>
-                    </div>
-
-                    <div class="report-type-card" data-report-type="absence">
-                        <div class="report-type-icon">🏖️</div>
-                        <h4><?php p($l->t('Absence Report')); ?></h4>
-                        <p><?php p($l->t('Vacation and absence overview')); ?></p>
-                        <button class="btn-select-report" data-report="absence"><?php p($l->t('Generate')); ?></button>
-                    </div>
-
-                    <div class="report-type-card" data-report-type="compliance">
-                        <div class="report-type-icon">✅</div>
-                        <h4><?php p($l->t('Compliance Report')); ?></h4>
-                        <p><?php p($l->t('German labor law compliance')); ?></p>
-                        <button class="btn-select-report" data-report="compliance"><?php p($l->t('Generate')); ?></button>
+                    <div class="report-type-card report-type-card--primary" data-report-type="compliance">
+                        <div class="report-type-icon" aria-hidden="true">✅</div>
+                        <h4><?php p($l->t('Compliance Export')); ?></h4>
+                        <p><?php p($l->t('Export labor law compliance violations and severity details.')); ?></p>
+                        <button class="btn-select-report" data-report="compliance"><?php p($l->t('Select')); ?></button>
                     </div>
                 </div>
             </div>
@@ -248,13 +227,14 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
             <div id="report-parameters" class="reports-section report-parameters-section" style="display: none;" aria-labelledby="report-parameters-heading">
                 <h3 id="report-parameters-heading" class="reports-section__title"><?php p($l->t('Set time period and format')); ?></h3>
                 <p class="reports-section__desc">
-                    <?php p($l->t('Pick the time period for your report. For daily or weekly reports, we will adjust the dates automatically.')); ?>
+                    <?php p($l->t('Pick the time period for your report. The selected range applies to the export and preview.')); ?>
                 </p>
                 <form id="report-form" class="report-form" aria-label="<?php p($l->t('Report parameters')); ?>">
                     <input type="hidden" id="report-type" name="report_type" value="">
                     <input type="hidden" id="report-scope" name="report_scope" value="">
                     <input type="hidden" id="report-team-users" name="report_team_users" value="">
-                    
+
+                    <div class="report-form__date-row">
                     <div class="form-group" id="start-date-group">
                         <label for="start-date" class="form-label">
                             <?php p($l->t('Start Date')); ?>
@@ -273,7 +253,7 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                             <?php p($l->t('The first day to include in the report. Click the calendar icon to pick a date. Example: If you want a report for January, select January 1st.')); ?>
                         </p>
                     </div>
-                    
+
                     <div class="form-group" id="end-date-group">
                         <label for="end-date" class="form-label">
                             <?php p($l->t('End Date')); ?>
@@ -292,8 +272,9 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                             <?php p($l->t('The last day to include in the report. Click the calendar icon to pick a date. Example: If you want a report for January, select January 31st.')); ?>
                         </p>
                     </div>
-                    
-                    <div class="form-group">
+                    </div>
+
+                    <div class="form-group" id="format-group">
                         <label for="format" class="form-label">
                             <?php p($l->t('File Format')); ?>
                         </label>
@@ -370,10 +351,24 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
     window.ArbeitszeitCheck.l10n.users = <?php echo json_encode($l->t('Users'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.name = <?php echo json_encode($l->t('Name'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.dailyBreakdown = <?php echo json_encode($l->t('Daily breakdown'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.violationTypes = <?php echo json_encode($l->t('Violation types'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.severities = <?php echo json_encode($l->t('Severities'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.severity = <?php echo json_encode($l->t('Severity'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.type = <?php echo json_encode($l->t('Type'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.count = <?php echo json_encode($l->t('Count'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.absences = <?php echo json_encode($l->t('Absences'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.totalDays = <?php echo json_encode($l->t('Total days'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.absencesByType = <?php echo json_encode($l->t('Absences by type'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.absencesByStatus = <?php echo json_encode($l->t('Absences by status'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.details = <?php echo json_encode($l->t('Details'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.startDateCol = <?php echo json_encode($l->t('Start'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.endDateCol = <?php echo json_encode($l->t('End'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.days = <?php echo json_encode($l->t('Days'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.status = <?php echo json_encode($l->t('Status'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.scopeRequired = <?php echo json_encode($l->t('Please choose who should be included in the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.teamRequired = <?php echo json_encode($l->t('Please select a team.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.dateRangeInvalid = <?php echo json_encode($l->t('Start date must be before or equal to end date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    window.ArbeitszeitCheck.l10n.exportScopeNotice = <?php echo json_encode($l->t('Export for team or organization scope is not yet available. Use Preview to view the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.exportScopeNotice = <?php echo json_encode($l->t('The download contains one row per team member for the selected period.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.exportOrganizationScopeNotice = <?php echo json_encode($l->t('Export for organization scope is not yet available. Use Preview to view the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.reportParamsRequired = <?php echo json_encode($l->t('Please fill in report type, start date and end date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.invalidReportType = <?php echo json_encode($l->t('Invalid report type.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
