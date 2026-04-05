@@ -269,6 +269,8 @@ class OvertimeServiceTest extends TestCase
 		$this->assertEquals(30.0, $result['total_hours_worked']);
 		$this->assertEquals(6.0, $result['daily_hours']);
 		$this->assertEquals(30.0, $result['weekly_hours']);
+		$this->assertEquals(6.0, $result['implied_daily_hours']);
+		$this->assertSame('weekly_contract', $result['required_hours_basis']);
 		// Should be approximately balanced (worked exactly what's required)
 		$this->assertLessThan(1.0, abs($result['overtime_hours']));
 	}

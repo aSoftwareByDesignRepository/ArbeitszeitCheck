@@ -64,6 +64,7 @@ $showAdminNav = !empty($_['showAdminNav']);
 
 <!-- App layout wrapper: flex container for sidebar + content (desktop), stacked (mobile) -->
 <div id="arbeitszeitcheck-app" class="arbeitszeitcheck-app">
+    <a href="#app-content" class="skip-link"><?php p($l->t('Skip to main content')); ?></a>
     <!-- Mobile hamburger menu button -->
     <button class="nav-mobile-toggle"
         id="nav-mobile-toggle"

@@ -347,6 +347,31 @@ class AbsenceMapper extends QBMapper
 	}
 
 	/**
+	 * All approved vacation absences that overlap a calendar year (inclusive of fully inside and spanning boundaries).
+	 * Ordered by start_date ASC, id ASC for FIFO carryover allocation.
+	 *
+	 * @return Absence[]
+	 */
+	public function findVacationApprovedOverlappingYear(string $userId, int $year): array
+	{
+		$yearStart = new \DateTime("$year-01-01");
+		$yearEnd = new \DateTime("$year-12-31");
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(Absence::TYPE_VACATION)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_APPROVED)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($yearEnd->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($yearStart->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->orderBy('start_date', 'ASC')
+			->addOrderBy('id', 'ASC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
 	 * Get total sick leave days for a user in a year
 	 *
 	 * @param string $userId

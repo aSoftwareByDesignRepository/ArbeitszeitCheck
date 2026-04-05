@@ -1,7 +1,7 @@
 # Developer Documentation – ArbeitszeitCheck
 
-**Version:** 1.0.0  
-**Last Updated:** 2025-12-29
+**Version:** 1.1.0  
+**Last Updated:** 2026-04-05
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.
 
@@ -19,6 +19,7 @@ This guide is for developers who want to contribute to ArbeitszeitCheck or integ
 8. [Contributing](#contributing)
 9. [Code Standards](#code-standards)
 10. [Security Guidelines](#security-guidelines)
+11. [Vacation carryover (Resturlaub)](#vacation-carryover-resturlaub)
 
 ---
 
@@ -373,6 +374,7 @@ All tables use the `at_` prefix (short for arbeitszeitcheck):
 
 - `oc_at_entries` - Time entries
 - `oc_at_absences` - Absence requests
+- `oc_at_vacation_year_balance` - Per user and calendar year: opening **carryover** days (Resturlaub from prior year, as recorded for year *Y*)
 - `oc_at_violations` - Compliance violations
 - `oc_at_models` - Working time models
 - `oc_at_user_models` - User working time model assignments
@@ -413,6 +415,29 @@ class Version1000Date20241229000000 extends SimpleMigrationStep
     }
 }
 ```
+
+### Vacation carryover (Resturlaub)
+
+Carryover is **not** a separate “adjustment” column: the editable opening balance is `carryover_days` on `at_vacation_year_balance` for `(user_id, year)`.
+
+**Config (app `IConfig`, keys in `Constants.php`):**
+
+- `vacation_carryover_expiry_month` (1–12, default `3`)
+- `vacation_carryover_expiry_day` (1–31, default `31`)
+
+For calendar year *Y*, carryover from that row may only apply to vacation working days on dates **on or before** that month/day in year *Y*. After that date, **new** requests cannot consume remaining carryover for *Y*; annual entitlement from the working time model still applies. Consumption order for **approved** vacation is **FIFO** (sort by `start_date`, then `id`), implemented in `VacationAllocationService` and used by `AbsenceService::getVacationStats` and vacation validation (including re-check on approve / auto-approve).
+
+**CLI (initial migration from other HR systems):**
+
+```bash
+php occ arbeitszeitcheck:import-vacation-balance /path/to/balances.csv --dry-run
+```
+
+CSV columns: `user_id`, `year`, `carryover_days` (header row). Validates users exist; use `--dry-run` to preview.
+
+**Privacy:** `UserDeletedListener` deletes all `at_vacation_year_balance` rows for the removed user id.
+
+**Known limitations (product):** Entitlement per historical year uses the **current** working time model assignment unless extended later; concurrent pending vacation requests are not “soft reserved” in the DB—approval-time validation prevents overdraw on commit under normal use.
 
 ---
 

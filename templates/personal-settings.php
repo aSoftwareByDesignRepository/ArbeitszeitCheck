@@ -56,12 +56,12 @@ $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 					class="form-input"
 					min="1"
 					max="24"
-					step="0.5"
+					step="0.1"
 					value="8"
 					aria-describedby="working-hours-help"
 				>
 				<p id="working-hours-help" class="form-help">
-					<?php p($l->t('How many hours you normally work each day. The standard is 8 hours. Example: Enter 8 for an 8-hour workday, or 7.5 for 7 hours and 30 minutes.')); ?>
+					<?php p($l->t('How many hours you normally work each day. The standard is 8 hours. Decimal values are allowed (e.g. 7.74 for a 38.7 h week spread over five days).')); ?>
 				</p>
 			</div>
 		</div>

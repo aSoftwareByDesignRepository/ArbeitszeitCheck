@@ -765,12 +765,33 @@ class ReportControllerTest extends TestCase
 			->with($userId)
 			->willReturn(['userA']);
 		$this->permissionService->method('canViewUserReport')->with($userId, 'userA')->willReturn(true);
-		$this->request->method('getParam')->willReturnMap([
-			['download', '0', '1'],
-			['format', 'csv', 'csv'],
-			['variant', 'summary', 'summary'],
-			['layout', 'long', 'long'],
-		]);
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			return match ($name) {
+				'download' => '1',
+				'format' => 'csv',
+				'variant' => 'summary',
+				'layout' => 'long',
+				default => $default ?? '',
+			};
+		});
+
+		$controller = new ReportController(
+			'arbeitszeitcheck',
+			$request,
+			$this->reportingService,
+			$this->permissionService,
+			$this->teamResolver,
+			$this->teamMemberMapper,
+			$this->teamManagerMapper,
+			$this->timeEntryMapper,
+			new TimeEntryExportTransformer(),
+			$this->appConfig,
+			$this->userManager,
+			$this->userSession,
+			$this->l10n
+		);
 
 		$reportData = [
 			'type' => 'team',
@@ -795,7 +816,7 @@ class ReportControllerTest extends TestCase
 			)
 			->willReturn($reportData);
 
-		$response = $this->controller->team('2024-01-01', '2024-01-31');
+		$response = $controller->team('2024-01-01', '2024-01-31');
 		$this->assertInstanceOf(DataDownloadResponse::class, $response);
 
 		$csv = (string)$response->render();

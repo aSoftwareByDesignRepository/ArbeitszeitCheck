@@ -98,6 +98,8 @@ class AdminControllerTest extends TestCase
 		$holidayMapper = $this->createMock(HolidayMapper::class);
 		$holidayCalendarService = $this->createMock(HolidayCalendarService::class);
 
+		$vacationYearBalanceMapper = $this->createMock(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class);
+
 		$this->controller = new AdminController(
 			'arbeitszeitcheck',
 			$this->request,
@@ -117,7 +119,8 @@ class AdminControllerTest extends TestCase
 			$l10n,
 			$urlGenerator,
 			$holidayMapper,
-			$holidayCalendarService
+			$holidayCalendarService,
+			$vacationYearBalanceMapper
 		);
 	}
 

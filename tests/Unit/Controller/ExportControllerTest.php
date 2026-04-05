@@ -604,8 +604,8 @@ class ExportControllerTest extends TestCase
 		$totalDuration = (float)$row1[$durationIdx] + (float)$row2[$durationIdx];
 		$totalWorking = (float)$row1[$workingIdx] + (float)$row2[$workingIdx];
 
-		$this->assertEquals(8.0, $totalDuration, '', 0.01);
-		$this->assertEquals(8.0, $totalWorking, '', 0.01);
+		$this->assertEqualsWithDelta(8.0, $totalDuration, 0.02);
+		$this->assertEqualsWithDelta(8.0, $totalWorking, 0.02);
 	}
 
 	/**

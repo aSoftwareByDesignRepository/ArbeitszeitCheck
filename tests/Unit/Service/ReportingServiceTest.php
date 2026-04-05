@@ -295,14 +295,21 @@ class ReportingServiceTest extends TestCase
 			->with($userId)
 			->willReturn($user);
 
-		// Mock overtime data
 		$this->overtimeService->expects($this->once())
-			->method('calculateMonthlyOvertime')
-			->with($userId)
+			->method('calculateOvertime')
+			->with(
+				$userId,
+				$this->callback(static function (\DateTime $start): bool {
+					return $start->format('Y-m-d') === '2024-01-01';
+				}),
+				$this->callback(static function (\DateTime $end): bool {
+					return $end->format('Y-m-d') === '2024-01-31';
+				})
+			)
 			->willReturn([
 				'total_hours_worked' => 160.0,
 				'required_hours' => 160.0,
-				'overtime_hours' => 0.0
+				'overtime_hours' => 0.0,
 			]);
 
 		// Mock time entries

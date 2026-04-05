@@ -12,7 +12,7 @@ Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instan
   - Automatische Pausenberechnung nach ArbZG §4 (30/45 Minuten, nur Pausen ≥ 15 Minuten)
   - Ruhezeiten (11h) mit Blockierung von Clock‑In und manuellen Einträgen
   - Erkennung von Nacht‑, Sonn‑ und Feiertagsarbeit inkl. Dokumentation
-- **Abwesenheitsmanagement**: Urlaub, Krankheit, Sonderurlaub, unbezahlter Urlaub mit Genehmigungsworkflow
+- **Abwesenheitsmanagement**: Urlaub, Krankheit, Sonderurlaub, unbezahlter Urlaub mit Genehmigungsworkflow; **Resturlaub / Vorjahres‑Tage** mit konfigurierbarem Ablaufdatum (z. B. 31.03.), FIFO‑Verbrauch, Admin‑Pflege und optional CSV‑Import (`occ arbeitszeitcheck:import-vacation-balance`)
 - **Team‑ und Manager‑Ansicht**: Genehmigungen, Team‑Übersichten, Compliance‑Status
 - **Berichte & Exporte**: Tages/Wochen/Monats‑Reports, Overtime‑Reports, Absenzberichte, DATEV‑Export
 - **Audit‑Logs**: Lückenlose Nachvollziehbarkeit von Änderungen an Zeiten, Abwesenheiten und Einstellungen

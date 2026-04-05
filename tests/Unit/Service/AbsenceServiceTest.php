@@ -16,10 +16,12 @@ use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
+use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\HolidayCalendarService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
 use OCP\IDBConnection;
@@ -65,6 +67,18 @@ class AbsenceServiceTest extends TestCase
 	/** @var UserWorkingTimeModelMapper|\PHPUnit\Framework\MockObject\MockObject */
 	private $userWorkingTimeModelMapper;
 
+	/** @var VacationYearBalanceMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $vacationYearBalanceMapper;
+
+	/** @var VacationAllocationService|\PHPUnit\Framework\MockObject\MockObject */
+	private $vacationAllocationService;
+
+	/** @var array<string,mixed>|null Override for VacationAllocationService::computeYearAllocation return shape */
+	private ?array $vacationAllocationStub = null;
+
+	/** When true, prospective allocation (non-null dates) returns allocation_valid false */
+	private bool $vacationAllocationFailProspective = false;
+
 	/** @var IDBConnection|\PHPUnit\Framework\MockObject\MockObject */
 	private $db;
 
@@ -84,6 +98,8 @@ class AbsenceServiceTest extends TestCase
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->userWorkingTimeModelMapper = $this->createMock(UserWorkingTimeModelMapper::class);
+		$this->vacationYearBalanceMapper = $this->createMock(VacationYearBalanceMapper::class);
+		$this->vacationYearBalanceMapper->method('getCarryoverDays')->willReturn(0.0);
 		$this->l10n = $this->createMock(IL10N::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->holidayCalendarService = $this->createMock(HolidayCalendarService::class);
@@ -92,6 +108,38 @@ class AbsenceServiceTest extends TestCase
 			->willReturnCallback(function ($text) {
 				return $text;
 			});
+
+		$this->vacationAllocationStub = null;
+		$this->vacationAllocationFailProspective = false;
+		$this->vacationAllocationService = $this->createMock(VacationAllocationService::class);
+		$this->vacationAllocationService->method('computeYearAllocation')->willReturnCallback(function ($userId, $year, $exclude, $pStart, $pEnd, $asOf) {
+			unset($userId, $year, $exclude, $asOf);
+			if ($this->vacationAllocationStub !== null) {
+				return $this->vacationAllocationStub;
+			}
+			if ($this->vacationAllocationFailProspective && $pStart !== null && $pEnd !== null) {
+				return [
+					'entitlement' => 25.0,
+					'carryover_opening' => 0.0,
+					'carryover_usable_for_new_requests' => 0.0,
+					'carryover_expires_on' => null,
+					'total_remaining_for_new_requests' => 0.0,
+					'used_total_working_days' => 0.0,
+					'allocation_valid' => false,
+					'shortfall' => 4.0,
+				];
+			}
+			return [
+				'entitlement' => 25.0,
+				'carryover_opening' => 0.0,
+				'carryover_usable_for_new_requests' => 0.0,
+				'carryover_expires_on' => null,
+				'total_remaining_for_new_requests' => 25.0,
+				'used_total_working_days' => 0.0,
+				'allocation_valid' => true,
+				'shortfall' => 0.0,
+			];
+		});
 
 		$this->service = new AbsenceService(
 			$this->absenceMapper,
@@ -105,7 +153,11 @@ class AbsenceServiceTest extends TestCase
 			$this->l10n,
 			$this->notificationService,
 			null,
-			$this->holidayCalendarService
+			$this->holidayCalendarService,
+			$this->vacationYearBalanceMapper,
+			$this->vacationAllocationService,
+			null,
+			null
 		);
 	}
 
@@ -129,7 +181,6 @@ class AbsenceServiceTest extends TestCase
 			->with($userId, $this->isInstanceOf(\DateTime::class), $this->isInstanceOf(\DateTime::class), $this->anything())
 			->willReturn([]);
 
-		$this->absenceMapper->method('getVacationDaysUsed')->willReturn(15.0);
 		$this->absenceMapper->method('getSickLeaveDays')->willReturn(0.0);
 		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
 		$this->userSettingsMapper->method('getIntegerSetting')
@@ -219,7 +270,6 @@ class AbsenceServiceTest extends TestCase
 		];
 
 		$this->absenceMapper->method('findOverlapping')->willReturn([]);
-		$this->absenceMapper->method('getVacationDaysUsed')->willReturn(0.0);
 		$this->absenceMapper->method('getSickLeaveDays')->willReturn(0.0);
 		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
 		$this->userSettingsMapper->method('getIntegerSetting')->willReturn(25);
@@ -299,7 +349,6 @@ class AbsenceServiceTest extends TestCase
 		$this->absenceMapper->expects($this->once())
 			->method('findOverlapping')
 			->willReturn([]);
-		$this->absenceMapper->method('getVacationDaysUsed')->willReturn(0.0);
 		$this->absenceMapper->method('getSickLeaveDays')->willReturn(0.0);
 		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
 		$this->userSettingsMapper->method('getIntegerSetting')->willReturn(25);
@@ -412,7 +461,6 @@ class AbsenceServiceTest extends TestCase
 		];
 
 		$this->absenceMapper->method('findOverlapping')->willReturn([]);
-		$this->absenceMapper->method('getVacationDaysUsed')->willReturn(24.0);
 		$this->absenceMapper->method('getSickLeaveDays')->willReturn(0.0);
 		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
 		$this->userSettingsMapper->method('getIntegerSetting')
@@ -420,6 +468,8 @@ class AbsenceServiceTest extends TestCase
 		$year = (int)(new \DateTime($futureStart))->format('Y');
 		$this->holidayCalendarService->method('computeWorkingDaysPerYearForUser')
 			->willReturn([$year => 4.0]);
+
+		$this->vacationAllocationFailProspective = true;
 
 		$this->expectException(\Exception::class);
 		$this->expectExceptionMessage('Not enough vacation days remaining');
@@ -535,7 +585,7 @@ class AbsenceServiceTest extends TestCase
 		$absence->setReason('Original reason');
 		$absence->setDays(5.0);
 
-		$this->absenceMapper->expects($this->exactly(2))
+		$this->absenceMapper->expects($this->once())
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -549,7 +599,6 @@ class AbsenceServiceTest extends TestCase
 		$year = (int)$newStart->format('Y');
 		$this->holidayCalendarService->method('computeWorkingDaysPerYearForUser')
 			->willReturn([$year => 5.0]);
-		$this->absenceMapper->method('getVacationDaysUsed')->willReturn(10.0);
 		$this->absenceMapper->method('getSickLeaveDays')->willReturn(0.0);
 		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
 		$this->userSettingsMapper->method('getIntegerSetting')->willReturn(25);
@@ -783,29 +832,29 @@ class AbsenceServiceTest extends TestCase
 		$userId = 'testuser';
 		$year = 2024;
 
-		// Mock vacation days used
-		$this->absenceMapper->expects($this->once())
-			->method('getVacationDaysUsed')
-			->with($userId, $year)
-			->willReturn(15.0);
-
-		// Mock sick leave days
 		$this->absenceMapper->expects($this->once())
 			->method('getSickLeaveDays')
 			->with($userId, $year)
 			->willReturn(3.0);
 
-		// Mock vacation entitlement from user settings
-		$this->userSettingsMapper->expects($this->once())
-			->method('getIntegerSetting')
-			->with($userId, 'vacation_days_per_year', 25)
-			->willReturn(30);
+		$this->vacationAllocationStub = [
+			'entitlement' => 30.0,
+			'carryover_opening' => 0.0,
+			'carryover_usable_for_new_requests' => 0.0,
+			'carryover_expires_on' => null,
+			'total_remaining_for_new_requests' => 15.0,
+			'used_total_working_days' => 15.0,
+			'allocation_valid' => true,
+			'shortfall' => 0.0,
+		];
 
 		$stats = $this->service->getVacationStats($userId, $year);
 
 		$this->assertIsArray($stats);
 		$this->assertEquals($year, $stats['year']);
 		$this->assertEquals(30, $stats['entitlement']);
+		$this->assertEquals(0.0, $stats['carryover_days']);
+		$this->assertEquals(30.0, $stats['total_available']);
 		$this->assertEquals(15, $stats['used']);
 		$this->assertEquals(15, $stats['remaining']); // 30 - 15 = 15
 		$this->assertEquals(3, $stats['sick_days']);
@@ -820,22 +869,25 @@ class AbsenceServiceTest extends TestCase
 		$year = 2024;
 
 		$this->absenceMapper->expects($this->once())
-			->method('getVacationDaysUsed')
-			->willReturn(10.0);
-
-		$this->absenceMapper->expects($this->once())
 			->method('getSickLeaveDays')
 			->willReturn(0.0);
 
-		// Mock no user setting (returns default 25)
-		$this->userSettingsMapper->expects($this->once())
-			->method('getIntegerSetting')
-			->with($userId, 'vacation_days_per_year', 25)
-			->willReturn(25);
+		$this->vacationAllocationStub = [
+			'entitlement' => 25.0,
+			'carryover_opening' => 0.0,
+			'carryover_usable_for_new_requests' => 0.0,
+			'carryover_expires_on' => null,
+			'total_remaining_for_new_requests' => 15.0,
+			'used_total_working_days' => 10.0,
+			'allocation_valid' => true,
+			'shortfall' => 0.0,
+		];
 
 		$stats = $this->service->getVacationStats($userId, $year);
 
 		$this->assertEquals(25, $stats['entitlement']);
+		$this->assertEquals(0.0, $stats['carryover_days']);
+		$this->assertEquals(25.0, $stats['total_available']);
 		$this->assertEquals(10, $stats['used']);
 		$this->assertEquals(15, $stats['remaining']); // 25 - 10 = 15
 	}

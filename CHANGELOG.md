@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.7 - 2026-04-05
+
+### Added
+
+- **Vacation carryover (Resturlaub)**: Per user and calendar year, opening balance `carryover_days` in `at_vacation_year_balance`; global admin setting for carryover expiry (month/day, default 31 March). `VacationAllocationService` applies FIFO consumption of approved vacation (by `start_date`, then `id`) and splits working days before/after expiry so carryover is used first where still valid.
+- **Validation & approvals**: Vacation requests are re-validated when a manager approves (and on auto-approve) so concurrent pending requests cannot overdraw balances after approval.
+- **API & UI**: `AbsenceController::stats` exposes entitlement, carryover, totals, expiry-related fields; dashboard and absences pages show a clear vacation summary; admin settings include expiry fields.
+- **GDPR**: `UserDeletedListener` removes vacation year balance rows when a user account is deleted.
+- **Migration / bulk setup**: `occ arbeitszeitcheck:import-vacation-balance` imports CSV `user_id,year,carryover_days` with `--dry-run`.
+
+### Tests
+
+- Unit tests for `VacationAllocationService`; extended `AbsenceService` and related controller tests.
+
 ## 1.1.6 - 2026-03-27
 
 ### Added

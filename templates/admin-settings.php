@@ -136,6 +136,34 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
 
                 <section class="admin-settings-section" aria-labelledby="section-absences-heading">
                     <h3 id="section-absences-heading" class="admin-settings-section__title"><?php p($l->t('Absences and notifications')); ?></h3>
+                <fieldset class="form-fieldset" aria-labelledby="vacation-carryover-expiry-legend">
+                    <legend id="vacation-carryover-expiry-legend" class="form-legend"><?php p($l->t('Vacation carryover expiry')); ?></legend>
+                    <p class="form-help form-help--block" id="vacation-carryover-expiry-intro">
+                        <?php p($l->t('This is the last calendar day in each year when carryover from the opening balance (Resturlaub) may still be used for vacation. You enter each person’s opening balance per calendar year under Users. After this date, new vacation requests can only use the annual vacation entitlement from the working time model—not carryover. This applies to everyone.')); ?>
+                    </p>
+                    <p class="form-help form-help--block form-help--note" id="vacation-carryover-expiry-how">
+                        <?php p($l->t('Only approved vacation counts. For working days on or before this date, carryover is used before annual entitlement. Approved absences are applied in chronological order (by start date, then id).')); ?>
+                    </p>
+                    <div class="form-row form-row--inline" role="group" aria-labelledby="vacation-carryover-expiry-legend" aria-describedby="vacation-carryover-expiry-intro vacation-carryover-expiry-how vacation-carryover-expiry-help">
+                        <div class="form-group">
+                            <label for="vacationCarryoverExpiryMonth" class="form-label"><?php p($l->t('Month (1–12)')); ?></label>
+                            <input type="number" class="form-input" id="vacationCarryoverExpiryMonth" name="vacationCarryoverExpiryMonth"
+                                min="1" max="12" step="1" required
+                                value="<?php p((string)($settings['vacationCarryoverExpiryMonth'] ?? 3)); ?>"
+                                aria-describedby="vacation-carryover-expiry-intro vacation-carryover-expiry-how vacation-carryover-expiry-help">
+                        </div>
+                        <div class="form-group">
+                            <label for="vacationCarryoverExpiryDay" class="form-label"><?php p($l->t('Day (1–31)')); ?></label>
+                            <input type="number" class="form-input" id="vacationCarryoverExpiryDay" name="vacationCarryoverExpiryDay"
+                                min="1" max="31" step="1" required
+                                value="<?php p((string)($settings['vacationCarryoverExpiryDay'] ?? 31)); ?>"
+                                aria-describedby="vacation-carryover-expiry-intro vacation-carryover-expiry-how vacation-carryover-expiry-help">
+                        </div>
+                    </div>
+                    <p id="vacation-carryover-expiry-help" class="form-help">
+                        <?php p($l->t('Typical value in Germany: 31 March (month 3, day 31). If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically.')); ?>
+                    </p>
+                </fieldset>
                 <fieldset class="form-fieldset" aria-labelledby="send-ical-legend">
                     <legend id="send-ical-legend" class="form-legend"><?php p($l->t('Absences: Send iCal via email')); ?></legend>
                     <p class="form-help form-help--block">
@@ -256,7 +284,7 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
                            value="<?php p($settings['maxDailyHours'] ?? 10); ?>" 
                            min="1" 
                            max="24" 
-                           step="0.5" 
+                           step="0.1" 
                            required
                            aria-describedby="maxDailyHours-help <?php echo isset($_['errors']['maxDailyHours']) ? 'maxDailyHours-error' : ''; ?>"
                            aria-invalid="<?php echo isset($_['errors']['maxDailyHours']) ? 'true' : 'false'; ?>">
@@ -284,7 +312,7 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
                            value="<?php p($settings['minRestPeriod'] ?? 11); ?>" 
                            min="1" 
                            max="24" 
-                           step="0.5" 
+                           step="0.1" 
                            required
                            aria-describedby="minRestPeriod-help">
                     <p id="minRestPeriod-help" class="form-help">
@@ -304,11 +332,11 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
                            value="<?php p($settings['defaultWorkingHours'] ?? 8); ?>" 
                            min="1" 
                            max="24" 
-                           step="0.5" 
+                           step="0.1" 
                            required
                            aria-describedby="defaultWorkingHours-help">
                     <p id="defaultWorkingHours-help" class="form-help">
-                        <?php p($l->t('Default daily working hours. Used for new employees until individual models are set.')); ?>
+                        <?php p($l->t('Default daily working hours. Used for new employees until individual models are set. Decimal hours are allowed (e.g. 7.7).')); ?>
                     </p>
                 </div>
                 </section>
