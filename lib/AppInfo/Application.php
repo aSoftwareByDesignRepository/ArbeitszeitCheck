@@ -265,6 +265,10 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer::class, function() {
+			return new \OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer();
+		});
+
 		$context->registerService(ReportingService::class, function($c) {
 			return new ReportingService(
 				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),

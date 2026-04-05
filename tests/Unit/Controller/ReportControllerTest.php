@@ -15,9 +15,13 @@ use OCA\ArbeitszeitCheck\Controller\ReportController;
 use OCA\ArbeitszeitCheck\Db\TeamMember;
 use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
 use OCA\ArbeitszeitCheck\Db\TeamMemberMapper;
+use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
+use OCP\IConfig;
+use OCP\IUserManager;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -59,6 +63,15 @@ class ReportControllerTest extends TestCase
 	/** @var TeamManagerMapper|\PHPUnit\Framework\MockObject\MockObject */
 	private $teamManagerMapper;
 
+	/** @var TimeEntryMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $timeEntryMapper;
+
+	/** @var IConfig|\PHPUnit\Framework\MockObject\MockObject */
+	private $appConfig;
+
+	/** @var IUserManager|\PHPUnit\Framework\MockObject\MockObject */
+	private $userManager;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -69,6 +82,9 @@ class ReportControllerTest extends TestCase
 		$this->l10n = $this->createMock(IL10N::class);
 		$this->l10n->method('t')->willReturnCallback(fn ($s) => $s);
 		$this->request = $this->createMock(IRequest::class);
+		$this->request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			return $default ?? '';
+		});
 
 		// Default to allowing self-report access unless a test overrides it.
 		$this->permissionService->method('canViewUserReport')->willReturn(true);
@@ -78,6 +94,15 @@ class ReportControllerTest extends TestCase
 		$this->teamResolver = $this->createMock(TeamResolverService::class);
 		$this->teamMemberMapper = $this->createMock(TeamMemberMapper::class);
 		$this->teamManagerMapper = $this->createMock(TeamManagerMapper::class);
+		$this->timeEntryMapper = $this->createMock(TimeEntryMapper::class);
+		$this->appConfig = $this->createMock(IConfig::class);
+		$this->appConfig->method('getAppValue')->willReturnCallback(static function (string $app, string $key, string $default = ''): string {
+			if ($app === 'arbeitszeitcheck' && $key === 'export_midnight_split_enabled') {
+				return '1';
+			}
+			return $default;
+		});
+		$this->userManager = $this->createMock(IUserManager::class);
 
 		$this->controller = new ReportController(
 			'arbeitszeitcheck',
@@ -87,6 +112,10 @@ class ReportControllerTest extends TestCase
 			$this->teamResolver,
 			$this->teamMemberMapper,
 			$this->teamManagerMapper,
+			$this->timeEntryMapper,
+			new TimeEntryExportTransformer(),
+			$this->appConfig,
+			$this->userManager,
 			$this->userSession,
 			$this->l10n
 		);
@@ -286,7 +315,7 @@ class ReportControllerTest extends TestCase
 
 		$this->reportingService->expects($this->once())
 			->method('generateMonthlyReport')
-			->with($this->isInstanceOf(\DateTime::class), $userId)
+			->with($this->isInstanceOf(\DateTime::class), $userId, null, null)
 			->willReturn($reportData);
 
 		$response = $this->controller->monthly();
@@ -317,10 +346,43 @@ class ReportControllerTest extends TestCase
 			->method('generateMonthlyReport')
 			->with($this->callback(function ($date) {
 				return $date instanceof \DateTime && $date->format('Y-m') === '2024-02';
-			}), $userId)
+			}), $userId, null, null)
 			->willReturn($reportData);
 
 		$response = $this->controller->monthly('2024-02');
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+	}
+
+	/**
+	 * Monthly preview/export: startDate and endDate override the calendar month range.
+	 */
+	public function testMonthlyReportUsesStartEndDateOverride(): void
+	{
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$reportData = [
+			'month' => '2024-01',
+			'total_hours' => 40.0,
+			'entries' => [],
+		];
+
+		$this->reportingService->expects($this->once())
+			->method('generateMonthlyReport')
+			->with(
+				$this->callback(fn ($m) => $m instanceof \DateTime && $m->format('Y-m') === '2024-01'),
+				$userId,
+				$this->callback(fn ($s) => $s instanceof \DateTime && $s->format('Y-m-d') === '2024-01-10'),
+				$this->callback(fn ($e) => $e instanceof \DateTime && $e->format('Y-m-d') === '2024-01-25'),
+			)
+			->willReturn($reportData);
+
+		$response = $this->controller->monthly('2024-01', null, '2024-01-10', '2024-01-25');
 		$data = $response->getData();
 
 		$this->assertTrue($data['success']);
@@ -706,6 +768,8 @@ class ReportControllerTest extends TestCase
 		$this->request->method('getParam')->willReturnMap([
 			['download', '0', '1'],
 			['format', 'csv', 'csv'],
+			['variant', 'summary', 'summary'],
+			['layout', 'long', 'long'],
 		]);
 
 		$reportData = [
@@ -737,6 +801,62 @@ class ReportControllerTest extends TestCase
 		$csv = (string)$response->render();
 		$this->assertStringContainsString('user_id,display_name,total_hours,required_hours,overtime_hours,break_hours,violations_count,absence_days,entries_count', $csv);
 		$this->assertStringContainsString('userA,"User A"', $csv);
+	}
+
+	/**
+	 * Team download with variant time_entries and no rows yields empty CSV message.
+	 */
+	public function testTeamReportTimeEntriesDownloadEmptyCsv(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			return match ($name) {
+				'download' => '1',
+				'format' => 'csv',
+				'variant' => 'time_entries',
+				'layout' => 'long',
+				default => $default ?? '',
+			};
+		});
+
+		$controller = new ReportController(
+			'arbeitszeitcheck',
+			$request,
+			$this->reportingService,
+			$this->permissionService,
+			$this->teamResolver,
+			$this->teamMemberMapper,
+			$this->teamManagerMapper,
+			$this->timeEntryMapper,
+			new TimeEntryExportTransformer(),
+			$this->appConfig,
+			$this->userManager,
+			$this->userSession,
+			$this->l10n
+		);
+
+		$userId = 'manager1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canAccessManagerDashboard')->with($userId)->willReturn(true);
+		$this->teamResolver->method('getTeamMemberIds')->with($userId)->willReturn(['userA']);
+		$this->permissionService->method('canViewUserReport')->willReturn(true);
+
+		$this->timeEntryMapper->method('findByUserAndDateRange')->willReturn([]);
+
+		$ncUser = $this->createMock(IUser::class);
+		$ncUser->method('getDisplayName')->willReturn('User A');
+		$this->userManager->method('get')->with('userA')->willReturn($ncUser);
+
+		$this->reportingService->expects($this->once())->method('generateTeamReport')->willReturn([
+			'type' => 'team',
+			'members' => [],
+		]);
+
+		$response = $controller->team('2024-01-01', '2024-01-31');
+		$this->assertInstanceOf(DataDownloadResponse::class, $response);
+		$this->assertStringContainsString('No data available', (string)$response->render());
 	}
 
 	/**

@@ -19,6 +19,7 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Service\DatevExportService;
+use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
@@ -87,6 +88,10 @@ class ExportControllerTest extends TestCase
 				return $default;
 			});
 
+		$this->request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			return $default ?? '';
+		});
+
 		$this->controller = new ExportController(
 			'arbeitszeitcheck',
 			$this->request,
@@ -94,6 +99,7 @@ class ExportControllerTest extends TestCase
 			$this->absenceMapper,
 			$this->violationMapper,
 			$this->datevExportService,
+			new TimeEntryExportTransformer(),
 			$this->userSession,
 			$this->l10n,
 			$this->config
@@ -648,6 +654,7 @@ class ExportControllerTest extends TestCase
 			$this->absenceMapper,
 			$this->violationMapper,
 			$this->datevExportService,
+			new TimeEntryExportTransformer(),
 			$this->userSession,
 			$this->l10n,
 			$config

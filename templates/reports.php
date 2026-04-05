@@ -65,13 +65,20 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
             </div>
         </header>
 
-        <!-- Step 1: Scope & Report Type Selection -->
-        <section id="report-type-section" class="reports-section section" aria-labelledby="report-scope-heading" aria-label="<?php p($l->t('Select what you want to see')); ?>">
+        <!-- Step 1: Scope & report type -->
+        <section id="report-type-section" class="reports-section section reports-step" aria-labelledby="report-scope-heading" aria-label="<?php p($l->t('Select what you want to see')); ?>">
             <?php if (!$canAccessReports): ?>
                 <div class="empty-state">
                     <h3 class="empty-state__title" id="report-type-heading"><?php p($l->t('Reports are only available for administrators and managers')); ?></h3>
                     <p class="empty-state__description">
                         <?php p($l->t('If you need to generate reports, please contact your administrator or manager.')); ?>
+                    </p>
+                    <p class="empty-state__actions">
+                        <button type="button"
+                                class="btn btn--primary"
+                                onclick="window.location.href=<?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.page.index'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>">
+                            <?php p($l->t('Dashboard')); ?>
+                        </button>
                     </p>
                 </div>
             <?php else: ?>
@@ -195,27 +202,27 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                 </form>
             </div>
 
-            <div class="report-selection-section" aria-labelledby="report-type-heading">
+            <div class="report-selection-section reports-step" aria-labelledby="report-type-heading">
                 <h3 id="report-type-heading" class="reports-section__title"><?php p($l->t('Choose an export')); ?></h3>
                 <p class="reports-section__desc"><?php p($l->t('Choose one of these exports, then set the period and format below.')); ?></p>
 
                 <div class="report-types-grid report-types-grid--simple" role="list">
                     <div class="report-type-card report-type-card--primary" data-report-type="monthly">
-                        <div class="report-type-icon" aria-hidden="true">📈</div>
+                        <div class="report-type-icon report-type-icon--working-time" aria-hidden="true"><span class="report-type-icon__abbr"><?php p($l->t('WT')); ?></span></div>
                         <h4><?php p($l->t('Working Time Export')); ?></h4>
                         <p><?php p($l->t('Export a clear overview of worked hours for the selected period.')); ?></p>
                         <button class="btn-select-report" data-report="monthly"><?php p($l->t('Select')); ?></button>
                     </div>
 
                     <div class="report-type-card report-type-card--primary" data-report-type="absence">
-                        <div class="report-type-icon" aria-hidden="true">🏖️</div>
+                        <div class="report-type-icon report-type-icon--absence" aria-hidden="true"><span class="report-type-icon__abbr"><?php p($l->t('AB')); ?></span></div>
                         <h4><?php p($l->t('Absence Export')); ?></h4>
                         <p><?php p($l->t('Export vacation and absence data with totals and status.')); ?></p>
                         <button class="btn-select-report" data-report="absence"><?php p($l->t('Select')); ?></button>
                     </div>
 
                     <div class="report-type-card report-type-card--primary" data-report-type="compliance">
-                        <div class="report-type-icon" aria-hidden="true">✅</div>
+                        <div class="report-type-icon report-type-icon--compliance" aria-hidden="true"><span class="report-type-icon__abbr"><?php p($l->t('CP')); ?></span></div>
                         <h4><?php p($l->t('Compliance Export')); ?></h4>
                         <p><?php p($l->t('Export labor law compliance violations and severity details.')); ?></p>
                         <button class="btn-select-report" data-report="compliance"><?php p($l->t('Select')); ?></button>
@@ -223,11 +230,14 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                 </div>
             </div>
 
-            <!-- Step 2: Report Parameters -->
-            <div id="report-parameters" class="reports-section report-parameters-section" style="display: none;" aria-labelledby="report-parameters-heading">
+            <!-- Step 2: period, format, export options -->
+            <div id="report-parameters" class="reports-section report-parameters-section reports-step" style="display: none;" aria-labelledby="report-parameters-heading">
                 <h3 id="report-parameters-heading" class="reports-section__title"><?php p($l->t('Set time period and format')); ?></h3>
                 <p class="reports-section__desc">
                     <?php p($l->t('Pick the time period for your report. The selected range applies to the export and preview.')); ?>
+                </p>
+                <p class="reports-section__desc reports-section__desc--secondary" id="report-preview-download-hint">
+                    <?php p($l->t('Preview loads the report in the browser. Generate and download saves a file using the options below.')); ?>
                 </p>
                 <form id="report-form" class="report-form" aria-label="<?php p($l->t('Report parameters')); ?>">
                     <input type="hidden" id="report-type" name="report_type" value="">
@@ -287,6 +297,40 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                         </select>
                         <p id="format-help" class="form-help">
                             <?php p($l->t('Choose how you want to save the report. CSV works well with spreadsheet programs. JSON is best if another system needs to process the data.')); ?>
+                        </p>
+                    </div>
+
+                    <div class="form-group" id="report-team-variant-group" style="display: none;" aria-labelledby="report-team-variant-label">
+                        <label id="report-team-variant-label" for="report-team-variant" class="form-label">
+                            <?php p($l->t('Team download content')); ?>
+                        </label>
+                        <select id="report-team-variant"
+                                name="report_team_variant"
+                                class="form-select"
+                                disabled
+                                aria-describedby="report-team-variant-help">
+                            <option value="summary"><?php p($l->t('Summary (one row per person)')); ?></option>
+                            <option value="time_entries"><?php p($l->t('Detailed time entries')); ?></option>
+                        </select>
+                        <p id="report-team-variant-help" class="form-help">
+                            <?php p($l->t('Summary matches the on-screen team totals. Detailed time entries lists each booking line (respects midnight split in admin settings).')); ?>
+                        </p>
+                    </div>
+
+                    <div class="form-group" id="report-export-layout-group" style="display: none;" aria-labelledby="report-export-layout-label">
+                        <label id="report-export-layout-label" for="report-export-layout" class="form-label">
+                            <?php p($l->t('Time entries layout')); ?>
+                        </label>
+                        <select id="report-export-layout"
+                                name="report_export_layout"
+                                class="form-select"
+                                disabled
+                                aria-describedby="report-export-layout-help">
+                            <option value="long"><?php p($l->t('One row per segment (long)')); ?></option>
+                            <option value="wide"><?php p($l->t('Daily sheet: date, weekday, From–To pairs (wide)')); ?></option>
+                        </select>
+                        <p id="report-export-layout-help" class="form-help">
+                            <?php p($l->t('Wide layout groups pairs of start and end times per calendar day for spreadsheet review.')); ?>
                         </p>
                     </div>
                     

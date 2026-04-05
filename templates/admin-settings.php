@@ -125,6 +125,9 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
                         <p id="exportMidnightSplitEnabled-help" class="form-help">
                             <?php p($l->t('When enabled, entries that run across midnight (for example 22:00–06:00) are shown as two lines in the export (before and after 00:00). This is only a visual/export split – all internal working time and ArbZG compliance checks continue to use the original, unsplit entry.')); ?>
                         </p>
+                        <p class="form-help form-help--note" id="exportDatevMidnight-note">
+                            <?php p($l->t('DATEV export always uses full, unsplit time entries as required by the DATEV payroll format. CSV and JSON exports respect the midnight split setting above when it is enabled.')); ?>
+                        </p>
                     </div>
                 </section>
 

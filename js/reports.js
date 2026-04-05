@@ -26,6 +26,10 @@
 		const startDateInput = document.getElementById('start-date');
 		const endDateInput = document.getElementById('end-date');
 		const formatSelect = document.getElementById('format');
+		const teamVariantGroup = document.getElementById('report-team-variant-group');
+		const teamVariantSelect = document.getElementById('report-team-variant');
+		const exportLayoutGroup = document.getElementById('report-export-layout-group');
+		const exportLayoutSelect = document.getElementById('report-export-layout');
 		const previewBtn = document.getElementById('btn-preview-report');
 		const generateBtn = document.getElementById('btn-generate-report');
 		const scopeForm = document.getElementById('report-scope-form');
@@ -179,6 +183,36 @@
 			});
 		}
 
+		/** Show team variant + export layout controls when they apply (working time export, team scope, formats). */
+		function updateExportOptionVisibility() {
+			const reportType = reportTypeInput ? reportTypeInput.value : '';
+			const scope = reportScopeInput ? reportScopeInput.value : '';
+			const teamScopes = ['admin_team', 'manager_team', 'manager_single_team'];
+			const isTeam = teamScopes.includes(scope);
+			const isMonthlyWorkingTime = reportType === 'monthly';
+			const fmt = formatSelect ? formatSelect.value : 'csv';
+
+			if (teamVariantGroup) {
+				const showTeamVariant = isTeam && isMonthlyWorkingTime;
+				teamVariantGroup.style.display = showTeamVariant ? '' : 'none';
+				if (teamVariantSelect) {
+					teamVariantSelect.disabled = !showTeamVariant;
+				}
+			}
+
+			if (exportLayoutGroup) {
+				const teamVariant = teamVariantSelect ? teamVariantSelect.value : 'summary';
+				const showLayout =
+					isMonthlyWorkingTime &&
+					(fmt === 'csv' || fmt === 'json') &&
+					(!isTeam || teamVariant === 'time_entries');
+				exportLayoutGroup.style.display = showLayout ? '' : 'none';
+				if (exportLayoutSelect) {
+					exportLayoutSelect.disabled = !showLayout;
+				}
+			}
+		}
+
 		function handleScopeChange() {
 				// Enable/disable team selects based on active scope
 				const scopeAdminTeam = document.getElementById('scope-admin-team');
@@ -206,6 +240,7 @@
 
 				updateScopeFromForm();
 				applyReportTypeRestrictionsForScope(reportScopeInput ? reportScopeInput.value : '');
+				updateExportOptionVisibility();
 		}
 
 		if (scopeForm) {
@@ -220,6 +255,7 @@
 			} else if (A.isManager) {
 				loadManagerTeamsIfNeeded();
 			}
+			updateExportOptionVisibility();
 		}
 
 		// Handle report card clicks
@@ -297,9 +333,17 @@
 
 					if (startDateInput) startDateInput.value = toDDMMYYYY(defaultStart);
 					if (endDateInput) endDateInput.value = toDDMMYYYY(defaultEnd);
+					updateExportOptionVisibility();
 				}
 			});
 		});
+
+		if (formatSelect) {
+			formatSelect.addEventListener('change', updateExportOptionVisibility);
+		}
+		if (teamVariantSelect) {
+			teamVariantSelect.addEventListener('change', updateExportOptionVisibility);
+		}
 
 		// Build report URL with correct params per type (API expects specific param names)
 		function buildReportUrl(apiUrl, reportType, startDate, endDate) {
@@ -310,6 +354,8 @@
 				url.searchParams.set('weekStart', startDate);
 			} else if (reportType === 'monthly') {
 				url.searchParams.set('month', startDate.substring(0, 7));
+				url.searchParams.set('startDate', startDate);
+				url.searchParams.set('endDate', endDate);
 			} else {
 				url.searchParams.set('startDate', startDate);
 				url.searchParams.set('endDate', endDate);
@@ -798,6 +844,14 @@
 					if (format) {
 						urlObj.searchParams.set('format', format);
 					}
+					const teamVar = teamVariantSelect ? teamVariantSelect.value : 'summary';
+					if (teamVar) {
+						urlObj.searchParams.set('variant', teamVar);
+					}
+					const layoutVal = exportLayoutSelect ? exportLayoutSelect.value : 'long';
+					if (layoutVal && teamVar === 'time_entries') {
+						urlObj.searchParams.set('layout', layoutVal);
+					}
 					if (scope === 'admin_team' && adminTeamSelect && adminTeamSelect.value) {
 						urlObj.searchParams.set('teamId', adminTeamSelect.value.trim());
 					}
@@ -837,6 +891,10 @@
 				if (startIso) urlObj.searchParams.set('startDate', startIso);
 				if (endIso) urlObj.searchParams.set('endDate', endIso);
 				if (format) urlObj.searchParams.set('format', format);
+				const layoutVal = exportLayoutSelect ? exportLayoutSelect.value : 'long';
+				if (reportType === 'monthly' && layoutVal && (format === 'csv' || format === 'json')) {
+					urlObj.searchParams.set('layout', layoutVal);
+				}
 				const a = document.createElement('a');
 				a.href = urlObj.toString();
 				a.style.display = 'none';
