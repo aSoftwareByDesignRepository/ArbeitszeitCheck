@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Development tooling**: `occ arbeitszeitcheck:generate-test-data` CLI for deterministic demo data (time entries, absences, optional violations, demo app team) to exercise UI, reports, and workflows locally.
+- **Exports**: `TimeEntryExportTransformer` centralizes field mapping and CSV shaping for time-entry exports; `ExportController` delegates to it for a single, testable pipeline.
 
 ### Fixed
 
@@ -22,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Compatibility (dev)**: Local development stacks aligned with Nextcloud 33.x (example: official `nextcloud` Docker image).
 - **Reports layout**: Reverted an overly aggressive “full width” parameter form rule that could interfere with scrolling/layout on the reports page.
+- **Reports UI**: Templates, JavaScript, and styling updates for the reports page; admin settings hook for related options.
+- **Reporting**: `ReportController` and `ReportingService` adjustments aligned with the export refactor.
+
+### Tests
+
+- Unit tests for `TimeEntryExportTransformer`; expanded `ReportController` tests; `ExportController` tests updated for the new wiring.
 
 ## 1.1.5 - 2026-03-26
 

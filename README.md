@@ -61,6 +61,8 @@ Unterstützte Umgebungen:
 
 ### Dokumentation
 
+- **Versionshistorie**: `CHANGELOG.md` (EN) / `CHANGELOG.de.md` (DE) — Release- und Änderungsübersicht (Keep a Changelog).
+
 Die wichtigsten öffentlich mitgelieferten Begleitdokumente liegen im Ordner `docs/`:
 
 - **Compliance**
