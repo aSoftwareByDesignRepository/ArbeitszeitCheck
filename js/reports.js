@@ -285,6 +285,13 @@
 					}
 					reportTypeInput.value = reportType;
 
+					if (teamVariantSelect) {
+						teamVariantSelect.value = 'time_entries';
+					}
+					if (exportLayoutSelect) {
+						exportLayoutSelect.value = 'long';
+					}
+
 					// Ensure scope is up to date before showing parameters
 					updateScopeFromForm();
 
@@ -323,8 +330,10 @@
 						defaultEnd = new Date(defaultStart);
 						defaultEnd.setDate(defaultStart.getDate() + 6);
 					} else if (reportType === 'monthly') {
-						defaultStart = new Date(today.getFullYear(), today.getMonth(), 1);
-						defaultEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0); // last day
+						// Rolling window so team/time-entry exports include recent bookings (e.g. overnight
+						// shifts last month) instead of only the current calendar month.
+						defaultStart = thirtyDaysAgo;
+						defaultEnd = today;
 					} else {
 						// overtime, absence, compliance: keep last-30-days default
 						defaultStart = thirtyDaysAgo;
@@ -353,7 +362,9 @@
 			} else if (reportType === 'weekly') {
 				url.searchParams.set('weekStart', startDate);
 			} else if (reportType === 'monthly') {
-				url.searchParams.set('month', startDate.substring(0, 7));
+				if (startDate.length >= 7) {
+					url.searchParams.set('month', startDate.substring(0, 7));
+				}
 				url.searchParams.set('startDate', startDate);
 				url.searchParams.set('endDate', endDate);
 			} else {
@@ -744,11 +755,27 @@
 						let html = `<p class="report-success">${esc(
 							(A.l10n && A.l10n.reportReady) || 'Report generated successfully.',
 						)}</p>`;
-						if (isTeamScope) {
+						if (isTeamScope && (reportType === 'absence' || reportType === 'compliance')) {
 							html += `<p class="report-info" role="status">${esc(
-								(A.l10n && A.l10n.exportScopeNotice) ||
-								'The download will contain one row per team member matching this preview.',
+								(A.l10n && A.l10n.teamPreviewWorkingTimeOnly) ||
+								'With team scope, this preview shows the team working time summary, not absence or compliance.',
 							)}</p>`;
+						}
+						if (isTeamScope) {
+							if (reportType === 'monthly') {
+								const teamVar = teamVariantSelect ? teamVariantSelect.value : 'summary';
+								const scopeNotice =
+									teamVar === 'time_entries' && A.l10n && A.l10n.exportScopeNoticeTimeEntries
+										? A.l10n.exportScopeNoticeTimeEntries
+										: (A.l10n && A.l10n.exportScopeNotice) ||
+											'The download will contain one row per team member matching this preview.';
+								html += `<p class="report-info" role="status">${esc(scopeNotice)}</p>`;
+							} else {
+								html += `<p class="report-info" role="status">${esc(
+									(A.l10n && A.l10n.teamDownloadOnlyWorkingTimeExport) ||
+									'Team file download is only available for the working time export.',
+								)}</p>`;
+							}
 						} else if (isOrganizationScope) {
 							html += `<p class="report-info" role="status">${esc(
 								(A.l10n && A.l10n.exportOrganizationScopeNotice) ||
@@ -826,6 +853,15 @@
 				return;
 			}
 
+			// Team downloads only support working time (team report / time entries). Other exports are per-user only.
+			if (teamScopes.includes(scope) && reportType !== 'monthly') {
+				const msg =
+					(A.l10n && A.l10n.teamDownloadWorkingTimeOnly) ||
+					'Team download is only available for the working time export. Switch to personal scope to download absence or compliance data.';
+				announceToScreenReader(msg);
+				return;
+			}
+
 			// Team and manager scopes: export aggregated team report via team API
 			if (teamScopes.includes(scope)) {
 				const apiMap = A.apiUrl || {};
@@ -844,12 +880,18 @@
 					if (format) {
 						urlObj.searchParams.set('format', format);
 					}
-					const teamVar = teamVariantSelect ? teamVariantSelect.value : 'summary';
+					const teamVar =
+						reportType === 'monthly' && teamVariantSelect ? teamVariantSelect.value : 'summary';
 					if (teamVar) {
 						urlObj.searchParams.set('variant', teamVar);
 					}
 					const layoutVal = exportLayoutSelect ? exportLayoutSelect.value : 'long';
-					if (layoutVal && teamVar === 'time_entries') {
+					if (
+						reportType === 'monthly' &&
+						teamVar === 'time_entries' &&
+						layoutVal &&
+						(format === 'csv' || format === 'json')
+					) {
 						urlObj.searchParams.set('layout', layoutVal);
 					}
 					if (scope === 'admin_team' && adminTeamSelect && adminTeamSelect.value) {
@@ -892,7 +934,11 @@
 				if (endIso) urlObj.searchParams.set('endDate', endIso);
 				if (format) urlObj.searchParams.set('format', format);
 				const layoutVal = exportLayoutSelect ? exportLayoutSelect.value : 'long';
-				if (reportType === 'monthly' && layoutVal && (format === 'csv' || format === 'json')) {
+				if (
+					reportType === 'monthly' &&
+					layoutVal &&
+					(format === 'csv' || format === 'json')
+				) {
 					urlObj.searchParams.set('layout', layoutVal);
 				}
 				const a = document.createElement('a');

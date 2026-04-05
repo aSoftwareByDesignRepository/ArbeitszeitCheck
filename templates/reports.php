@@ -309,8 +309,8 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                                 class="form-select"
                                 disabled
                                 aria-describedby="report-team-variant-help">
+                            <option value="time_entries" selected><?php p($l->t('Detailed time entries')); ?></option>
                             <option value="summary"><?php p($l->t('Summary (one row per person)')); ?></option>
-                            <option value="time_entries"><?php p($l->t('Detailed time entries')); ?></option>
                         </select>
                         <p id="report-team-variant-help" class="form-help">
                             <?php p($l->t('Summary matches the on-screen team totals. Detailed time entries lists each booking line (respects midnight split in admin settings).')); ?>
@@ -330,7 +330,7 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                             <option value="wide"><?php p($l->t('Daily sheet: date, weekday, From–To pairs (wide)')); ?></option>
                         </select>
                         <p id="report-export-layout-help" class="form-help">
-                            <?php p($l->t('Wide layout groups pairs of start and end times per calendar day for spreadsheet review.')); ?>
+                            <?php p($l->t('Long layout: one row per time segment with start/end times and duration/working hours columns (use this to see overnight shifts split at midnight when your administrator enables it). Wide layout: date, weekday, and From–To clock times only — no duration or working hours columns.')); ?>
                         </p>
                     </div>
                     
@@ -413,7 +413,11 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
     window.ArbeitszeitCheck.l10n.teamRequired = <?php echo json_encode($l->t('Please select a team.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.dateRangeInvalid = <?php echo json_encode($l->t('Start date must be before or equal to end date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.exportScopeNotice = <?php echo json_encode($l->t('The download contains one row per team member for the selected period.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.exportScopeNoticeTimeEntries = <?php echo json_encode($l->t('The download lists each time entry line for your team (several rows per person if there are multiple entries; overnight shifts may appear as two rows when midnight split is enabled).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.exportOrganizationScopeNotice = <?php echo json_encode($l->t('Export for organization scope is not yet available. Use Preview to view the report.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.teamDownloadWorkingTimeOnly = <?php echo json_encode($l->t('Team download is only available for the working time export. Switch to personal scope to download absence or compliance data.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.teamPreviewWorkingTimeOnly = <?php echo json_encode($l->t('With team scope, this preview shows the team working time summary, not absence or compliance.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.teamDownloadOnlyWorkingTimeExport = <?php echo json_encode($l->t('Team file download is only available for the working time export.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.reportParamsRequired = <?php echo json_encode($l->t('Please fill in report type, start date and end date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.invalidReportType = <?php echo json_encode($l->t('Invalid report type.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.errorTryAgain = <?php echo json_encode($l->t('An error occurred. Please try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

@@ -462,8 +462,10 @@ class ReportController extends Controller
 			$download = (string)$this->request->getParam('download', '0') === '1';
 			if ($download) {
 				$format = (string)$this->request->getParam('format', 'csv');
-				$variant = (string)$this->request->getParam('variant', 'summary');
-				$layout = (string)$this->request->getParam('layout', 'long');
+				$variantParam = (string)$this->request->getParam('variant', 'summary');
+				$variant = in_array($variantParam, ['summary', 'time_entries'], true) ? $variantParam : 'summary';
+				$layoutParam = (string)$this->request->getParam('layout', 'long');
+				$layout = in_array($layoutParam, ['long', 'wide'], true) ? $layoutParam : 'long';
 
 				if ($variant === 'time_entries') {
 					$enableMidnightSplit = $this->config->getAppValue('arbeitszeitcheck', 'export_midnight_split_enabled', '1') === '1';

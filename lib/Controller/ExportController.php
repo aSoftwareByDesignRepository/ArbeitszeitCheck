@@ -116,7 +116,8 @@ class ExportController extends Controller
 			// Decide whether to virtually split entries that span midnight in CSV/JSON export
 			$enableMidnightSplit = $this->config->getAppValue('arbeitszeitcheck', 'export_midnight_split_enabled', '1') === '1';
 
-			$layout = (string)$this->request->getParam('layout', 'long');
+			$layoutParam = (string)$this->request->getParam('layout', 'long');
+			$layout = in_array($layoutParam, ['long', 'wide'], true) ? $layoutParam : 'long';
 
 			$data = [];
 			foreach ($entries as $entry) {
