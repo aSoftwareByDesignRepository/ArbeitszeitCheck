@@ -24,7 +24,6 @@ use OCA\ArbeitszeitCheck\Service\HolidayCalendarService;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
-use OCA\ArbeitszeitCheck\Service\AbsenceCalendarSyncService;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
 use OCA\ArbeitszeitCheck\Service\AbsenceIcalMailService;
 use OCA\ArbeitszeitCheck\Service\AbsenceNotificationMailService;
@@ -125,29 +124,6 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
-		$context->registerService(\OCA\ArbeitszeitCheck\Db\AbsenceCalendarMapper::class, function($c) {
-			return new \OCA\ArbeitszeitCheck\Db\AbsenceCalendarMapper(
-				$c->query(IDBConnection::class)
-			);
-		});
-
-		$context->registerService(AbsenceCalendarSyncService::class, function($c) {
-			$calDav = null;
-			try {
-				$calDav = $c->query(\OCA\DAV\CalDAV\CalDavBackend::class);
-			} catch (\Throwable $e) {
-				// DAV app not available in some contexts (e.g. unit tests without full stack)
-			}
-			return new AbsenceCalendarSyncService(
-				$c->query(\OCP\Calendar\IManager::class),
-				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceCalendarMapper::class),
-				$c->query(\OCP\IL10N::class),
-				$c->query(\OCP\AppFramework\Utility\ITimeFactory::class),
-				$c->query(\OCP\IURLGenerator::class),
-				$calDav
-			);
-		});
-
 		$context->registerService(\OCA\ArbeitszeitCheck\Db\TeamMapper::class, function($c) {
 			return new \OCA\ArbeitszeitCheck\Db\TeamMapper(
 				$c->query(IDBConnection::class)
@@ -241,8 +217,7 @@ class Application extends App implements IBootstrap {
 				$c->query(HolidayCalendarService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class),
 				$c->query(VacationAllocationService::class),
-				$c->query(AbsenceNotificationMailService::class),
-				$c->query(AbsenceCalendarSyncService::class)
+				$c->query(AbsenceNotificationMailService::class)
 			);
 		});
 

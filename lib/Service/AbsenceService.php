@@ -45,7 +45,6 @@ class AbsenceService
 	private HolidayCalendarService $holidayCalendarService;
 	private VacationYearBalanceMapper $vacationYearBalanceMapper;
 	private VacationAllocationService $vacationAllocationService;
-	private ?AbsenceCalendarSyncService $absenceCalendarSyncService;
 
 	public function __construct(
 		AbsenceMapper $absenceMapper,
@@ -62,8 +61,7 @@ class AbsenceService
 		HolidayCalendarService $holidayCalendarService,
 		VacationYearBalanceMapper $vacationYearBalanceMapper,
 		VacationAllocationService $vacationAllocationService,
-		?AbsenceNotificationMailService $absenceNotificationMailService = null,
-		?AbsenceCalendarSyncService $absenceCalendarSyncService = null
+		?AbsenceNotificationMailService $absenceNotificationMailService = null
 	) {
 		$this->absenceMapper = $absenceMapper;
 		$this->auditLogMapper = $auditLogMapper;
@@ -79,7 +77,6 @@ class AbsenceService
 		$this->holidayCalendarService = $holidayCalendarService;
 		$this->vacationYearBalanceMapper = $vacationYearBalanceMapper;
 		$this->absenceNotificationMailService = $absenceNotificationMailService;
-		$this->absenceCalendarSyncService = $absenceCalendarSyncService;
 		$this->vacationAllocationService = $vacationAllocationService;
 	}
 
@@ -161,7 +158,6 @@ class AbsenceService
 			if ($this->absenceIcalMailService) {
 				$this->absenceIcalMailService->sendIcalForApprovedAbsence($savedAbsence);
 			}
-			$this->afterAbsenceApprovedCalendar($savedAbsence);
 		} elseif ($substituteUserId) {
 			if ($this->notificationService) {
 				$startDate = $savedAbsence->getStartDate();
@@ -428,10 +424,6 @@ class AbsenceService
 			throw $e;
 		}
 
-		if ($status === Absence::STATUS_APPROVED) {
-			$this->removeAbsenceCalendarSafe($id);
-		}
-
 		return $updatedAbsence;
 	}
 
@@ -517,8 +509,6 @@ class AbsenceService
 			throw $e;
 		}
 
-		$this->afterAbsenceApprovedCalendar($updatedAbsence);
-
 		return $updatedAbsence;
 	}
 
@@ -598,8 +588,6 @@ class AbsenceService
 		if ($this->absenceIcalMailService) {
 			$this->absenceIcalMailService->sendIcalForApprovedAbsence($updatedAbsence);
 		}
-
-		$this->afterAbsenceApprovedCalendar($updatedAbsence);
 
 		return $updatedAbsence;
 	}
@@ -746,7 +734,6 @@ class AbsenceService
 			if ($this->absenceIcalMailService) {
 				$this->absenceIcalMailService->sendIcalForApprovedAbsence($updatedAbsence);
 			}
-			$this->afterAbsenceApprovedCalendar($updatedAbsence);
 		} else {
 			// Employee has manager: notify about substitute approval and that manager approval is pending
 			if ($this->notificationService) {
@@ -1379,35 +1366,5 @@ class AbsenceService
 		// and will internally delegate to HolidayCalendarService in future iterations if needed.
 		unset($start, $end, $userId);
 		return [];
-	}
-
-	private function afterAbsenceApprovedCalendar(Absence $absence): void
-	{
-		if ($this->absenceCalendarSyncService === null) {
-			return;
-		}
-		try {
-			$this->absenceCalendarSyncService->syncApprovedAbsence($absence);
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error(
-				'Calendar sync after approval failed: ' . $e->getMessage(),
-				['exception' => $e]
-			);
-		}
-	}
-
-	private function removeAbsenceCalendarSafe(int $absenceId): void
-	{
-		if ($this->absenceCalendarSyncService === null) {
-			return;
-		}
-		try {
-			$this->absenceCalendarSyncService->removeAbsenceCalendar($absenceId);
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error(
-				'Calendar removal failed: ' . $e->getMessage(),
-				['exception' => $e]
-			);
-		}
 	}
 }

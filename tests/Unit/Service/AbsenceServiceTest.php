@@ -156,7 +156,6 @@ class AbsenceServiceTest extends TestCase
 			$this->holidayCalendarService,
 			$this->vacationYearBalanceMapper,
 			$this->vacationAllocationService,
-			null,
 			null
 		);
 	}
