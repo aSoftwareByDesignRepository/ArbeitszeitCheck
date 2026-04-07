@@ -1,8 +1,18 @@
 ## [Unreleased]
 
+## 1.1.10 – 2026-04-07
+
+### Hinzugefügt
+
+- **Urlaubsübertrag / Rollover**: `VacationRolloverService`, Hintergrundauftrag, `occ arbeitszeitcheck:vacation-rollover`, Migration `Version1013Date20260407120000` mit `at_vacation_rollover_log`; Unit-Tests.
+
+### Geändert
+
+- **Frontend-L10n**: Gemeinsame Partials `templates/common/main-ui-l10n.php` und `teams-l10n.php`, damit Übersetzungen früh verfügbar sind; zugehörige Template- und JS-Anpassungen.
+
 ### Behoben
 
-- **Manager-Dashboard — ausstehende Abwesenheiten**: Die API liefert jetzt `summary.typeLabel` (serverseitig übersetzter Abwesenheitstyp); die Oberfläche nutzt das bevorzugt, damit Karten lokalisierte Bezeichnungen zeigen (z. B. *Urlaub*) statt Rohcodes wie `vacation`.
+- **Manager-Dashboard — ausstehende Abwesenheiten**: Die API liefert `summary.typeLabel` (serverseitig übersetzter Abwesenheitstyp); die Oberfläche nutzt das bevorzugt, damit Karten lokalisierte Bezeichnungen zeigen (z. B. *Urlaub*) statt Rohcodes wie `vacation`.
 
 ### Dokumentation
 

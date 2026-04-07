@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.1.10 - 2026-04-07
+
+### Added
+
+- **Vacation rollover**: `VacationRolloverService`, background job, `occ arbeitszeitcheck:vacation-rollover`, migration `Version1013Date20260407120000` with `at_vacation_rollover_log`; unit tests.
+
+### Changed
+
+- **Frontend l10n**: Shared `templates/common/main-ui-l10n.php` and `teams-l10n.php` so translated strings are available early across pages; related template and JS updates.
+
 ### Fixed
 
-- **Manager dashboard — pending absences**: API now includes `summary.typeLabel` (server-localized absence type); UI prefers it so cards show translated labels (e.g. German *Urlaub*) instead of raw codes like `vacation`.
+- **Manager dashboard — pending absences**: API includes `summary.typeLabel` (server-localized absence type); UI prefers it so cards show translated labels (e.g. German *Urlaub*) instead of raw codes like `vacation`.
 
 ### Documentation
 
