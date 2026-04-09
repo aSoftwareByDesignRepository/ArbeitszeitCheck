@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Geändert
+
+- **Kalender-Verhalten (Rollback-Bereinigung)**: Angefangene Funktionalität für direkte Kalendereinträge sowie zugehörige Admin-Optionen/Status/Test-Endpunkte wurde entfernt. Das unterstützte Verhalten bleibt unverändert: keine Synchronisation mit der Nextcloud-Kalender-App; optionale `.ics`-Anhänge werden weiterhin per E-Mail in den konfigurierten Abwesenheits-Workflows versendet.
+
 ## 1.1.10 – 2026-04-07
 
 ### Hinzugefügt

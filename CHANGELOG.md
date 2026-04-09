@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Calendar behavior (rollback cleanup)**: Removed in-progress direct calendar-write functionality and related admin controls/status/test endpoints. The supported behavior remains unchanged: no Nextcloud Calendar app sync; optional `.ics` attachments are sent by email for configured absence workflows.
+
 ## 1.1.10 - 2026-04-07
 
 ### Added

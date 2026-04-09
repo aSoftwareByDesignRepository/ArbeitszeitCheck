@@ -1884,6 +1884,8 @@
 		"Source model": "Source model",
 		"Copy (noun)": "Copy",
 		"Delete working time model": "Delete working time model",
+		"Important: This is best-effort email delivery, not a guaranteed real-time calendar sync. Delivery can be delayed or fail due to mail server/network issues. Source of truth remains ArbeitszeitCheck.": "Important: This is best-effort email delivery, not a guaranteed real-time calendar sync. Delivery can be delayed or fail due to mail server/network issues. Source of truth remains ArbeitszeitCheck.",
+		"Privacy note: To reduce sensitive data exposure, iCal details for substitutes/managers intentionally avoid private absence reasons.": "Privacy note: To reduce sensitive data exposure, iCal details for substitutes/managers intentionally avoid private absence reasons.",
 		"Are you sure you want to delete this work schedule?\n\nThis will permanently remove this schedule. If any employees are using this schedule, you should assign them to a different schedule first.\n\nThis action cannot be undone.": "Are you sure you want to delete this work schedule?\n\nThis will permanently remove this schedule. If any employees are using this schedule, you should assign them to a different schedule first.\n\nThis action cannot be undone.",
 		"Are you sure you want to delete \"{name}\"?\n\nThis will permanently remove this work schedule. If any employees are using this schedule, you should assign them to a different schedule first.\n\nThis action cannot be undone.": "Are you sure you want to delete \"{name}\"?\n\nThis will permanently remove this work schedule. If any employees are using this schedule, you should assign them to a different schedule first.\n\nThis action cannot be undone."
 	}
