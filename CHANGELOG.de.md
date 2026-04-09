@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## 1.1.11 – 2026-04-09
+
 ### Hinzugefügt
 
 - **Manager-Ansicht „Mitarbeiter-Abwesenheiten“**: Neue In-App-Seite und API für Manager/Admins zur Einsicht von Abwesenheiten mit sicherer Bereichsfilterung, Pagination und lokalisierten Statusbezeichnungen.

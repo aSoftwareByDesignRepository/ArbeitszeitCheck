@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.1.11 - 2026-04-09
+
 ### Added
 
 - **Manager employee absences view**: New in-app page and API for managers/admins to review employee absences with secure scope filtering, pagination, and localized status labels.
