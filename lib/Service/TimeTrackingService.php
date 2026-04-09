@@ -34,6 +34,7 @@ class TimeTrackingService
 	private IL10N $l10n;
 	private IConfig $config;
 	private UserSettingsMapper $userSettingsMapper;
+	private MonthClosureGuard $monthClosureGuard;
 
 	public function __construct(
 		TimeEntryMapper $timeEntryMapper,
@@ -43,7 +44,8 @@ class TimeTrackingService
 		ComplianceService $complianceService,
 		IL10N $l10n,
 		IConfig $config,
-		UserSettingsMapper $userSettingsMapper
+		UserSettingsMapper $userSettingsMapper,
+		MonthClosureGuard $monthClosureGuard
 	) {
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->violationMapper = $violationMapper;
@@ -53,6 +55,7 @@ class TimeTrackingService
 		$this->l10n = $l10n;
 		$this->config = $config;
 		$this->userSettingsMapper = $userSettingsMapper;
+		$this->monthClosureGuard = $monthClosureGuard;
 	}
 
 	private function getMaxDailyHours(): float
@@ -76,6 +79,8 @@ class TimeTrackingService
 	 */
 	public function clockIn(string $userId, ?string $projectCheckProjectId = null, ?string $description = null): TimeEntry
 	{
+		$this->monthClosureGuard->assertUserDayMutable($userId, new \DateTime());
+
 		// Check if user is already clocked in
 		$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
 		if ($activeEntry !== null) {
@@ -286,6 +291,8 @@ class TimeTrackingService
 			throw new \Exception($this->l10n->t('User is not currently clocked in'));
 		}
 
+		$this->monthClosureGuard->assertTimeEntryMutable($currentEntry);
+
 		$now = new \DateTime();
 		
 		// If user is on break, end the break first
@@ -341,6 +348,8 @@ class TimeTrackingService
 		if ($activeEntry === null) {
 			throw new \Exception($this->l10n->t('User is not currently clocked in'));
 		}
+
+		$this->monthClosureGuard->assertTimeEntryMutable($activeEntry);
 
 		// Allow multiple breaks - check if there's an active break
 		if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() === null) {
@@ -400,6 +409,8 @@ class TimeTrackingService
 		if ($breakEntry === null) {
 			throw new \Exception($this->l10n->t('User is not currently on break'));
 		}
+
+		$this->monthClosureGuard->assertTimeEntryMutable($breakEntry);
 
 		$now = new \DateTime();
 		$breakEntry->setBreakEndTime($now);

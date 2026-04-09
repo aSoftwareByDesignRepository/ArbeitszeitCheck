@@ -27,6 +27,10 @@
         if (form) {
             Utils.on(form, 'submit', handleFormSubmit);
         }
+        const reopenBtn = Utils.$('#monthClosureReopenBtn');
+        if (reopenBtn) {
+            Utils.on(reopenBtn, 'click', handleMonthReopen);
+        }
         // Real-time validation
         const numberInputs = Utils.$$('#admin-settings-form input[type="number"]');
         numberInputs.forEach(input => {
@@ -34,6 +38,25 @@
                 validateField(this);
             });
         });
+
+        const monthClosureToggle = Utils.$('#monthClosureEnabled');
+        if (monthClosureToggle) {
+            Utils.on(monthClosureToggle, 'change', syncMonthClosureGraceField);
+            syncMonthClosureGraceField();
+        }
+    }
+
+    /**
+     * Grace days only apply when month closure is enabled; keep the field disabled otherwise (still submitted via direct value read).
+     */
+    function syncMonthClosureGraceField() {
+        const toggle = Utils.$('#monthClosureEnabled');
+        const grace = Utils.$('#monthClosureGraceDaysAfterEom');
+        if (!toggle || !grace) {
+            return;
+        }
+        const on = toggle.checked === true;
+        grace.disabled = !on;
     }
 
     /**
@@ -60,6 +83,7 @@
         formData.complianceStrictMode = isChecked(formData.complianceStrictMode);
         formData.enableViolationNotifications = isChecked(formData.enableViolationNotifications);
         formData.exportMidnightSplitEnabled = isChecked(formData.exportMidnightSplitEnabled);
+        formData.monthClosureEnabled = isChecked(formData.monthClosureEnabled);
         formData.sendIcalApprovedAbsences = isChecked(formData.sendIcalApprovedAbsences);
         formData.sendIcalToSubstitute = isChecked(formData.sendIcalToSubstitute);
         formData.sendIcalToManagers = isChecked(formData.sendIcalToManagers);
@@ -79,6 +103,8 @@
         formData.retentionPeriod = int(formData.retentionPeriod, 2);
         formData.vacationCarryoverExpiryMonth = int(formData.vacationCarryoverExpiryMonth, 3);
         formData.vacationCarryoverExpiryDay = int(formData.vacationCarryoverExpiryDay, 31);
+        const graceInput = Utils.$('#monthClosureGraceDaysAfterEom');
+        formData.monthClosureGraceDaysAfterEom = graceInput ? int(graceInput.value, 0) : int(formData.monthClosureGraceDaysAfterEom, 0);
 
         // Validate
         if (!validateForm(formData)) {
@@ -99,6 +125,74 @@
             },
             onError: function(_error) {
                 Messaging.showError(window.ArbeitszeitCheck?.l10n?.errorSavingSettings || (window.t ? window.t('arbeitszeitcheck', 'An error occurred while saving settings') : 'An error occurred while saving settings'));
+            }
+        });
+    }
+
+    /**
+     * Admin: reopen a finalized calendar month for an employee (revision-safe closure).
+     */
+    function handleMonthReopen() {
+        const userEl = Utils.$('#monthClosureReopenUserId');
+        const yearEl = Utils.$('#monthClosureReopenYear');
+        const monthEl = Utils.$('#monthClosureReopenMonth');
+        const reasonEl = Utils.$('#monthClosureReopenReason');
+        const live = Utils.$('#monthClosureReopenLive');
+        const btn = Utils.$('#monthClosureReopenBtn');
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        const userId = userEl && userEl.value ? String(userEl.value).trim() : '';
+        const reason = reasonEl && reasonEl.value ? String(reasonEl.value).trim() : '';
+        const year = yearEl ? parseInt(String(yearEl.value), 10) : NaN;
+        const month = monthEl ? parseInt(String(monthEl.value), 10) : NaN;
+
+        if (!userId || !reason || !Number.isInteger(year) || !Number.isInteger(month)) {
+            Messaging.showError(l10n.monthReopenFillAll || 'Please enter user ID, year, month, and a reason.');
+            return;
+        }
+        if (year < 1970 || year > 2100 || month < 1 || month > 12) {
+            Messaging.showError(window.t ? window.t('arbeitszeitcheck', 'Invalid month') : 'Invalid month');
+            return;
+        }
+        const confirmMsg = l10n.monthReopenConfirm || 'Reopen this finalized month?';
+        if (typeof window.confirm === 'function' && !window.confirm(confirmMsg)) {
+            return;
+        }
+        const url = window.ArbeitszeitCheck && window.ArbeitszeitCheck.monthClosureReopenUrl;
+        if (!url) {
+            return;
+        }
+        if (btn) {
+            btn.disabled = true;
+        }
+        if (live) {
+            live.textContent = '';
+        }
+        Utils.ajax(url, {
+            method: 'POST',
+            data: { userId: userId, year: year, month: month, reason: reason },
+            onSuccess: function (data) {
+                if (data && data.success) {
+                    const ok = l10n.monthReopenSuccess || 'Month reopened.';
+                    Messaging.showSuccess(ok);
+                    if (live) {
+                        live.textContent = ok;
+                    }
+                } else {
+                    Messaging.showError((data && data.error) ? data.error : 'Error');
+                }
+                if (btn) {
+                    btn.disabled = false;
+                }
+            },
+            onError: function (err) {
+                const msg = (err && err.error) ? err.error : ((err && err.message) ? err.message : 'Error');
+                Messaging.showError(msg);
+                if (live) {
+                    live.textContent = msg;
+                }
+                if (btn) {
+                    btn.disabled = false;
+                }
             }
         });
     }
@@ -138,6 +232,12 @@
         }
         if (data.vacationCarryoverExpiryDay < 1 || data.vacationCarryoverExpiryDay > 31) {
             const msg = window.ArbeitszeitCheck?.l10n?.carryoverDayRange || (window.t && window.t('arbeitszeitcheck', 'Carryover expiry day must be between 1 and 31')) || 'Carryover expiry day must be between 1 and 31';
+            Messaging.showError(msg);
+            return false;
+        }
+
+        if (data.monthClosureGraceDaysAfterEom < 0 || data.monthClosureGraceDaysAfterEom > 90) {
+            const msg = window.ArbeitszeitCheck?.l10n?.monthClosureGraceDaysRange || (window.t && window.t('arbeitszeitcheck', 'Grace days after month end must be between 0 and 90')) || 'Grace days after month end must be between 0 and 90';
             Messaging.showError(msg);
             return false;
         }

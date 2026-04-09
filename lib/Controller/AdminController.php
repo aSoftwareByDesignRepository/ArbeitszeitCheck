@@ -411,6 +411,8 @@ class AdminController extends Controller
 			'complianceStrictMode' => $this->appConfig->getAppValueString('compliance_strict_mode', '0') === '1',
 			'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
 			'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
+			'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
+			'monthClosureGraceDaysAfterEom' => max(0, min(90, (int)$this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM, '0'))),
 			'requireSubstituteTypes' => $requireSubstituteTypes,
 			'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
 			'sendIcalToSubstitute' => $this->appConfig->getAppValueString('send_ical_to_substitute', '0') === '1',
@@ -1205,6 +1207,8 @@ class AdminController extends Controller
 				'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
 				'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
 				'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
+				'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
+				'monthClosureGraceDaysAfterEom' => max(0, min(90, (int)$this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM, '0'))),
 				'requireSubstituteTypes' => $requireSubstituteTypes,
 				'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
 				'sendIcalToSubstitute' => $this->appConfig->getAppValueString('send_ical_to_substitute', '0') === '1',
@@ -1255,6 +1259,8 @@ class AdminController extends Controller
 				'complianceStrictMode' => 'compliance_strict_mode',
 				'enableViolationNotifications' => 'enable_violation_notifications',
 				'exportMidnightSplitEnabled' => 'export_midnight_split_enabled',
+				'monthClosureEnabled' => Constants::CONFIG_MONTH_CLOSURE_ENABLED,
+				'monthClosureGraceDaysAfterEom' => Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM,
 				'requireSubstituteTypes' => 'require_substitute_types',
 				'sendIcalApprovedAbsences' => 'send_ical_approved_absences',
 				'sendIcalToSubstitute' => 'send_ical_to_substitute',
@@ -1285,7 +1291,7 @@ class AdminController extends Controller
 					// Validate and convert value based on type
 					if (in_array($paramKey, [
 						'autoComplianceCheck', 'realtimeComplianceCheck', 'complianceStrictMode', 'enableViolationNotifications',
-						'exportMidnightSplitEnabled',
+						'exportMidnightSplitEnabled', 'monthClosureEnabled',
 						'sendIcalApprovedAbsences', 'sendIcalToSubstitute', 'sendIcalToManagers',
 						'sendEmailSubstitutionRequest', 'sendEmailSubstituteApprovedToEmployee', 'sendEmailSubstituteApprovedToManager',
 						'statutoryAutoReseed',
@@ -1338,6 +1344,9 @@ class AdminController extends Controller
 							}
 							$value = (string)$max;
 						}
+					} elseif ($paramKey === 'monthClosureGraceDaysAfterEom') {
+						$g = max(0, min(90, (int)$value));
+						$value = (string)$g;
 					} elseif ($paramKey === 'requireSubstituteTypes') {
 						$validTypes = ['vacation', 'sick_leave', 'personal_leave', 'parental_leave', 'special_leave', 'unpaid_leave', 'home_office', 'business_trip'];
 						$arr = is_array($value) ? $value : (is_string($value) ? json_decode($value, true) : []);

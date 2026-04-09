@@ -18,6 +18,7 @@ use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCP\IConfig;
 use OCP\IL10N;
@@ -64,6 +65,7 @@ class TimeTrackingServiceTest extends TestCase {
 		});
 		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
 		$userSettingsMapper->method('getStringSetting')->willReturn('1');
+		$monthClosureGuard = $this->createMock(MonthClosureGuard::class);
 
 		$this->service = new TimeTrackingService(
 			$this->timeEntryMapper,
@@ -73,7 +75,8 @@ class TimeTrackingServiceTest extends TestCase {
 			$complianceService,
 			$this->l10n,
 			$config,
-			$userSettingsMapper
+			$userSettingsMapper,
+			$monthClosureGuard
 		);
 	}
 

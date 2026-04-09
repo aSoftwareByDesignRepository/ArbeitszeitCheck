@@ -16,6 +16,7 @@ Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instan
 - **Team‑ und Manager‑Ansicht**: Genehmigungen, Team‑Übersichten, Compliance‑Status
 - **Berichte & Exporte**: Tages/Wochen/Monats‑Reports, Overtime‑Reports, Absenzberichte, DATEV‑Export
 - **Audit‑Logs**: Lückenlose Nachvollziehbarkeit von Änderungen an Zeiten, Abwesenheiten und Einstellungen
+- **Revisionssichere Monatsfinalisierung** (optional, Admin‑Schalter): Kalendermonat mit Snapshot, Hash und PDF‑Nachweis abschließen; finalisierte Monate bleiben gesperrt, bis eine Administratorin/ein Administrator mit Begründung wieder öffnet
 - **DSGVO‑Support**: Exporte, Löschkonzepte (unter Beachtung der gesetzlichen Aufbewahrung), DPIA‑/Verarbeitungsverzeichnis‑Vorlagen
 
 > **Rechtlicher Hinweis (DE):**  

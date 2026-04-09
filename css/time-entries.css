@@ -604,6 +604,132 @@
     color: var(--arbeitszeitcheck-color-text-maxcontrast);
 }
 
+/* Revision-safe month closure (time entries header) — clear hierarchy, WCAG 2.1 AA touch targets */
+.month-closure-section {
+    margin-top: var(--space-5, 1.25rem);
+    padding-top: var(--space-5, 1.25rem);
+    border-top: 1px solid var(--arbeitszeitcheck-color-border);
+}
+
+.month-closure-card.card--elevated {
+    margin: 0;
+    padding: var(--space-5, 1.25rem) var(--space-6, 1.5rem);
+}
+
+.month-closure-section__title {
+    margin: 0 0 var(--space-2, 0.5rem);
+    font-size: var(--arbeitszeitcheck-font-size-lg, 1.125rem);
+    font-weight: var(--arbeitszeitcheck-font-weight-semibold, 600);
+    line-height: 1.3;
+}
+
+.month-closure-lead {
+    margin: 0 0 var(--space-4, 1rem);
+    max-width: 42rem;
+    line-height: 1.5;
+}
+
+.month-closure-field {
+    margin-top: var(--space-2, 0.5rem);
+}
+
+.month-closure-field__label {
+    margin: 0 0 var(--space-2, 0.5rem);
+    font-size: 0.875rem;
+    font-weight: var(--arbeitszeitcheck-font-weight-semibold, 600);
+    color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast));
+}
+
+.month-closure-toolbar,
+.month-closure-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3, 0.75rem);
+    margin-top: var(--space-2, 0.5rem);
+}
+
+.month-closure-actions {
+    margin-top: var(--space-4, 1rem);
+}
+
+.month-closure-toolbar .form-input--inline {
+    min-height: 44px;
+}
+
+.month-closure-badge {
+    min-height: 44px;
+    min-width: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--space-3, 0.75rem);
+    border-radius: var(--border-radius, 6px);
+    font-weight: var(--arbeitszeitcheck-font-weight-medium, 500);
+    background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover));
+    border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+}
+
+.month-closure-blocked[hidden] {
+    display: none !important;
+}
+
+.month-closure-blocked:not([hidden]) {
+    display: block;
+    margin-top: var(--space-3, 0.75rem);
+    padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+    border-radius: var(--border-radius, 6px);
+    border-left: 4px solid var(--arbeitszeitcheck-color-warning, #b58100);
+    background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover));
+    color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+    line-height: 1.45;
+}
+
+.month-closure-deadline[hidden] {
+    display: none !important;
+}
+
+.month-closure-deadline:not([hidden]) {
+    display: block;
+    margin-top: var(--space-3, 0.75rem);
+}
+
+.month-closure-feedback {
+    min-height: 1.5rem;
+    margin-top: var(--space-4, 1rem);
+    font-size: 0.9375rem;
+    line-height: 1.45;
+}
+
+.month-closure-feedback--error {
+    color: var(--arbeitszeitcheck-color-error, var(--color-error));
+    font-weight: var(--arbeitszeitcheck-font-weight-medium, 500);
+}
+
+.month-closure-feedback--success {
+    color: var(--arbeitszeitcheck-color-success, var(--color-success));
+    font-weight: var(--arbeitszeitcheck-font-weight-medium, 500);
+}
+
+.month-closure-actions .btn {
+    min-height: 44px;
+}
+
+@media (max-width: 576px) {
+    .month-closure-card.card--elevated {
+        padding: var(--space-4, 1rem);
+    }
+
+    .month-closure-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .month-closure-toolbar .month-closure-badge {
+        justify-content: flex-start;
+    }
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;

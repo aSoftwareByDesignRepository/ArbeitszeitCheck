@@ -20,3 +20,12 @@ test('Health endpoint returns JSON', async ({ request }) => {
   expect(json).toHaveProperty('timestamp')
 })
 
+test('Month closure feature endpoint returns JSON when logged in', async ({ page }) => {
+  await login(page, credsFromEnv('EMPLOYEE'))
+  const res = await page.request.get('/apps/arbeitszeitcheck/api/month-closure/feature')
+  expect(res.ok()).toBeTruthy()
+  const json = await res.json()
+  expect(json).toHaveProperty('enabled')
+  expect(typeof json.enabled).toBe('boolean')
+})
+

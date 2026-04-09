@@ -21,6 +21,7 @@ use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
@@ -78,6 +79,9 @@ class TimeEntryControllerTest extends TestCase
 	/** @var NotificationService|\PHPUnit\Framework\MockObject\MockObject */
 	private $notificationService;
 
+	/** @var MonthClosureGuard|\PHPUnit\Framework\MockObject\MockObject */
+	private $monthClosureGuard;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -105,6 +109,7 @@ class TimeEntryControllerTest extends TestCase
 		$this->teamResolver = $this->createMock(TeamResolverService::class);
 		$this->teamResolver->method('getColleagueIds')->willReturn([]);
 		$this->notificationService = $this->createMock(NotificationService::class);
+		$this->monthClosureGuard = $this->createMock(MonthClosureGuard::class);
 
 		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
 
@@ -122,7 +127,8 @@ class TimeEntryControllerTest extends TestCase
 			$this->complianceService,
 			$this->timeTrackingService,
 			$this->teamResolver,
-			$this->notificationService
+			$this->notificationService,
+			$this->monthClosureGuard
 		);
 	}
 

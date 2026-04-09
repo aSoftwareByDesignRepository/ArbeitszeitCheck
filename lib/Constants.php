@@ -75,6 +75,15 @@ final class Constants
 	 */
 	public const BATCH_CHUNK_SIZE = 500;
 
+	/** App config: when "1", employees may finalize months (revision-safe snapshot + lock). Default off. */
+	public const CONFIG_MONTH_CLOSURE_ENABLED = 'month_closure_enabled';
+
+	/**
+	 * Days after the last day of a calendar month until automatic finalization runs (daily job).
+	 * "0" = no automatic finalization (employees must finalize manually, or admin reopens).
+	 */
+	public const CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM = 'month_closure_grace_days_after_eom';
+
 	/**
 	 * Compliance score weights (critical, warning, info).
 	 */

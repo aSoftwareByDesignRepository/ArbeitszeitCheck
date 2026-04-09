@@ -50,20 +50,38 @@ Exact permissions depend on your Nextcloud groups and app configuration.
 
 ---
 
-## 5. Holidays (Germany)
+## 5. Monthly record (revision-safe)
+
+**Legal note (not legal advice):** German law requires employers to **record and retain** working time (ArbZG / case law). It does **not** prescribe that an employee must “click finalize” in software, nor a specific **deadline** for that action—those are **organizational** choices (works agreement, company policy, payroll process). This app’s optional monthly seal is a **technical audit aid** (snapshot + hash), not a statutory formality by itself.
+
+If your administrator enabled **revision-safe month finalization**, the **Time entries** page can show a **Monthly record** section.
+
+- Choose **year** and **month**, then review your times until the month is complete (including resolving **pending correction** requests—finalization is blocked while any correction is still pending).
+- **Finalize month** stores a **fixed snapshot** of that calendar month (working time and related report totals as implemented by the app), a **cryptographic hash**, and allows downloading a **PDF** for your records.
+- After finalization, you **cannot change** time entries or absences that fall in that month through the normal app—your organization’s **administrator** can **reopen** a month only with a **documented reason** (audited).
+
+Turning the feature **off** later does **not** unlock months that were already finalized.
+
+**Administrator reopen:** An administrator can reopen a finalized month **in the app** (admin settings area) with a **mandatory reason** (audited), not only via API.
+
+This is an **in-app integrity** feature (hash + audit). It is **not** a qualified electronic signature. Direct database access by server operators is outside what the app can prevent—your organization’s IT and retention policies apply.
+
+---
+
+## 6. Holidays (Germany)
 
 Statutory and optional holidays depend on the **federal state (Bundesland)** and settings your **administrator** maintains under the holidays / admin area. The app uses this data for working-day calculations and checks—not for pushing events into the Nextcloud Calendar app.
 
 ---
 
-## 6. Privacy and data
+## 7. Privacy and data
 
 - Personal data is processed for **time recording and HR-related processes** as configured by your organization.
 - Use **GDPR export / deletion** features only as allowed by policy and retention rules (see the GDPR guide linked above).
 
 ---
 
-## 7. Getting help
+## 8. Getting help
 
 - **Issues with the product**: Contact your internal IT or the person who runs Nextcloud.
 - **Bugs in the app**: Your administrator can report issues via the repository linked in the app metadata on the App Store page.

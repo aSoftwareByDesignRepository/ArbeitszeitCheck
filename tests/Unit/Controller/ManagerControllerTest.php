@@ -27,6 +27,7 @@ use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -109,6 +110,9 @@ class ManagerControllerTest extends TestCase
 	/** @var IConfig|\PHPUnit\Framework\MockObject\MockObject */
 	private $config;
 
+	/** @var MonthClosureGuard|\PHPUnit\Framework\MockObject\MockObject */
+	private $monthClosureGuard;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -142,6 +146,7 @@ class ManagerControllerTest extends TestCase
 			->willReturnCallback(function (string $userId): bool {
 				return $this->isAdminAccess;
 			});
+		$this->monthClosureGuard = $this->createMock(MonthClosureGuard::class);
 
 		$this->controller = new ManagerController(
 			'arbeitszeitcheck',
@@ -163,7 +168,8 @@ class ManagerControllerTest extends TestCase
 			$this->notificationService,
 			$this->timeEntryMapper,
 			$this->urlGenerator,
-			$this->config
+			$this->config,
+			$this->monthClosureGuard
 		);
 	}
 

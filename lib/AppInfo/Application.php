@@ -147,6 +147,39 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\MonthClosureMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\MonthClosureMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\MonthClosureRevisionMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\MonthClosureRevisionMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Service\MonthClosureService(
+				$c->query(\OCA\ArbeitszeitCheck\Db\MonthClosureMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\MonthClosureRevisionMapper::class),
+				$c->query(ReportingService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
+				$c->query(IDBConnection::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\Psr\Log\LoggerInterface::class)
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\MonthClosureGuard::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Service\MonthClosureGuard(
+				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class)
+			);
+		});
+
 		$context->registerService(BackfillAbsenceDays::class, function($c) {
 			return new BackfillAbsenceDays(
 				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
@@ -181,7 +214,8 @@ class Application extends App implements IBootstrap {
 				$c->query(ComplianceService::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(\OCP\IConfig::class),
-				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class)
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureGuard::class)
 			);
 		});
 

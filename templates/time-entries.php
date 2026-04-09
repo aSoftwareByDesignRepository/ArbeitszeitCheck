@@ -33,10 +33,14 @@ Util::addScript('arbeitszeitcheck', 'common/datepicker');
 Util::addScript('arbeitszeitcheck', 'common/validation');
 Util::addScript('arbeitszeitcheck', 'time-entry-form-accessibility');
 Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
+if (!empty($_['monthClosureEnabled'])) {
+    Util::addScript('arbeitszeitcheck', 'month-closure');
+}
 
 $entries = $_['entries'] ?? [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $stats = $_['stats'] ?? [];
+$monthClosureEnabled = !empty($_['monthClosureEnabled']);
 $mode = $_['mode'] ?? 'list'; // 'list', 'create', 'edit'
 $entry = $_['entry'] ?? null;
 $error = $_['error'] ?? null;
@@ -124,6 +128,34 @@ $error = $_['error'] ?? null;
                         <span class="stat-value"><?php p(round($stats['total_hours'] ?? 0, 2)); ?> h</span>
                     </div>
                 </div>
+                <?php if ($monthClosureEnabled): ?>
+                <section class="section month-closure-section" aria-labelledby="month-closure-heading">
+                    <div class="month-closure-card card card--elevated">
+                        <h3 id="month-closure-heading" class="month-closure-section__title"><?php p($l->t('Monthly record (revision-safe)')); ?></h3>
+                        <p class="month-closure-lead form-help" id="month-closure-intro"><?php p($l->t('Finalize a full calendar month when your times are complete. The app stores a cryptographic snapshot and a PDF you can archive.')); ?></p>
+                        <div class="month-closure-field">
+                            <p id="month-closure-period-label" class="month-closure-field__label"><?php p($l->t('Month to finalize')); ?></p>
+                            <div class="month-closure-toolbar" role="group" aria-labelledby="month-closure-period-label">
+                                <label for="month-closure-year" class="sr-only"><?php p($l->t('Year')); ?></label>
+                                <select id="month-closure-year" class="form-input form-input--inline" aria-describedby="month-closure-intro month-closure-deadline month-closure-blocked"></select>
+                                <label for="month-closure-month" class="sr-only"><?php p($l->t('Month')); ?></label>
+                                <select id="month-closure-month" class="form-input form-input--inline" aria-describedby="month-closure-intro month-closure-deadline month-closure-blocked"></select>
+                                <span id="month-closure-status" class="month-closure-badge" role="status" aria-live="polite"></span>
+                            </div>
+                        </div>
+                        <p id="month-closure-blocked" class="month-closure-blocked form-help" role="status" aria-live="polite" hidden></p>
+                        <p id="month-closure-deadline" class="month-closure-deadline form-help form-help--note" hidden></p>
+                        <div class="month-closure-actions">
+                            <button type="button"
+                                id="month-closure-finalize"
+                                class="btn btn--primary"
+                                data-confirm-finalize="<?php p($l->t('Really finalize this month? You will not be able to change time entries afterward unless an administrator reopens the month.')); ?>"><?php p($l->t('Finalize month')); ?></button>
+                            <a id="month-closure-pdf" class="btn btn--secondary" href="#" style="display:none"><?php p($l->t('Download PDF')); ?></a>
+                        </div>
+                        <p id="month-closure-feedback" class="month-closure-feedback" role="status" aria-live="polite" aria-atomic="true"></p>
+                    </div>
+                </section>
+                <?php endif; ?>
             <?php endif; ?>
         </header>
 

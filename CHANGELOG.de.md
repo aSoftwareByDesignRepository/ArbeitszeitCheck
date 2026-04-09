@@ -1,5 +1,23 @@
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Monatsabschluss: Karenz und Auto-Finalisierung**: Admin-Einstellung `month_closure_grace_days_after_eom` (0–90, Standard 0). Nach Monatsende haben Mitarbeitende so viele Kalendertage zur manuellen Finalisierung; ist der Monat danach noch offen, finalisiert ein täglicher Hintergrundauftrag automatisch (gleicher Snapshot wie manuell). Ausstehende Zeiteintragsfreigaben und offene Abwesenheits-Workflows blockieren die Auto-Finalisierung. Wiederöffnen bleibt Administrator:innen vorbehalten.
+
+### Geändert
+
+- **Monatsabschluss UX/API**: Klarere Karten-UI, sichtbares Erfolgs-/Fehlerfeedback (WCAG), serverseitiges `canFinalize` mit lokalisierten Sperrgründen; manuelle Finalisierung lehnt zukünftige Kalendermonate ab; Abwesenheits-Workflow (`pending`, `substitute_pending`, `substitute_declined`) zusätzlich zu ausstehenden Zeiteintragskorrekturen; API 401 bei fehlender Anmeldung wo passend; Admin: eigener Abschnitt „Monatsabschluss“; Karenzfeld bei deaktivierter Funktion ausgegraut, Wert wird dennoch korrekt gespeichert; Auto-Finalize protokolliert Einzelfehler.
+
+## 1.1.12 – 2026-04-09
+
+### Hinzugefügt
+
+- **Revisionssichere Monatsfinalisierung (optional)**: Admin-Schalter `month_closure_enabled` (Standard aus). Mitarbeitende können einen vollen Kalendermonat finalisieren; die App speichert kanonischen JSON-Snapshot, SHA-256-Hashkette, Anhänge-Revisionen, Audit-Ereignisse und ein schlankes PDF. Finalisierte Monate sind über normale App-APIs nicht mehr änderbar; Administrator:innen können einen Monat mit Pflichtbegründung wieder öffnen (Audit). Monatsberichte für finalisierte Monate lesen den gespeicherten Snapshot. Datenbank: `at_month_closure`, `at_month_closure_revision` (Migration `Version1014Date20260409120000`).
+
+### Dokumentation
+
+- Nutzerhandbücher (DE/EN), Entwicklerdokumentation und Compliance-Hinweise zu Monatsabschluss, Aufbewahrung und Grenzen (Nachweis in der App, keine QES) ergänzt.
+
 ## 1.1.11 – 2026-04-09
 
 ### Hinzugefügt

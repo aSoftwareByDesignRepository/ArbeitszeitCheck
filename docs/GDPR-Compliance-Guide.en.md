@@ -78,6 +78,9 @@ ArbeitszeitCheck supports optional features that you should carefully evaluate:
   - Train users **not** to enter sensitive data (e.g. diagnoses, political views)
 - **Integrations (e.g. DATEV export)**
   - Ensure that only necessary fields are exported
+- **Revision-safe month finalization** (if enabled by the administrator)
+  - Stores a fixed monthly snapshot, hash metadata, PDF text, and audit events for that action
+  - Align retention and deletion policies: deleting a user account may conflict with statutory retention of time records—coordinate with HR/legal before using “delete all data” features
 - **Email with `.ics` attachments (optional)**
   - Some workflows send iCalendar files by email so recipients can import events into a calendar client manually. This is **not** automatic synchronization with the Nextcloud Calendar app; evaluate purpose and recipients under Art. 6 GDPR like any other notification.
 

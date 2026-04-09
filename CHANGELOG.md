@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Month closure grace period and auto-finalization**: Admin setting `month_closure_grace_days_after_eom` (0–90, default 0). After end-of-month, employees have that many calendar days to finalize manually; if the month is still open afterward, a daily background job finalizes it automatically (same snapshot as manual finalize). Pending time entry approvals and open absence workflow states block auto-finalization. Reopening remains admin-only.
+
+### Changed
+
+- **Month closure UX and API**: Employee UI uses a clearer card layout, visible feedback for success/errors (WCAG-friendly), server-driven `canFinalize` with localized block reasons (feature off, future month, pending approvals). Manual finalize rejects future calendar months. Absence workflow (`pending`, `substitute_pending`, `substitute_declined`) is enforced alongside pending time entry corrections. Unauthorized API access returns 401 where appropriate. Admin settings: dedicated “Month closure” section; grace-days field stays disabled when closure is off while still saving correctly. Auto-finalize job logs per-user failures for operations.
+
+## 1.1.12 - 2026-04-09
+
+### Added
+
+- **Revision-safe month finalization (optional)**: Admin toggle `month_closure_enabled` (default off). Employees can finalize a full calendar month; the app stores a canonical JSON snapshot, SHA-256 hash chain, append-only revision rows, audit events, and a minimal PDF download. Finalized months are read-only through normal app APIs; administrators may reopen a month with a mandatory reason (audit). Monthly reports for a finalized month use the stored snapshot. Database: `at_month_closure`, `at_month_closure_revision` (migration `Version1014Date20260409120000`).
+
+### Documentation
+
+- User manuals (EN/DE), developer documentation, and compliance notes updated for month closure, retention context, and limits (in-app tamper evidence, not QES).
+
 ## 1.1.11 - 2026-04-09
 
 ### Added

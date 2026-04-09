@@ -195,5 +195,12 @@ return [
 
 		// Health check route
 		['name' => 'health#check', 'url' => '/health', 'verb' => 'GET'],
+
+		// Revision-safe month closure
+		['name' => 'month_closure#feature', 'url' => '/api/month-closure/feature', 'verb' => 'GET'],
+		['name' => 'month_closure#status', 'url' => '/api/month-closure/status', 'verb' => 'GET'],
+		['name' => 'month_closure#finalize', 'url' => '/api/month-closure/finalize', 'verb' => 'POST'],
+		['name' => 'month_closure#pdf', 'url' => '/api/month-closure/pdf', 'verb' => 'GET'],
+		['name' => 'month_closure#reopen', 'url' => '/api/month-closure/reopen', 'verb' => 'POST'],
 	],
 ];

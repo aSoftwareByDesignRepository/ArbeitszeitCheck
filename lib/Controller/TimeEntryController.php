@@ -20,6 +20,8 @@ use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
+use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCP\AppFramework\Controller;
 use OCP\IConfig;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -51,6 +53,7 @@ class TimeEntryController extends Controller
 	private TimeTrackingService $timeTrackingService;
 	private TeamResolverService $teamResolver;
 	private NotificationService $notificationService;
+	private MonthClosureGuard $monthClosureGuard;
 
 	public function __construct(
 		string $appName,
@@ -66,7 +69,8 @@ class TimeEntryController extends Controller
 		ComplianceService $complianceService,
 		TimeTrackingService $timeTrackingService,
 		TeamResolverService $teamResolver,
-		NotificationService $notificationService
+		NotificationService $notificationService,
+		MonthClosureGuard $monthClosureGuard
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -81,6 +85,25 @@ class TimeEntryController extends Controller
 		$this->timeTrackingService = $timeTrackingService;
 		$this->teamResolver = $teamResolver;
 		$this->notificationService = $notificationService;
+		$this->monthClosureGuard = $monthClosureGuard;
+	}
+
+	private function jsonMonthFinalizedConflict(): JSONResponse
+	{
+		return new JSONResponse([
+			'success' => false,
+			'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+		], Http::STATUS_CONFLICT);
+	}
+
+	private function assertGuardTimeEntry(TimeEntry $entry): ?JSONResponse
+	{
+		try {
+			$this->monthClosureGuard->assertTimeEntryMutable($entry);
+		} catch (MonthFinalizedException $e) {
+			return $this->jsonMonthFinalizedConflict();
+		}
+		return null;
 	}
 
 	/**
@@ -584,6 +607,11 @@ class TimeEntryController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
+			$mc = $this->assertGuardTimeEntry($timeEntry);
+			if ($mc !== null) {
+				return $mc;
+			}
+
 			$savedEntry = $this->timeEntryMapper->insert($timeEntry);
 
 			// Real-time compliance check for completed entries
@@ -660,6 +688,11 @@ class TimeEntryController extends Controller
 					'success' => false,
 					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
+			}
+
+			$mc0 = $this->assertGuardTimeEntry($entry);
+			if ($mc0 !== null) {
+				return $mc0;
 			}
 
 			// Check if entry can be edited
@@ -998,6 +1031,10 @@ class TimeEntryController extends Controller
 			}
 
 			$entry->setUpdatedAt(new \DateTime());
+			$mc1 = $this->assertGuardTimeEntry($entry);
+			if ($mc1 !== null) {
+				return $mc1;
+			}
 			$updatedEntry = $this->timeEntryMapper->update($entry);
 
 			// Real-time compliance check if entry is now completed
@@ -1168,6 +1205,11 @@ class TimeEntryController extends Controller
 				], Http::STATUS_FORBIDDEN);
 			}
 
+			$mcReq = $this->assertGuardTimeEntry($entry);
+			if ($mcReq !== null) {
+				return $mcReq;
+			}
+
 			// Check if entry can be corrected (not already pending)
 			$currentStatus = $entry->getStatus();
 			if ($currentStatus === TimeEntry::STATUS_PENDING_APPROVAL) {
@@ -1293,6 +1335,11 @@ class TimeEntryController extends Controller
 				if ($newDescription !== null) {
 					$entry->setDescription($newDescription);
 				}
+			}
+
+			$mcNew = $this->assertGuardTimeEntry($entry);
+			if ($mcNew !== null) {
+				return $mcNew;
 			}
 
 			$updatedEntry = $this->timeEntryMapper->update($entry);
@@ -1447,6 +1494,11 @@ class TimeEntryController extends Controller
 					'success' => false,
 					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
+			}
+
+			$mcDel = $this->assertGuardTimeEntry($entry);
+			if ($mcDel !== null) {
+				return $mcDel;
 			}
 
 			// Check if entry can be deleted (only manual entries)
@@ -1954,6 +2006,11 @@ class TimeEntryController extends Controller
 						'error' => implode(', ', $translatedErrors),
 						'errors' => $translatedErrors
 					], Http::STATUS_BAD_REQUEST);
+				}
+
+				$mc = $this->assertGuardTimeEntry($timeEntry);
+				if ($mc !== null) {
+					return $mc;
 				}
 
 				$savedEntry = $this->timeEntryMapper->insert($timeEntry);

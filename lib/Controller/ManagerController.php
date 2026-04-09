@@ -25,6 +25,8 @@ use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
+use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCA\ArbeitszeitCheck\Constants;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -65,6 +67,7 @@ class ManagerController extends Controller
 	private TimeEntryMapper $timeEntryMapper;
 	private IURLGenerator $urlGenerator;
 	private IConfig $config;
+	private MonthClosureGuard $monthClosureGuard;
 
 	public function __construct(
 		string $appName,
@@ -86,7 +89,8 @@ class ManagerController extends Controller
 		NotificationService $notificationService,
 		TimeEntryMapper $timeEntryMapper,
 		IURLGenerator $urlGenerator,
-		IConfig $config
+		IConfig $config,
+		MonthClosureGuard $monthClosureGuard
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
@@ -106,6 +110,7 @@ class ManagerController extends Controller
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->urlGenerator = $urlGenerator;
 		$this->config = $config;
+		$this->monthClosureGuard = $monthClosureGuard;
 		$this->setCspService($cspService);
 	}
 
@@ -1394,6 +1399,15 @@ class ManagerController extends Controller
 				], Http::STATUS_FORBIDDEN);
 			}
 
+			try {
+				$this->monthClosureGuard->assertTimeEntryMutable($entry);
+			} catch (MonthFinalizedException $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+				], Http::STATUS_CONFLICT);
+			}
+
 			$oldValues = $entry->getSummary();
 
 			// Approve the correction - finalize the proposed changes
@@ -1556,6 +1570,15 @@ class ManagerController extends Controller
 				$justificationData['rejected_at'] = date('c');
 				$justificationData['rejected_by'] = $managerId;
 				$entry->setJustification(json_encode($justificationData));
+			}
+
+			try {
+				$this->monthClosureGuard->assertTimeEntryMutable($entry);
+			} catch (MonthFinalizedException $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+				], Http::STATUS_CONFLICT);
 			}
 
 			$updatedEntry = $this->timeEntryMapper->update($entry);

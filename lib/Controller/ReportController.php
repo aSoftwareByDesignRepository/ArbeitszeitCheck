@@ -17,6 +17,7 @@ use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
 use OCP\AppFramework\Controller;
@@ -47,6 +48,7 @@ class ReportController extends Controller
 	private IUserManager $userManager;
 	private IUserSession $userSession;
 	private IL10N $l10n;
+	private MonthClosureService $monthClosureService;
 
 	public function __construct(
 		string $appName,
@@ -61,7 +63,8 @@ class ReportController extends Controller
 		IConfig $config,
 		IUserManager $userManager,
 		IUserSession $userSession,
-		IL10N $l10n
+		IL10N $l10n,
+		MonthClosureService $monthClosureService
 	) {
 		parent::__construct($appName, $request);
 		$this->reportingService = $reportingService;
@@ -75,6 +78,7 @@ class ReportController extends Controller
 		$this->userManager = $userManager;
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
+		$this->monthClosureService = $monthClosureService;
 	}
 
 	/**
@@ -248,6 +252,18 @@ class ReportController extends Controller
 						'Export date range must not exceed %d days. Please narrow the range.',
 						[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
 					));
+				}
+			}
+
+			if ($reportUserId !== null && $periodStart === null && $periodEnd === null) {
+				$y = (int)$monthDate->format('Y');
+				$mo = (int)$monthDate->format('n');
+				$snapReport = $this->monthClosureService->getFinalizedMonthlyReportForUser($reportUserId, $y, $mo);
+				if ($snapReport !== null) {
+					return new JSONResponse([
+						'success' => true,
+						'report' => $snapReport,
+					]);
 				}
 			}
 

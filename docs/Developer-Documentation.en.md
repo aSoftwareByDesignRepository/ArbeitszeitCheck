@@ -1,7 +1,7 @@
 # Developer Documentation – ArbeitszeitCheck
 
-**Version:** 1.1.9  
-**Last Updated:** 2026-04-05
+**Version:** 1.1.12  
+**Last Updated:** 2026-04-09
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.
 
@@ -20,6 +20,7 @@ This guide is for developers who want to contribute to ArbeitszeitCheck or integ
 9. [Code Standards](#code-standards)
 10. [Security Guidelines](#security-guidelines)
 11. [Vacation carryover (Resturlaub)](#vacation-carryover-resturlaub)
+12. [Revision-safe month closure](#revision-safe-month-closure)
 
 ---
 
@@ -381,6 +382,8 @@ All tables use the `at_` prefix (short for arbeitszeitcheck):
 - `oc_at_user_models` - User working time model assignments
 - `oc_at_settings` - User settings
 - `oc_at_audit` - Audit logs
+- `oc_at_month_closure` - Per user and calendar month: revision-safe finalization (status, canonical snapshot JSON, SHA-256 hash chain fields, version)
+- `oc_at_month_closure_revision` - Append-only sealed rows per closure version (immutable copy for audit trail)
 
 There is **no** `at_absence_calendar` table in current releases: migration `Version1012Date20260406120000` drops it. ArbeitszeitCheck does **not** integrate with the Nextcloud **Calendar** app (no CalDAV, no `OCA\Calendar` API). The in-app month view and optional email `.ics` attachments are separate from Calendar-app sync.
 
@@ -456,6 +459,33 @@ php occ arbeitszeitcheck:vacation-rollover --dry-run
 **Privacy:** `UserDeletedListener` deletes all `at_vacation_year_balance` and `at_vacation_rollover_log` rows for the removed user id.
 
 **Known limitations (product):** Entitlement per historical year uses the **current** working time model assignment unless extended later; concurrent pending vacation requests are not “soft reserved” in the DB—approval-time validation prevents overdraw on commit under normal use. Rollover uses the **server date**; align organisation policy with the instance timezone.
+
+---
+
+## Revision-safe month closure
+
+**Purpose:** Optional per-employee monthly seal with tamper-evident snapshot (hash chain) and PDF export for archiving.
+
+**Configuration:** `IConfig` key `month_closure_enabled` (see `Constants::CONFIG_MONTH_CLOSURE_ENABLED`), default `'0'`. When disabled, new finalizations are rejected with HTTP 403/consistent errors; **months already finalized remain locked** (mutation guards still apply).
+
+**Core classes:**
+
+| Class | Role |
+| --- | --- |
+| `MonthClosureService` | Builds canonical payload (`buildCanonicalPayload`), finalizes/reopens inside DB transactions, audit logging, PDF text |
+| `MonthClosureCanonical` | Stable JSON encoding (`encode`) and `hashChain` SHA-256 |
+| `MonthClosureGuard` | Calls `MonthClosureService::assertDateRangeMutable` for time entries, absences, and “clock” days |
+| `MonthClosureController` | JSON API under `/api/month-closure/*` (feature, status, finalize, pdf, reopen) |
+
+**Admin UI:** Administrators can **reopen** a finalized month from the app **admin settings** page (user ID, year, month, mandatory reason), in addition to the `reopen` API.
+
+**Integration points:** `TimeEntryController`, `TimeTrackingService`, `ManagerController` (corrections), `AbsenceController`, `ReportController` (monthly report uses `getFinalizedMonthlyReportForUser` when the month is finalized and the request matches a full calendar month for one user).
+
+**Concurrency:** Finalize uses a transaction; unique `(user_id, year, month)` prevents duplicate rows; pending correction entries block finalization.
+
+**Not in scope:** Qualified electronic signature (QES). Integrity is enforced for **application-level** use; direct database edits bypass the app (organizational controls apply).
+
+**Tests:** `tests/Unit/Service/MonthClosureCanonicalTest.php` covers canonical JSON and hash behavior.
 
 ---
 
@@ -637,13 +667,30 @@ npm run e2e
 
 ### Docker-based development (optional)
 
-If you use a Docker Compose stack for Nextcloud (service name often `nextcloud`), run tests inside the container from the app directory under `custom_apps`:
+If you use a Docker Compose stack for Nextcloud, run tests inside the container from the app directory under `custom_apps`.
 
-Run PHP tests inside the Nextcloud container:
+**Recommended (this repository):** From the Nextcloud **server repository root** (where `docker-compose.yml` and `docker/run-app-phpunit.sh` live), with the stack up (`docker compose up -d`):
+
 ```bash
-docker compose exec -T nextcloud bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test"
-docker compose exec -T nextcloud bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test:unit"
-docker compose exec -T nextcloud bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test:integration"
+./docker/run-app-phpunit.sh arbeitszeitcheck
+```
+
+The script targets the `nextcloud-app` container by default; set `NEXTCLOUD_DOCKER_CONTAINER` if your service name differs.
+
+From **`apps/arbeitszeitcheck`** on the host you can also run:
+
+```bash
+composer test:docker
+# or
+npm run test:php:docker
+```
+
+Run PHP tests manually inside the container (adjust the Compose service name if needed, e.g. `nextcloud-app`):
+
+```bash
+docker compose exec -T nextcloud-app bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test"
+docker compose exec -T nextcloud-app bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test:unit"
+docker compose exec -T nextcloud-app bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test:integration"
 ```
 
 Run JS unit tests inside the Nextcloud container:

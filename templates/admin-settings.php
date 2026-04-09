@@ -17,6 +17,7 @@ $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 $settings = $_['settings'] ?? [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdminSettings');
+$monthClosureReopenUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.month_closure.reopen');
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -130,6 +131,45 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
                         </p>
                         <p class="form-help form-help--note" id="exportDatevMidnight-note">
                             <?php p($l->t('DATEV export always uses full, unsplit time entries as required by the DATEV payroll format. CSV and JSON exports respect the midnight split setting above when it is enabled.')); ?>
+                        </p>
+                    </div>
+                </section>
+
+                <?php $monthClosureOn = !empty($settings['monthClosureEnabled']); ?>
+                <section class="admin-settings-section" aria-labelledby="section-month-closure-heading">
+                    <h3 id="section-month-closure-heading" class="admin-settings-section__title"><?php p($l->t('Month closure (revision-safe)')); ?></h3>
+                    <p class="form-help form-help--block" id="month-closure-section-intro">
+                        <?php p($l->t('Employees seal a calendar month when work is complete. Administrators can reopen a sealed month if corrections are needed.')); ?>
+                    </p>
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox"
+                                   id="monthClosureEnabled"
+                                   name="monthClosureEnabled"
+                                   <?php echo $monthClosureOn ? 'checked' : ''; ?>
+                                   aria-describedby="month-closure-section-intro monthClosureEnabled-help">
+                            <label for="monthClosureEnabled" class="form-label">
+                                <?php p($l->t('Enable revision-safe month finalization')); ?>
+                            </label>
+                        </div>
+                        <p id="monthClosureEnabled-help" class="form-help">
+                            <?php p($l->t('When enabled, employees can finalize a calendar month to create a tamper-evident snapshot (hash) and PDF. Finalized months stay locked even if this option is turned off later. Reopening a month is limited to administrators.')); ?>
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label for="monthClosureGraceDaysAfterEom" class="form-label"><?php p($l->t('Grace days after month end')); ?></label>
+                        <input type="number"
+                            class="form-input"
+                            id="monthClosureGraceDaysAfterEom"
+                            name="monthClosureGraceDaysAfterEom"
+                            min="0"
+                            max="90"
+                            step="1"
+                            value="<?php p((string)($settings['monthClosureGraceDaysAfterEom'] ?? 0)); ?>"
+                            <?php echo $monthClosureOn ? '' : 'disabled="disabled"'; ?>
+                            aria-describedby="month-closure-section-intro monthClosureGraceDaysAfterEom-help">
+                        <p id="monthClosureGraceDaysAfterEom-help" class="form-help">
+                            <?php p($l->t('Number of calendar days after the last day of each month for employees to finalize manually. If the month is still open after that, a daily job seals it automatically (same snapshot as manual finalize). Pending time entry or absence approvals block auto-finalization. Use 0 to disable automatic sealing.')); ?>
                         </p>
                     </div>
                 </section>
@@ -480,6 +520,37 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
                     </a>
                 </div>
             </form>
+
+            <section class="admin-settings-section section" aria-labelledby="month-closure-reopen-heading">
+                <h3 id="month-closure-reopen-heading" class="admin-settings-section__title"><?php p($l->t('Reopen a finalized month (admin)')); ?></h3>
+                <p class="form-help" id="month-closure-reopen-intro">
+                    <?php p($l->t('If a calendar month was finalized by mistake or a correction is required, reopen it here. The employee\'s user ID is their Nextcloud account ID. A reason is required and is stored in the audit log. Previous snapshot rows remain in the database for traceability.')); ?>
+                </p>
+                <div class="form-row form-row--inline" role="group" aria-labelledby="month-closure-reopen-heading" aria-describedby="month-closure-reopen-intro">
+                    <div class="form-group">
+                        <label for="monthClosureReopenUserId" class="form-label"><?php p($l->t('User ID')); ?></label>
+                        <input type="text" id="monthClosureReopenUserId" class="form-input" autocomplete="username" aria-required="true">
+                    </div>
+                    <div class="form-group">
+                        <label for="monthClosureReopenYear" class="form-label"><?php p($l->t('Year')); ?></label>
+                        <input type="number" id="monthClosureReopenYear" class="form-input" min="1970" max="2100" step="1" aria-required="true">
+                    </div>
+                    <div class="form-group">
+                        <label for="monthClosureReopenMonth" class="form-label"><?php p($l->t('Month')); ?></label>
+                        <input type="number" id="monthClosureReopenMonth" class="form-input" min="1" max="12" step="1" aria-required="true">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="monthClosureReopenReason" class="form-label"><?php p($l->t('Reason (required)')); ?></label>
+                    <textarea id="monthClosureReopenReason" class="form-input" rows="3" aria-required="true" aria-describedby="month-closure-reopen-intro"></textarea>
+                </div>
+                <div class="card-actions">
+                    <button type="button" id="monthClosureReopenBtn" class="btn btn--secondary">
+                        <?php p($l->t('Reopen month')); ?>
+                    </button>
+                </div>
+                <div id="monthClosureReopenLive" class="form-help" role="status" aria-live="polite" aria-atomic="true"></div>
+            </section>
         </div>
     </div>
 </div>
@@ -488,6 +559,7 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
 window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
 window.ArbeitszeitCheck.adminSettingsApiUrl = <?php echo json_encode($apiSettingsUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.monthClosureReopenUrl = <?php echo json_encode($monthClosureReopenUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
 window.ArbeitszeitCheck.l10n.settingsSavedSuccessfully = <?php echo json_encode($l->t('Settings saved successfully'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.failedToSaveSettings = <?php echo json_encode($l->t('Failed to save settings'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -500,4 +572,7 @@ window.ArbeitszeitCheck.l10n.carryoverMonthRange = <?php echo json_encode($l->t(
 window.ArbeitszeitCheck.l10n.carryoverDayRange = <?php echo json_encode($l->t('Carryover expiry day must be between 1 and 31'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.maxCarryoverDaysRange = <?php echo json_encode($l->t('Maximum carryover days must be empty (unlimited) or between 0 and 366'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.valueBetweenMinMax = <?php echo json_encode($l->t('Value must be between {min} and {max}'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.monthReopenFillAll = <?php echo json_encode($l->t('Please enter user ID, year, month, and a reason.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.monthReopenConfirm = <?php echo json_encode($l->t('Reopen this finalized month? The employee will be able to edit times again until the month is finalized once more.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.monthReopenSuccess = <?php echo json_encode($l->t('Month reopened.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>

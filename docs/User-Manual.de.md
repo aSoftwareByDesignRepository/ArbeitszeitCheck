@@ -50,19 +50,37 @@ Die genauen Rechte hängen von Nextcloud-Gruppen und der App-Konfiguration ab.
 
 ---
 
-## 5. Feiertage (Deutschland)
+## 5. Monatsnachweis (revisionssicher)
+
+**Rechtlicher Hinweis (keine Rechtsberatung):** Nach deutschem Recht hat der Arbeitgeber Zeiten **aufzuzeichnen und aufzubewahren** (ArbZG / Rechtsprechung). Es gibt **keine** gesetzliche Vorgabe, dass eine Software einen bestimmten „Finalisieren“-Klick oder eine feste **Frist** dafür vorsieht—das ist **betrieblich** (Betriebsvereinbarung, Unternehmensregel, Lohnabrechnung). Die optionale Monats-Siegelung in dieser App ist ein **technischer Prüfnachweis** (Snapshot + Hash), keine gesetzliche Form selbst.
+
+Wenn Ihre Administration die **revisionssichere Monatsfinalisierung** aktiviert hat, kann die Seite **Zeiteinträge** einen Bereich **Monatsnachweis** zeigen.
+
+- Wählen Sie **Jahr** und **Monat** und stellen Sie sicher, dass der Monat vollständig ist (inkl. Klärung **ausstehender Korrekturanträge**—eine Finalisierung ist blockiert, solange noch ein Antrag aussteht).
+- **Monat finalisieren** legt einen **festen Snapshot** dieses Kalendermonats ab (Arbeitszeit und zugehörige Report-Summen gemäß App-Logik), einen **kryptografischen Hash** und ermöglicht den Download eines **PDFs** zur Ablage.
+- Nach der Finalisierung können Sie Zeiteinträge und Abwesenheiten in diesem Monat **nicht mehr** über die normale App ändern—eine **Administratorin / ein Administrator** kann einen Monat nur mit **dokumentierter Begründung** wieder öffnen (auditierbar).
+
+Wird die Funktion später **deaktiviert**, bleiben **bereits finalisierte Monate gesperrt**.
+
+**Administrator:innen – Wieder öffnen:** Eine Administratorin / ein Administrator kann einen finalisierten Monat **in der App** (Admin-Einstellungen) mit **Pflichtbegründung** (auditierbar) wieder öffnen, nicht nur über eine API.
+
+Das ist ein **Integritätsnachweis in der App** (Hash + Audit), **keine** qualifizierte elektronische Signatur. Direkter Datenbankzugriff durch Server-Betrieb liegt außerhalb der App-Kontrolle—es gelten IT- und Aufbewahrungsvorgaben Ihrer Organisation.
+
+---
+
+## 6. Feiertage (Deutschland)
 
 Gesetzliche und betriebliche Feiertage hängen vom **Bundesland** und den **Administrator-Einstellungen** ab. Die App nutzt diese Daten für Arbeitstags- und Prüflogik—**nicht** zum automatischen Befüllen der Nextcloud-Kalender-App.
 
 ---
 
-## 6. Datenschutz
+## 7. Datenschutz
 
 Personenbezogene Daten werden für **Zeiterfassung und damit verbundene HR-Prozesse** verarbeitet, wie von Ihrer Organisation festgelegt. **DSGVO-Export und -Löschung** nur im Rahmen von Vorgaben und Aufbewahrungsfristen nutzen (siehe verlinkte Dokumente).
 
 ---
 
-## 7. Hilfe
+## 8. Hilfe
 
 - **Interne Fragen**: IT oder Nextcloud-Administration Ihrer Organisation.
 - **Fehler in der App**: Meldung über die im App-Store genannte Projektvorgabe möglich.

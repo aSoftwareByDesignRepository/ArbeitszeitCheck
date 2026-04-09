@@ -21,6 +21,7 @@
 	},
 	"scripts": {
 		"test": "phpunit",
+		"test:docker": "bash ../../docker/run-app-phpunit.sh arbeitszeitcheck",
 		"test:unit": "phpunit --testsuite unit",
 		"test:integration": "phpunit --testsuite integration",
 		"test:coverage": "phpunit --coverage-html tests/coverage",
