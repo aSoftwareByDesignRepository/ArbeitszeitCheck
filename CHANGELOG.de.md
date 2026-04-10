@@ -6,7 +6,13 @@
 
 ### Geändert
 
-- **Monatsabschluss UX/API**: Klarere Karten-UI, sichtbares Erfolgs-/Fehlerfeedback (WCAG), serverseitiges `canFinalize` mit lokalisierten Sperrgründen; manuelle Finalisierung lehnt zukünftige Kalendermonate ab; Abwesenheits-Workflow (`pending`, `substitute_pending`, `substitute_declined`) zusätzlich zu ausstehenden Zeiteintragskorrekturen; API 401 bei fehlender Anmeldung wo passend; Admin: eigener Abschnitt „Monatsabschluss“; Karenzfeld bei deaktivierter Funktion ausgegraut, Wert wird dennoch korrekt gespeichert; Auto-Finalize protokolliert Einzelfehler.
+- **Monatsabschluss UX/API**: Klarere Karten-UI, sichtbares Erfolgs-/Fehlerfeedback (WCAG), serverseitiges `canFinalize` mit lokalisierten Sperrgründen; manuelle Finalisierung lehnt zukünftige Kalendermonate ab; Abwesenheits-Workflow (`pending`, `substitute_pending`, `substitute_declined`) zusätzlich zu ausstehenden Zeiteintragskorrekturen; API 401 bei fehlender Anmeldung wo passend; Admin: eigener Abschnitt „Monatsabschluss“; Karenzfeld bleibt editierbar mit Hinweis, dass der Wert gespeichert wird und bei aktivierter Funktion gilt; Wiederöffnen mit durchsuchbarer Mitarbeitenden-Auswahl und klarerer Rollenbeschreibung; Validierungsfehler mit höherem Kontrast über Themes hinweg. Auto-Finalize protokolliert Einzelfehler.
+- **Release-/Signatur-Workflow für Integritätsprüfung gehärtet**: `make release-signed` signiert jetzt den entpackten Release-Archivinhalt (nicht den lokalen Entwicklungs-Checkout), prüft verbotene Entwicklungs-Pfade und packt das signierte Archiv für Deployment/App-Store neu.
+
+### Dokumentation
+
+- **Deployment-Hinweise ergänzt**: Die Release-Dokumentation fordert nun explizit das Deployment aus dem signierten Tarball und beschreibt das typische Fehlerbild (`.git/*` / `node_modules/*`) bei versehentlicher Signierung eines Dev-Trees.
+- **Deployment-Helferskript**: `release/deploy-from-release.sh` hinzugefügt für Deployment aus signierten Release-Archiven mit Sicherheitsprüfungen (verbotene Pfade, erforderliche `signature.json`, optionales Disable/Enable und `occ integrity:check-app`).
 
 ## 1.1.12 – 2026-04-09
 

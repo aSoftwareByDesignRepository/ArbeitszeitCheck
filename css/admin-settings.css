@@ -144,6 +144,64 @@
   max-width: 12rem;
 }
 
+/* Month reopen: full-width user search + suggestion list */
+#admin-settings-form .month-reopen-user-picker .form-input,
+#admin-settings-form .month-reopen-user-picker .user-picker__search {
+  max-width: 100%;
+}
+
+#admin-settings-form .user-picker {
+  position: relative;
+  max-width: 100%;
+}
+
+#admin-settings-form .user-picker__list {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  right: 0;
+  margin: var(--space-1, 0.25rem) 0 0;
+  padding: var(--space-1, 0.25rem) 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background));
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+  border-radius: var(--border-radius, 6px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+#admin-settings-form .user-picker__item {
+  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+#admin-settings-form .user-picker__item:hover,
+#admin-settings-form .user-picker__item:focus {
+  background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover));
+  outline: none;
+}
+
+#admin-settings-form .user-picker__item--muted {
+  cursor: default;
+  color: var(--arbeitszeitcheck-color-text-lighter, var(--color-text-lighter));
+  font-size: 0.875rem;
+}
+
+#admin-settings-form .user-picker__name {
+  display: block;
+  font-weight: 500;
+  color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+}
+
+#admin-settings-form .user-picker__meta {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--arbeitszeitcheck-color-text-lighter, var(--color-text-lighter));
+  margin-top: 0.125rem;
+}
+
 /* ===== CARD ACTIONS ===== */
 .admin-settings-form .card-actions {
   display: flex;
@@ -158,6 +216,13 @@
   min-height: 2.75rem;
   padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
   font-weight: 500;
+}
+
+/* Month reopen: single action inside fieldset — no extra top rule */
+#admin-settings-form .form-fieldset .card-actions--inline {
+  margin-top: var(--space-4, 1rem);
+  padding-top: 0;
+  border-top: none;
 }
 
 /* ===== RESPONSIVE ===== */

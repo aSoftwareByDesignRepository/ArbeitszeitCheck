@@ -39,24 +39,7 @@
             });
         });
 
-        const monthClosureToggle = Utils.$('#monthClosureEnabled');
-        if (monthClosureToggle) {
-            Utils.on(monthClosureToggle, 'change', syncMonthClosureGraceField);
-            syncMonthClosureGraceField();
-        }
-    }
-
-    /**
-     * Grace days only apply when month closure is enabled; keep the field disabled otherwise (still submitted via direct value read).
-     */
-    function syncMonthClosureGraceField() {
-        const toggle = Utils.$('#monthClosureEnabled');
-        const grace = Utils.$('#monthClosureGraceDaysAfterEom');
-        if (!toggle || !grace) {
-            return;
-        }
-        const on = toggle.checked === true;
-        grace.disabled = !on;
+        initMonthReopenUserPicker();
     }
 
     /**
@@ -130,6 +113,124 @@
     }
 
     /**
+     * Searchable user picker for month reopen (uses GET /api/admin/users).
+     */
+    function initMonthReopenUserPicker() {
+        const hidden = Utils.$('#monthClosureReopenUserId');
+        const search = Utils.$('#monthClosureReopenUserSearch');
+        const list = Utils.$('#monthClosureReopenUserListbox');
+        const wrap = Utils.$('.month-reopen-user-picker');
+        const baseUrl = window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminUsersListUrl;
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        if (!hidden || !search || !list || !baseUrl) {
+            return;
+        }
+
+        let debounceTimer = null;
+        let selectedLabel = '';
+
+        function closeList() {
+            list.hidden = true;
+            list.innerHTML = '';
+            search.setAttribute('aria-expanded', 'false');
+        }
+
+        function openList() {
+            list.hidden = false;
+            search.setAttribute('aria-expanded', 'true');
+        }
+
+        function showLoading() {
+            const msg = l10n.loadingEllipsis || 'Loading…';
+            list.innerHTML = '<li class="user-picker__item user-picker__item--muted" role="presentation">' + Utils.escapeHtml(msg) + '</li>';
+            openList();
+        }
+
+        function fetchUsers(query) {
+            const q = typeof query === 'string' ? query.trim() : '';
+            const url = baseUrl + (q !== '' ? '?search=' + encodeURIComponent(q) : '');
+            showLoading();
+            Utils.ajax(url, {
+                method: 'GET',
+                onSuccess: function(data) {
+                    if (!data || !data.success || !Array.isArray(data.users)) {
+                        closeList();
+                        return;
+                    }
+                    renderUsers(data.users);
+                },
+                onError: function() {
+                    closeList();
+                }
+            });
+        }
+
+        function renderUsers(users) {
+            const emptyMsg = l10n.noUsersFound || 'No users found';
+            if (users.length === 0) {
+                list.innerHTML = '<li class="user-picker__item user-picker__item--muted" role="presentation">' + Utils.escapeHtml(emptyMsg) + '</li>';
+                openList();
+                return;
+            }
+            list.innerHTML = users.map(function(u) {
+                const uid = u.userId || '';
+                const name = (u.displayName && String(u.displayName).trim()) ? String(u.displayName) : uid;
+                const email = u.email ? String(u.email) : '';
+                const meta = email ? (uid + ' · ' + email) : uid;
+                return '<li role="option" tabindex="0" class="user-picker__item" data-user-id="' + Utils.escapeHtml(uid) + '">' +
+                    '<span class="user-picker__name">' + Utils.escapeHtml(name) + '</span>' +
+                    '<span class="user-picker__meta">' + Utils.escapeHtml(meta) + '</span></li>';
+            }).join('');
+            openList();
+            Utils.$$('.user-picker__item[data-user-id]', list).forEach(function(li) {
+                Utils.on(li, 'mousedown', function(e) {
+                    e.preventDefault();
+                });
+                Utils.on(li, 'click', function() {
+                    const uid = li.getAttribute('data-user-id') || '';
+                    const nameEl = li.querySelector('.user-picker__name');
+                    const displayName = nameEl ? nameEl.textContent : uid;
+                    hidden.value = uid;
+                    selectedLabel = displayName + ' (' + uid + ')';
+                    search.value = selectedLabel;
+                    closeList();
+                });
+            });
+        }
+
+        Utils.on(search, 'input', function() {
+            if (search.value !== selectedLabel) {
+                hidden.value = '';
+                selectedLabel = '';
+            }
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                fetchUsers(search.value);
+            }, 300);
+        });
+
+        Utils.on(search, 'focus', function() {
+            const q = (hidden.value && search.value === selectedLabel)
+                ? hidden.value
+                : search.value.trim();
+            fetchUsers(q);
+        });
+
+        Utils.on(search, 'keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeList();
+            }
+        });
+
+        document.addEventListener('click', function(ev) {
+            if (!wrap || wrap.contains(ev.target)) {
+                return;
+            }
+            closeList();
+        });
+    }
+
+    /**
      * Admin: reopen a finalized calendar month for an employee (revision-safe closure).
      */
     function handleMonthReopen() {
@@ -146,7 +247,7 @@
         const month = monthEl ? parseInt(String(monthEl.value), 10) : NaN;
 
         if (!userId || !reason || !Number.isInteger(year) || !Number.isInteger(month)) {
-            Messaging.showError(l10n.monthReopenFillAll || 'Please enter user ID, year, month, and a reason.');
+            Messaging.showError(l10n.monthReopenFillAll || 'Please select an employee, and enter year, month, and a reason.');
             return;
         }
         if (year < 1970 || year > 2100 || month < 1 || month > 12) {
@@ -176,6 +277,17 @@
                     Messaging.showSuccess(ok);
                     if (live) {
                         live.textContent = ok;
+                    }
+                    const searchEl = Utils.$('#monthClosureReopenUserSearch');
+                    if (userEl) {
+                        userEl.value = '';
+                    }
+                    if (searchEl) {
+                        searchEl.value = '';
+                        searchEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    if (reasonEl) {
+                        reasonEl.value = '';
                     }
                 } else {
                     Messaging.showError((data && data.error) ? data.error : 'Error');

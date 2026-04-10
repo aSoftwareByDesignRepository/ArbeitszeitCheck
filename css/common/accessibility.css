@@ -327,9 +327,9 @@ header {
   border-width: 2px;
 }
 
-/* Error messages should be associated */
+/* Error messages should be associated; body text uses main-text for contrast (accent is border + icon) */
 .form-error[role="alert"] {
-  color: var(--arbeitszeitcheck-color-error);
+  color: var(--arbeitszeitcheck-color-main-text);
   font-weight: var(--arbeitszeitcheck-font-weight-medium);
 }
 

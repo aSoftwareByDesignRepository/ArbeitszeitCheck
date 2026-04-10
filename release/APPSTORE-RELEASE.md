@@ -24,6 +24,17 @@ Replace `X.Y.Z` with the real version (e.g. `1.1.6`).
 
 ## 2. Build the installable `.tar.gz`
 
+Preferred (uses this app's guarded Makefile workflow):
+
+```bash
+cd apps/arbeitszeitcheck
+make release-signed
+```
+
+This produces `build/release/arbeitszeitcheck-X.Y.Z.tar.gz`, verifies the archive does not contain development paths (for example `.git`, `node_modules`, `tests`, `build`, `scripts`), signs the extracted archive payload via `occ integrity:sign-app`, and repacks the signed tarball.
+
+Manual fallback (if you cannot use `make`):
+
 From the repo root that contains `apps/arbeitszeitcheck` (here: `nextcloud-development/apps/`; local folder name may differ):
 
 ```bash
@@ -40,12 +51,31 @@ tar --exclude='arbeitszeitcheck/node_modules' \
 
 **Do not commit** the tarball (see `.gitignore`).
 
+### Critical deployment rule (prevents integrity errors)
+
+Deploy **only** from the signed release tarball.  
+Do **not** copy/sync a development checkout (`git`, `rsync`, IDE upload) into production when `appinfo/signature.json` exists.
+
+If production ever shows many `FILE_MISSING` entries under `.git/*` or a huge list under `node_modules/*`, that is a strong indicator the app was signed from a development tree and then deployed in a different file layout.
+
+### Safe production deployment helper
+
+```bash
+cd apps/arbeitszeitcheck/release
+./deploy-from-release.sh \
+  --archive ../build/release/arbeitszeitcheck-X.Y.Z.tar.gz \
+  --target-apps-dir /var/www/html/custom_apps \
+  --occ /var/www/html/occ
+```
+
+This helper validates archive integrity prerequisites before replacing app files.
+
 ---
 
 ## 3. SHA-256 / SHA-512 (app store + checksum file)
 
 ```bash
-cd apps/arbeitszeitcheck/release
+cd apps/arbeitszeitcheck/build/release
 sha256sum "arbeitszeitcheck-${VERSION}.tar.gz"
 sha512sum "arbeitszeitcheck-${VERSION}.tar.gz"
 ```
@@ -92,7 +122,7 @@ Typical fields:
 
 | Field | Source |
 |--------|--------|
-| **Archive** | `release/arbeitszeitcheck-X.Y.Z.tar.gz` |
+| **Archive** | `build/release/arbeitszeitcheck-X.Y.Z.tar.gz` |
 | **SHA-256** | From `sha256sum` / `CHECKSUMS-X.Y.Z.txt` |
 | **Signature** | Output of the `openssl dgst … \| openssl base64` command |
 | **Changelog** | Paste from `CHANGELOG.md` (or shortened) |

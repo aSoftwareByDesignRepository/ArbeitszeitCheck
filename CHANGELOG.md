@@ -13,7 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Month closure UX and API**: Employee UI uses a clearer card layout, visible feedback for success/errors (WCAG-friendly), server-driven `canFinalize` with localized block reasons (feature off, future month, pending approvals). Manual finalize rejects future calendar months. Absence workflow (`pending`, `substitute_pending`, `substitute_declined`) is enforced alongside pending time entry corrections. Unauthorized API access returns 401 where appropriate. Admin settings: dedicated “Month closure” section; grace-days field stays disabled when closure is off while still saving correctly. Auto-finalize job logs per-user failures for operations.
+- **Month closure UX and API**: Employee UI uses a clearer card layout, visible feedback for success/errors (WCAG-friendly), server-driven `canFinalize` with localized block reasons (feature off, future month, pending approvals). Manual finalize rejects future calendar months. Absence workflow (`pending`, `substitute_pending`, `substitute_declined`) is enforced alongside pending time entry corrections. Unauthorized API access returns 401 where appropriate. Admin settings: dedicated “Month closure” section; grace-days field stays editable with copy explaining it is saved even when closure is off; reopen uses searchable employee picker and clearer administrator vs. employee wording. Form validation error callouts use higher-contrast text and tinted surfaces across themes. Auto-finalize job logs per-user failures for operations.
+- **Release/signing workflow hardened for integrity checks**: `make release-signed` now signs the extracted release archive payload (not the local development checkout), validates forbidden development paths are excluded, and repacks the signed archive for deployment/App Store upload.
+
+### Documentation
+
+- **Deployment guidance**: Release docs now explicitly require production deployment from the signed tarball only and document the common integrity-failure pattern (`.git/*` / `node_modules/*` lists) caused by signing a dev tree.
+- **Deployment helper script**: Added `release/deploy-from-release.sh` to deploy from signed release archives with safety checks (forbidden path scan, required `signature.json`, optional app disable/enable and `occ integrity:check-app`).
 
 ## 1.1.12 - 2026-04-09
 
