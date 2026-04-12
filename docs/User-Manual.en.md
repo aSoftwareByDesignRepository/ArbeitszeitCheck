@@ -44,7 +44,7 @@ Exact permissions depend on your Nextcloud groups and app configuration.
 
 - **Clock in / out** and **breaks**: Use the time tracking UI; follow your organization’s rules for corrections and comments.
 - **Absences**: Create requests; wait for approval if your workflow requires it. Vacation balances and carryover (**Resturlaub**) may be shown if your admin configured them.
-- **Manager dashboard** (if you are a team lead): Under **Pending approvals**, absence requests list each person with the **absence type in your language** (e.g. vacation vs sick leave), not raw internal codes.
+- **Manager dashboard** (if you are a team lead): Under **Pending approvals**, absence requests list each person with the **absence type in your language** (e.g. vacation vs sick leave), not raw internal codes. Where enabled, **Employee absences** provides a dedicated list/filter view of team absences.
 - **Reports**: Generate period reports or exports your admin allows (CSV, DATEV, etc.).
 - **Compliance**: The app may flag violations (e.g. missing breaks); your employer defines how those are handled.
 
@@ -58,6 +58,7 @@ If your administrator enabled **revision-safe month finalization**, the **Time e
 
 - Choose the **calendar month** (month and year in one list, shown with a readable month name). The list includes **only months that have ended and contain at least one time entry** (so empty months are not shown). Review your times until that month is complete (including resolving **pending correction** requests—finalization is blocked while any correction is still pending).
 - **Finalize month** stores a **fixed snapshot** of that calendar month (working time and related report totals as implemented by the app), a **cryptographic hash**, and allows downloading a **PDF** for your records.
+- **Grace period (if configured):** Administrators may set **calendar days after month-end** during which you are expected to finalize manually; the UI may show that deadline. If the month is **still open** after the grace period ends, a **daily background job** may seal it automatically using the **same snapshot** as a manual finalize. **Pending** time-entry correction requests or **open absence workflow** steps (e.g. approval or substitute steps) **block** automatic sealing until resolved.
 - After finalization, you **cannot change** time entries or absences that fall in that month through the normal app—your organization’s **administrator** can **reopen** a month only with a **documented reason** (audited).
 
 Turning the feature **off** later does **not** unlock months that were already finalized.

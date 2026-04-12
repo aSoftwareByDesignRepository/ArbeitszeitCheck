@@ -101,12 +101,16 @@ Diese Dateien werden vom Nextcloud App Store für Listung, Detailseite und Revie
 
 ### Entwicklung & Tests
 
-- PHPUnit‑Tests: `composer test` (bzw. `phpunit` mit bereitgestellter `phpunit.xml`)  
-- JS‑Build: `npm run build`, Dev‑Watch: `npm run watch`  
-- Test‑Abdeckung:
-  - Controller‑Tests (`tests/Unit/Controller/*Test.php`)
-  - Service‑Tests (z. B. `ComplianceServiceTest`, `TimeTrackingServiceTest`, `OvertimeServiceTest`)
-  - Integrationstests für zentrale API‑Flows (`tests/Integration/`, falls vorhanden)
+**Voraussetzungen:** Node.js **20 oder 22** und npm **10+** (siehe `package.json` → `engines`), Composer, PHPUnit über `composer.json`.
+
+- **PHP:** `composer test` (alle Suites), `composer test:unit`, `composer test:integration` (Integration unter `tests/Integration/`), optional `composer test:coverage`
+- **PHP im Docker‑Stack dieses Monorepos:** vom Nextcloud‑Server‑Root `./docker/run-app-phpunit.sh arbeitszeitcheck` oder in der App `composer test:docker` bzw. `npm run test:php:docker`
+- **JavaScript (Vitest):** `npm test`, bei Bedarf `npm run test:watch`
+- **Lint:** `npm run lint`, `npm run stylelint` (sowie `composer lint` für PHP‑Syntaxcheck unter `lib/`)
+- **E2E (Playwright):** `npm run e2e` — erfordert laufende Nextcloud‑Instanz und Umgebungsvariablen (`NC_BASE_URL`, Testnutzer); siehe `docs/Developer-Documentation.en.md`
+- **Alle Tests im Container (Hilfsskript):** `scripts/run-tests-docker.sh` vom App‑ bzw. Repo‑Kontext
+
+Hinweis: `npm run build` ist ein Platzhalter (**kein** Bundler‑Build; Frontend ist Vanilla‑JS mit PHP‑Templates).
 
 Weitere Details zur Architektur und zu Beitrag‑Richtlinien finden sich in `docs/Developer-Documentation.en.md`.
 

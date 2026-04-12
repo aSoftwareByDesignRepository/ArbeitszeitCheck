@@ -1,7 +1,7 @@
 # Developer Documentation – ArbeitszeitCheck
 
 **Version:** 1.1.12  
-**Last Updated:** 2026-04-09
+**Last Updated:** 2026-04-12
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.
 
@@ -111,17 +111,15 @@ apps/arbeitszeitcheck/
    php occ app:enable arbeitszeitcheck
    ```
 
-### Development Mode
+### Development workflow
 
-For development with hot-reload:
+There is **no** webpack/Vite bundle step for the app UI (`npm run build` is a no-op). For **JavaScript unit tests**, use:
 
 ```bash
-# Terminal 1: Watch for changes
-npm run watch
-
-# Terminal 2: Run Nextcloud
-php -S localhost:8080
+npm run test:watch
 ```
+
+Run Nextcloud using your usual stack (Docker Compose, web server, or `php -S` for quick experiments—not a substitute for a full instance). After changing PHP or static assets, reload the app in the browser.
 
 ### IDE Configuration
 
@@ -466,7 +464,10 @@ php occ arbeitszeitcheck:vacation-rollover --dry-run
 
 **Purpose:** Optional per-employee monthly seal with tamper-evident snapshot (hash chain) and PDF export for archiving.
 
-**Configuration:** `IConfig` key `month_closure_enabled` (see `Constants::CONFIG_MONTH_CLOSURE_ENABLED`), default `'0'`. When disabled, new finalizations are rejected with HTTP 403/consistent errors; **months already finalized remain locked** (mutation guards still apply).
+**Configuration:**
+
+- `month_closure_enabled` (`Constants::CONFIG_MONTH_CLOSURE_ENABLED`), default `'0'`. When disabled, new finalizations are rejected with HTTP 403/consistent errors; **months already finalized remain locked** (mutation guards still apply).
+- `month_closure_grace_days_after_eom` (`Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM`), **0–90**, default `0`. After the end of a calendar month, employees have this many **calendar days** to finalize manually. If the month is **still open** after that deadline, the daily `MonthClosureAutoFinalizeJob` runs automatic finalization (same canonical snapshot as manual finalize). **Pending** time-entry correction approvals and **open absence workflow** states (`pending`, `substitute_pending`, `substitute_declined`, etc.) **block** auto-finalize until cleared. Reopening a month remains **admin-only**.
 
 **Core classes:**
 
@@ -475,7 +476,8 @@ php occ arbeitszeitcheck:vacation-rollover --dry-run
 | `MonthClosureService` | Builds canonical payload (`buildCanonicalPayload`), finalizes/reopens inside DB transactions, audit logging, PDF text |
 | `MonthClosureCanonical` | Stable JSON encoding (`encode`) and `hashChain` SHA-256 |
 | `MonthClosureGuard` | Calls `MonthClosureService::assertDateRangeMutable` for time entries, absences, and “clock” days |
-| `MonthClosureController` | JSON API under `/api/month-closure/*` (feature, periods, status, finalize, pdf, reopen) — `GET periods` lists `{ year, month }` for ended months that have at least one time entry (employee UI dropdown). `finalize` and `status` enforce the same rules server-side (including at least one time entry in that month); auto-finalize skips months with no entries. |
+| `MonthClosureController` | JSON API under `/api/month-closure/*` (feature, periods, status, finalize, pdf, reopen) — `GET periods` lists `{ year, month }` for ended months that have at least one time entry (employee UI dropdown). `finalize` and `status` enforce the same rules server-side (including at least one time entry in that month); auto-finalize skips months with no entries. Responses include grace/deadline metadata (`graceDaysAfterEom`, etc.) for the employee UI. |
+| `MonthClosureAutoFinalizeJob` | Daily: finalizes open months whose grace window has passed (see `MonthClosureService`). |
 
 **Admin UI:** Administrators can **reopen** a finalized month from the app **admin settings** page: **search and select the employee** (Nextcloud account; uses `GET /api/admin/users` for suggestions), then year, month, and mandatory reason. The action runs immediately via **“Reopen month”** and is **not** part of **Save all settings**. The `reopen` API still expects `userId` in the JSON body.
 
@@ -854,7 +856,3 @@ $qb->where($qb->expr()->eq('user_id', "'$userId'"));
 - **Nextcloud App Framework:** https://docs.nextcloud.com/server/latest/developer_manual/
 - **PHPUnit Documentation:** https://phpunit.de/
 - **Vitest Documentation:** https://vitest.dev/ (JavaScript unit tests, if used)
-
----
-
-**Last Updated:** 2026-04-05

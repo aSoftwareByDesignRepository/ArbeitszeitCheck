@@ -44,7 +44,7 @@ Die genauen Rechte hängen von Nextcloud-Gruppen und der App-Konfiguration ab.
 
 - **Kommen/Gehen und Pausen** über die Zeiterfassung; Korrekturen und Begründungen nach internen Regeln.
 - **Abwesenheiten** beantragen und ggf. auf Freigabe warten. **Resturlaub** und Überträge werden angezeigt, wenn die Administration das gepflegt hat.
-- **Manager-Dashboard** (als Führungskraft): Unter **Ausstehende Genehmigungen** erscheint der **Abwesenheitstyp in Ihrer Sprache** (z. B. Urlaub, Krankheit), nicht technische Kurzbezeichnungen.
+- **Manager-Dashboard** (als Führungskraft): Unter **Ausstehende Genehmigungen** erscheint der **Abwesenheitstyp in Ihrer Sprache** (z. B. Urlaub, Krankheit), nicht technische Kurzbezeichnungen. Wo freigeschaltet, bietet **Abwesenheiten der Mitarbeitenden** eine eigene Listen-/Filteransicht.
 - **Berichte** für Zeiträume erstellen und erlaubte Exporte nutzen (CSV, DATEV, …).
 - **Compliance-Hinweise** (z. B. fehlende Pausen) nach Vorgabe des Arbeitgebers bearbeiten.
 
@@ -58,6 +58,7 @@ Wenn Ihre Administration die **revisionssichere Monatsfinalisierung** aktiviert 
 
 - Wählen Sie den **Kalendermonat** (Monat und Jahr in einer Liste, mit ausgeschriebenem Monatsnamen). Angezeigt werden **nur abgeschlossene Monate, in denen mindestens ein Zeiteintrag liegt** (leere Monate erscheinen nicht). Stellen Sie sicher, dass der Monat vollständig ist (inkl. Klärung **ausstehender Korrekturanträge**—eine Finalisierung ist blockiert, solange noch ein Antrag aussteht).
 - **Monat finalisieren** legt einen **festen Snapshot** dieses Kalendermonats ab (Arbeitszeit und zugehörige Report-Summen gemäß App-Logik), einen **kryptografischen Hash** und ermöglicht den Download eines **PDFs** zur Ablage.
+- **Karenz (falls konfiguriert):** Die Administration kann **Kalendertage nach Monatsende** festlegen, in denen der Monat noch **manuell** finalisiert werden soll; die Oberfläche kann eine Frist anzeigen. Bleibt der Monat nach Ende dieser Karenz **noch offen**, kann ein **täglicher Hintergrundauftrag** ihn automatisch versiegeln (**gleicher Snapshot** wie bei manueller Finalisierung). **Ausstehende** Korrekturanträge zu Zeiteinträgen oder **offene Abwesenheits-Workflows** (z. B. Genehmigung oder Vertretung) **verhindern** die automatische Versiegelung, bis sie geklärt sind.
 - Nach der Finalisierung können Sie Zeiteinträge und Abwesenheiten in diesem Monat **nicht mehr** über die normale App ändern—eine **Administratorin / ein Administrator** kann einen Monat nur mit **dokumentierter Begründung** wieder öffnen (auditierbar).
 
 Wird die Funktion später **deaktiviert**, bleiben **bereits finalisierte Monate gesperrt**.
