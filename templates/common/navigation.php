@@ -12,6 +12,7 @@ declare(strict_types=1);
  * @license AGPL-3.0-or-later
  */
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCP\Util;
 
 // Ensure navigation scripts load on all pages with sidebar (mobile menu, keyboard nav, SVG icons)
@@ -35,7 +36,8 @@ $isSettings = strpos($currentPage, '/settings') !== false;
 $isManagerPage = strpos($currentPage, '/manager') !== false;
 $isManagerTimeEntries = strpos($currentPage, '/manager/time-entries') !== false;
 $isManagerAbsences = strpos($currentPage, '/manager/absences') !== false;
-$isManagerDashboard = $isManagerPage && !$isManagerTimeEntries && !$isManagerAbsences;
+$isManagerMonthClosures = strpos($currentPage, '/manager/month-closures') !== false;
+$isManagerDashboard = $isManagerPage && !$isManagerTimeEntries && !$isManagerAbsences && !$isManagerMonthClosures;
 $isSubstitutionRequests = strpos($currentPage, '/substitution-requests') !== false;
 $isCompliance = strpos($currentPage, '/compliance') !== false;
 $isAdmin = strpos($currentPage, '/admin') !== false;
@@ -63,6 +65,11 @@ $showManagerLink = !empty($_['showManagerLink']);
 $showReportsLink = !empty($_['showReportsLink']);
 // Admin section visibility (admin navigation)
 $showAdminNav = !empty($_['showAdminNav']);
+
+// Revision PDFs (month closure): prefer controller-provided flag; otherwise read app config so the item appears on every page (e.g. dashboard) when the feature is on.
+$monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
+	? !empty($_['monthClosureEnabled'])
+	: (\OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitcheck', Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1');
 ?>
 
 <!-- App layout wrapper: flex container for sidebar + content (desktop), stacked (mobile) -->
@@ -250,6 +257,15 @@ $showAdminNav = !empty($_['showAdminNav']);
                                 <span><?php p($l->t('Employee absences')); ?></span>
                             </a>
                         </li>
+                        <?php if ($monthClosureEnabledNav): ?>
+                        <li class="<?php p($isManagerMonthClosures ? 'active' : ''); ?>" <?php p($isManagerMonthClosures ? 'aria-current="page"' : ''); ?>>
+                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.manager.monthClosuresPage')); ?>"
+                                title="<?php p($l->t('Download revision-secure month PDFs for team members (same document as the employee).')); ?>"
+                                aria-label="<?php p($l->t('Open revision PDFs for employees')); ?>">
+                                <span><?php p($l->t('Revision PDFs')); ?></span>
+                            </a>
+                        </li>
+                        <?php endif; ?>
                         <?php if ($showReportsLink): ?>
                             <li class="<?php p($isReports ? 'active' : ''); ?>" <?php p($isReports ? 'aria-current="page"' : ''); ?>>
                                 <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.reports')); ?>"

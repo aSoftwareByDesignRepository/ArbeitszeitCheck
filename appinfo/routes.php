@@ -81,6 +81,10 @@ return [
 		['name' => 'manager#dashboard', 'url' => '/manager', 'verb' => 'GET'],
 		['name' => 'manager#employeeTimeEntriesPage', 'url' => '/manager/time-entries', 'verb' => 'GET'],
 		['name' => 'manager#employeeAbsencesPage', 'url' => '/manager/absences', 'verb' => 'GET'],
+		['name' => 'manager#monthClosuresPage', 'url' => '/manager/month-closures', 'verb' => 'GET'],
+		['name' => 'manager#revisionPdfUsers', 'url' => '/api/manager/revision-pdf/users', 'verb' => 'GET'],
+		['name' => 'manager#revisionPdfAvailableMonths', 'url' => '/api/manager/revision-pdf/available-months', 'verb' => 'GET'],
+		['name' => 'manager#revisionPdfUsersForMonth', 'url' => '/api/manager/revision-pdf/users-for-month', 'verb' => 'GET'],
 		['name' => 'manager#getTeamOverview', 'url' => '/api/manager/team-overview', 'verb' => 'GET'],
 		['name' => 'manager#getEmployeeTimeEntries', 'url' => '/api/manager/employee-time-entries', 'verb' => 'GET'],
 		['name' => 'manager#getEmployeeAbsences', 'url' => '/api/manager/employee-absences', 'verb' => 'GET'],
@@ -202,6 +206,7 @@ return [
 		['name' => 'month_closure#status', 'url' => '/api/month-closure/status', 'verb' => 'GET'],
 		['name' => 'month_closure#finalize', 'url' => '/api/month-closure/finalize', 'verb' => 'POST'],
 		['name' => 'month_closure#pdf', 'url' => '/api/month-closure/pdf', 'verb' => 'GET'],
+		['name' => 'month_closure#finalizedMonths', 'url' => '/api/month-closure/finalized-months', 'verb' => 'GET'],
 		['name' => 'month_closure#reopen', 'url' => '/api/month-closure/reopen', 'verb' => 'POST'],
 	],
 ];

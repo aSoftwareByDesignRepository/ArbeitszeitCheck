@@ -118,7 +118,7 @@ class PageController extends Controller
 	 * Build common navigation flags for templates.
 	 *
 	 * @param string $userId
-	 * @return array{showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool}
+	 * @return array{showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool, monthClosureEnabled: bool}
 	 */
 	private function getNavigationFlags(string $userId): array
 	{
@@ -154,6 +154,7 @@ class PageController extends Controller
 			'showManagerLink' => $showManagerLink,
 			'showReportsLink' => $showReportsLink,
 			'showAdminNav' => $showAdminNav,
+			'monthClosureEnabled' => $this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
 		];
 	}
 

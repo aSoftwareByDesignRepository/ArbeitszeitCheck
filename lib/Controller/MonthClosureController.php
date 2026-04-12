@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\MonthClosure;
 use OCA\ArbeitszeitCheck\Service\MonthClosureFeature;
 use OCA\ArbeitszeitCheck\Service\MonthClosureService;
@@ -27,8 +28,10 @@ use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
 use OCP\IRequest;
+use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\IL10N;
+use Psr\Log\LoggerInterface;
 
 class MonthClosureController extends Controller
 {
@@ -37,6 +40,9 @@ class MonthClosureController extends Controller
 	private PermissionService $permissionService;
 	private IConfig $config;
 	private IL10N $l10n;
+	private IUserManager $userManager;
+	private AuditLogMapper $auditLogMapper;
+	private LoggerInterface $logger;
 
 	public function __construct(
 		string $appName,
@@ -45,7 +51,10 @@ class MonthClosureController extends Controller
 		MonthClosureService $monthClosureService,
 		PermissionService $permissionService,
 		IConfig $config,
-		IL10N $l10n
+		IL10N $l10n,
+		IUserManager $userManager,
+		AuditLogMapper $auditLogMapper,
+		LoggerInterface $logger
 	) {
 		parent::__construct($appName, $request);
 		$this->userSession = $userSession;
@@ -53,6 +62,9 @@ class MonthClosureController extends Controller
 		$this->permissionService = $permissionService;
 		$this->config = $config;
 		$this->l10n = $l10n;
+		$this->userManager = $userManager;
+		$this->auditLogMapper = $auditLogMapper;
+		$this->logger = $logger;
 	}
 
 	private function uid(): string
@@ -62,6 +74,52 @@ class MonthClosureController extends Controller
 			throw new \RuntimeException('not_logged_in');
 		}
 		return $u->getUID();
+	}
+
+	/**
+	 * @return array{type: 'ok', userId: string}|array{type: 'not_found'}|array{type: 'forbidden'}
+	 */
+	private function resolveClosureTargetUserId(string $actorUserId, ?string $requestedUserId, string $deniedLogAction): array
+	{
+		$rid = $requestedUserId !== null ? trim($requestedUserId) : '';
+		if ($rid === '') {
+			return ['type' => 'ok', 'userId' => $actorUserId];
+		}
+		$u = $this->userManager->get($rid);
+		if ($u === null) {
+			return ['type' => 'not_found'];
+		}
+		if ($rid === $actorUserId) {
+			return ['type' => 'ok', 'userId' => $actorUserId];
+		}
+		if (!$this->permissionService->canManageEmployee($actorUserId, $rid)) {
+			$this->permissionService->logPermissionDenied($actorUserId, $deniedLogAction, 'user', $rid);
+
+			return ['type' => 'forbidden'];
+		}
+
+		return ['type' => 'ok', 'userId' => $rid];
+	}
+
+	private function displayNameForPdf(string $actorUserId, string $targetUserId): string
+	{
+		if ($targetUserId === $actorUserId) {
+			$u = $this->userSession->getUser();
+			if ($u !== null && $u->getUID() === $actorUserId) {
+				$dn = $u->getDisplayName();
+				return ($dn !== '' && $dn !== null) ? $dn : $actorUserId;
+			}
+		}
+		$dn = $this->userManager->getDisplayName($targetUserId);
+
+		return ($dn !== '' && $dn !== false) ? $dn : $targetUserId;
+	}
+
+	private function safeFilenameSegment(string $userId): string
+	{
+		$s = preg_replace('/[^a-zA-Z0-9._-]+/', '_', $userId);
+
+		return ($s !== '' && $s !== null) ? $s : 'user';
 	}
 
 	#[NoAdminRequired]
@@ -213,19 +271,87 @@ class MonthClosureController extends Controller
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
+	public function finalizedMonths(): JSONResponse
+	{
+		try {
+			$actor = $this->uid();
+			$requested = $this->request->getParam('userId');
+			$res = $this->resolveClosureTargetUserId($actor, is_string($requested) ? $requested : null, 'list_finalized_months');
+			if ($res['type'] === 'not_found') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User not found.')], Http::STATUS_NOT_FOUND);
+			}
+			if ($res['type'] === 'forbidden') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Access denied')], Http::STATUS_FORBIDDEN);
+			}
+			$targetUserId = $res['userId'];
+			$months = $this->monthClosureService->listFinalizedYearMonthsForUser($targetUserId);
+
+			return new JSONResponse([
+				'success' => true,
+				'months' => $months,
+				'featureEnabled' => MonthClosureFeature::isEnabledFromIConfig($this->config),
+			]);
+		} catch (\RuntimeException $e) {
+			if ($e->getMessage() === 'not_logged_in') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Authentication required')], Http::STATUS_UNAUTHORIZED);
+			}
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Error')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Error')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function pdf(): DataDownloadResponse|JSONResponse
 	{
 		try {
-			$userId = $this->uid();
+			$actor = $this->uid();
+			$requested = $this->request->getParam('userId');
+			$res = $this->resolveClosureTargetUserId($actor, is_string($requested) ? $requested : null, 'download_month_closure_pdf');
+			if ($res['type'] === 'not_found') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User not found.')], Http::STATUS_NOT_FOUND);
+			}
+			if ($res['type'] === 'forbidden') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Access denied')], Http::STATUS_FORBIDDEN);
+			}
+			$targetUserId = $res['userId'];
 			$year = (int)$this->request->getParam('year', 0);
 			$month = (int)$this->request->getParam('month', 0);
 			if ($year < 1970 || $year > 2100 || $month < 1 || $month > 12) {
 				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Invalid month')], Http::STATUS_BAD_REQUEST);
 			}
-			$u = $this->userSession->getUser();
-			$name = $u ? $u->getDisplayName() : $userId;
-			$pdf = $this->monthClosureService->buildPdfContent($userId, $year, $month, $name, $this->l10n);
-			$fn = sprintf('arbeitszeitcheck-month-%04d-%02d.pdf', $year, $month);
+			$name = $this->displayNameForPdf($actor, $targetUserId);
+			$pdf = $this->monthClosureService->buildPdfContent($targetUserId, $year, $month, $name, $this->l10n);
+			if ($actor !== $targetUserId) {
+				$row = $this->monthClosureService->getClosureRow($targetUserId, $year, $month);
+				if ($row !== null) {
+					try {
+						$this->auditLogMapper->logAction(
+							$targetUserId,
+							'month_closure_pdf_downloaded',
+							'month_closure',
+							$row->getId(),
+							null,
+							['year' => $year, 'month' => $month, 'target_user_id' => $targetUserId],
+							$actor
+						);
+					} catch (\Throwable $e) {
+						$this->logger->warning('Audit log failed after month closure PDF download', ['exception' => $e, 'app' => 'arbeitszeitcheck']);
+					}
+				}
+			}
+			if ($actor === $targetUserId) {
+				$fn = sprintf('arbeitszeitcheck-month-%04d-%02d.pdf', $year, $month);
+			} else {
+				$fn = sprintf(
+					'arbeitszeitcheck-%s-%04d-%02d.pdf',
+					$this->safeFilenameSegment($targetUserId),
+					$year,
+					$month
+				);
+			}
+
 			return new DataDownloadResponse($pdf, $fn, 'application/pdf');
 		} catch (\RuntimeException $e) {
 			if ($e->getMessage() === 'not_logged_in') {
@@ -234,6 +360,8 @@ class MonthClosureController extends Controller
 			if ($e->getMessage() === 'not_finalized') {
 				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Month is not finalized.')], Http::STATUS_NOT_FOUND);
 			}
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Error')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		} catch (\Throwable $e) {
 			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Error')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}

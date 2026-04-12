@@ -44,6 +44,109 @@ class MonthClosureMapper extends QBMapper
 		}
 	}
 
+	/**
+	 * All finalized month closures for a user, newest first.
+	 *
+	 * @return MonthClosure[]
+	 */
+	public function findFinalizedByUserId(string $userId): array
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(MonthClosure::STATUS_FINALIZED)))
+			->orderBy('year', 'DESC')
+			->addOrderBy('month', 'DESC');
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * Distinct calendar months that have at least one finalized closure for the given users (newest first).
+	 *
+	 * @param list<string> $userIds
+	 * @return list<array{year: int, month: int}>
+	 */
+	public function findDistinctFinalizedYearMonthsForUserIds(array $userIds): array
+	{
+		if ($userIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('year', 'month')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('status', $qb->createNamedParameter(MonthClosure::STATUS_FINALIZED)))
+			->andWhere($qb->expr()->in('user_id', $qb->createNamedParameter($userIds, IQueryBuilder::PARAM_STR_ARRAY)))
+			->groupBy('year')
+			->addGroupBy('month')
+			->orderBy('year', 'DESC')
+			->addOrderBy('month', 'DESC');
+		$result = $qb->executeQuery();
+		$out = [];
+		while ($row = $result->fetch()) {
+			$out[] = ['year' => (int)$row['year'], 'month' => (int)$row['month']];
+		}
+		$result->closeCursor();
+
+		return $out;
+	}
+
+	/**
+	 * All distinct finalized (year, month) pairs in the table (newest first).
+	 *
+	 * @return list<array{year: int, month: int}>
+	 */
+	public function findDistinctFinalizedYearMonths(): array
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('year', 'month')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('status', $qb->createNamedParameter(MonthClosure::STATUS_FINALIZED)))
+			->groupBy('year')
+			->addGroupBy('month')
+			->orderBy('year', 'DESC')
+			->addOrderBy('month', 'DESC');
+		$result = $qb->executeQuery();
+		$out = [];
+		while ($row = $result->fetch()) {
+			$out[] = ['year' => (int)$row['year'], 'month' => (int)$row['month']];
+		}
+		$result->closeCursor();
+
+		return $out;
+	}
+
+	/**
+	 * User ids with a finalized closure for the given calendar month.
+	 *
+	 * @param list<string>|null $restrictUserIds If null, any user; if empty array, none.
+	 * @return list<string>
+	 */
+	public function findUserIdsWithFinalizedMonth(int $year, int $month, ?array $restrictUserIds): array
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('user_id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('year', $qb->createNamedParameter($year, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('month', $qb->createNamedParameter($month, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(MonthClosure::STATUS_FINALIZED)));
+		if ($restrictUserIds !== null) {
+			if ($restrictUserIds === []) {
+				return [];
+			}
+			$qb->andWhere($qb->expr()->in('user_id', $qb->createNamedParameter($restrictUserIds, IQueryBuilder::PARAM_STR_ARRAY)));
+		}
+		$result = $qb->executeQuery();
+		$out = [];
+		while ($row = $result->fetch()) {
+			$out[] = (string)$row['user_id'];
+		}
+		$result->closeCursor();
+
+		return $out;
+	}
+
 	public function findLatestFinalizedBefore(string $userId, int $year, int $month): ?MonthClosure
 	{
 		$qb = $this->db->getQueryBuilder();

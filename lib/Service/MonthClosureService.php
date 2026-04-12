@@ -303,6 +303,55 @@ class MonthClosureService
 	}
 
 	/**
+	 * Finalized calendar months for which a revision PDF exists (newest first).
+	 * Does not depend on the month-closure feature flag — historical seals remain listable.
+	 *
+	 * @return list<array{year: int, month: int}>
+	 */
+	public function listFinalizedYearMonthsForUser(string $userId): array
+	{
+		$rows = $this->closureMapper->findFinalizedByUserId($userId);
+		$out = [];
+		foreach ($rows as $row) {
+			$out[] = ['year' => $row->getYear(), 'month' => $row->getMonth()];
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Distinct months where at least one of the given users has a finalized closure (for manager revision PDF picker).
+	 *
+	 * @param list<string> $userIds Team members (or other scoped ids); empty => no months.
+	 * @return list<array{year: int, month: int}>
+	 */
+	public function listDistinctFinalizedYearMonthsForUserIds(array $userIds): array
+	{
+		return $this->closureMapper->findDistinctFinalizedYearMonthsForUserIds($userIds);
+	}
+
+	/**
+	 * Distinct finalized months across all users (admin revision PDF picker).
+	 *
+	 * @return list<array{year: int, month: int}>
+	 */
+	public function listDistinctFinalizedYearMonthsGlobally(): array
+	{
+		return $this->closureMapper->findDistinctFinalizedYearMonths();
+	}
+
+	/**
+	 * User ids with a finalized row for (year, month), optionally restricted to a set of accounts.
+	 *
+	 * @param list<string>|null $restrictUserIds null = any user; empty = none
+	 * @return list<string>
+	 */
+	public function listUserIdsWithFinalizedMonth(int $year, int $month, ?array $restrictUserIds): array
+	{
+		return $this->closureMapper->findUserIdsWithFinalizedMonth($year, $month, $restrictUserIds);
+	}
+
+	/**
 	 * Locked months cannot be mutated via the app (even if the feature toggle is off).
 	 */
 	public function assertDateRangeMutable(string $userId, \DateTime $rangeStart, \DateTime $rangeEnd): void

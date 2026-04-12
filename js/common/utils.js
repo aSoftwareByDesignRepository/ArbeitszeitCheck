@@ -173,17 +173,23 @@ const ArbeitszeitCheckUtils = {
 
     const requestToken = (typeof OC !== 'undefined' && OC.requestToken) ||
       (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || '';
+    const methodUpper = String(method).toUpperCase();
     const defaultHeaders = {
-      'Content-Type': 'application/json',
+      'Accept': 'application/json',
       'requesttoken': requestToken
     };
+    // Avoid sending Content-Type on GET/HEAD: some stacks and intermediaries mishandle it; body is absent anyway.
+    if (methodUpper !== 'GET' && methodUpper !== 'HEAD') {
+      defaultHeaders['Content-Type'] = 'application/json';
+    }
 
     const config = {
       method: method,
-      headers: { ...defaultHeaders, ...headers }
+      headers: { ...defaultHeaders, ...headers },
+      credentials: 'same-origin'
     };
 
-    if (data && method !== 'GET') {
+    if (data && methodUpper !== 'GET' && methodUpper !== 'HEAD') {
       if (config.headers['Content-Type'] === 'application/json') {
         config.body = JSON.stringify(data);
       } else {
@@ -196,8 +202,9 @@ const ArbeitszeitCheckUtils = {
         return url;
       }
 
-      // Keep fully-qualified and already-generated Nextcloud paths unchanged.
-      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//') || url.startsWith('/index.php/')) {
+      // Keep fully-qualified URLs and root-relative paths unchanged. PHP linkToRoute() often
+      // returns /apps/... (pretty URLs); those must not be passed through OC.generateUrl.
+      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//') || url.startsWith('/')) {
         return url;
       }
 
