@@ -116,70 +116,62 @@ Produces `arbeitszeitcheck-X.Y.Z.tar.gz.asc` — **ignored** by git.
 
 ---
 
-## 6. Upload at apps.nextcloud.com
+## 6. GitHub Release (**required**) — **`nextcloud-arbeitszeitcheck`**
 
-Typical fields:
+You **must** create a **GitHub Release** tagged **`vX.Y.Z`** and attach **`arbeitszeitcheck-X.Y.Z.tar.gz`** before you treat the App Store upload as complete. The SHA-256, OpenSSL signature, and store upload **must** be the **same byte-identical** file as the release asset. User-facing downloads and tags belong on the **public** app repo, not on the private monorepo.
+
+| Repository | Role |
+|------------|------|
+| **This workspace** (`nextcloud-development`, …) | Development; tarball is built under `apps/arbeitszeitcheck/build/release/`. |
+| **`aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`** | **Public** — source sync + **GitHub Releases** + `.tar.gz` asset. |
+
+**Canonical repo:** https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck  
+
+Always pass **`--repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`** to `gh` (or `export GH_REPO=...`) so you never target the monorepo by mistake.
+
+**1. Push sources** (from monorepo root):
+
+```bash
+./scripts/push-public-app-subtree.sh arbeitszeitcheck aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck
+```
+
+**2. Create the release** from the built tarball (paths relative to `apps/arbeitszeitcheck`):
+
+```bash
+VERSION=X.Y.Z
+cd apps/arbeitszeitcheck
+
+gh release create "v${VERSION}" \
+  --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck \
+  --title "v${VERSION}" \
+  --notes-file "release/GITHUB_RELEASE_NOTES_${VERSION}.md" \
+  "build/release/arbeitszeitcheck-${VERSION}.tar.gz"
+```
+
+If the release **already exists** and you only need to **replace the asset**:
+
+```bash
+gh release upload "v${VERSION}" "build/release/arbeitszeitcheck-${VERSION}.tar.gz" \
+  --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck \
+  --clobber
+```
+
+Publishing the **tarball** does not push git history; subtree sync is separate. The release command only attaches the archive to **`nextcloud-arbeitszeitcheck`**.
+
+---
+
+## 7. Upload at apps.nextcloud.com
+
+Upload the **same** `build/release/arbeitszeitcheck-X.Y.Z.tar.gz` you attached to the GitHub Release.
 
 | Field | Source |
 |--------|--------|
-| **Archive** | `build/release/arbeitszeitcheck-X.Y.Z.tar.gz` |
+| **Archive** | `build/release/arbeitszeitcheck-X.Y.Z.tar.gz` (same bytes as GitHub asset) |
 | **SHA-256** | From `sha256sum` / `CHECKSUMS-X.Y.Z.txt` |
 | **Signature** | Output of the `openssl dgst … \| openssl base64` command |
 | **Changelog** | Paste from `CHANGELOG.md` (or shortened) |
 
 Submit; fix any validation errors (wrong checksum/signature almost always means a wrong file or stale copy).
-
----
-
-## 7. GitHub release — **standalone app repo** (not the monorepo)
-
-User-facing downloads and release tags belong on **`nextcloud-arbeitszeitcheck`** (the **only** public first-party app repo — see [REPOSITORY-LAYOUT.md](../../../ready2publish/REPOSITORY-LAYOUT.md)), not on the private development monorepo.
-
-| Repository | Role |
-|------------|------|
-| **This workspace** (`nextcloud-development` or e.g. `nextcloud-dev`, …) | Day-to-day development; **do not** create product releases here unless you explicitly want a monorepo release. |
-| **`aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`** | **Public** ArbeitszeitCheck repo — tags, GitHub Releases, and the `.tar.gz` asset users expect. |
-
-**Canonical GitHub repo for releases**
-
-- `https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`
-- Shorthand for `gh`: `--repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`
-
-Always pass **`--repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`** (or set `GH_REPO` once) so `gh` never targets your monorepo remote by mistake.
-
-```bash
-# Optional: default for this shell session
-export GH_REPO=aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck
-```
-
-Build the tarball **here** (monorepo `apps/`), then point `gh` at the file with an absolute or correct relative path.
-
-### Create a new GitHub Release (tag + notes + asset)
-
-From `apps/arbeitszeitcheck/release` after building `arbeitszeitcheck-${VERSION}.tar.gz`:
-
-```bash
-VERSION=X.Y.Z
-cd /path/to/nextcloud-development/apps/arbeitszeitcheck/release
-
-gh release create "v${VERSION}" \
-  --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck \
-  --title "v${VERSION}" \
-  --notes-file "GITHUB_RELEASE_NOTES_${VERSION}.md" \
-  "arbeitszeitcheck-${VERSION}.tar.gz"
-```
-
-If the release **already exists** and you only need to **replace the asset** (same version, new tarball):
-
-```bash
-gh release upload "v${VERSION}" "arbeitszeitcheck-${VERSION}.tar.gz" \
-  --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck \
-  --clobber
-```
-
-### Source code on GitHub
-
-Publishing the **tarball** does not push git history. If you also publish app sources to that repo (e.g. `git subtree split` / manual sync), do that in your usual way **before or after** the release; the commands above only attach the built archive to **`nextcloud-arbeitszeitcheck`**, not to the monorepo.
 
 ---
 
@@ -204,4 +196,5 @@ Publishing the **tarball** does not push git history. If you also publish app so
 - [ ] SHA-256 + SHA-512 recorded; store gets **SHA-256**
 - [ ] OpenSSL base64 signature **from the same tarball file**
 - [ ] Nothing uploaded to git except docs/checksums (no `.tar.gz`, no keys)
-- [ ] GitHub Release (if used): **`gh` with `--repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`**, not the monorepo
+- [ ] **GitHub Release** on **`nextcloud-arbeitszeitcheck`**: tag `vX.Y.Z`, attach **`build/release/arbeitszeitcheck-X.Y.Z.tar.gz`**, `gh --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck` (**required**)
+- [ ] App Store upload uses **that same** tarball bytes
