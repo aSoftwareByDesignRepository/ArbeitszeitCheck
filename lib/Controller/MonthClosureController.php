@@ -76,6 +76,35 @@ class MonthClosureController extends Controller
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
+	public function periods(): JSONResponse
+	{
+		try {
+			$userId = $this->uid();
+			if (!MonthClosureFeature::isEnabledFromIConfig($this->config)) {
+				return new JSONResponse([
+					'success' => true,
+					'featureEnabled' => false,
+					'periods' => [],
+				]);
+			}
+			$periods = $this->monthClosureService->getEligiblePeriodsWithTimeEntriesForUser($userId);
+			return new JSONResponse([
+				'success' => true,
+				'featureEnabled' => true,
+				'periods' => $periods,
+			]);
+		} catch (\RuntimeException $e) {
+			if ($e->getMessage() === 'not_logged_in') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Authentication required')], Http::STATUS_UNAUTHORIZED);
+			}
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Error')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Error')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function status(): JSONResponse
 	{
 		try {
@@ -99,6 +128,10 @@ class MonthClosureController extends Controller
 				$canFinalize = false;
 			} elseif ($this->monthClosureService->isCalendarMonthStrictlyAfterCurrent($year, $month)) {
 				$finalizeBlockedReason = 'future_month';
+			} elseif (!$this->monthClosureService->isCalendarMonthFullyEnded($year, $month)) {
+				$finalizeBlockedReason = 'month_not_ended';
+			} elseif (!$this->monthClosureService->hasTimeEntryInCalendarMonth($userId, $year, $month)) {
+				$finalizeBlockedReason = 'no_time_entries';
 			} elseif ($this->monthClosureService->monthBlocksFinalization($userId, $year, $month)) {
 				$finalizeBlockedReason = 'pending_workflow';
 			} else {
@@ -109,7 +142,9 @@ class MonthClosureController extends Controller
 			if ($finalizeBlockedReason !== null) {
 				$finalizeBlockedMessage = match ($finalizeBlockedReason) {
 					'feature_disabled' => $this->l10n->t('Month finalization is disabled by the administrator.'),
-					'future_month' => $this->l10n->t('You can only finalize past or the current calendar month.'),
+					'future_month' => $this->l10n->t('You cannot finalize a future calendar month.'),
+					'month_not_ended' => $this->l10n->t('You can finalize only after that calendar month has ended.'),
+					'no_time_entries' => $this->l10n->t('There are no time entries in this calendar month.'),
 					'pending_workflow' => $this->l10n->t('Resolve pending time entry or absence approvals in this month before finalizing.'),
 					default => null,
 				};
@@ -164,7 +199,9 @@ class MonthClosureController extends Controller
 				'feature_disabled' => [Http::STATUS_FORBIDDEN, $this->l10n->t('Month closure is disabled by the administrator.')],
 				'forbidden' => [Http::STATUS_FORBIDDEN, $this->l10n->t('Access denied')],
 				'already_finalized' => [Http::STATUS_CONFLICT, $this->l10n->t('This month is already finalized.')],
-				'future_month' => [Http::STATUS_BAD_REQUEST, $this->l10n->t('You can only finalize past or the current calendar month.')],
+				'future_month' => [Http::STATUS_BAD_REQUEST, $this->l10n->t('You cannot finalize a future calendar month.')],
+				'month_not_ended' => [Http::STATUS_BAD_REQUEST, $this->l10n->t('You can finalize only after that calendar month has ended.')],
+				'no_time_entries' => [Http::STATUS_BAD_REQUEST, $this->l10n->t('There are no time entries in this calendar month.')],
 				'pending_correction' => [Http::STATUS_CONFLICT, $this->l10n->t('Resolve pending time entry or absence approvals in this month before finalizing.')],
 			];
 			if (isset($map[$code])) {
@@ -187,7 +224,7 @@ class MonthClosureController extends Controller
 			}
 			$u = $this->userSession->getUser();
 			$name = $u ? $u->getDisplayName() : $userId;
-			$pdf = $this->monthClosureService->buildPdfContent($userId, $year, $month, $name);
+			$pdf = $this->monthClosureService->buildPdfContent($userId, $year, $month, $name, $this->l10n);
 			$fn = sprintf('arbeitszeitcheck-month-%04d-%02d.pdf', $year, $month);
 			return new DataDownloadResponse($pdf, $fn, 'application/pdf');
 		} catch (\RuntimeException $e) {

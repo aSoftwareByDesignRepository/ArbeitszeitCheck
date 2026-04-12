@@ -475,9 +475,11 @@ php occ arbeitszeitcheck:vacation-rollover --dry-run
 | `MonthClosureService` | Builds canonical payload (`buildCanonicalPayload`), finalizes/reopens inside DB transactions, audit logging, PDF text |
 | `MonthClosureCanonical` | Stable JSON encoding (`encode`) and `hashChain` SHA-256 |
 | `MonthClosureGuard` | Calls `MonthClosureService::assertDateRangeMutable` for time entries, absences, and “clock” days |
-| `MonthClosureController` | JSON API under `/api/month-closure/*` (feature, status, finalize, pdf, reopen) |
+| `MonthClosureController` | JSON API under `/api/month-closure/*` (feature, periods, status, finalize, pdf, reopen) — `GET periods` lists `{ year, month }` for ended months that have at least one time entry (employee UI dropdown). `finalize` and `status` enforce the same rules server-side (including at least one time entry in that month); auto-finalize skips months with no entries. |
 
-**Admin UI:** Administrators can **reopen** a finalized month from the app **admin settings** page (user ID, year, month, mandatory reason), in addition to the `reopen` API.
+**Admin UI:** Administrators can **reopen** a finalized month from the app **admin settings** page: **search and select the employee** (Nextcloud account; uses `GET /api/admin/users` for suggestions), then year, month, and mandatory reason. The action runs immediately via **“Reopen month”** and is **not** part of **Save all settings**. The `reopen` API still expects `userId` in the JSON body.
+
+**How to verify (manual):** Enable **revision-safe month finalization** and (optionally) set **grace days after month end**; save. As a normal user on **Time entries**, finalize a **past calendar month that has already ended** (not the current month) when no approvals are pending in that month. Confirm **status** / **PDF** on the same page and in `GET /api/month-closure/status`. As admin, **reopen** that month from settings, then confirm the employee can edit again; finalize a second time and check **`version`** increments and **`at_month_closure_revision`** gains a new row. **Automated:** `tests/Unit/Service/MonthClosureCanonicalTest.php` exercises canonical JSON and the hash chain only (not full finalize/reopen flows).
 
 **Integration points:** `TimeEntryController`, `TimeTrackingService`, `ManagerController` (corrections), `AbsenceController`, `ReportController` (monthly report uses `getFinalizedMonthlyReportForUser` when the month is finalized and the request matches a full calendar month for one user).
 
@@ -486,6 +488,8 @@ php occ arbeitszeitcheck:vacation-rollover --dry-run
 **Not in scope:** Qualified electronic signature (QES). Integrity is enforced for **application-level** use; direct database edits bypass the app (organizational controls apply).
 
 **Tests:** `tests/Unit/Service/MonthClosureCanonicalTest.php` covers canonical JSON and hash behavior.
+
+**PDF output:** The downloadable month-closure PDF is a human-readable summary for archiving (tables, totals, hash metadata). The **full canonical JSON is not embedded** in the PDF; verification always uses the stored server-side payload and SHA-256 hash. Text uses standard PDF fonts with Windows-1252–compatible encoding; the document `/Lang` follows the user locale. This is not a full PDF/UA tagged document; users who rely primarily on screen readers should use data exports or APIs for machine-oriented verification.
 
 ---
 

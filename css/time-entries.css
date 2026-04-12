@@ -301,6 +301,117 @@
     grid-template-columns: repeat(3, 1fr);
 }
 
+/* Full-width date row above aligned time columns */
+.time-entry-form__date {
+    width: 100%;
+    margin-bottom: var(--space-6, 1.5rem);
+}
+
+.time-entry-form__date .form-group {
+    max-width: 28rem;
+}
+
+/* Aligned start / end / action columns for work + breaks (WCAG: consistent layout, min 44px touch targets on actions) */
+.time-pair-matrix {
+    margin-bottom: var(--space-2, 0.5rem);
+}
+
+.time-pair-matrix__intro {
+    margin: 0 0 var(--space-2, 0.5rem);
+    font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+    font-weight: var(--arbeitszeitcheck-font-weight-semibold, 600);
+    color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast));
+    letter-spacing: 0.02em;
+}
+
+.time-pair-matrix__intro--breaks {
+    margin-top: var(--space-4, 1rem);
+}
+
+.time-pair-matrix__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(3rem, auto);
+    gap: var(--space-4, 1rem) var(--space-4, 1rem);
+    align-items: start;
+}
+
+.time-pair-matrix__grid--header {
+    margin-bottom: var(--space-2, 0.5rem);
+    padding-bottom: var(--space-2, 0.5rem);
+    border-bottom: 1px solid var(--arbeitszeitcheck-color-border);
+    align-items: end;
+}
+
+.time-pair-matrix__colhead {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--arbeitszeitcheck-color-text-secondary);
+}
+
+.time-pair-matrix__colhead--action {
+    text-align: end;
+    min-width: 5.5rem;
+}
+
+.time-pair-matrix__grid--row {
+    margin-bottom: 0;
+}
+
+.time-pair-matrix__grid--row + .time-pair-matrix__grid--row {
+    margin-top: var(--space-5, 1.25rem);
+    padding-top: var(--space-5, 1.25rem);
+    border-top: 1px solid var(--arbeitszeitcheck-color-border-secondary, var(--arbeitszeitcheck-color-border));
+}
+
+.time-pair-matrix--breaks .break-entry + .break-entry {
+    margin-top: var(--space-5, 1.25rem);
+    padding-top: var(--space-5, 1.25rem);
+    border-top: 1px solid var(--arbeitszeitcheck-color-border-secondary, var(--arbeitszeitcheck-color-border));
+}
+
+.time-pair-matrix--breaks .break-entry .time-pair-matrix__grid--row {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+.time-pair-matrix__action {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    align-self: stretch;
+    padding-bottom: 0.125rem;
+    min-height: 2.75rem;
+    box-sizing: border-box;
+}
+
+.time-pair-matrix__action--spacer {
+    min-height: 0;
+    padding: 0;
+}
+
+.time-pair-matrix__action .btn-remove-break {
+    min-height: 44px;
+    min-width: 44px;
+    padding-left: var(--space-3, 0.75rem);
+    padding-right: var(--space-3, 0.75rem);
+}
+
+.time-pair-matrix__grid--row--with-note .auto-break-note {
+    grid-column: 1 / -1;
+    margin-top: var(--space-2, 0.5rem);
+    margin-bottom: 0;
+}
+
+.time-pair-matrix .form-group .form-label {
+    min-height: 1.5rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
 .form-label-icon {
     display: inline-block;
     margin-right: var(--space-1, 0.25rem);
@@ -363,6 +474,37 @@
 
     .form-actions .btn {
         width: 100%;
+    }
+}
+
+/* Time pair matrix: narrow screens — stack fields; hide redundant column headers (labels remain on each control) */
+@media (max-width: 640px) {
+    .time-pair-matrix__grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-4, 1rem);
+    }
+
+    .time-pair-matrix__grid--header {
+        display: none;
+    }
+
+    .time-pair-matrix__action {
+        justify-content: flex-start;
+        align-items: center;
+        min-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .time-pair-matrix__action .btn-remove-break {
+        width: 100%;
+        max-width: 100%;
+        justify-content: center;
+    }
+
+    .time-pair-matrix__grid--row + .time-pair-matrix__grid--row {
+        margin-top: var(--space-4, 1rem);
+        padding-top: var(--space-4, 1rem);
     }
 }
 
@@ -505,6 +647,12 @@
     border-radius: var(--radius-lg, 8px);
 }
 
+.time-pair-matrix--breaks .break-entry {
+    margin-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
 .break-entry:last-child,
 .break-entry:last-of-type {
     margin-bottom: 0;
@@ -606,31 +754,48 @@
 
 /* Revision-safe month closure (time entries header) — clear hierarchy, WCAG 2.1 AA touch targets */
 .month-closure-section {
-    margin-top: var(--space-5, 1.25rem);
-    padding-top: var(--space-5, 1.25rem);
+    margin-top: var(--space-6, 1.5rem);
+    padding-top: var(--space-6, 1.5rem);
     border-top: 1px solid var(--arbeitszeitcheck-color-border);
 }
 
 .month-closure-card.card--elevated {
     margin: 0;
-    padding: var(--space-5, 1.25rem) var(--space-6, 1.5rem);
+    padding: var(--space-6, 1.5rem);
+    border-radius: var(--border-radius-large, 10px);
+    background: var(--color-main-background, var(--color-background-plain, #fff));
+    border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+    box-shadow: var(--arbeitszeitcheck-shadow-subtle, 0 1px 4px rgba(0, 0, 0, 0.06));
 }
 
 .month-closure-section__title {
-    margin: 0 0 var(--space-2, 0.5rem);
+    margin: 0 0 var(--space-3, 0.75rem);
     font-size: var(--arbeitszeitcheck-font-size-lg, 1.125rem);
     font-weight: var(--arbeitszeitcheck-font-weight-semibold, 600);
-    line-height: 1.3;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
 }
 
 .month-closure-lead {
-    margin: 0 0 var(--space-4, 1rem);
-    max-width: 42rem;
-    line-height: 1.5;
+    margin: 0 0 var(--space-5, 1.25rem);
+    max-width: 44rem;
+    line-height: 1.55;
+    color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast));
+}
+
+.month-closure-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5, 1.25rem);
+}
+
+.month-closure-block--outcome {
+    padding-top: var(--space-4, 1rem);
+    border-top: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
 }
 
 .month-closure-field {
-    margin-top: var(--space-2, 0.5rem);
+    margin-top: 0;
 }
 
 .month-closure-field__label {
@@ -640,21 +805,46 @@
     color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast));
 }
 
+.month-closure-field__hint {
+    margin: 0 0 var(--space-3, 0.75rem);
+    max-width: 42rem;
+    font-size: 0.875rem;
+    line-height: 1.45;
+}
+
 .month-closure-toolbar,
 .month-closure-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-3, 0.75rem);
-    margin-top: var(--space-2, 0.5rem);
+    margin-top: 0;
+}
+
+.month-closure-period-select {
+    flex: 1 1 16rem;
+    min-width: min(100%, 12rem);
+    max-width: 100%;
+}
+
+.month-closure-section .month-closure-period-select:focus-visible,
+.month-closure-section .btn:focus-visible,
+.month-closure-section .month-closure-pdf-link:focus-visible {
+    outline: 2px solid var(--color-primary-element, var(--color-primary));
+    outline-offset: 2px;
 }
 
 .month-closure-actions {
-    margin-top: var(--space-4, 1rem);
+    margin-top: 0;
 }
 
 .month-closure-toolbar .form-input--inline {
     min-height: 44px;
+}
+
+.month-closure-period-select[aria-busy="true"] {
+    opacity: 0.85;
+    cursor: wait;
 }
 
 .month-closure-badge {
@@ -720,13 +910,20 @@
         padding: var(--space-4, 1rem);
     }
 
+    /* Keep period + status on one row when possible; allow wrap only if needed */
     .month-closure-toolbar {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .month-closure-period-select {
+        flex: 1 1 auto;
+        min-width: 0;
     }
 
     .month-closure-toolbar .month-closure-badge {
         justify-content: flex-start;
+        flex-shrink: 0;
     }
 }
 

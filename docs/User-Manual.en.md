@@ -56,7 +56,7 @@ Exact permissions depend on your Nextcloud groups and app configuration.
 
 If your administrator enabled **revision-safe month finalization**, the **Time entries** page can show a **Monthly record** section.
 
-- Choose **year** and **month**, then review your times until the month is complete (including resolving **pending correction** requests—finalization is blocked while any correction is still pending).
+- Choose the **calendar month** (month and year in one list, shown with a readable month name). The list includes **only months that have ended and contain at least one time entry** (so empty months are not shown). Review your times until that month is complete (including resolving **pending correction** requests—finalization is blocked while any correction is still pending).
 - **Finalize month** stores a **fixed snapshot** of that calendar month (working time and related report totals as implemented by the app), a **cryptographic hash**, and allows downloading a **PDF** for your records.
 - After finalization, you **cannot change** time entries or absences that fall in that month through the normal app—your organization’s **administrator** can **reopen** a month only with a **documented reason** (audited).
 

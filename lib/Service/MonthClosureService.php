@@ -24,6 +24,7 @@ use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCP\IDBConnection;
 use OCP\IConfig;
+use OCP\IL10N;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
 
@@ -113,6 +114,59 @@ class MonthClosureService
 		$curY = (int)$today->format('Y');
 		$curM = (int)$today->format('n');
 		return ($year > $curY) || ($year === $curY && $month > $curM);
+	}
+
+	/**
+	 * True once the calendar month is over (local server date): first day of the next month has begun.
+	 */
+	public function isCalendarMonthFullyEnded(int $year, int $month): bool
+	{
+		$firstOfNext = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+		$firstOfNext = $firstOfNext->modify('first day of next month')->setTime(0, 0, 0);
+		$today = new \DateTimeImmutable('today');
+		return $today >= $firstOfNext;
+	}
+
+	public function hasTimeEntryInCalendarMonth(string $userId, int $year, int $month): bool
+	{
+		$start = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
+		$start->setTime(0, 0, 0);
+		$end = clone $start;
+		$end->modify('last day of this month');
+		$end->setTime(23, 59, 59);
+		$entries = $this->timeEntryMapper->findByUserAndDateRange($userId, $start, $end);
+
+		return $entries !== [];
+	}
+
+	/**
+	 * Ended calendar months that contain at least one time entry (newest first). Used by the month-closure UI.
+	 *
+	 * @return list<array{year: int, month: int}>
+	 */
+	public function getEligiblePeriodsWithTimeEntriesForUser(string $userId): array
+	{
+		$ymStrings = $this->timeEntryMapper->findDistinctYearMonthStringsForUser($userId);
+		$out = [];
+		foreach ($ymStrings as $ym) {
+			if (!preg_match('/^(\d{4})-(\d{2})$/', $ym, $m)) {
+				continue;
+			}
+			$y = (int)$m[1];
+			$mo = (int)$m[2];
+			if ($this->isCalendarMonthStrictlyAfterCurrent($y, $mo)) {
+				continue;
+			}
+			if (!$this->isCalendarMonthFullyEnded($y, $mo)) {
+				continue;
+			}
+			if (!$this->hasTimeEntryInCalendarMonth($userId, $y, $mo)) {
+				continue;
+			}
+			$out[] = ['year' => $y, 'month' => $mo];
+		}
+
+		return $out;
 	}
 
 	/**
@@ -394,6 +448,12 @@ class MonthClosureService
 		if ($this->isCalendarMonthStrictlyAfterCurrent($year, $month)) {
 			throw new \RuntimeException('future_month');
 		}
+		if (!$this->isCalendarMonthFullyEnded($year, $month)) {
+			throw new \RuntimeException('month_not_ended');
+		}
+		if (!$this->hasTimeEntryInCalendarMonth($targetUserId, $year, $month)) {
+			throw new \RuntimeException('no_time_entries');
+		}
 
 		if ($this->monthBlocksFinalization($targetUserId, $year, $month)) {
 			throw new \RuntimeException('pending_correction');
@@ -530,33 +590,25 @@ class MonthClosureService
 		}
 	}
 
-	public function buildPdfContent(string $userId, int $year, int $month, string $displayName): string
+	public function buildPdfContent(string $userId, int $year, int $month, string $displayName, IL10N $l): string
 	{
 		$snap = $this->getSnapshotReportArray($userId, $year, $month);
 		$row = $this->closureMapper->findByUserAndMonthOptional($userId, $year, $month);
 		if ($snap === null || $row === null || $row->getStatus() !== MonthClosure::STATUS_FINALIZED) {
 			throw new \RuntimeException('not_finalized');
 		}
-		$title = 'ArbeitszeitCheck — Monatsnachweis ' . sprintf('%04d-%02d', $year, $month);
-		$lines = [
-			'Name / Kennung: ' . $displayName . ' (' . $userId . ')',
-			'Zeitraum: ' . ($snap['period']['start'] ?? '') . ' — ' . ($snap['period']['end'] ?? ''),
-			'Snapshot-Hash (SHA-256): ' . ($row->getSnapshotHash() ?? ''),
-			'Vorheriger Hash: ' . ($row->getPrevSnapshotHash() ?? '(keiner)'),
-			'Version: ' . $row->getVersion(),
-			'',
-			'Summe (Report): Std. gesamt: ' . ($this->fmtNum($snap['report']['total_hours'] ?? null)),
-			'Ueberstunden: ' . $this->fmtNum($snap['report']['total_overtime'] ?? null),
-			'Verstoesse: ' . (string)($snap['report']['violations_count'] ?? 0),
-		];
-		return MinimalPdfBuilder::build($title, $lines);
-	}
 
-	private function fmtNum($v): string
-	{
-		if ($v === null) {
-			return '-';
+		$finalizedByDisplay = '';
+		$fb = $row->getFinalizedBy();
+		if ($fb !== null && $fb !== '') {
+			if ($fb === self::AUTO_FINALIZE_ACTOR_ID) {
+				$finalizedByDisplay = $l->t('Finalized automatically');
+			} else {
+				$u = $this->userManager->get($fb);
+				$finalizedByDisplay = $u ? ($u->getDisplayName() . ' (' . $fb . ')') : $fb;
+			}
 		}
-		return is_float($v) || is_int($v) ? (string)round((float)$v, 2) : (string)$v;
+
+		return MonthClosurePdfDocumentBuilder::build($snap, $row, $displayName, $userId, $l, $finalizedByDisplay);
 	}
 }

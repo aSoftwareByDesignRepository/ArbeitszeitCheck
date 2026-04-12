@@ -13,11 +13,13 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
 use OCA\ArbeitszeitCheck\Controller\TimeEntryController;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
+use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
@@ -82,6 +84,12 @@ class TimeEntryControllerTest extends TestCase
 	/** @var MonthClosureGuard|\PHPUnit\Framework\MockObject\MockObject */
 	private $monthClosureGuard;
 
+	/** @var AbsenceMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $absenceMapper;
+
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -110,6 +118,11 @@ class TimeEntryControllerTest extends TestCase
 		$this->teamResolver->method('getColleagueIds')->willReturn([]);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->monthClosureGuard = $this->createMock(MonthClosureGuard::class);
+		$this->absenceMapper = $this->createMock(AbsenceMapper::class);
+		$this->absenceMapper->method('findSubstitutePendingForUser')->willReturn([]);
+		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->permissionService->method('canAccessManagerDashboard')->willReturn(false);
+		$this->permissionService->method('isAdmin')->willReturn(false);
 
 		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
 
@@ -128,7 +141,9 @@ class TimeEntryControllerTest extends TestCase
 			$this->timeTrackingService,
 			$this->teamResolver,
 			$this->notificationService,
-			$this->monthClosureGuard
+			$this->monthClosureGuard,
+			$this->absenceMapper,
+			$this->permissionService
 		);
 	}
 

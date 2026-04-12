@@ -6,8 +6,23 @@
  * @license AGPL-3.0-or-later
  */
 
-(function(window, OC) {
+(function(window) {
     'use strict';
+
+    function azcGenerateUrl(path) {
+        if (typeof window !== 'undefined' && window.OC && typeof window.OC.generateUrl === 'function') {
+            return window.OC.generateUrl(path);
+        }
+        return path.charAt(0) === '/' ? path : '/' + path;
+    }
+
+    function azcRequestToken() {
+        if (typeof window !== 'undefined' && window.OC && window.OC.requestToken) {
+            return window.OC.requestToken;
+        }
+        var head = document.querySelector('head');
+        return head ? (head.getAttribute('data-requesttoken') || '') : '';
+    }
 
     /**
      * Settings page controller
@@ -32,11 +47,11 @@
          * Load current settings from API
          */
         loadCurrentSettings: function() {
-            return fetch(OC.generateUrl('/apps/arbeitszeitcheck/api/settings-legacy'), {
+            return fetch(azcGenerateUrl('/apps/arbeitszeitcheck/api/settings-legacy'), {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'requesttoken': (typeof OC !== 'undefined' && OC.requestToken) || (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || ''
+                    'requesttoken': azcRequestToken()
                 },
                 credentials: 'same-origin'
             })
@@ -136,14 +151,14 @@
 
             let apiUrl = window.ArbeitszeitCheck?.apiUrl?.updateSettings;
             if (!apiUrl) {
-                apiUrl = OC.generateUrl('/apps/arbeitszeitcheck/settings');
+                apiUrl = azcGenerateUrl('/apps/arbeitszeitcheck/settings');
             }
 
             fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'requesttoken': (typeof OC !== 'undefined' && OC.requestToken) || (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || ''
+                    'requesttoken': azcRequestToken()
                 },
                 body: JSON.stringify(data)
             })
@@ -223,4 +238,4 @@
     // Export for global access if needed
     window.ArbeitszeitCheckSettings = SettingsPage;
 
-})(window, OC);
+})(window);

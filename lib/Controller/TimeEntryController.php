@@ -14,9 +14,11 @@ namespace OCA\ArbeitszeitCheck\Controller;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
+use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
@@ -54,6 +56,8 @@ class TimeEntryController extends Controller
 	private TeamResolverService $teamResolver;
 	private NotificationService $notificationService;
 	private MonthClosureGuard $monthClosureGuard;
+	private AbsenceMapper $absenceMapper;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		string $appName,
@@ -70,7 +74,9 @@ class TimeEntryController extends Controller
 		TimeTrackingService $timeTrackingService,
 		TeamResolverService $teamResolver,
 		NotificationService $notificationService,
-		MonthClosureGuard $monthClosureGuard
+		MonthClosureGuard $monthClosureGuard,
+		AbsenceMapper $absenceMapper,
+		PermissionService $permissionService
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -86,6 +92,8 @@ class TimeEntryController extends Controller
 		$this->teamResolver = $teamResolver;
 		$this->notificationService = $notificationService;
 		$this->monthClosureGuard = $monthClosureGuard;
+		$this->absenceMapper = $absenceMapper;
+		$this->permissionService = $permissionService;
 	}
 
 	private function jsonMonthFinalizedConflict(): JSONResponse
@@ -119,6 +127,74 @@ class TimeEntryController extends Controller
 			throw new \Exception('User not authenticated');
 		}
 		return $user->getUID();
+	}
+
+	/**
+	 * Navigation flags for time-entries template (must match PageController::getNavigationFlags).
+	 *
+	 * @return array{showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool}
+	 */
+	private function getNavigationFlags(string $userId): array
+	{
+		$showSubstitutionLink = false;
+		$showManagerLink = false;
+		$showReportsLink = false;
+		$showAdminNav = false;
+
+		try {
+			$pending = $this->absenceMapper->findSubstitutePendingForUser($userId, 1, 0);
+			$showSubstitutionLink = \is_array($pending) && \count($pending) > 0;
+		} catch (\Throwable $e) {
+			$showSubstitutionLink = false;
+		}
+
+		try {
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
+			$isAdmin = $this->permissionService->isAdmin($userId);
+
+			$showManagerLink = $canAccessManagerDashboard;
+			$showReportsLink = $canAccessManagerDashboard || $isAdmin;
+			$showAdminNav = $isAdmin;
+		} catch (\Throwable $e) {
+			$showManagerLink = false;
+			$showReportsLink = false;
+			$showAdminNav = false;
+		}
+
+		return [
+			'showSubstitutionLink' => $showSubstitutionLink,
+			'showManagerLink' => $showManagerLink,
+			'showReportsLink' => $showReportsLink,
+			'showAdminNav' => $showAdminNav,
+		];
+	}
+
+	/**
+	 * Shared template parameters for time-entries (month closure + navigation).
+	 *
+	 * @return array{monthClosureEnabled: bool, showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool}
+	 */
+	private function getTimeEntriesSharedTemplateParams(string $userId): array
+	{
+		return [
+			'monthClosureEnabled' => $this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
+		] + $this->getNavigationFlags($userId);
+	}
+
+	/**
+	 * Defaults when user context is unavailable (error pages).
+	 *
+	 * @return array{monthClosureEnabled: bool, showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool}
+	 */
+	private function getTimeEntriesSharedTemplateParamsFallback(): array
+	{
+		return [
+			'monthClosureEnabled' => false,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => false,
+			'showReportsLink' => false,
+			'showAdminNav' => false,
+		];
 	}
 
 	/**
@@ -311,6 +387,8 @@ class TimeEntryController extends Controller
 	{
 		\OCP\Util::addTranslations('arbeitszeitcheck');
 
+		$userId = $this->getUserId();
+
 		// Get compliance configuration for frontend validation
 		$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
 		$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
@@ -327,7 +405,7 @@ class TimeEntryController extends Controller
 				'maxDailyHours' => $maxDailyHours,
 				'complianceStrictMode' => $complianceStrictMode,
 				'l' => $this->l10n,
-			]
+			] + $this->getTimeEntriesSharedTemplateParams($userId)
 		);
 		return $this->configureCSP($response);
 	}
@@ -366,7 +444,7 @@ class TimeEntryController extends Controller
 						'urlGenerator' => $this->urlGenerator,
 						'error' => $this->l10n->t('Access denied'),
 						'l' => $this->l10n,
-					]
+					] + $this->getTimeEntriesSharedTemplateParams($userId)
 				);
 				return $this->configureCSP($response);
 			}
@@ -406,7 +484,7 @@ class TimeEntryController extends Controller
 						'urlGenerator' => $this->urlGenerator,
 						'error' => $errorMessage,
 						'l' => $this->l10n,
-					]
+					] + $this->getTimeEntriesSharedTemplateParams($userId)
 				);
 				return $this->configureCSP($response);
 			}
@@ -427,11 +505,16 @@ class TimeEntryController extends Controller
 					'maxDailyHours' => $maxDailyHours,
 					'complianceStrictMode' => $complianceStrictMode,
 					'l' => $this->l10n,
-				]
+				] + $this->getTimeEntriesSharedTemplateParams($userId)
 			);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in edit method: ' . $e->getMessage(), ['exception' => $e]);
+			$shared = $this->getTimeEntriesSharedTemplateParamsFallback();
+			try {
+				$shared = $this->getTimeEntriesSharedTemplateParams($this->getUserId());
+			} catch (\Throwable $ignore) {
+			}
 			$response = new TemplateResponse(
 				$this->appName,
 				'time-entries',
@@ -439,7 +522,7 @@ class TimeEntryController extends Controller
 					'urlGenerator' => $this->urlGenerator,
 					'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 					'l' => $this->l10n,
-				]
+				] + $shared
 			);
 			return $this->configureCSP($response);
 		}

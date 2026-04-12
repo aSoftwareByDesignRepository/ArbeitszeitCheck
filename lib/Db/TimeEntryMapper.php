@@ -96,6 +96,67 @@ class TimeEntryMapper extends QBMapper
 	}
 
 	/**
+	 * Whether the user has at least one time entry whose start_time falls in the given calendar month.
+	 */
+	public function userHasTimeEntryInCalendarMonth(string $userId, int $year, int $month): bool
+	{
+		$start = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
+		$start->setTime(0, 0, 0);
+		$endExclusive = clone $start;
+		$endExclusive->modify('first day of next month');
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->gte('start_time', $qb->createNamedParameter($start->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endExclusive->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->setMaxResults(1);
+
+		return $qb->executeQuery()->fetchOne() !== false;
+	}
+
+	/**
+	 * Distinct calendar months (from start_time) that have at least one time entry for this user.
+	 * Returns YYYY-MM strings, newest first.
+	 *
+	 * @return list<string>
+	 */
+	public function findDistinctYearMonthStringsForUser(string $userId): array
+	{
+		$expr = $this->yearMonthFromStartTimeSql();
+		$qb = $this->db->getQueryBuilder();
+		$fn = $qb->createFunction($expr);
+		$qb->selectAlias($fn, 'ym')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->groupBy($fn)
+			->orderBy($fn, 'DESC');
+
+		$result = $qb->executeQuery();
+		$rows = $result->fetchAll(\PDO::FETCH_COLUMN);
+		if (!is_array($rows)) {
+			return [];
+		}
+		$out = [];
+		foreach ($rows as $row) {
+			if ($row !== null && $row !== false && $row !== '') {
+				$out[] = (string)$row;
+			}
+		}
+		return $out;
+	}
+
+	private function yearMonthFromStartTimeSql(): string
+	{
+		return match ($this->db->getDatabaseProvider()) {
+			IDBConnection::PLATFORM_POSTGRES => "TO_CHAR(start_time, 'YYYY-MM')",
+			IDBConnection::PLATFORM_ORACLE => "TO_CHAR(start_time, 'YYYY-MM')",
+			default => 'SUBSTR(start_time, 1, 7)',
+		};
+	}
+
+	/**
 	 * Find active time entry for a user (currently clocked in)
 	 *
 	 * @param string $userId
