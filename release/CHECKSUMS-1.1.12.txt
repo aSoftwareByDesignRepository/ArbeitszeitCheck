@@ -1,0 +1,4 @@
+# Checksums for arbeitszeitcheck-1.1.12.tar.gz
+
+3e7dade0f9a41fa8df0bd1c8b50443851ad250ad4be69829cc24098010929a67  arbeitszeitcheck-1.1.12.tar.gz
+55a6816f5faf043547edb0658f5226db4b2ebdeca911e733d5b93fb8d37e1f450a4b124e42367a168c435cb0fe905b9b3ef167f3b4618bb752494893b79704ad  arbeitszeitcheck-1.1.12.tar.gz
