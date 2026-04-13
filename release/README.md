@@ -29,6 +29,8 @@ make release-signed
 
 Output archive: `build/release/arbeitszeitcheck-X.Y.Z.tar.gz`.
 
+If `make release-signed` fails because host `occ` cannot run, use the Docker signing fallback in `APPSTORE-RELEASE.md` and continue with `release/arbeitszeitcheck-X.Y.Z.tar.gz`.
+
 Deploy from this signed tarball only. Do not rsync/copy a development checkout into production.
 `appinfo/signature.json` is generated during signing and is not source-controlled.
 

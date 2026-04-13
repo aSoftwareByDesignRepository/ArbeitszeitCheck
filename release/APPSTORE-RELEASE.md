@@ -33,7 +33,49 @@ make release-signed
 
 This produces `build/release/arbeitszeitcheck-X.Y.Z.tar.gz`, verifies the archive does not contain development paths (for example `.git`, `node_modules`, `tests`, `build`, `scripts`), signs the extracted archive payload via `occ integrity:sign-app`, validates that `appinfo/signature.json` does not reference forbidden development paths, and repacks the signed tarball.
 
-Manual fallback (advanced, use only if you cannot run `make release-signed`):
+If `make release-signed` fails on the host because `occ` cannot run (for example missing PDO driver), use the Docker signing fallback below.
+
+### Docker signing fallback (recommended when using the local Nextcloud container)
+
+Use this after creating `release/arbeitszeitcheck-X.Y.Z.tar.gz`:
+
+```bash
+VERSION=X.Y.Z
+APPID=arbeitszeitcheck
+CONTAINER=nextcloud-app
+
+# 1) Copy key material into container tmp
+docker cp "$HOME/.nextcloud/certificates/${APPID}.key" "${CONTAINER}:/tmp/${APPID}.key"
+docker cp "$HOME/.nextcloud/certificates/${APPID}.crt" "${CONTAINER}:/tmp/${APPID}.crt"
+docker exec "${CONTAINER}" sh -lc "chown www-data:www-data /tmp/${APPID}.key /tmp/${APPID}.crt && chmod 600 /tmp/${APPID}.key && chmod 644 /tmp/${APPID}.crt"
+
+# 2) Sign extracted archive payload with occ (as www-data), repack to /tmp
+docker exec -u www-data "${CONTAINER}" sh -lc "
+  set -e
+  ARCHIVE=/var/www/html/custom_apps/${APPID}/release/${APPID}-${VERSION}.tar.gz
+  STAGING=\$(mktemp -d)
+  tar -xzf \"\$ARCHIVE\" -C \"\$STAGING\"
+  php /var/www/html/occ integrity:sign-app \
+    --privateKey=/tmp/${APPID}.key \
+    --certificate=/tmp/${APPID}.crt \
+    --path=\"\$STAGING/${APPID}\"
+  tar -czf /tmp/${APPID}-signed-${VERSION}.tar.gz -C \"\$STAGING\" \"${APPID}\"
+  rm -rf \"\$STAGING\"
+"
+
+# 3) Copy signed archive back and clean temporary secrets
+docker cp "${CONTAINER}:/tmp/${APPID}-signed-${VERSION}.tar.gz" "apps/${APPID}/release/${APPID}-${VERSION}.tar.gz"
+docker exec "${CONTAINER}" sh -lc "rm -f /tmp/${APPID}.key /tmp/${APPID}.crt /tmp/${APPID}-signed-${VERSION}.tar.gz"
+```
+
+Validate the result before continuing:
+
+```bash
+cd apps/arbeitszeitcheck/release
+tar -tzf "arbeitszeitcheck-${VERSION}.tar.gz" | grep "appinfo/signature.json"
+```
+
+Manual fallback (advanced, use only if you cannot run `make release-signed` or Docker signing):
 
 From the repo root that contains `apps/arbeitszeitcheck` (here: `nextcloud-development/apps/`; local folder name may differ):
 
@@ -78,7 +120,7 @@ By default, it now requires `--occ` so integrity checks cannot be silently skipp
 ## 3. SHA-256 / SHA-512 (app store + checksum file)
 
 ```bash
-cd apps/arbeitszeitcheck/build/release
+cd apps/arbeitszeitcheck/release
 sha256sum "arbeitszeitcheck-${VERSION}.tar.gz"
 sha512sum "arbeitszeitcheck-${VERSION}.tar.gz"
 ```
@@ -178,6 +220,17 @@ Submit; fix any validation errors (wrong checksum/signature almost always means 
 
 ---
 
+## 8. Required chat handoff (every release)
+
+After release creation and before closing the task, always paste these two items in chat:
+
+1. **App Store signature** — the single-line base64 value from `SIGNATURE-X.Y.Z.txt` (or direct command output).
+2. **Direct GitHub tarball URL** — `https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck/releases/download/vX.Y.Z/arbeitszeitcheck-X.Y.Z.tar.gz`.
+
+This handoff is mandatory for every release so upload data can be copied without re-running commands.
+
+---
+
 
 ## What is committed vs ignored
 
@@ -196,9 +249,10 @@ Submit; fix any validation errors (wrong checksum/signature almost always means 
 
 - [ ] `info.xml` version = `X.Y.Z`
 - [ ] Changelog updated
-- [ ] Tarball built with excludes above
+- [ ] Tarball built (and signed) with `appinfo/signature.json` inside archive
 - [ ] SHA-256 + SHA-512 recorded; store gets **SHA-256**
 - [ ] OpenSSL base64 signature **from the same tarball file**
 - [ ] Nothing uploaded to git except docs/checksums (no `.tar.gz`, no keys)
 - [ ] **GitHub Release** on **`nextcloud-arbeitszeitcheck`**: tag `vX.Y.Z`, attach **`build/release/arbeitszeitcheck-X.Y.Z.tar.gz`**, `gh --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck` (**required**)
 - [ ] App Store upload uses **that same** tarball bytes
+- [ ] Chat handoff posted: App Store signature + direct GitHub tarball URL

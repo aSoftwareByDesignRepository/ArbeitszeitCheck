@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.1.13 - 2026-04-13
+
 ### Added
 
 - **Month closure grace period and auto-finalization**: Admin setting `month_closure_grace_days_after_eom` (0–90, default 0). After end-of-month, employees have that many calendar days to finalize manually; if the month is still open afterward, a daily background job finalizes it automatically (same snapshot as manual finalize). Pending time entry approvals and open absence workflow states block auto-finalization. Reopening remains admin-only.
