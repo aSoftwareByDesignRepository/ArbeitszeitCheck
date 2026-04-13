@@ -74,7 +74,11 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
 
 <!-- App layout wrapper: flex container for sidebar + content (desktop), stacked (mobile) -->
 <div id="arbeitszeitcheck-app" class="arbeitszeitcheck-app">
-    <a href="#app-content" class="skip-link"><?php p($l->t('Skip to main content')); ?></a>
+    <a href="#app-content" class="skip-link" aria-describedby="azc-skiplinks-help"><?php p($l->t('Skip to main content')); ?></a>
+    <a href="#app-navigation" class="skip-link" aria-describedby="azc-skiplinks-help"><?php p($l->t('Skip to app navigation')); ?></a>
+    <p id="azc-skiplinks-help" class="visually-hidden">
+        <?php p($l->t('Help: These skip links let you jump directly to the main content or to the app navigation.')); ?>
+    </p>
     <!-- Mobile hamburger menu button -->
     <button class="nav-mobile-toggle"
         id="nav-mobile-toggle"

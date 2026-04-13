@@ -338,6 +338,11 @@ class AbsenceController extends Controller
 				'success' => true,
 				'absence' => $absence->getSummary()
 			]);
+		} catch (MonthFinalizedException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.')
+			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
@@ -368,6 +373,10 @@ class AbsenceController extends Controller
 			$this->absenceService->shortenAbsence($id, $userId, $endDate);
 			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
 			return new RedirectResponse($url . '?shortened=1', Http::STATUS_SEE_OTHER);
+		} catch (MonthFinalizedException $e) {
+			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
+			$msg = $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.');
+			return new RedirectResponse($url . '?shorten_error=' . rawurlencode($msg), Http::STATUS_SEE_OTHER);
 		} catch (\Throwable $e) {
 			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
 			return new RedirectResponse($url . '?shorten_error=' . rawurlencode($this->getSafeErrorMessage($e)), Http::STATUS_SEE_OTHER);

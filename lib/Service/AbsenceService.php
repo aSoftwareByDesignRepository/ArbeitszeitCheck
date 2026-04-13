@@ -45,6 +45,7 @@ class AbsenceService
 	private HolidayService $holidayCalendarService;
 	private VacationYearBalanceMapper $vacationYearBalanceMapper;
 	private VacationAllocationService $vacationAllocationService;
+	private ?MonthClosureService $monthClosureService;
 
 	public function __construct(
 		AbsenceMapper $absenceMapper,
@@ -61,7 +62,8 @@ class AbsenceService
 		HolidayService $holidayCalendarService,
 		VacationYearBalanceMapper $vacationYearBalanceMapper,
 		VacationAllocationService $vacationAllocationService,
-		?AbsenceNotificationMailService $absenceNotificationMailService = null
+		?AbsenceNotificationMailService $absenceNotificationMailService = null,
+		?MonthClosureService $monthClosureService = null
 	) {
 		$this->absenceMapper = $absenceMapper;
 		$this->auditLogMapper = $auditLogMapper;
@@ -78,6 +80,7 @@ class AbsenceService
 		$this->vacationYearBalanceMapper = $vacationYearBalanceMapper;
 		$this->absenceNotificationMailService = $absenceNotificationMailService;
 		$this->vacationAllocationService = $vacationAllocationService;
+		$this->monthClosureService = $monthClosureService;
 	}
 
 	/**
@@ -473,6 +476,13 @@ class AbsenceService
 
 		$newEnd = $this->parseDate($newEndDate);
 		$newEnd->setTime(0, 0, 0);
+
+		if ($this->monthClosureService !== null) {
+			$this->monthClosureService->assertDateRangeMutable($userId, $startDate, $originalEndDate);
+			$newEndWithDayEnd = clone $newEnd;
+			$newEndWithDayEnd->setTime(23, 59, 59);
+			$this->monthClosureService->assertDateRangeMutable($userId, $startDate, $newEndWithDayEnd);
+		}
 
 		if ($newEnd < $startDate) {
 			throw new \Exception($this->l10n->t('The new end date cannot be before the start date.'));

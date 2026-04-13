@@ -78,6 +78,11 @@
                     if (breakReminders) {
                         breakReminders.checked = result.settings.break_reminders_enabled === '1' || result.settings.break_reminders_enabled === true;
                     }
+
+                    const missingClockInReminders = document.getElementById('missing-clock-in-reminders');
+                    if (missingClockInReminders) {
+                        missingClockInReminders.checked = result.settings.missing_clock_in_reminders_enabled === '1' || result.settings.missing_clock_in_reminders_enabled === true;
+                    }
                 }
             })
             .catch(error => {
@@ -131,7 +136,8 @@
             const _formData = new FormData(form);
             const data = {
                 notifications_enabled: form.querySelector('#notifications-enabled').checked,
-                break_reminders_enabled: form.querySelector('#break-reminders').checked
+                break_reminders_enabled: form.querySelector('#break-reminders').checked,
+                missing_clock_in_reminders_enabled: form.querySelector('#missing-clock-in-reminders').checked
             };
 
             this.submitSettings(data, 'notification-settings-form');

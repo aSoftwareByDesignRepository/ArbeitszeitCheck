@@ -14,6 +14,7 @@ namespace OCA\ArbeitszeitCheck\BackgroundJob;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\TimedJob;
 use OCP\IConfig;
@@ -34,6 +35,7 @@ class BreakReminderJob extends TimedJob
 	private IUserManager $userManager;
 	private IConfig $config;
 	private LoggerInterface $logger;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		ITimeFactory $timeFactory,
@@ -42,7 +44,8 @@ class BreakReminderJob extends TimedJob
 		NotificationService $notificationService,
 		IUserManager $userManager,
 		IConfig $config,
-		LoggerInterface $logger
+		LoggerInterface $logger,
+		PermissionService $permissionService
 	) {
 		parent::__construct($timeFactory);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -51,6 +54,7 @@ class BreakReminderJob extends TimedJob
 		$this->userManager = $userManager;
 		$this->config = $config;
 		$this->logger = $logger;
+		$this->permissionService = $permissionService;
 
 		// Run every 30 minutes
 		$this->setInterval(30 * 60);
@@ -81,8 +85,20 @@ class BreakReminderJob extends TimedJob
 				if (!$user->isEnabled()) {
 					return;
 				}
+				if (!$this->permissionService->isUserAllowedByAccessGroups($userId)) {
+					return;
+				}
 
 				// Check user settings - skip if break reminders disabled
+				$notificationsEnabled = $this->userSettingsMapper->getBooleanSetting(
+					$userId,
+					'notifications_enabled',
+					true
+				);
+				if (!$notificationsEnabled) {
+					return;
+				}
+
 				$breakRemindersEnabled = $this->userSettingsMapper->getBooleanSetting(
 					$userId,
 					'break_reminders_enabled',

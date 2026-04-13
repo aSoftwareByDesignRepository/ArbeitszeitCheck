@@ -28,6 +28,7 @@ use OCA\ArbeitszeitCheck\Db\Holiday;
 use OCA\ArbeitszeitCheck\Db\HolidayMapper;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -36,6 +37,7 @@ use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IAppConfig;
+use OCP\IGroupManager;
 use OCP\IRequest;
 use OCP\IUserManager;
 use OCP\IUser;
@@ -67,6 +69,8 @@ class AdminController extends Controller
 	private TeamMapper $teamMapper;
 	private TeamMemberMapper $teamMemberMapper;
 	private TeamManagerMapper $teamManagerMapper;
+	private IGroupManager $groupManager;
+	private IAppManager $appManager;
 	private IUserSession $userSession;
 	private IURLGenerator $urlGenerator;
 	private HolidayMapper $holidayMapper;
@@ -88,6 +92,8 @@ class AdminController extends Controller
 		TeamMapper $teamMapper,
 		TeamMemberMapper $teamMemberMapper,
 		TeamManagerMapper $teamManagerMapper,
+		IGroupManager $groupManager,
+		IAppManager $appManager,
 		IUserSession $userSession,
 		CSPService $cspService,
 		IL10N $l10n,
@@ -109,6 +115,8 @@ class AdminController extends Controller
 		$this->teamMapper = $teamMapper;
 		$this->teamMemberMapper = $teamMemberMapper;
 		$this->teamManagerMapper = $teamManagerMapper;
+		$this->groupManager = $groupManager;
+		$this->appManager = $appManager;
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
 		$this->urlGenerator = $urlGenerator;
@@ -410,6 +418,7 @@ class AdminController extends Controller
 			'realtimeComplianceCheck' => $this->appConfig->getAppValueString('realtime_compliance_check', '1') === '1',
 			'complianceStrictMode' => $this->appConfig->getAppValueString('compliance_strict_mode', '0') === '1',
 			'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+			'missingClockInRemindersEnabled' => $this->appConfig->getAppValueString('missing_clock_in_reminders_enabled', '1') === '1',
 			'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
 			'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
 			'monthClosureGraceDaysAfterEom' => max(0, min(90, (int)$this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM, '0'))),
@@ -431,10 +440,12 @@ class AdminController extends Controller
 			'vacationCarryoverMaxDays' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_CARRYOVER_MAX_DAYS, ''),
 			'vacationRolloverEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_ENABLED, '1') === '1',
 			'vacationRolloverIncludeUnusedAnnual' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL, '0') === '1',
+			'accessAllowedGroups' => $this->getAllowedAccessGroupsFromConfig(),
 		];
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
 			'settings' => $settings,
+			'availableGroups' => $this->getAvailableGroupsForAccessControl(),
 			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
 			'showSubstitutionLink' => false,
@@ -1206,6 +1217,7 @@ class AdminController extends Controller
 			$settings = [
 				'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
 				'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+				'missingClockInRemindersEnabled' => $this->appConfig->getAppValueString('missing_clock_in_reminders_enabled', '1') === '1',
 				'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
 				'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
 				'monthClosureGraceDaysAfterEom' => max(0, min(90, (int)$this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM, '0'))),
@@ -1227,11 +1239,13 @@ class AdminController extends Controller
 				'vacationCarryoverMaxDays' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_CARRYOVER_MAX_DAYS, ''),
 				'vacationRolloverEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_ENABLED, '1') === '1',
 				'vacationRolloverIncludeUnusedAnnual' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL, '0') === '1',
+				'accessAllowedGroups' => $this->getAllowedAccessGroupsFromConfig(),
 			];
 
 			return new JSONResponse([
 				'success' => true,
-				'settings' => $settings
+				'settings' => $settings,
+				'availableGroups' => $this->getAvailableGroupsForAccessControl(),
 			]);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
@@ -1258,6 +1272,7 @@ class AdminController extends Controller
 				'realtimeComplianceCheck' => 'realtime_compliance_check',
 				'complianceStrictMode' => 'compliance_strict_mode',
 				'enableViolationNotifications' => 'enable_violation_notifications',
+				'missingClockInRemindersEnabled' => 'missing_clock_in_reminders_enabled',
 				'exportMidnightSplitEnabled' => 'export_midnight_split_enabled',
 				'monthClosureEnabled' => Constants::CONFIG_MONTH_CLOSURE_ENABLED,
 				'monthClosureGraceDaysAfterEom' => Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM,
@@ -1291,6 +1306,7 @@ class AdminController extends Controller
 					// Validate and convert value based on type
 					if (in_array($paramKey, [
 						'autoComplianceCheck', 'realtimeComplianceCheck', 'complianceStrictMode', 'enableViolationNotifications',
+						'missingClockInRemindersEnabled',
 						'exportMidnightSplitEnabled', 'monthClosureEnabled',
 						'sendIcalApprovedAbsences', 'sendIcalToSubstitute', 'sendIcalToManagers',
 						'sendEmailSubstitutionRequest', 'sendEmailSubstituteApprovedToEmployee', 'sendEmailSubstituteApprovedToManager',
@@ -1366,6 +1382,16 @@ class AdminController extends Controller
 				}
 			}
 
+			if (array_key_exists('accessAllowedGroups', $params)) {
+				$groupsRaw = $params['accessAllowedGroups'];
+				$groups = is_array($groupsRaw) ? $groupsRaw : (is_string($groupsRaw) ? json_decode($groupsRaw, true) : []);
+				if (!is_array($groups)) {
+					$groups = [];
+				}
+				$this->applyAppRestrictionGroups($this->normalizeExistingGroupIds($groups));
+				$updatedSettings['accessAllowedGroups'] = $this->getAllowedAccessGroupsFromConfig();
+			}
+
 			if (empty($updatedSettings)) {
 				return new JSONResponse([
 					'success' => false,
@@ -1384,6 +1410,83 @@ class AdminController extends Controller
 				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function getAllowedAccessGroupsFromConfig(): array
+	{
+		return $this->normalizeExistingGroupIds($this->appManager->getAppRestriction('arbeitszeitcheck'));
+	}
+
+	/**
+	 * @param array<mixed> $groupIds
+	 * @return list<string>
+	 */
+	private function normalizeExistingGroupIds(array $groupIds): array
+	{
+		$unique = [];
+		foreach ($groupIds as $groupId) {
+			$candidate = trim((string)$groupId);
+			if ($candidate === '' || isset($unique[$candidate])) {
+				continue;
+			}
+			if ($this->groupManager->get($candidate) === null) {
+				continue;
+			}
+			$unique[$candidate] = true;
+		}
+
+		return array_keys($unique);
+	}
+
+	/**
+	 * @param list<string> $groupIds
+	 */
+	private function applyAppRestrictionGroups(array $groupIds): void
+	{
+		if ($groupIds === []) {
+			$this->appManager->enableApp('arbeitszeitcheck');
+			return;
+		}
+		$groups = [];
+		foreach ($groupIds as $groupId) {
+			$group = $this->groupManager->get($groupId);
+			if ($group !== null) {
+				$groups[] = $group;
+			}
+		}
+		$this->appManager->enableAppForGroups('arbeitszeitcheck', $groups);
+	}
+
+	/**
+	 * @return list<array{id: string, displayName: string}>
+	 */
+	private function getAvailableGroupsForAccessControl(): array
+	{
+		$out = [];
+		try {
+			$groups = $this->groupManager->search('');
+			foreach ($groups as $group) {
+				$gid = (string)$group->getGID();
+				if ($gid === '') {
+					continue;
+				}
+				$displayName = trim((string)$group->getDisplayName());
+				$out[] = [
+					'id' => $gid,
+					'displayName' => $displayName !== '' ? $displayName : $gid,
+				];
+			}
+		} catch (\Throwable) {
+			return [];
+		}
+
+		usort($out, static function (array $a, array $b): int {
+			return strcasecmp($a['displayName'], $b['displayName']);
+		});
+		return $out;
 	}
 
 

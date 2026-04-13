@@ -12,7 +12,9 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\BackgroundJob;
 
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
+use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\TimedJob;
 use OCP\IConfig;
@@ -28,25 +30,31 @@ use Psr\Log\LoggerInterface;
 class ClockOutReminderJob extends TimedJob
 {
 	private TimeEntryMapper $timeEntryMapper;
+	private UserSettingsMapper $userSettingsMapper;
 	private NotificationService $notificationService;
 	private IUserManager $userManager;
 	private IConfig $config;
 	private LoggerInterface $logger;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		ITimeFactory $timeFactory,
 		TimeEntryMapper $timeEntryMapper,
+		UserSettingsMapper $userSettingsMapper,
 		NotificationService $notificationService,
 		IUserManager $userManager,
 		IConfig $config,
-		LoggerInterface $logger
+		LoggerInterface $logger,
+		PermissionService $permissionService
 	) {
 		parent::__construct($timeFactory);
 		$this->timeEntryMapper = $timeEntryMapper;
+		$this->userSettingsMapper = $userSettingsMapper;
 		$this->notificationService = $notificationService;
 		$this->userManager = $userManager;
 		$this->config = $config;
 		$this->logger = $logger;
+		$this->permissionService = $permissionService;
 
 		// Run every hour
 		$this->setInterval(60 * 60);
@@ -73,6 +81,22 @@ class ClockOutReminderJob extends TimedJob
 			$this->userManager->callForAllUsers(function ($user) use (&$remindersSent) {
 				$userId = $user->getUID();
 
+				if (!$user->isEnabled()) {
+					return;
+				}
+				if (!$this->permissionService->isUserAllowedByAccessGroups($userId)) {
+					return;
+				}
+
+				$notificationsEnabled = $this->userSettingsMapper->getBooleanSetting(
+					$userId,
+					'notifications_enabled',
+					true
+				);
+				if (!$notificationsEnabled) {
+					return;
+				}
+
 				// Find active time entries
 				$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
 				
@@ -87,18 +111,26 @@ class ClockOutReminderJob extends TimedJob
 
 				// Send reminder if worked more than 8 hours
 				if ($hoursWorked >= 8) {
-					// Check if we already sent a reminder today for this entry
-					$today = new \DateTime();
-					$today->setTime(0, 0, 0);
-					
-					// Only send one reminder per day per entry
-					// We check if the entry started today (if it started yesterday, it's a new day)
-					if ($startTime >= $today) {
+					$lastReminderKey = 'last_clock_out_reminder_' . $activeEntry->getId();
+					$lastReminderTime = (int)$this->config->getUserValue(
+						$userId,
+						'arbeitszeitcheck',
+						$lastReminderKey,
+						'0'
+					);
+
+					if ($lastReminderTime < (time() - 3600)) {
 						$this->notificationService->notifyClockOutReminder($userId, [
 							'id' => $activeEntry->getId(),
 							'start_time' => $startTime->format('H:i'),
 							'hours_worked' => round($hoursWorked, 2)
 						]);
+						$this->config->setUserValue(
+							$userId,
+							'arbeitszeitcheck',
+							$lastReminderKey,
+							(string)time()
+						);
 						
 						$remindersSent++;
 						

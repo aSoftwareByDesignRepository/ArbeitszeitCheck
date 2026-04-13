@@ -128,6 +128,22 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
                             </p>
                         </div>
 
+                        <div class="form-group">
+                            <div class="form-checkbox">
+                                <input type="checkbox"
+                                       id="missing-clock-in-reminders"
+                                       name="missing_clock_in_reminders_enabled"
+                                       checked
+                                       aria-describedby="missing-clock-in-reminders-help">
+                                <label for="missing-clock-in-reminders" class="form-label">
+                                    <?php p($l->t('Remind me when I forgot to clock in (for expected workdays)')); ?>
+                                </label>
+                            </div>
+                            <p id="missing-clock-in-reminders-help" class="form-help">
+                                <?php p($l->t('Sie erhalten diese Erinnerung nur an regulären Arbeitstagen. An Wochenenden, Feiertagen oder bei genehmigten Abwesenheiten wird keine Erinnerung versendet.')); ?>
+                            </p>
+                        </div>
+
                         <div class="card-actions">
                             <button type="submit" 
                                     class="btn btn--primary"

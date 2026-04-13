@@ -176,5 +176,72 @@ class NotificationServiceTest extends TestCase
 
 		$this->service->notifyTimeEntryCorrectionRequested($userId, $timeEntryData, $justification);
 	}
+
+	public function testShouldSendMissingClockInReminderReturnsFalseWhenGlobalDisabled(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('isEnabled')->willReturn(true);
+		$this->userManager->expects($this->once())
+			->method('get')
+			->with('user1')
+			->willReturn($user);
+
+		$this->config->expects($this->once())
+			->method('getAppValue')
+			->with('arbeitszeitcheck', NotificationService::CONFIG_MISSING_CLOCK_IN_REMINDERS_ENABLED, '1')
+			->willReturn('0');
+
+		$this->assertFalse($this->service->shouldSendMissingClockInReminder('user1'));
+	}
+
+	public function testShouldSendMissingClockInReminderUsesUserSettingWhenGlobalEnabled(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('isEnabled')->willReturn(true);
+		$this->userManager->expects($this->once())
+			->method('get')
+			->with('user1')
+			->willReturn($user);
+
+		$this->config->expects($this->once())
+			->method('getAppValue')
+			->with('arbeitszeitcheck', NotificationService::CONFIG_MISSING_CLOCK_IN_REMINDERS_ENABLED, '1')
+			->willReturn('1');
+
+		$this->userSettingsMapper->expects($this->once())
+			->method('getBooleanSetting')
+			->with('user1', NotificationService::USER_SETTING_MISSING_CLOCK_IN_REMINDERS_ENABLED, true)
+			->willReturn(false);
+
+		$this->assertFalse($this->service->shouldSendMissingClockInReminder('user1'));
+	}
+
+	public function testShouldSendMissingClockInReminderReturnsFalseWhenUserDisabled(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('isEnabled')->willReturn(false);
+		$this->userManager->expects($this->once())
+			->method('get')
+			->with('user1')
+			->willReturn($user);
+
+		$this->config->expects($this->never())
+			->method('getAppValue');
+
+		$this->assertFalse($this->service->shouldSendMissingClockInReminder('user1'));
+	}
+
+	public function testShouldSendMissingClockInReminderReturnsFalseWhenUserMissing(): void
+	{
+		$this->userManager->expects($this->once())
+			->method('get')
+			->with('user1')
+			->willReturn(null);
+
+		$this->config->expects($this->never())
+			->method('getAppValue');
+
+		$this->assertFalse($this->service->shouldSendMissingClockInReminder('user1'));
+	}
 }
 

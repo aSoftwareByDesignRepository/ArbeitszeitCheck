@@ -28,6 +28,7 @@ use OCA\ArbeitszeitCheck\Db\HolidayMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLog;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
@@ -35,6 +36,7 @@ use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IAppConfig;
 use OCP\IRequest;
 use OCP\IL10N;
+use OCP\IGroupManager;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
@@ -72,6 +74,10 @@ class AdminControllerTest extends TestCase
 
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
+	/** @var IGroupManager|\PHPUnit\Framework\MockObject\MockObject */
+	private $groupManager;
+	/** @var IAppManager|\PHPUnit\Framework\MockObject\MockObject */
+	private $appManager;
 
 	protected function setUp(): void
 	{
@@ -85,6 +91,9 @@ class AdminControllerTest extends TestCase
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->appConfig = $this->createMock(IAppConfig::class);
 		$this->request = $this->createMock(IRequest::class);
+		$this->groupManager = $this->createMock(IGroupManager::class);
+		$this->groupManager->method('search')->willReturn([]);
+		$this->appManager = $this->createMock(IAppManager::class);
 		$teamMapper = $this->createMock(TeamMapper::class);
 		$teamMemberMapper = $this->createMock(TeamMemberMapper::class);
 		$teamManagerMapper = $this->createMock(TeamManagerMapper::class);
@@ -116,6 +125,8 @@ class AdminControllerTest extends TestCase
 			$teamMapper,
 			$teamMemberMapper,
 			$teamManagerMapper,
+			$this->groupManager,
+			$this->appManager,
 			$userSession,
 			$cspService,
 			$l10n,
@@ -187,6 +198,7 @@ class AdminControllerTest extends TestCase
 				$values = [
 					'auto_compliance_check' => '1',
 					'enable_violation_notifications' => '1',
+					'missing_clock_in_reminders_enabled' => '1',
 					'export_midnight_split_enabled' => '1',
 					'max_daily_hours' => '10',
 					'min_rest_period' => '11',
@@ -196,6 +208,7 @@ class AdminControllerTest extends TestCase
 				];
 				return $values[$key] ?? $default;
 			});
+		$this->appManager->method('getAppRestriction')->with('arbeitszeitcheck')->willReturn([]);
 
 		$response = $this->controller->getAdminSettings();
 		$data = $response->getData();
@@ -203,7 +216,33 @@ class AdminControllerTest extends TestCase
 		$this->assertTrue($data['success']);
 		$this->assertArrayHasKey('settings', $data);
 		$this->assertTrue($data['settings']['autoComplianceCheck']);
+		$this->assertTrue($data['settings']['missingClockInRemindersEnabled']);
 		$this->assertEquals(10.0, $data['settings']['maxDailyHours']);
+		$this->assertArrayHasKey('accessAllowedGroups', $data['settings']);
+	}
+
+	public function testUpdateAdminSettingsNormalizesAccessAllowedGroups(): void
+	{
+		$this->request->method('getParams')
+			->willReturn([
+				'accessAllowedGroups' => ['group_a', 'group_a', 'missing_group', 'group_b'],
+			]);
+
+		$this->groupManager->method('get')->willReturnCallback(function (string $gid) {
+			if (!in_array($gid, ['group_a', 'group_b'], true)) {
+				return null;
+			}
+			$group = $this->createMock(\OCP\IGroup::class);
+			$group->method('getGID')->willReturn($gid);
+			return $group;
+		});
+		$this->appManager->expects($this->once())->method('enableAppForGroups')
+			->with('arbeitszeitcheck', $this->callback(static fn (array $groups): bool => count($groups) === 2));
+		$this->appManager->method('getAppRestriction')->with('arbeitszeitcheck')->willReturn(['group_a', 'group_b']);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
 	}
 
 	/**
@@ -214,12 +253,14 @@ class AdminControllerTest extends TestCase
 		$this->request->method('getParams')
 			->willReturn([
 				'maxDailyHours' => 9.5,
-				'germanState' => 'BY'
+				'germanState' => 'BY',
+				'missingClockInRemindersEnabled' => false,
 			]);
 
-		$this->appConfig->expects($this->exactly(2))
+		$this->appConfig->expects($this->exactly(3))
 			->method('setAppValueString')
 			->withConsecutive(
+				['missing_clock_in_reminders_enabled', '0'],
 				['max_daily_hours', '9.5'],
 				['german_state', 'BY']
 			);

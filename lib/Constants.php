@@ -92,6 +92,7 @@ final class Constants
 	public const COMPLIANCE_SCORE_INFO_WEIGHT = 5;
 	public const COMPLIANCE_SCORE_MAX_DEDUCTION = 100;
 
+
 	private function __construct()
 	{
 	}

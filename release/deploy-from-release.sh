@@ -8,6 +8,7 @@ OCC_PATH=""
 RUN_INTEGRITY_CHECK=1
 TOGGLE_APP=1
 KEEP_BACKUP=0
+ALLOW_NO_OCC=0
 
 usage() {
 	echo "Deploy a signed Nextcloud app release tarball safely."
@@ -17,7 +18,8 @@ usage() {
 	echo
 	echo "Options:"
 	echo "  --app-id <id>             App id (default: ${APP_ID})"
-	echo "  --occ <path>              Path to Nextcloud occ file (recommended)"
+	echo "  --occ <path>              Path to Nextcloud occ file (required by default)"
+	echo "  --allow-no-occ            Allow deployment without --occ (not recommended)"
 	echo "  --no-integrity-check      Skip 'occ integrity:check-app' after deploy"
 	echo "  --no-toggle               Do not disable/enable app during deployment"
 	echo "  --keep-backup             Keep backup copy (default: remove after success)"
@@ -48,6 +50,10 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--no-toggle)
 			TOGGLE_APP=0
+			shift
+			;;
+		--allow-no-occ)
+			ALLOW_NO_OCC=1
 			shift
 			;;
 		--keep-backup)
@@ -87,19 +93,35 @@ if [[ -n "${OCC_PATH}" && ! -f "${OCC_PATH}" ]]; then
 	exit 1
 fi
 
-if ! tar -tzf "${ARCHIVE_PATH}" | rg -q "^${APP_ID}/appinfo/info.xml$"; then
+if [[ -z "${OCC_PATH}" && "${ALLOW_NO_OCC}" -ne 1 ]]; then
+	echo "Error: --occ is required for safe deployment. Use --allow-no-occ only for exceptional/manual recovery scenarios." >&2
+	exit 1
+fi
+
+if ! tar -tzf "${ARCHIVE_PATH}" | grep -Eq "^${APP_ID}/appinfo/info.xml$"; then
 	echo "Error: archive does not contain expected app root '${APP_ID}/' with appinfo/info.xml" >&2
 	exit 1
 fi
 
-if tar -tzf "${ARCHIVE_PATH}" | rg -q "^${APP_ID}/(\.git/|node_modules/|tests/|build/|scripts/)"; then
+if tar -tzf "${ARCHIVE_PATH}" | grep -Eq "/(\.git/|node_modules/|tests/|build/|scripts/)"; then
 	echo "Error: archive contains forbidden development paths:" >&2
-	tar -tzf "${ARCHIVE_PATH}" | rg "^${APP_ID}/(\.git/|node_modules/|tests/|build/|scripts/)" || true
+	tar -tzf "${ARCHIVE_PATH}" | grep -E "/(\.git/|node_modules/|tests/|build/|scripts/)" || true
 	exit 1
 fi
 
-if ! tar -tzf "${ARCHIVE_PATH}" | rg -q "^${APP_ID}/appinfo/signature.json$"; then
+if ! tar -tzf "${ARCHIVE_PATH}" | grep -Eq "^${APP_ID}/appinfo/signature.json$"; then
 	echo "Error: archive is missing appinfo/signature.json (unsigned release)." >&2
+	exit 1
+fi
+
+if ! tar -xOf "${ARCHIVE_PATH}" "${APP_ID}/appinfo/signature.json" | grep -Eq .; then
+	echo "Error: appinfo/signature.json could not be read from archive." >&2
+	exit 1
+fi
+
+if tar -xOf "${ARCHIVE_PATH}" "${APP_ID}/appinfo/signature.json" | grep -Eq '"([^"]*/)?(\.git|node_modules|tests|build|scripts)\\/'; then
+	echo "Error: signature.json references forbidden development paths." >&2
+	tar -xOf "${ARCHIVE_PATH}" "${APP_ID}/appinfo/signature.json" | grep -E '"([^"]*/)?(\.git|node_modules|tests|build|scripts)\\/' || true
 	exit 1
 fi
 

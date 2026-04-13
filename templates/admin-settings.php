@@ -15,6 +15,7 @@ declare(strict_types=1);
 $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $settings = $_['settings'] ?? [];
+$availableGroups = is_array($_['availableGroups'] ?? null) ? $_['availableGroups'] : [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdminSettings');
 $monthClosureReopenUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.month_closure.reopen');
@@ -53,6 +54,57 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
 
             <form id="admin-settings-form" class="form admin-settings-form" method="post" action="#" novalidate>
                 <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
+                <section class="admin-settings-section" aria-labelledby="section-access-heading">
+                    <h3 id="section-access-heading" class="admin-settings-section__title"><?php p($l->t('Access control')); ?></h3>
+                    <div class="form-group">
+                        <?php $selectedAccessGroups = is_array($settings['accessAllowedGroups'] ?? null) ? $settings['accessAllowedGroups'] : []; ?>
+                        <label for="accessAllowedGroupsSearch" class="form-label"><?php p($l->t('Allowed Nextcloud groups')); ?></label>
+                        <input type="text"
+                               id="accessAllowedGroupsSearch"
+                               class="form-input"
+                               autocomplete="off"
+                               spellcheck="false"
+                               placeholder="<?php p($l->t('Search groups...')); ?>"
+                               aria-describedby="accessAllowedGroups-help accessAllowedGroups-note accessAllowedGroupsCount">
+                        <p id="accessAllowedGroupsCount" class="form-help form-help--note" aria-live="polite">
+                            <?php
+                            $selectedCount = count($selectedAccessGroups);
+                            p($selectedCount > 0
+                                ? $l->t('%d group(s) selected', [$selectedCount])
+                                : $l->t('No groups selected (all users are allowed).'));
+                            ?>
+                        </p>
+                        <div id="accessAllowedGroupsList" class="access-groups-list" role="group" aria-label="<?php p($l->t('Group selection')); ?>">
+                            <?php foreach ($availableGroups as $groupOption): ?>
+                                <?php
+                                $groupId = (string)($groupOption['id'] ?? '');
+                                if ($groupId === '') {
+                                    continue;
+                                }
+                                $groupDisplayName = (string)($groupOption['displayName'] ?? $groupId);
+                                $isSelected = in_array($groupId, $selectedAccessGroups, true);
+                                ?>
+                                <label class="access-groups-item" data-access-group-search="<?php p(strtolower($groupDisplayName . ' ' . $groupId)); ?>">
+                                    <input type="checkbox"
+                                           name="accessAllowedGroups[]"
+                                           value="<?php p($groupId); ?>"
+                                           <?php echo $isSelected ? 'checked' : ''; ?>>
+                                    <span class="access-groups-item__label"><?php p($groupDisplayName); ?></span>
+                                    <span class="access-groups-item__meta"><?php p($groupId); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <p id="accessAllowedGroupsEmpty" class="form-help form-help--note" hidden>
+                            <?php p($l->t('No matching groups found for your search.')); ?>
+                        </p>
+                        <p id="accessAllowedGroups-help" class="form-help">
+                            <?php p($l->t('Leave empty to allow all users (default behavior). If one or more groups are selected, only members of these groups can use this app. Administrators are always allowed.')); ?>
+                        </p>
+                        <p id="accessAllowedGroups-note" class="form-help form-help--note">
+                            <?php p($l->t('Select one or more groups. The rule applies immediately after saving settings.')); ?>
+                        </p>
+                    </div>
+                </section>
                 <section class="admin-settings-section" aria-labelledby="section-compliance-heading">
                     <h3 id="section-compliance-heading" class="admin-settings-section__title"><?php p($l->t('Compliance and working time rules')); ?></h3>
                 <div class="form-group">
@@ -235,6 +287,19 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
 
                 <section class="admin-settings-section" aria-labelledby="section-absences-heading">
                     <h3 id="section-absences-heading" class="admin-settings-section__title"><?php p($l->t('Absences and notifications')); ?></h3>
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="missingClockInRemindersEnabled" name="missingClockInRemindersEnabled"
+                            <?php echo ($settings['missingClockInRemindersEnabled'] ?? true) ? 'checked' : ''; ?>
+                            aria-describedby="missingClockInRemindersEnabled-help">
+                        <label for="missingClockInRemindersEnabled" class="form-label">
+                            <?php p($l->t('Enable missing clock-in reminders globally')); ?>
+                        </label>
+                    </div>
+                    <p id="missingClockInRemindersEnabled-help" class="form-help">
+                        <?php p($l->t('If enabled, users can still turn this reminder off in their personal settings. Reminders are sent only for expected workdays (not weekends, holidays, or approved absences).')); ?>
+                    </p>
+                </div>
                 <fieldset class="form-fieldset" aria-labelledby="vacation-carryover-expiry-legend">
                     <legend id="vacation-carryover-expiry-legend" class="form-legend"><?php p($l->t('Vacation carryover expiry')); ?></legend>
                     <p class="form-help form-help--block" id="vacation-carryover-expiry-intro">
@@ -606,4 +671,6 @@ window.ArbeitszeitCheck.l10n.loadingEllipsis = <?php echo json_encode($l->t('Loa
 window.ArbeitszeitCheck.l10n.noUsersFound = <?php echo json_encode($l->t('No users found'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.monthReopenConfirm = <?php echo json_encode($l->t('Reopen this finalized month? The employee will be able to edit times again until the month is finalized once more.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.monthReopenSuccess = <?php echo json_encode($l->t('Month reopened.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.accessGroupsSelected = <?php echo json_encode($l->t('%s group(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.accessGroupsAllUsers = <?php echo json_encode($l->t('No groups selected (all users are allowed).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>

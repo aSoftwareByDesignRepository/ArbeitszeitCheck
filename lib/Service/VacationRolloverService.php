@@ -28,6 +28,7 @@ class VacationRolloverService
 		private VacationRolloverLogMapper $vacationRolloverLogMapper,
 		private IUserManager $userManager,
 		private AuditLogMapper $auditLogMapper,
+		private PermissionService $permissionService,
 	) {
 	}
 
@@ -188,6 +189,9 @@ class VacationRolloverService
 			if ($user->isEnabled() !== true) {
 				return;
 			}
+			if (!$this->permissionService->isUserAllowedByAccessGroups($uid)) {
+				return;
+			}
 			foreach ($years as $fromYear) {
 				try {
 					$r = $this->processUserForFromYear($uid, $fromYear, $dryRun, $force, $ignoreEnabledCheck);
@@ -217,6 +221,9 @@ class VacationRolloverService
 		}
 		$user = $this->userManager->get($userId);
 		if ($user === null || $user->isEnabled() !== true) {
+			return $stats;
+		}
+		if (!$this->permissionService->isUserAllowedByAccessGroups($userId)) {
 			return $stats;
 		}
 		$today = new \DateTime('today');

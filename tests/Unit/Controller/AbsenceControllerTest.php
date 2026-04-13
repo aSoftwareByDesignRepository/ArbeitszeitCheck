@@ -19,6 +19,7 @@ use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\MonthClosureService;
+use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IL10N;
@@ -627,5 +628,48 @@ class AbsenceControllerTest extends TestCase
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
+	}
+
+	public function testShortenReturnsConflictWhenMonthFinalized(): void
+	{
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'end_date' => '2024-06-05',
+		]);
+		$this->absenceService->expects($this->once())
+			->method('shortenAbsence')
+			->with(1, $userId, '2024-06-05')
+			->willThrowException(new MonthFinalizedException('locked'));
+
+		$response = $this->controller->shorten(1);
+		$this->assertEquals(Http::STATUS_CONFLICT, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringContainsString('finalized', $data['error']);
+	}
+
+	public function testShortenFormRedirectsWithMonthFinalizedError(): void
+	{
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParam')
+			->with('end_date')
+			->willReturn('2024-06-05');
+		$this->urlGenerator->method('linkToRoute')
+			->with('arbeitszeitcheck.absence.show', ['id' => 99])
+			->willReturn('/apps/arbeitszeitcheck/absences/99');
+		$this->absenceService->expects($this->once())
+			->method('shortenAbsence')
+			->with(99, $userId, '2024-06-05')
+			->willThrowException(new MonthFinalizedException('locked'));
+
+		$response = $this->controller->shortenForm(99);
+		$this->assertEquals(Http::STATUS_SEE_OTHER, $response->getStatus());
+		$this->assertStringContainsString('shorten_error=', $response->getRedirectURL());
 	}
 }

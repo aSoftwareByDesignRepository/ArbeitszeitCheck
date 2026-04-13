@@ -12,8 +12,10 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Settings;
 
 use OCA\ArbeitszeitCheck\Constants;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IAppConfig;
+use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\Settings\ISettings;
 
@@ -21,11 +23,15 @@ class AdminSettings implements ISettings
 {
 	private IAppConfig $appConfig;
 	private IL10N $l10n;
+	private IGroupManager $groupManager;
+	private IAppManager $appManager;
 
-	public function __construct(IAppConfig $appConfig, IL10N $l10n)
+	public function __construct(IAppConfig $appConfig, IL10N $l10n, IGroupManager $groupManager, IAppManager $appManager)
 	{
 		$this->appConfig = $appConfig;
 		$this->l10n = $l10n;
+		$this->groupManager = $groupManager;
+		$this->appManager = $appManager;
 	}
 
 	/**
@@ -65,10 +71,12 @@ class AdminSettings implements ISettings
 			'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
+			'accessAllowedGroups' => $this->readAccessAllowedGroups(),
 		];
 
 		return new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
 			'settings' => $settings,
+			'availableGroups' => $this->getAvailableGroups(),
 			'l' => $this->l10n,
 		]);
 	}
@@ -81,5 +89,40 @@ class AdminSettings implements ISettings
 	public function getPriority(): int
 	{
 		return 50;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function readAccessAllowedGroups(): array
+	{
+		$decoded = $this->appManager->getAppRestriction('arbeitszeitcheck');
+		$out = [];
+		foreach ($decoded as $groupId) {
+			$candidate = trim((string)$groupId);
+			if ($candidate === '') {
+				continue;
+			}
+			$out[$candidate] = true;
+		}
+		return array_keys($out);
+	}
+
+	/**
+	 * @return list<array{id: string, displayName: string}>
+	 */
+	private function getAvailableGroups(): array
+	{
+		$out = [];
+		foreach ($this->groupManager->search('') as $group) {
+			$gid = trim((string)$group->getGID());
+			if ($gid === '') {
+				continue;
+			}
+			$displayName = trim((string)$group->getDisplayName());
+			$out[] = ['id' => $gid, 'displayName' => $displayName !== '' ? $displayName : $gid];
+		}
+		usort($out, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
+		return $out;
 	}
 }

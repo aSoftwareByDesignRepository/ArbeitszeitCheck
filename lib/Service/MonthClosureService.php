@@ -43,6 +43,7 @@ class MonthClosureService
 	private IConfig $config;
 	private IUserManager $userManager;
 	private LoggerInterface $logger;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		MonthClosureMapper $closureMapper,
@@ -54,7 +55,8 @@ class MonthClosureService
 		IDBConnection $db,
 		IConfig $config,
 		IUserManager $userManager,
-		LoggerInterface $logger
+		LoggerInterface $logger,
+		PermissionService $permissionService
 	) {
 		$this->closureMapper = $closureMapper;
 		$this->revisionMapper = $revisionMapper;
@@ -66,6 +68,7 @@ class MonthClosureService
 		$this->config = $config;
 		$this->userManager = $userManager;
 		$this->logger = $logger;
+		$this->permissionService = $permissionService;
 	}
 
 	public function getGraceDaysAfterEndOfMonth(): int
@@ -195,6 +198,9 @@ class MonthClosureService
 				return;
 			}
 			$uid = $user->getUID();
+			if (!$this->permissionService->isUserAllowedByAccessGroups($uid)) {
+				return;
+			}
 			for ($i = 1; $i <= 36; $i++) {
 				$d = new \DateTime($today->format('Y-m-d'));
 				$d->modify('first day of this month');

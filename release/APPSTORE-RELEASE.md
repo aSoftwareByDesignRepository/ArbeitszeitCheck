@@ -31,9 +31,9 @@ cd apps/arbeitszeitcheck
 make release-signed
 ```
 
-This produces `build/release/arbeitszeitcheck-X.Y.Z.tar.gz`, verifies the archive does not contain development paths (for example `.git`, `node_modules`, `tests`, `build`, `scripts`), signs the extracted archive payload via `occ integrity:sign-app`, and repacks the signed tarball.
+This produces `build/release/arbeitszeitcheck-X.Y.Z.tar.gz`, verifies the archive does not contain development paths (for example `.git`, `node_modules`, `tests`, `build`, `scripts`), signs the extracted archive payload via `occ integrity:sign-app`, validates that `appinfo/signature.json` does not reference forbidden development paths, and repacks the signed tarball.
 
-Manual fallback (if you cannot use `make`):
+Manual fallback (advanced, use only if you cannot run `make release-signed`):
 
 From the repo root that contains `apps/arbeitszeitcheck` (here: `nextcloud-development/apps/`; local folder name may differ):
 
@@ -49,11 +49,13 @@ tar --exclude='arbeitszeitcheck/node_modules' \
     -czf "arbeitszeitcheck/release/arbeitszeitcheck-${VERSION}.tar.gz" arbeitszeitcheck
 ```
 
+If you use the manual fallback, you **must** re-sign the extracted archive tree with `occ integrity:sign-app` and validate that `appinfo/signature.json` contains no `.git/`, `node_modules/`, `tests/`, `build/`, or `scripts/` entries before upload.
+
 **Do not commit** the tarball (see `.gitignore`).
 
 ### Critical deployment rule (prevents integrity errors)
 
-Deploy **only** from the signed release tarball.  
+Deploy **only** from the signed release tarball.
 Do **not** copy/sync a development checkout (`git`, `rsync`, IDE upload) into production when `appinfo/signature.json` exists.
 
 If production ever shows many `FILE_MISSING` entries under `.git/*` or a huge list under `node_modules/*`, that is a strong indicator the app was signed from a development tree and then deployed in a different file layout.
@@ -69,6 +71,7 @@ cd apps/arbeitszeitcheck/release
 ```
 
 This helper validates archive integrity prerequisites before replacing app files.
+By default, it now requires `--occ` so integrity checks cannot be silently skipped.
 
 ---
 
@@ -184,6 +187,7 @@ Submit; fix any validation errors (wrong checksum/signature almost always means 
 | `CHECKSUMS-X.Y.Z.txt` | Optional (recommended for your team) |
 | `*.tar.gz`, `*.tar.gz.asc` | **No** (gitignored) |
 | `SIGNATURE-*.txt` or local signature dumps | **No** (gitignored) |
+| `appinfo/signature.json` in working tree | **No** (generated during signing, not source-controlled) |
 | Private key `*.key` | **Never** in the repo |
 
 ---

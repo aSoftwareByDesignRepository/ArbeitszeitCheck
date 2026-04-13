@@ -30,6 +30,7 @@ make release-signed
 Output archive: `build/release/arbeitszeitcheck-X.Y.Z.tar.gz`.
 
 Deploy from this signed tarball only. Do not rsync/copy a development checkout into production.
+`appinfo/signature.json` is generated during signing and is not source-controlled.
 
 ## Production deploy helper
 

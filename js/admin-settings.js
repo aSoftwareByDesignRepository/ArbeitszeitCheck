@@ -40,6 +40,60 @@
         });
 
         initMonthReopenUserPicker();
+        initAccessGroupsPicker();
+    }
+
+    function initAccessGroupsPicker() {
+        const search = Utils.$('#accessAllowedGroupsSearch');
+        const list = Utils.$('#accessAllowedGroupsList');
+        const empty = Utils.$('#accessAllowedGroupsEmpty');
+        const countEl = Utils.$('#accessAllowedGroupsCount');
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        if (!search || !list) {
+            return;
+        }
+
+        const items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
+        const checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="accessAllowedGroups[]"]'));
+
+        function updateCount() {
+            if (!countEl) {
+                return;
+            }
+            const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
+            if (selectedCount === 0) {
+                countEl.textContent = l10n.accessGroupsAllUsers || 'No groups selected (all users are allowed).';
+                return;
+            }
+            const template = l10n.accessGroupsSelected || '%s group(s) selected';
+            countEl.textContent = template.indexOf('%s') !== -1
+                ? template.replace('%s', String(selectedCount))
+                : String(selectedCount) + ' ' + template;
+        }
+
+        function applyFilter() {
+            const q = String(search.value || '').trim().toLowerCase();
+            let visible = 0;
+            items.forEach(function(item) {
+                const haystack = String(item.getAttribute('data-access-group-search') || '');
+                const show = q === '' || haystack.indexOf(q) !== -1;
+                item.hidden = !show;
+                if (show) {
+                    visible++;
+                }
+            });
+            if (empty) {
+                empty.hidden = visible !== 0;
+            }
+        }
+
+        Utils.on(search, 'input', applyFilter);
+        checkboxes.forEach(function(box) {
+            Utils.on(box, 'change', updateCount);
+        });
+
+        updateCount();
+        applyFilter();
     }
 
     /**
@@ -65,6 +119,7 @@
         formData.realtimeComplianceCheck = isChecked(formData.realtimeComplianceCheck);
         formData.complianceStrictMode = isChecked(formData.complianceStrictMode);
         formData.enableViolationNotifications = isChecked(formData.enableViolationNotifications);
+        formData.missingClockInRemindersEnabled = isChecked(formData.missingClockInRemindersEnabled);
         formData.exportMidnightSplitEnabled = isChecked(formData.exportMidnightSplitEnabled);
         formData.monthClosureEnabled = isChecked(formData.monthClosureEnabled);
         formData.sendIcalApprovedAbsences = isChecked(formData.sendIcalApprovedAbsences);
@@ -76,6 +131,11 @@
         formData.statutoryAutoReseed = isChecked(formData.statutoryAutoReseed);
         formData.vacationRolloverEnabled = isChecked(formData.vacationRolloverEnabled);
         formData.vacationRolloverIncludeUnusedAnnual = isChecked(formData.vacationRolloverIncludeUnusedAnnual);
+        const accessGroupsRaw = formData['accessAllowedGroups[]'];
+        formData.accessAllowedGroups = accessGroupsRaw === undefined
+            ? []
+            : (Array.isArray(accessGroupsRaw) ? accessGroupsRaw : [accessGroupsRaw]);
+        delete formData['accessAllowedGroups[]'];
 
         // Convert numbers (use defaults on invalid/empty)
         const num = (v, def) => { const n = parseFloat(v); return (Number.isFinite(n) ? n : def); };

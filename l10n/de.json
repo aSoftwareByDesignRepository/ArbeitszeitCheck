@@ -1053,6 +1053,7 @@
 		"Refresh the list of employees": "Liste der Mitarbeiter aktualisieren",
 		"Manage your personal preferences and notification settings": "Verwalten Sie Ihre persönlichen Präferenzen und Benachrichtigungseinstellungen",
 		"Working Time Preferences": "Arbeitszeit-Präferenzen",
+		"Notifications": "Benachrichtigungen",
 		"Your working time model, vacation days, and working hours are assigned by your administrator. Contact your administrator if you have questions or need changes.": "Ihr Arbeitszeitmodell, Urlaubstage und Arbeitsstunden werden von Ihrem Administrator zugewiesen. Wenden Sie sich an Ihren Administrator, wenn Sie Fragen haben oder Änderungen benötigen.",
 		"Save your preferences": "Ihre Präferenzen speichern",
 		"Click to reload the list and see any new employees": "Klicken Sie, um die Liste neu zu laden und neue Mitarbeiter zu sehen",
@@ -2146,6 +2147,15 @@
 		"Select a month to see who you can download for.": "Wählen Sie einen Monat, um zu sehen, für wen Sie herunterladen können.",
 		"Could not load people for this month.": "Personen für diesen Monat konnten nicht geladen werden.",
 		"No one has a finalized revision for this month in your scope.": "Für diesen Monat gibt es in Ihrem Zuständigkeitsbereich keine finalisierte Revision.",
-		"Download revision PDF for {name}": "Revisions-PDF herunterladen für {name}"
+		"Download revision PDF for {name}": "Revisions-PDF herunterladen für {name}",
+		"Allowed Nextcloud groups": "Erlaubte Nextcloud-Gruppen",
+		"Search groups...": "Gruppen suchen...",
+		"No groups selected (all users are allowed).": "Keine Gruppen ausgewählt (alle Benutzer:innen sind erlaubt).",
+		"No matching groups found for your search.": "Keine passenden Gruppen für Ihre Suche gefunden.",
+		"Leave empty to allow all users (default behavior). If one or more groups are selected, only members of these groups can use this app. Administrators are always allowed.": "Leer lassen, um alle Benutzer:innen zuzulassen (Standardverhalten). Wenn eine oder mehrere Gruppen ausgewählt sind, können nur Mitglieder dieser Gruppen die App verwenden. Administrator:innen sind immer zugelassen.",
+		"Select one or more groups. The rule applies immediately after saving settings.": "Wählen Sie eine oder mehrere Gruppen aus. Die Regel gilt sofort nach dem Speichern der Einstellungen.",
+		"%d group(s) selected": "%d Gruppe(n) ausgewählt",
+		"%s group(s) selected": "%s Gruppe(n) ausgewählt",
+		"Access control": "Zugriffskontrolle"
 	}
 }

@@ -8,7 +8,7 @@ archive_name = $(app_name)-$(version).tar.gz
 archive_path = $(release_dir)/$(archive_name)
 occ = ../../occ
 
-.PHONY: release verify-release sign-release release-signed clean
+.PHONY: release verify-release verify-signature-manifest sign-release release-signed clean
 
 release:
 	@echo "Building $(app_name) v$(version)..."
@@ -18,6 +18,7 @@ release:
 		rsync -a --exclude='.git' --exclude='$(build_dir)' --exclude='.github' \
 			--exclude='node_modules' --exclude='tests' --exclude='.phpunit.result.cache' \
 			--exclude='scripts' --exclude='release/*.tar.gz' --exclude='release/*.asc' \
+			--exclude='appinfo/signature.json' \
 			./ "$$staging/$(app_name)/" && \
 		tar -czf $(archive_path) -C "$$staging" $(app_name) && \
 		rm -rf "$$staging"
@@ -25,12 +26,29 @@ release:
 
 verify-release:
 	@test -f $(archive_path) || (echo "Error: Run 'make release' first"; exit 1)
-	@if tar -tzf $(archive_path) | rg -q '^$(app_name)/(\.git/|node_modules/|build/|tests/|scripts/)'; then \
+	@if tar -tzf $(archive_path) | grep -Eq '/(\.git/|node_modules/|build/|tests/|scripts/)'; then \
 		echo "Error: release archive contains forbidden development paths"; \
-		tar -tzf $(archive_path) | rg '^$(app_name)/(\.git/|node_modules/|build/|tests/|scripts/)' || true; \
+		tar -tzf $(archive_path) | grep -E '/(\.git/|node_modules/|build/|tests/|scripts/)' || true; \
 		exit 1; \
 	fi
 	@echo "Release archive layout looks clean."
+
+verify-signature-manifest:
+	@test -f $(archive_path) || (echo "Error: Run 'make release-signed' first"; exit 1)
+	@tmpdir=$$(mktemp -d) && \
+		trap 'rm -rf "$$tmpdir"' EXIT && \
+		tar -xzf $(archive_path) -C "$$tmpdir" "$(app_name)/appinfo/signature.json" && \
+		sig="$$tmpdir/$(app_name)/appinfo/signature.json" && \
+		if ! test -f "$$sig"; then \
+			echo "Error: signature.json missing from signed archive"; \
+			exit 1; \
+		fi && \
+		if grep -Eq '"([^"]*/)?(\.git|node_modules|build|tests|scripts)\\/' "$$sig"; then \
+			echo "Error: signature.json references forbidden development paths"; \
+			grep -E '"([^"]*/)?(\.git|node_modules|build|tests|scripts)\\/' "$$sig" || true; \
+			exit 1; \
+		fi
+	@echo "Signature manifest sanity check passed."
 
 clean:
 	rm -rf $(build_dir)
@@ -60,5 +78,5 @@ sign-release: verify-release
 		tar -czf $(archive_path) -C "$$staging" $(app_name)
 	@echo "Signed archive updated at $(archive_path)"
 
-release-signed: release sign-release
+release-signed: release sign-release verify-signature-manifest
 	@echo "Release build + Nextcloud signature complete."

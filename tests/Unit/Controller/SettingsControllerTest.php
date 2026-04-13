@@ -197,7 +197,8 @@ class SettingsControllerTest extends TestCase
 			->willReturn([
 				'notifications_enabled' => true, // Boolean true
 				'break_reminders_enabled' => 'true', // String 'true'
-				'auto_break_calculation' => '1' // String '1'
+				'auto_break_calculation' => '1', // String '1'
+				'missing_clock_in_reminders_enabled' => 'true'
 			]);
 
 		$oldSetting = new UserSetting();
@@ -211,12 +212,13 @@ class SettingsControllerTest extends TestCase
 		$this->userSettingsMapper->method('getSetting')->willReturn($oldSetting);
 
 		// All should be converted to '1'
-		$this->userSettingsMapper->expects($this->exactly(3))
+		$this->userSettingsMapper->expects($this->exactly(4))
 			->method('setSetting')
 			->withConsecutive(
 				[$userId, 'notifications_enabled', '1'],
 				[$userId, 'break_reminders_enabled', '1'],
-				[$userId, 'auto_break_calculation', '1']
+				[$userId, 'auto_break_calculation', '1'],
+				[$userId, 'missing_clock_in_reminders_enabled', '1']
 			)
 			->willReturn($oldSetting);
 

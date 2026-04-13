@@ -170,7 +170,8 @@ class Application extends App implements IBootstrap {
 				$c->query(IDBConnection::class),
 				$c->query(\OCP\IConfig::class),
 				$c->query(\OCP\IUserManager::class),
-				$c->query(\Psr\Log\LoggerInterface::class)
+				$c->query(\Psr\Log\LoggerInterface::class),
+				$c->query(PermissionService::class)
 			);
 		});
 
@@ -258,7 +259,8 @@ class Application extends App implements IBootstrap {
 				$c->query(HolidayService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class),
 				$c->query(VacationAllocationService::class),
-				$c->query(AbsenceNotificationMailService::class)
+				$c->query(AbsenceNotificationMailService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class)
 			);
 		});
 
@@ -272,7 +274,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IL10N::class),
 				$c->query(NotificationService::class),
 				$c->query(HolidayService::class),
-				$c->query(\OCP\IConfig::class)
+				$c->query(\OCP\IConfig::class),
+				$c->query(PermissionService::class)
 			);
 		});
 
@@ -305,7 +308,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationRolloverLogMapper::class),
 				$c->query(\OCP\IUserManager::class),
-				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class)
+				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
+				$c->query(PermissionService::class)
 			);
 		});
 
@@ -349,7 +353,8 @@ class Application extends App implements IBootstrap {
 				$c->query(OvertimeService::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\IL10N::class),
-				$c->query(HolidayService::class)
+				$c->query(HolidayService::class),
+				$c->query(PermissionService::class)
 			);
 		});
 
@@ -367,6 +372,8 @@ class Application extends App implements IBootstrap {
 		$context->registerService(PermissionService::class, function($c) {
 			return new PermissionService(
 				$c->query(\OCP\IGroupManager::class),
+				$c->query(\OCP\App\IAppManager::class),
+				$c->query(\OCP\IUserManager::class),
 				$c->query(TeamResolverService::class),
 				$c->query(\Psr\Log\LoggerInterface::class)
 			);

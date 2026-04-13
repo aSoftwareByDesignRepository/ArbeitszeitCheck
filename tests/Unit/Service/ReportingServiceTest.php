@@ -20,6 +20,7 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\IUserManager;
 use OCP\IUser;
 use OCP\IL10N;
@@ -53,6 +54,8 @@ class ReportingServiceTest extends TestCase
 
 	/** @var HolidayService|\PHPUnit\Framework\MockObject\MockObject */
 	private $holidayCalendarService;
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
 
 	protected function setUp(): void
 	{
@@ -65,6 +68,8 @@ class ReportingServiceTest extends TestCase
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->l10n = $this->createMock(IL10N::class);
 		$this->holidayCalendarService = $this->createMock(HolidayService::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->permissionService->method('isUserAllowedByAccessGroups')->willReturn(true);
 		$this->holidayCalendarService->method('isHolidayForUser')->willReturn(false);
 		$this->holidayCalendarService->method('computeWorkingDaysForUser')->willReturn(0.0);
 
@@ -75,7 +80,8 @@ class ReportingServiceTest extends TestCase
 			$this->overtimeService,
 			$this->userManager,
 			$this->l10n,
-			$this->holidayCalendarService
+			$this->holidayCalendarService,
+			$this->permissionService
 		);
 	}
 

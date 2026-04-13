@@ -23,6 +23,9 @@ use OCP\Notification\INotification;
  */
 class NotificationService
 {
+	public const CONFIG_MISSING_CLOCK_IN_REMINDERS_ENABLED = 'missing_clock_in_reminders_enabled';
+	public const USER_SETTING_MISSING_CLOCK_IN_REMINDERS_ENABLED = 'missing_clock_in_reminders_enabled';
+
 	private INotificationManager $notificationManager;
 	private IL10N $l10n;
 	private UserSettingsMapper $userSettingsMapper;
@@ -253,7 +256,8 @@ class NotificationService
 			->setObject('time_entry', (string)($timeEntryData['id'] ?? ''))
 			->setSubject('reminder_clock_out', [
 				'entry_id' => $timeEntryData['id'] ?? null,
-				'start_time' => $timeEntryData['start_time'] ?? null
+				'start_time' => $timeEntryData['start_time'] ?? null,
+				'hours_worked' => $timeEntryData['hours_worked'] ?? 0
 			])
 			->setMessage('reminder_clock_out', [
 				'start_time' => $timeEntryData['start_time'] ?? null,
@@ -279,7 +283,8 @@ class NotificationService
 			->setObject('time_entry', (string)($timeEntryData['id'] ?? ''))
 			->setSubject('reminder_break', [
 				'entry_id' => $timeEntryData['id'] ?? null,
-				'hours_worked' => $timeEntryData['hours_worked'] ?? 0
+				'hours_worked' => $timeEntryData['hours_worked'] ?? 0,
+				'required_break' => $timeEntryData['required_break_minutes'] ?? 30
 			])
 			->setMessage('reminder_break', [
 				'hours_worked' => $timeEntryData['hours_worked'] ?? 0,
@@ -312,6 +317,33 @@ class NotificationService
 			]);
 
 		$this->notificationManager->notify($notification);
+	}
+
+	/**
+	 * Evaluate if missing clock-in reminders are enabled for a user.
+	 */
+	public function shouldSendMissingClockInReminder(string $userId): bool
+	{
+		$user = $this->userManager->get($userId);
+		if ($user === null || !$user->isEnabled()) {
+			return false;
+		}
+
+		$globalEnabled = $this->config->getAppValue(
+			'arbeitszeitcheck',
+			self::CONFIG_MISSING_CLOCK_IN_REMINDERS_ENABLED,
+			'1'
+		) === '1';
+
+		if (!$globalEnabled) {
+			return false;
+		}
+
+		return $this->userSettingsMapper->getBooleanSetting(
+			$userId,
+			self::USER_SETTING_MISSING_CLOCK_IN_REMINDERS_ENABLED,
+			true
+		);
 	}
 
 	/**

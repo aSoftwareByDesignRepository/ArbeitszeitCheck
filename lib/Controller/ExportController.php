@@ -15,6 +15,7 @@ use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Service\DatevExportService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
 use OCA\ArbeitszeitCheck\Constants;
 use OCP\AppFramework\Controller;
@@ -41,6 +42,7 @@ class ExportController extends Controller
 	private IUserSession $userSession;
 	private IL10N $l10n;
 	private IConfig $config;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		string $appName,
@@ -52,7 +54,8 @@ class ExportController extends Controller
 		TimeEntryExportTransformer $timeEntryExportTransformer,
 		IUserSession $userSession,
 		IL10N $l10n,
-		IConfig $config
+		IConfig $config,
+		PermissionService $permissionService
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -63,6 +66,7 @@ class ExportController extends Controller
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
 		$this->config = $config;
+		$this->permissionService = $permissionService;
 	}
 
 	/**
@@ -498,6 +502,21 @@ class ExportController extends Controller
 	public function datevConfig(): JSONResponse
 	{
 		try {
+			$user = $this->userSession->getUser();
+			if ($user === null) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('User not authenticated')
+				], Http::STATUS_UNAUTHORIZED);
+			}
+			$userId = $user->getUID();
+			if (!$this->permissionService->isAdmin($userId)) {
+				$this->permissionService->logPermissionDenied($userId, 'read_datev_config', 'datev_config');
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Access denied')
+				], Http::STATUS_FORBIDDEN);
+			}
 			$status = $this->datevExportService->getConfigurationStatus();
 			return new JSONResponse([
 				'success' => true,
