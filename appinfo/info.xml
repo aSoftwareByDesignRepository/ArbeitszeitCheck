@@ -142,6 +142,7 @@ gehosteten Nextcloud.
 	<repair-steps>
 		<post-migration>
 			<step>OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays</step>
+			<step>OCA\ArbeitszeitCheck\Repair\ReleaseStuckPendingAbsences</step>
 		</post-migration>
 	</repair-steps>
 	<background-jobs>

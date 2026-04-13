@@ -73,7 +73,7 @@ Edge cases:
   - request requires justification
   - status transitions (completed → pending_approval → completed/rejected)
   - manager approval applies proposed changes, rejection restores original
-  - “no manager” auto-approval behavior (if implemented)
+  - **Auto-approval** when `TeamResolverService::hasAssignableManagerForEmployee(user)` is false (same rule as absences): app-teams mode requires at least one **explicit team manager** other than the employee; legacy group mode uses **colleagues** as proxy. Otherwise the correction is auto-approved so it cannot stay pending with nobody allowed to approve.
 
 ## Absences (CRUD + approvals + substitute flow)
 Routes:
@@ -90,6 +90,7 @@ Role expectations:
 
 Edge cases:
 - **Status machine**: pending → approved/rejected/cancelled; substitute_pending → substitute_approved/substitute_declined → pending_manager → approved/rejected (depending on flow)
+- **Assignable manager / auto-approval**: `hasAssignableManagerForEmployee` — in **app-teams** mode, only **designated team managers** count (not mere colleagues); if none, new requests without a substitute path auto-approve. **Legacy** group mode still uses non-empty colleagues as “has someone in scope.” Stuck legacy `pending` rows may be cleared by repair step `ReleaseStuckPendingAbsences`.
 - **Working-days calculation**: holidays/weekends; state selection
 - **Colleagues list**: only team colleagues; both team modes
 

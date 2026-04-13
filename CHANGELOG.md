@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Approver deadlock (app teams)**: Absence and time-entry correction workflows no longer treat “has colleagues” as “has a manager”. Auto-approval when **no assignable approver** exists now follows `TeamResolverService::hasAssignableManagerForEmployee()` (explicit team managers in app-teams mode; legacy group mode still uses colleagues as a proxy). Prevents requests stuck in “awaiting manager approval” when nobody can approve.
+- **Time entry corrections**: Same assignability rule as absences (previously used colleague IDs only).
+
+### Added
+
+- **Repair step** `ReleaseStuckPendingAbsences`: post-migration repair auto-approves legacy `pending` absences that still match the “no assignable approver” condition (idempotent).
+
+### Changed
+
+- **UX**: Absences UI shows an informational callout when app teams are enabled and no approver is assigned; detail view shows a defensive warning if an old `pending` row is still stuck (until repair/admin fixes team setup).
+
+### Documentation
+
+- User manuals (EN/DE), `tests/WORKFLOW_ROLE_MATRIX.md`, and developer documentation updated for assignable-manager semantics and repair step.
+
 ## 1.1.13 - 2026-04-13
 
 ### Added

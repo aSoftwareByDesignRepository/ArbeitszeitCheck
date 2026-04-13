@@ -544,6 +544,8 @@ class AbsenceController extends Controller
 				'colleagues' => $colleagues,
 				'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
 				'l' => $this->l10n,
+				'employeeHasAssignableManager' => $this->teamResolver->hasAssignableManagerForEmployee($userId),
+				'useAppTeams' => $this->teamResolver->useAppTeams(),
 			]
 		);
 		return $this->configureCSP($response);
@@ -598,6 +600,8 @@ class AbsenceController extends Controller
 					'colleagues' => $colleagues,
 					'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
 					'l' => $this->l10n,
+					'employeeHasAssignableManager' => $this->teamResolver->hasAssignableManagerForEmployee($userId),
+					'useAppTeams' => $this->teamResolver->useAppTeams(),
 				]
 			);
 			return $this->configureCSP($response);
@@ -690,6 +694,8 @@ class AbsenceController extends Controller
 					'currentUserId' => $userId,
 					'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
 					'l' => $this->l10n,
+					'employeeHasAssignableManager' => $this->teamResolver->hasAssignableManagerForEmployee($userId),
+					'useAppTeams' => $this->teamResolver->useAppTeams(),
 				]
 			);
 			return $this->configureCSP($response);

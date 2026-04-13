@@ -116,6 +116,7 @@ class TimeEntryControllerTest extends TestCase
 		$this->timeTrackingService->method('adjustEndTimeForDailyMaximum');
 		$this->teamResolver = $this->createMock(TeamResolverService::class);
 		$this->teamResolver->method('getColleagueIds')->willReturn([]);
+		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(false);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->monthClosureGuard = $this->createMock(MonthClosureGuard::class);
 		$this->absenceMapper = $this->createMock(AbsenceMapper::class);
@@ -527,6 +528,7 @@ class TimeEntryControllerTest extends TestCase
 
 		$this->userSession->method('getUser')->willReturn($user);
 		$this->teamResolver->method('getColleagueIds')->willReturn(['manager1']);
+		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(true);
 		$this->request->expects($this->once())->method('getParams')->willReturn([
 			'justification' => 'Wrong time recorded',
 			'newDate' => '2024-01-16',

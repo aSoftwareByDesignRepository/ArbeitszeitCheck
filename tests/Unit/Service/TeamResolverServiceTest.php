@@ -167,5 +167,74 @@ class TeamResolverServiceTest extends TestCase
 		$this->config->method('getAppValue')->willReturn('0');
 		$this->assertSame([], $this->service->getManagerIdsForEmployee('employee1'));
 	}
+
+	public function testHasAssignableManagerForEmployeeAppTeamsFalseWhenColleaguesButNoManagers(): void
+	{
+		$userId = 'employee1';
+		$this->config->method('getAppValue')->willReturn('1');
+
+		$membership = $this->getMockBuilder(TeamMember::class)
+			->addMethods(['getTeamId'])
+			->getMock();
+		$membership->method('getTeamId')->willReturn(50);
+
+		$this->teamMemberMapper->method('findByUserId')->with($userId)->willReturn([$membership]);
+		$this->teamManagerMapper->method('findByTeamId')->with(50)->willReturn([]);
+
+		$this->assertFalse($this->service->hasAssignableManagerForEmployee($userId));
+	}
+
+	public function testHasAssignableManagerForEmployeeAppTeamsTrueWhenOtherManagerAssigned(): void
+	{
+		$userId = 'employee1';
+		$this->config->method('getAppValue')->willReturn('1');
+
+		$membership = $this->getMockBuilder(TeamMember::class)
+			->addMethods(['getTeamId'])
+			->getMock();
+		$membership->method('getTeamId')->willReturn(50);
+
+		$mgr = new \OCA\ArbeitszeitCheck\Db\TeamManager();
+		$mgr->setTeamId(50);
+		$mgr->setUserId('boss1');
+
+		$this->teamMemberMapper->method('findByUserId')->with($userId)->willReturn([$membership]);
+		$this->teamManagerMapper->method('findByTeamId')->with(50)->willReturn([$mgr]);
+
+		$this->assertTrue($this->service->hasAssignableManagerForEmployee($userId));
+	}
+
+	public function testHasAssignableManagerForEmployeeLegacyUsesColleagues(): void
+	{
+		$this->config->method('getAppValue')->willReturn('0');
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('employee1');
+		$this->userManager->method('get')->with('employee1')->willReturn($user);
+
+		$group = $this->createMock(IGroup::class);
+		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+
+		$colleague = $this->createMock(IUser::class);
+		$colleague->method('getUID')->willReturn('other');
+		$group->method('getUsers')->willReturn([$user, $colleague]);
+
+		$this->assertTrue($this->service->hasAssignableManagerForEmployee('employee1'));
+	}
+
+	public function testHasAssignableManagerForEmployeeLegacyFalseWhenSoloInGroups(): void
+	{
+		$this->config->method('getAppValue')->willReturn('0');
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('solo');
+		$this->userManager->method('get')->with('solo')->willReturn($user);
+
+		$group = $this->createMock(IGroup::class);
+		$this->groupManager->method('getUserGroups')->with($user)->willReturn([$group]);
+		$group->method('getUsers')->willReturn([$user]);
+
+		$this->assertFalse($this->service->hasAssignableManagerForEmployee('solo'));
+	}
 }
 

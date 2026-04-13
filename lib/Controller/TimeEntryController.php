@@ -1453,13 +1453,13 @@ class TimeEntryController extends Controller
 				\OCP\Log\logger('arbeitszeitcheck')->warning('Failed to send correction request notification', ['exception' => $e]);
 			}
 
-			// Auto-approve when employee has no manager (no colleagues in team/groups)
-			if (!$this->employeeHasManager($userId)) {
+			// Auto-approve when no assignable manager exists (same rule as absences)
+			if (!$this->teamResolver->hasAssignableManagerForEmployee($userId)) {
 				$updatedEntry = $this->autoApproveTimeEntryCorrection($updatedEntry, $this->auditLogMapper);
 				return new JSONResponse([
 					'success' => true,
 					'entry' => $updatedEntry->getSummary(),
-					'message' => $this->l10n->t('Correction request submitted and auto-approved (no manager in your team).')
+					'message' => $this->l10n->t('Correction request submitted and auto-approved (no approver assigned in the app).')
 				]);
 			}
 
@@ -1483,16 +1483,6 @@ class TimeEntryController extends Controller
 	}
 
 	/**
-	 * Whether the employee has at least one manager (colleague in same team/group).
-	 * Used for auto-approving time entry corrections when no one would see them.
-	 */
-	private function employeeHasManager(string $employeeUserId): bool
-	{
-		$colleagueIds = $this->teamResolver->getColleagueIds($employeeUserId);
-		return !empty($colleagueIds);
-	}
-
-	/**
 	 * Auto-approve a time entry correction when the employee has no manager.
 	 * Ensures corrections are not stuck in pending_approval for solo users.
 	 *
@@ -1510,7 +1500,7 @@ class TimeEntryController extends Controller
 		// Preserve justification with auto-approval marker
 		$justificationData = json_decode($entry->getJustification() ?? '{}', true);
 		if (is_array($justificationData)) {
-			$justificationData['approval_comment'] = $this->l10n->t('Auto-approved: no manager assigned in your team.');
+			$justificationData['approval_comment'] = $this->l10n->t('Auto-approved: no approver is assigned to your team in the app.');
 			$justificationData['approved_at'] = date('c');
 			$justificationData['approved_by'] = 'system';
 			$entry->setJustification(json_encode($justificationData));

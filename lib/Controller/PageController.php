@@ -407,6 +407,9 @@ class PageController extends Controller
 
 		$navFlags = $this->getNavigationFlags($userId);
 
+		$employeeHasAssignableManager = $this->teamResolver->hasAssignableManagerForEmployee($userId);
+		$useAppTeams = $this->teamResolver->useAppTeams();
+
 		// Pending requests count: must use full list so filter doesn't affect stats
 		$absencesForStats = empty($filters) ? $absences : $this->absenceMapper->findByUser($userId);
 		$pendingCount = count(array_filter($absencesForStats, function ($a) {
@@ -447,6 +450,8 @@ class PageController extends Controller
 			],
 			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
+			'employeeHasAssignableManager' => $employeeHasAssignableManager,
+			'useAppTeams' => $useAppTeams,
 		] + $navFlags;
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'absences', $params);
@@ -469,6 +474,8 @@ class PageController extends Controller
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0, 'vacation_days_remaining' => 0, 'vacation_days_used_this_year' => 0, 'vacation_carryover_days' => 0, 'vacation_carryover_usable' => 0, 'vacation_carryover_expires_on' => null, 'vacation_carryover_locked_after_deadline' => false, 'vacation_annual_remaining' => 0, 'vacation_carryover_remaining' => 0, 'vacation_carryover_max_cap' => null, 'vacation_annual_entitlement' => 0, 'vacation_year' => (int)date('Y'), 'pending_requests' => 0],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
+				'employeeHasAssignableManager' => true,
+				'useAppTeams' => false,
 				'showSubstitutionLink' => false,
 				'showManagerLink' => false,
 				'showReportsLink' => false,
