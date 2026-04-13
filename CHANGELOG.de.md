@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+### Behoben
+
+- **Genehmigungs-Deadlock (App-Teams)**: Abwesenheiten und Zeiteintrags-Korrekturen behandeln „hat Kolleg:innen“ nicht mehr wie „hat eine:n Vorgesetzte:n“. Auto-Genehmigung, wenn **kein zuweisbarer Genehmiger** existiert, folgt `TeamResolverService::hasAssignableManagerForEmployee()` (explizite Team-Manager bei App-Teams; Legacy-Gruppenmodus weiterhin Kollegen-Proxy). Verhindert Anträge, die dauerhaft auf Managerfreigabe warten, obwohl niemand freigeben darf.
+- **Zeiteintrags-Korrekturen**: Gleiche Zuweisbarkeitsregel wie bei Abwesenheiten (zuvor nur Kollegen-IDs).
+
+### Hinzugefügt
+
+- **Repair-Schritt** `ReleaseStuckPendingAbsences`: setzt nach Migration verbliebene `pending`-Abwesenheiten unter derselben Bedingung automatisch auf genehmigt (idempotent).
+
+### Geändert
+
+- **UX**: Abwesenheiten zeigen einen Hinweis, wenn App-Teams aktiv sind und kein Genehmiger zugeordnet ist; in der Detailansicht erscheint bei veralteten hängenden Anträgen ein Warnhinweis (bis Repair/Admin die Teamkonfiguration korrigiert).
+
+### Dokumentation
+
+- Nutzerhandbücher (EN/DE), `tests/WORKFLOW_ROLE_MATRIX.md` und Entwicklerdokumentation zur Semantik „zuweisbarer Manager“ und zum Repair-Schritt ergänzt.
+
+## 1.1.13 – 2026-04-13
+
 ### Hinzugefügt
 
 - **Monatsabschluss: Karenz und Auto-Finalisierung**: Admin-Einstellung `month_closure_grace_days_after_eom` (0–90, Standard 0). Nach Monatsende haben Mitarbeitende so viele Kalendertage zur manuellen Finalisierung; ist der Monat danach noch offen, finalisiert ein täglicher Hintergrundauftrag automatisch (gleicher Snapshot wie manuell). Ausstehende Zeiteintragsfreigaben und offene Abwesenheits-Workflows blockieren die Auto-Finalisierung. Wiederöffnen bleibt Administrator:innen vorbehalten.

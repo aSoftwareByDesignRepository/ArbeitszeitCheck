@@ -30,6 +30,19 @@
 	display: block;
 }
 
+/* Approval workflow info: sits under page header, before list/filter or form */
+.section--approval-hint {
+	margin-top: var(--space-4, 1rem);
+	margin-bottom: var(--space-6, 1.5rem);
+}
+.section--approval-hint .alert {
+	margin-bottom: 0;
+}
+
+.absence-detail-stuck-callout {
+	margin-bottom: var(--space-6, 1.5rem);
+}
+
 .section--form {
 	padding: var(--space-8, 2rem);
 }

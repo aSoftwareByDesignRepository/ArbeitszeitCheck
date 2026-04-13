@@ -54,7 +54,7 @@ gehosteten Nextcloud.
 - PHP 8.1–8.4
 	]]></description>
 
-	<version>1.1.11</version>
+	<version>1.1.13</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="info@software-by-design.de" homepage="https://software-by-design.de">Alexander Mäule</author>
 
@@ -142,6 +142,7 @@ gehosteten Nextcloud.
 	<repair-steps>
 		<post-migration>
 			<step>OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays</step>
+			<step>OCA\ArbeitszeitCheck\Repair\ReleaseStuckPendingAbsences</step>
 		</post-migration>
 	</repair-steps>
 	<background-jobs>
@@ -150,5 +151,6 @@ gehosteten Nextcloud.
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\MissingTimeEntryJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\BreakReminderJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\VacationRolloverJob</job>
+		<job>OCA\ArbeitszeitCheck\BackgroundJob\MonthClosureAutoFinalizeJob</job>
 	</background-jobs>
 </info>

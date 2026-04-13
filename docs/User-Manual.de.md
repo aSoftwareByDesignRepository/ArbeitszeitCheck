@@ -54,6 +54,8 @@ Im Auswahldialog erscheinen nur Konten aus der Nextcloud-`admin`-Gruppe.
 
 - **Kommen/Gehen und Pausen** über die Zeiterfassung; Korrekturen und Begründungen nach internen Regeln.
 - **Abwesenheiten** beantragen und ggf. auf Freigabe warten. **Resturlaub** und Überträge werden angezeigt, wenn die Administration das gepflegt hat.
+  - **App-Teams (empfohlene Einrichtung):** Wenn Ihre Organisation **App-Teams** nutzt und in der App **kein:e Vorgesetzte:r** für Ihr Team hinterlegt ist, werden Anträge **ohne** Vertretung beim Absenden **automatisch genehmigt**—es gäbe sonst niemanden mit Managerfreigabe. Mit **Vertretung** läuft zuerst der Vertretungs-Schritt. Die Oberfläche kann dazu einen kurzen Hinweis anzeigen.
+  - **Älteres Gruppenmodell:** Verhalten folgt dem früheren „gleiche Gruppe“-Modell; die Administration sollte sicherstellen, dass Genehmigungen für Ihre Organisation weiterhin sinnvoll möglich sind.
 - **Manager-Dashboard** (als Führungskraft): Unter **Ausstehende Genehmigungen** erscheint der **Abwesenheitstyp in Ihrer Sprache** (z. B. Urlaub, Krankheit), nicht technische Kurzbezeichnungen. Wo freigeschaltet, bietet **Abwesenheiten der Mitarbeitenden** eine eigene Listen-/Filteransicht.
 - **Berichte** für Zeiträume erstellen und erlaubte Exporte nutzen (CSV, DATEV, …).
 - **Compliance-Hinweise** (z. B. fehlende Pausen) nach Vorgabe des Arbeitgebers bearbeiten.

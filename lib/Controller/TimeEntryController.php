@@ -14,12 +14,16 @@ namespace OCA\ArbeitszeitCheck\Controller;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
+use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
+use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCP\AppFramework\Controller;
 use OCP\IConfig;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -51,6 +55,9 @@ class TimeEntryController extends Controller
 	private TimeTrackingService $timeTrackingService;
 	private TeamResolverService $teamResolver;
 	private NotificationService $notificationService;
+	private MonthClosureGuard $monthClosureGuard;
+	private AbsenceMapper $absenceMapper;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		string $appName,
@@ -66,7 +73,10 @@ class TimeEntryController extends Controller
 		ComplianceService $complianceService,
 		TimeTrackingService $timeTrackingService,
 		TeamResolverService $teamResolver,
-		NotificationService $notificationService
+		NotificationService $notificationService,
+		MonthClosureGuard $monthClosureGuard,
+		AbsenceMapper $absenceMapper,
+		PermissionService $permissionService
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -81,6 +91,27 @@ class TimeEntryController extends Controller
 		$this->timeTrackingService = $timeTrackingService;
 		$this->teamResolver = $teamResolver;
 		$this->notificationService = $notificationService;
+		$this->monthClosureGuard = $monthClosureGuard;
+		$this->absenceMapper = $absenceMapper;
+		$this->permissionService = $permissionService;
+	}
+
+	private function jsonMonthFinalizedConflict(): JSONResponse
+	{
+		return new JSONResponse([
+			'success' => false,
+			'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+		], Http::STATUS_CONFLICT);
+	}
+
+	private function assertGuardTimeEntry(TimeEntry $entry): ?JSONResponse
+	{
+		try {
+			$this->monthClosureGuard->assertTimeEntryMutable($entry);
+		} catch (MonthFinalizedException $e) {
+			return $this->jsonMonthFinalizedConflict();
+		}
+		return null;
 	}
 
 	/**
@@ -96,6 +127,74 @@ class TimeEntryController extends Controller
 			throw new \Exception('User not authenticated');
 		}
 		return $user->getUID();
+	}
+
+	/**
+	 * Navigation flags for time-entries template (must match PageController::getNavigationFlags).
+	 *
+	 * @return array{showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool}
+	 */
+	private function getNavigationFlags(string $userId): array
+	{
+		$showSubstitutionLink = false;
+		$showManagerLink = false;
+		$showReportsLink = false;
+		$showAdminNav = false;
+
+		try {
+			$pending = $this->absenceMapper->findSubstitutePendingForUser($userId, 1, 0);
+			$showSubstitutionLink = \is_array($pending) && \count($pending) > 0;
+		} catch (\Throwable $e) {
+			$showSubstitutionLink = false;
+		}
+
+		try {
+			$canAccessManagerDashboard = $this->permissionService->canAccessManagerDashboard($userId);
+			$isAdmin = $this->permissionService->isAdmin($userId);
+
+			$showManagerLink = $canAccessManagerDashboard;
+			$showReportsLink = $canAccessManagerDashboard || $isAdmin;
+			$showAdminNav = $isAdmin;
+		} catch (\Throwable $e) {
+			$showManagerLink = false;
+			$showReportsLink = false;
+			$showAdminNav = false;
+		}
+
+		return [
+			'showSubstitutionLink' => $showSubstitutionLink,
+			'showManagerLink' => $showManagerLink,
+			'showReportsLink' => $showReportsLink,
+			'showAdminNav' => $showAdminNav,
+		];
+	}
+
+	/**
+	 * Shared template parameters for time-entries (month closure + navigation).
+	 *
+	 * @return array{monthClosureEnabled: bool, showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool}
+	 */
+	private function getTimeEntriesSharedTemplateParams(string $userId): array
+	{
+		return [
+			'monthClosureEnabled' => $this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
+		] + $this->getNavigationFlags($userId);
+	}
+
+	/**
+	 * Defaults when user context is unavailable (error pages).
+	 *
+	 * @return array{monthClosureEnabled: bool, showSubstitutionLink: bool, showManagerLink: bool, showReportsLink: bool, showAdminNav: bool}
+	 */
+	private function getTimeEntriesSharedTemplateParamsFallback(): array
+	{
+		return [
+			'monthClosureEnabled' => false,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => false,
+			'showReportsLink' => false,
+			'showAdminNav' => false,
+		];
 	}
 
 	/**
@@ -288,6 +387,8 @@ class TimeEntryController extends Controller
 	{
 		\OCP\Util::addTranslations('arbeitszeitcheck');
 
+		$userId = $this->getUserId();
+
 		// Get compliance configuration for frontend validation
 		$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
 		$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
@@ -304,7 +405,7 @@ class TimeEntryController extends Controller
 				'maxDailyHours' => $maxDailyHours,
 				'complianceStrictMode' => $complianceStrictMode,
 				'l' => $this->l10n,
-			]
+			] + $this->getTimeEntriesSharedTemplateParams($userId)
 		);
 		return $this->configureCSP($response);
 	}
@@ -343,7 +444,7 @@ class TimeEntryController extends Controller
 						'urlGenerator' => $this->urlGenerator,
 						'error' => $this->l10n->t('Access denied'),
 						'l' => $this->l10n,
-					]
+					] + $this->getTimeEntriesSharedTemplateParams($userId)
 				);
 				return $this->configureCSP($response);
 			}
@@ -383,7 +484,7 @@ class TimeEntryController extends Controller
 						'urlGenerator' => $this->urlGenerator,
 						'error' => $errorMessage,
 						'l' => $this->l10n,
-					]
+					] + $this->getTimeEntriesSharedTemplateParams($userId)
 				);
 				return $this->configureCSP($response);
 			}
@@ -404,11 +505,16 @@ class TimeEntryController extends Controller
 					'maxDailyHours' => $maxDailyHours,
 					'complianceStrictMode' => $complianceStrictMode,
 					'l' => $this->l10n,
-				]
+				] + $this->getTimeEntriesSharedTemplateParams($userId)
 			);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in edit method: ' . $e->getMessage(), ['exception' => $e]);
+			$shared = $this->getTimeEntriesSharedTemplateParamsFallback();
+			try {
+				$shared = $this->getTimeEntriesSharedTemplateParams($this->getUserId());
+			} catch (\Throwable $ignore) {
+			}
 			$response = new TemplateResponse(
 				$this->appName,
 				'time-entries',
@@ -416,7 +522,7 @@ class TimeEntryController extends Controller
 					'urlGenerator' => $this->urlGenerator,
 					'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 					'l' => $this->l10n,
-				]
+				] + $shared
 			);
 			return $this->configureCSP($response);
 		}
@@ -584,6 +690,11 @@ class TimeEntryController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
+			$mc = $this->assertGuardTimeEntry($timeEntry);
+			if ($mc !== null) {
+				return $mc;
+			}
+
 			$savedEntry = $this->timeEntryMapper->insert($timeEntry);
 
 			// Real-time compliance check for completed entries
@@ -660,6 +771,11 @@ class TimeEntryController extends Controller
 					'success' => false,
 					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
+			}
+
+			$mc0 = $this->assertGuardTimeEntry($entry);
+			if ($mc0 !== null) {
+				return $mc0;
 			}
 
 			// Check if entry can be edited
@@ -998,6 +1114,10 @@ class TimeEntryController extends Controller
 			}
 
 			$entry->setUpdatedAt(new \DateTime());
+			$mc1 = $this->assertGuardTimeEntry($entry);
+			if ($mc1 !== null) {
+				return $mc1;
+			}
 			$updatedEntry = $this->timeEntryMapper->update($entry);
 
 			// Real-time compliance check if entry is now completed
@@ -1168,6 +1288,11 @@ class TimeEntryController extends Controller
 				], Http::STATUS_FORBIDDEN);
 			}
 
+			$mcReq = $this->assertGuardTimeEntry($entry);
+			if ($mcReq !== null) {
+				return $mcReq;
+			}
+
 			// Check if entry can be corrected (not already pending)
 			$currentStatus = $entry->getStatus();
 			if ($currentStatus === TimeEntry::STATUS_PENDING_APPROVAL) {
@@ -1295,6 +1420,11 @@ class TimeEntryController extends Controller
 				}
 			}
 
+			$mcNew = $this->assertGuardTimeEntry($entry);
+			if ($mcNew !== null) {
+				return $mcNew;
+			}
+
 			$updatedEntry = $this->timeEntryMapper->update($entry);
 
 			// Create audit log
@@ -1323,13 +1453,13 @@ class TimeEntryController extends Controller
 				\OCP\Log\logger('arbeitszeitcheck')->warning('Failed to send correction request notification', ['exception' => $e]);
 			}
 
-			// Auto-approve when employee has no manager (no colleagues in team/groups)
-			if (!$this->employeeHasManager($userId)) {
+			// Auto-approve when no assignable manager exists (same rule as absences)
+			if (!$this->teamResolver->hasAssignableManagerForEmployee($userId)) {
 				$updatedEntry = $this->autoApproveTimeEntryCorrection($updatedEntry, $this->auditLogMapper);
 				return new JSONResponse([
 					'success' => true,
 					'entry' => $updatedEntry->getSummary(),
-					'message' => $this->l10n->t('Correction request submitted and auto-approved (no manager in your team).')
+					'message' => $this->l10n->t('Correction request submitted and auto-approved (no approver assigned in the app).')
 				]);
 			}
 
@@ -1353,16 +1483,6 @@ class TimeEntryController extends Controller
 	}
 
 	/**
-	 * Whether the employee has at least one manager (colleague in same team/group).
-	 * Used for auto-approving time entry corrections when no one would see them.
-	 */
-	private function employeeHasManager(string $employeeUserId): bool
-	{
-		$colleagueIds = $this->teamResolver->getColleagueIds($employeeUserId);
-		return !empty($colleagueIds);
-	}
-
-	/**
 	 * Auto-approve a time entry correction when the employee has no manager.
 	 * Ensures corrections are not stuck in pending_approval for solo users.
 	 *
@@ -1380,7 +1500,7 @@ class TimeEntryController extends Controller
 		// Preserve justification with auto-approval marker
 		$justificationData = json_decode($entry->getJustification() ?? '{}', true);
 		if (is_array($justificationData)) {
-			$justificationData['approval_comment'] = $this->l10n->t('Auto-approved: no manager assigned in your team.');
+			$justificationData['approval_comment'] = $this->l10n->t('Auto-approved: no approver is assigned to your team in the app.');
 			$justificationData['approved_at'] = date('c');
 			$justificationData['approved_by'] = 'system';
 			$entry->setJustification(json_encode($justificationData));
@@ -1447,6 +1567,11 @@ class TimeEntryController extends Controller
 					'success' => false,
 					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
+			}
+
+			$mcDel = $this->assertGuardTimeEntry($entry);
+			if ($mcDel !== null) {
+				return $mcDel;
 			}
 
 			// Check if entry can be deleted (only manual entries)
@@ -1954,6 +2079,11 @@ class TimeEntryController extends Controller
 						'error' => implode(', ', $translatedErrors),
 						'errors' => $translatedErrors
 					], Http::STATUS_BAD_REQUEST);
+				}
+
+				$mc = $this->assertGuardTimeEntry($timeEntry);
+				if ($mc !== null) {
+					return $mc;
 				}
 
 				$savedEntry = $this->timeEntryMapper->insert($timeEntry);

@@ -79,6 +79,9 @@ class AbsenceServiceTest extends TestCase
 	/** When true, prospective allocation (non-null dates) returns allocation_valid false */
 	private bool $vacationAllocationFailProspective = false;
 
+	/** Controls TeamResolverService::hasAssignableManagerForEmployee in unit tests */
+	private bool $hasAssignableManagerForTests = true;
+
 	/** @var IDBConnection|\PHPUnit\Framework\MockObject\MockObject */
 	private $db;
 
@@ -92,6 +95,10 @@ class AbsenceServiceTest extends TestCase
 		$this->teamResolver = $this->createMock(TeamResolverService::class);
 		$this->teamResolver->method('getColleagueIds')->willReturnCallback(function ($userId) {
 			return ['colleague1', 'colleague2'];
+		});
+		$this->hasAssignableManagerForTests = true;
+		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturnCallback(function () {
+			return $this->hasAssignableManagerForTests;
 		});
 		$this->config = $this->createMock(IConfig::class);
 		$this->config->method('getAppValue')->with('arbeitszeitcheck', 'require_substitute_types', '[]')->willReturn('[]');
@@ -1095,5 +1102,53 @@ class AbsenceServiceTest extends TestCase
 		$this->expectExceptionMessage('You are not the designated substitute for this absence');
 
 		$this->service->declineBySubstitute($absenceId, $wrongSubstituteId, 'comment');
+	}
+
+	/**
+	 * When no assignable manager exists, requests without substitute are auto-approved at creation.
+	 */
+	public function testCreateAbsenceAutoApprovesWhenNoAssignableManager(): void
+	{
+		$this->hasAssignableManagerForTests = false;
+
+		$userId = 'solo';
+		$start = (new \DateTime())->modify('+14 days');
+		$end = (clone $start)->modify('+2 days');
+		$data = [
+			'type' => Absence::TYPE_SICK_LEAVE,
+			'start_date' => $start->format('Y-m-d'),
+			'end_date' => $end->format('Y-m-d'),
+			'reason' => 'Test',
+		];
+
+		$this->absenceMapper->method('findOverlapping')->willReturn([]);
+		$this->holidayCalendarService->method('computeWorkingDaysForUser')->willReturn(3.0);
+
+		$inserted = new Absence();
+		$inserted->setId(500);
+		$inserted->setUserId($userId);
+		$inserted->setType(Absence::TYPE_SICK_LEAVE);
+		$inserted->setStartDate(clone $start);
+		$inserted->setEndDate(clone $end);
+		$inserted->setStatus(Absence::STATUS_PENDING);
+		$inserted->setDays(3.0);
+		$inserted->setCreatedAt(new \DateTime());
+		$inserted->setUpdatedAt(new \DateTime());
+
+		$this->absenceMapper->expects($this->once())->method('insert')->willReturn($inserted);
+		$this->absenceMapper->expects($this->once())->method('update')
+			->willReturnCallback(function ($a) {
+				$this->assertSame(Absence::STATUS_APPROVED, $a->getStatus());
+				return $a;
+			});
+		$this->auditLogMapper->expects($this->exactly(2))->method('logAction');
+		$this->db->method('beginTransaction');
+		$this->db->method('commit');
+		$this->db->method('rollBack');
+
+		$this->notificationService->expects($this->once())->method('notifyAbsenceApproved');
+
+		$result = $this->service->createAbsence($data, $userId);
+		$this->assertSame(Absence::STATUS_APPROVED, $result->getStatus());
 	}
 }

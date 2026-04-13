@@ -495,6 +495,24 @@ php occ arbeitszeitcheck:vacation-rollover --dry-run
 
 ---
 
+## Absence and correction approval (assignable manager)
+
+**Single source of truth:** `TeamResolverService::hasAssignableManagerForEmployee(string $employeeUserId): bool`
+
+- **`use_app_teams` enabled:** Returns true iff `getManagerIdsForEmployee()` is non-empty (explicit team managers; the employee’s own UID is never counted as their own manager). **Colleagues alone do not imply an approver**—this matches `PermissionService::canManageEmployee()` for non-admin actors.
+- **Legacy (groups only):** Returns true iff `getColleagueIds()` is non-empty (proxy only; there are no explicit manager rows). **Known product caveat:** manager HTTP APIs still require app teams + assignment for non-admins; auto-approval in legacy mode avoids deadlocks where nobody could approve.
+
+**Consumers:**
+
+- `AbsenceService`: auto-approves new `pending` requests (and after substitute approval when applicable) when the predicate is false; `doAutoApproveDbWork` records audit `absence_auto_approved`.
+- `TimeEntryController::requestCorrection`: auto-completes correction when the predicate is false (same deadlock avoidance as absences).
+
+**Repair:** `OCA\ArbeitszeitCheck\Repair\ReleaseStuckPendingAbsences` (registered in `appinfo/info.xml`) calls `AbsenceService::autoApprovePendingIfNoAssignableManager()` for each `pending` absence—idempotent, safe to re-run.
+
+**Tests:** `TeamResolverServiceTest`, `AbsenceServiceTest` (including auto-approve path), `TimeEntryControllerTest`; matrix notes in `tests/WORKFLOW_ROLE_MATRIX.md`.
+
+---
+
 ## API Development
 
 ### Adding New Endpoints

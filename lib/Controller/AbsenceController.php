@@ -18,6 +18,8 @@ use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureService;
+use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -49,6 +51,7 @@ class AbsenceController extends Controller
 	private IUserManager $userManager;
 	private IL10N $l10n;
 	private IConfig $config;
+	private MonthClosureService $monthClosureService;
 
 	public function __construct(
 		string $appName,
@@ -62,7 +65,8 @@ class AbsenceController extends Controller
 		IUserManager $userManager,
 		CSPService $cspService,
 		IL10N $l10n,
-		IConfig $config
+		IConfig $config,
+		MonthClosureService $monthClosureService
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
@@ -74,6 +78,7 @@ class AbsenceController extends Controller
 		$this->userManager = $userManager;
 		$this->l10n = $l10n;
 		$this->config = $config;
+		$this->monthClosureService = $monthClosureService;
 		$this->setCspService($cspService);
 	}
 
@@ -262,6 +267,26 @@ class AbsenceController extends Controller
 	{
 		try {
 			$userId = $this->getUserId();
+			try {
+				$absRow = $this->absenceMapper->find($id);
+				if ($absRow->getUserId() === $userId) {
+					$this->monthClosureService->assertDateRangeMutable(
+						$userId,
+						$absRow->getStartDate(),
+						$absRow->getEndDate()
+					);
+				}
+			} catch (MonthFinalizedException $e) {
+				$msg = $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.');
+				if (!$this->wantsJson()) {
+					$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.page.absences') . '?error=' . rawurlencode($msg);
+					return new RedirectResponse($url, Http::STATUS_SEE_OTHER);
+				}
+				return new JSONResponse(['success' => false, 'error' => $msg], Http::STATUS_CONFLICT);
+			} catch (DoesNotExistException $e) {
+				// cancelAbsence will handle not found
+			}
+
 			$absence = $this->absenceService->cancelAbsence($id, $userId);
 
 			if (!$this->wantsJson()) {
@@ -313,6 +338,11 @@ class AbsenceController extends Controller
 				'success' => true,
 				'absence' => $absence->getSummary()
 			]);
+		} catch (MonthFinalizedException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.')
+			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
@@ -343,6 +373,10 @@ class AbsenceController extends Controller
 			$this->absenceService->shortenAbsence($id, $userId, $endDate);
 			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
 			return new RedirectResponse($url . '?shortened=1', Http::STATUS_SEE_OTHER);
+		} catch (MonthFinalizedException $e) {
+			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
+			$msg = $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.');
+			return new RedirectResponse($url . '?shorten_error=' . rawurlencode($msg), Http::STATUS_SEE_OTHER);
 		} catch (\Throwable $e) {
 			$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.show', ['id' => $id]);
 			return new RedirectResponse($url . '?shorten_error=' . rawurlencode($this->getSafeErrorMessage($e)), Http::STATUS_SEE_OTHER);
@@ -510,6 +544,8 @@ class AbsenceController extends Controller
 				'colleagues' => $colleagues,
 				'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
 				'l' => $this->l10n,
+				'employeeHasAssignableManager' => $this->teamResolver->hasAssignableManagerForEmployee($userId),
+				'useAppTeams' => $this->teamResolver->useAppTeams(),
 			]
 		);
 		return $this->configureCSP($response);
@@ -564,6 +600,8 @@ class AbsenceController extends Controller
 					'colleagues' => $colleagues,
 					'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
 					'l' => $this->l10n,
+					'employeeHasAssignableManager' => $this->teamResolver->hasAssignableManagerForEmployee($userId),
+					'useAppTeams' => $this->teamResolver->useAppTeams(),
 				]
 			);
 			return $this->configureCSP($response);
@@ -656,6 +694,8 @@ class AbsenceController extends Controller
 					'currentUserId' => $userId,
 					'usersUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.users'),
 					'l' => $this->l10n,
+					'employeeHasAssignableManager' => $this->teamResolver->hasAssignableManagerForEmployee($userId),
+					'useAppTeams' => $this->teamResolver->useAppTeams(),
 				]
 			);
 			return $this->configureCSP($response);
@@ -714,6 +754,18 @@ class AbsenceController extends Controller
 					'success' => false,
 					'error' => $this->l10n->t('Type, start_date, and end_date are required')
 				], Http::STATUS_BAD_REQUEST);
+			}
+
+			try {
+				$ds = new \DateTime($data['start_date']);
+				$de = new \DateTime($data['end_date']);
+				$de->setTime(23, 59, 59);
+				$this->monthClosureService->assertDateRangeMutable($userId, $ds, $de);
+			} catch (MonthFinalizedException $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+				], Http::STATUS_CONFLICT);
 			}
 
 			$absence = $this->absenceService->createAbsence($data, $userId);
@@ -792,6 +844,29 @@ class AbsenceController extends Controller
 				$data['substitute_user_id'] = $substitute_user_id === '' ? null : $substitute_user_id;
 			}
 
+			try {
+				$existing = $this->absenceMapper->find($id);
+				if ($existing->getUserId() !== $userId) {
+					return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Access denied')], Http::STATUS_FORBIDDEN);
+				}
+				$this->monthClosureService->assertDateRangeMutable(
+					$userId,
+					$existing->getStartDate(),
+					$existing->getEndDate()
+				);
+				$nStart = isset($data['start_date']) ? new \DateTime($data['start_date']) : $existing->getStartDate();
+				$nEnd = isset($data['end_date']) ? new \DateTime($data['end_date']) : $existing->getEndDate();
+				$nEnd->setTime(23, 59, 59);
+				$this->monthClosureService->assertDateRangeMutable($userId, $nStart, $nEnd);
+			} catch (MonthFinalizedException $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+				], Http::STATUS_CONFLICT);
+			} catch (DoesNotExistException $e) {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Absence not found')], Http::STATUS_NOT_FOUND);
+			}
+
 			$absence = $this->absenceService->updateAbsence($id, $data, $userId);
 
 			if (!$this->wantsJson()) {
@@ -852,6 +927,19 @@ class AbsenceController extends Controller
 					'success' => false,
 					'error' => $this->l10n->t('Access denied')
 				], Http::STATUS_FORBIDDEN);
+			}
+
+			try {
+				$this->monthClosureService->assertDateRangeMutable(
+					$userId,
+					$absence->getStartDate(),
+					$absence->getEndDate()
+				);
+			} catch (MonthFinalizedException $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+				], Http::STATUS_CONFLICT);
 			}
 
 			// Delegate business rules (pending/substitute_pending only, etc.) to the service.

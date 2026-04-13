@@ -13,14 +13,17 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
 use OCA\ArbeitszeitCheck\Controller\TimeEntryController;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
+use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
@@ -78,6 +81,15 @@ class TimeEntryControllerTest extends TestCase
 	/** @var NotificationService|\PHPUnit\Framework\MockObject\MockObject */
 	private $notificationService;
 
+	/** @var MonthClosureGuard|\PHPUnit\Framework\MockObject\MockObject */
+	private $monthClosureGuard;
+
+	/** @var AbsenceMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $absenceMapper;
+
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -104,7 +116,14 @@ class TimeEntryControllerTest extends TestCase
 		$this->timeTrackingService->method('adjustEndTimeForDailyMaximum');
 		$this->teamResolver = $this->createMock(TeamResolverService::class);
 		$this->teamResolver->method('getColleagueIds')->willReturn([]);
+		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(false);
 		$this->notificationService = $this->createMock(NotificationService::class);
+		$this->monthClosureGuard = $this->createMock(MonthClosureGuard::class);
+		$this->absenceMapper = $this->createMock(AbsenceMapper::class);
+		$this->absenceMapper->method('findSubstitutePendingForUser')->willReturn([]);
+		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->permissionService->method('canAccessManagerDashboard')->willReturn(false);
+		$this->permissionService->method('isAdmin')->willReturn(false);
 
 		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
 
@@ -122,7 +141,10 @@ class TimeEntryControllerTest extends TestCase
 			$this->complianceService,
 			$this->timeTrackingService,
 			$this->teamResolver,
-			$this->notificationService
+			$this->notificationService,
+			$this->monthClosureGuard,
+			$this->absenceMapper,
+			$this->permissionService
 		);
 	}
 
@@ -506,6 +528,7 @@ class TimeEntryControllerTest extends TestCase
 
 		$this->userSession->method('getUser')->willReturn($user);
 		$this->teamResolver->method('getColleagueIds')->willReturn(['manager1']);
+		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(true);
 		$this->request->expects($this->once())->method('getParams')->willReturn([
 			'justification' => 'Wrong time recorded',
 			'newDate' => '2024-01-16',

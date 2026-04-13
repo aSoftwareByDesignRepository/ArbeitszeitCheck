@@ -45,6 +45,7 @@ class AbsenceService
 	private HolidayService $holidayCalendarService;
 	private VacationYearBalanceMapper $vacationYearBalanceMapper;
 	private VacationAllocationService $vacationAllocationService;
+	private ?MonthClosureService $monthClosureService;
 
 	public function __construct(
 		AbsenceMapper $absenceMapper,
@@ -61,7 +62,8 @@ class AbsenceService
 		HolidayService $holidayCalendarService,
 		VacationYearBalanceMapper $vacationYearBalanceMapper,
 		VacationAllocationService $vacationAllocationService,
-		?AbsenceNotificationMailService $absenceNotificationMailService = null
+		?AbsenceNotificationMailService $absenceNotificationMailService = null,
+		?MonthClosureService $monthClosureService = null
 	) {
 		$this->absenceMapper = $absenceMapper;
 		$this->auditLogMapper = $auditLogMapper;
@@ -78,6 +80,7 @@ class AbsenceService
 		$this->vacationYearBalanceMapper = $vacationYearBalanceMapper;
 		$this->absenceNotificationMailService = $absenceNotificationMailService;
 		$this->vacationAllocationService = $vacationAllocationService;
+		$this->monthClosureService = $monthClosureService;
 	}
 
 	/**
@@ -128,8 +131,8 @@ class AbsenceService
 				$savedAbsence->getSummary()
 			);
 
-			// Auto-approve when employee has no manager (no colleagues in team/groups)
-			if ($savedAbsence->getStatus() === Absence::STATUS_PENDING && !$this->employeeHasManager($userId)) {
+			// Auto-approve when no assignable manager exists (avoids deadlock: pending with nobody who can approve)
+			if ($savedAbsence->getStatus() === Absence::STATUS_PENDING && !$this->teamResolver->hasAssignableManagerForEmployee($userId)) {
 				$savedAbsence = $this->doAutoApproveDbWork($savedAbsence);
 				$autoApproved = true;
 			}
@@ -474,6 +477,13 @@ class AbsenceService
 		$newEnd = $this->parseDate($newEndDate);
 		$newEnd->setTime(0, 0, 0);
 
+		if ($this->monthClosureService !== null) {
+			$this->monthClosureService->assertDateRangeMutable($userId, $startDate, $originalEndDate);
+			$newEndWithDayEnd = clone $newEnd;
+			$newEndWithDayEnd->setTime(23, 59, 59);
+			$this->monthClosureService->assertDateRangeMutable($userId, $startDate, $newEndWithDayEnd);
+		}
+
 		if ($newEnd < $startDate) {
 			throw new \Exception($this->l10n->t('The new end date cannot be before the start date.'));
 		}
@@ -705,8 +715,8 @@ class AbsenceService
 				$substituteUserId
 			);
 
-			// When employee has no manager: auto-approve immediately (DB work only; notifications after commit)
-			if (!$this->employeeHasManager($absence->getUserId())) {
+			// When no assignable manager: auto-approve immediately (DB work only; notifications after commit)
+			if (!$this->teamResolver->hasAssignableManagerForEmployee($absence->getUserId())) {
 				$updatedAbsence = $this->doAutoApproveDbWork($updatedAbsence);
 				$wasAutoApproved = true;
 			}
@@ -1188,23 +1198,6 @@ class AbsenceService
 	}
 
 	/**
-	 * Whether the employee has at least one manager who could approve.
-	 * Uses getManagerIdsForEmployee when app-owned teams are enabled.
-	 * Falls back to getColleagueIds for group-based mode (legacy setups).
-	 * Used to auto-approve absences when no one would see them in the manager dashboard.
-	 */
-	private function employeeHasManager(string $employeeUserId): bool
-	{
-		$managerIds = $this->teamResolver->getManagerIdsForEmployee($employeeUserId);
-		if (!empty($managerIds)) {
-			return true;
-		}
-		// Group-based mode: no explicit managers, fall back to colleagues for legacy
-		$colleagueIds = $this->teamResolver->getColleagueIds($employeeUserId);
-		return !empty($colleagueIds);
-	}
-
-	/**
 	 * Perform only the DB writes needed to auto-approve an absence (no notifications/emails).
 	 *
 	 * Call this inside an open transaction so the status update and the audit log are
@@ -1222,7 +1215,7 @@ class AbsenceService
 
 		$oldData = $absence->getSummary();
 		$absence->setStatus(Absence::STATUS_APPROVED);
-		$absence->setApproverComment($this->l10n->t('Auto-approved: no manager assigned in your team.'));
+		$absence->setApproverComment($this->l10n->t('Auto-approved: no approver is assigned to your team in the app.'));
 		$absence->setApprovedBy(null);
 		$absence->setApprovedAt(new \DateTime());
 		$absence->setUpdatedAt(new \DateTime());
@@ -1243,8 +1236,8 @@ class AbsenceService
 	}
 
 	/**
-	 * Auto-approve an absence when the employee has no manager (no colleagues).
-	 * Ensures absences are not stuck in PENDING forever for solo users or users alone in their team.
+	 * Auto-approve an absence when no assignable manager exists for the employee.
+	 * Ensures absences are not stuck in PENDING when nobody can approve under current team rules.
 	 *
 	 * This method wraps `doAutoApproveDbWork` in its own transaction and then sends
 	 * notifications. Prefer calling `doAutoApproveDbWork` directly inside a caller-owned
@@ -1280,6 +1273,29 @@ class AbsenceService
 		}
 
 		return $updatedAbsence;
+	}
+
+	/**
+	 * Repair / migration: if an absence is still pending but no user can approve it under current
+	 * team rules, auto-approve it (same outcome as at creation time). Idempotent.
+	 *
+	 * @return bool True if the absence was updated
+	 */
+	public function autoApprovePendingIfNoAssignableManager(int $absenceId): bool
+	{
+		try {
+			$absence = $this->absenceMapper->find($absenceId);
+		} catch (DoesNotExistException $e) {
+			return false;
+		}
+		if ($absence->getStatus() !== Absence::STATUS_PENDING) {
+			return false;
+		}
+		if ($this->teamResolver->hasAssignableManagerForEmployee($absence->getUserId())) {
+			return false;
+		}
+		$this->autoApproveForNoManager($absence);
+		return true;
 	}
 
 	/**

@@ -41,6 +41,8 @@ $usersUrl = $_['usersUrl'] ?? '';
 $substituteDisplayName = $_['substituteDisplayName'] ?? null;
 $requireSubstituteTypes = $_['requireSubstituteTypes'] ?? [];
 $colleagues = $_['colleagues'] ?? [];
+$employeeHasAssignableManager = $_['employeeHasAssignableManager'] ?? true;
+$useAppTeams = $_['useAppTeams'] ?? false;
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -83,7 +85,11 @@ $colleagues = $_['colleagues'] ?? [];
                     ?></h2>
                     <p><?php 
                         if ($mode === 'create') {
-                            p($l->t('Request a new absence. Your manager will review and approve or reject your request.'));
+                            if ($useAppTeams && !$employeeHasAssignableManager) {
+                                p($l->t('Request a new absence. If you do not select a substitute, your request is approved automatically when you submit it.'));
+                            } else {
+                                p($l->t('Request a new absence. Your manager will review and approve or reject your request.'));
+                            }
                         } elseif ($mode === 'edit') {
                             p($l->t('Edit your absence request. You can only edit pending requests.'));
                         } elseif ($mode === 'view') {
@@ -113,6 +119,17 @@ $colleagues = $_['colleagues'] ?? [];
                 <?php endif; ?>
             </div>
         </header>
+
+        <?php if ($useAppTeams && !$employeeHasAssignableManager && in_array($mode, ['list', 'create', 'edit'], true)): ?>
+            <div class="section section--approval-hint" role="region" aria-labelledby="approval-hint-title">
+                <div class="alert alert--info" role="status" aria-live="polite">
+                    <div class="alert-content">
+                        <h3 id="approval-hint-title" class="alert-title"><?php p($l->t('How your request is approved')); ?></h3>
+                        <p class="alert-message"><?php p($l->t('No approver is assigned to your team in the app. Requests you submit without a substitute are approved automatically when you send them.')); ?></p>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <?php if ($mode === 'list'): ?>
             <!-- Filter section (hidden by default, toggled by Filter button) -->
@@ -308,6 +325,16 @@ $colleagues = $_['colleagues'] ?? [];
             <!-- Read-only Absence Details -->
             <section class="section section--detail absence-detail-view" aria-labelledby="detail-title">
                 <h3 id="detail-title" class="section__title visually-hidden"><?php p($l->t('Absence details')); ?></h3>
+
+                <?php if ($absence->getStatus() === 'pending' && $useAppTeams && !$employeeHasAssignableManager): ?>
+                    <div class="absence-detail-stuck-callout">
+                        <div class="alert alert--warning" role="alert">
+                            <div class="alert-content">
+                                <p class="alert-message"><?php p($l->t('This request is waiting for approval, but no approver is assigned to your team in the app. Contact your administrator to fix the team setup, or wait until the system can process it.')); ?></p>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <!-- Header: type, status, period summary -->
                 <div class="absence-detail-hero">

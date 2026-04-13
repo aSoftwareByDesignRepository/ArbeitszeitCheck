@@ -269,4 +269,19 @@ class TeamResolverService
 			throw $e;
 		}
 	}
+
+	/**
+	 * Whether the employee has at least one user who can approve absences / time corrections
+	 * under current team configuration (used for auto-approval when nobody can act as manager).
+	 *
+	 * - App-teams mode: true iff {@see getManagerIdsForEmployee} is non-empty (colleagues alone do not count).
+	 * - Legacy (group) mode: true iff {@see getColleagueIds} is non-empty (no explicit managers in DB).
+	 */
+	public function hasAssignableManagerForEmployee(string $employeeUserId): bool
+	{
+		if ($this->useAppTeams()) {
+			return $this->getManagerIdsForEmployee($employeeUserId) !== [];
+		}
+		return $this->getColleagueIds($employeeUserId) !== [];
+	}
 }
