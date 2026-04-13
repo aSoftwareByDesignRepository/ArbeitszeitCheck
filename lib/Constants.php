@@ -79,6 +79,12 @@ final class Constants
 	public const CONFIG_MONTH_CLOSURE_ENABLED = 'month_closure_enabled';
 
 	/**
+	 * App config: JSON array of user IDs that are allowed to administer this app.
+	 * Empty means all Nextcloud admins are app-admins (backward compatible default).
+	 */
+	public const CONFIG_APP_ADMIN_USER_IDS = 'app_admin_user_ids';
+
+	/**
 	 * Days after the last day of a calendar month until automatic finalization runs (daily job).
 	 * "0" = no automatic finalization (employees must finalize manually, or admin reopens).
 	 */

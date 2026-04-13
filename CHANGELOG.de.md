@@ -3,16 +3,20 @@
 ### Hinzugefügt
 
 - **Monatsabschluss: Karenz und Auto-Finalisierung**: Admin-Einstellung `month_closure_grace_days_after_eom` (0–90, Standard 0). Nach Monatsende haben Mitarbeitende so viele Kalendertage zur manuellen Finalisierung; ist der Monat danach noch offen, finalisiert ein täglicher Hintergrundauftrag automatisch (gleicher Snapshot wie manuell). Ausstehende Zeiteintragsfreigaben und offene Abwesenheits-Workflows blockieren die Auto-Finalisierung. Wiederöffnen bleibt Administrator:innen vorbehalten.
+- **App-Admin-Whitelist**: Neue Admin-Einstellung `app_admin_user_ids`, um die Administration von ArbeitszeitCheck auf eine ausgewählte Teilmenge der Nextcloud-Admins zu begrenzen. Leere Auswahl bleibt rückwärtskompatibel (alle Nextcloud-Admins dürfen die App verwalten).
+- **Docker-Testziel für Security-Role-Gating**: Verdrahtung von `scripts/test-security-role-gating-docker.sh` über `make test-security-role-gating-docker` und `composer test:security-role-gating:docker` für schnelle Autorisierungs-Regressionstests im Container-Setup.
 
 ### Geändert
 
 - **Monatsabschluss UX/API**: Klarere Karten-UI, sichtbares Erfolgs-/Fehlerfeedback (WCAG), serverseitiges `canFinalize` mit lokalisierten Sperrgründen; manuelle Finalisierung lehnt zukünftige Kalendermonate ab; Abwesenheits-Workflow (`pending`, `substitute_pending`, `substitute_declined`) zusätzlich zu ausstehenden Zeiteintragskorrekturen; API 401 bei fehlender Anmeldung wo passend; Admin: eigener Abschnitt „Monatsabschluss“; Karenzfeld bleibt editierbar mit Hinweis, dass der Wert gespeichert wird und bei aktivierter Funktion gilt; Wiederöffnen mit durchsuchbarer Mitarbeitenden-Auswahl und klarerer Rollenbeschreibung; Validierungsfehler mit höherem Kontrast über Themes hinweg. Auto-Finalize protokolliert Einzelfehler.
 - **Release-/Signatur-Workflow für Integritätsprüfung gehärtet**: `make release-signed` signiert jetzt den entpackten Release-Archivinhalt (nicht den lokalen Entwicklungs-Checkout), prüft verbotene Entwicklungs-Pfade und packt das signierte Archiv für Deployment/App-Store neu.
+- **Admin-Autorisierung zentral erzwungen**: Zugriffe auf `AdminController`-Routen werden jetzt per Middleware auf App-Admin-Rechte geprüft; nicht berechtigte angemeldete Nutzer erhalten eine konsistente 403-Seite.
 
 ### Dokumentation
 
 - **Deployment-Hinweise ergänzt**: Die Release-Dokumentation fordert nun explizit das Deployment aus dem signierten Tarball und beschreibt das typische Fehlerbild (`.git/*` / `node_modules/*`) bei versehentlicher Signierung eines Dev-Trees.
 - **Deployment-Helferskript**: `release/deploy-from-release.sh` hinzugefügt für Deployment aus signierten Release-Archiven mit Sicherheitsprüfungen (verbotene Pfade, erforderliche `signature.json`, optionales Disable/Enable und `occ integrity:check-app`).
+- **Admin-Betrieb**: Nutzer-/Entwicklerdokumentation ergänzt um Einrichtung der App-Admin-Whitelist, Rückfallverhalten bei leerer Auswahl und Verifikation des Role-Gatings im Docker-Testlauf.
 
 ## 1.1.12 – 2026-04-09
 

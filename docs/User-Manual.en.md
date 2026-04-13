@@ -35,8 +35,18 @@ All data stays in your **Nextcloud** instance.
 - **Substitute** (if used): Approve or reject coverage for an absence.
 - **Manager / team lead**: Approve absences for team members, see team views where permitted.
 - **Administrator**: Global settings, users, holidays, compliance options, exports.
+- **App administrator (optional restriction)**: Your organization can limit ArbeitszeitCheck administration to selected Nextcloud admins only. If this is configured, other Nextcloud admins may still be platform admins but will see access denied for ArbeitszeitCheck admin pages.
 
 Exact permissions depend on your Nextcloud groups and app configuration.
+
+### For administrators: how to configure app administrators
+
+1. Open **ArbeitszeitCheck → Admin settings**.
+2. In **App administrators (ArbeitszeitCheck)**, search/select the Nextcloud admin accounts that should manage this app.
+3. Save settings.
+4. Leave the list empty if you want the backward-compatible default (**all** Nextcloud admins can administer ArbeitszeitCheck).
+
+Only users in Nextcloud's `admin` group are eligible in this picker.
 
 ---
 

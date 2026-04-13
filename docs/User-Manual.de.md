@@ -35,8 +35,18 @@ Alle Daten verbleiben in Ihrer **Nextcloud-Instanz**.
 - **Vertretung** (falls genutzt): Eindeckung für Abwesenheiten bestätigen oder ablehnen.
 - **Führungskraft / Team**: Abwesenheiten genehmigen, Teamübersichten je nach Rechten.
 - **Administratorin / Administrator**: Globale Einstellungen, Nutzer, Feiertage, Compliance-Optionen, Exporte.
+- **App-Administrator:in (optionale Einschränkung)**: Ihre Organisation kann die ArbeitszeitCheck-Administration auf ausgewählte Nextcloud-Admins begrenzen. Ist das gesetzt, bleiben andere Nextcloud-Admins zwar Plattform-Admins, erhalten in den ArbeitszeitCheck-Adminseiten aber „Zugriff verweigert“.
 
 Die genauen Rechte hängen von Nextcloud-Gruppen und der App-Konfiguration ab.
+
+### Für Administrator:innen: App-Administrator:innen konfigurieren
+
+1. Öffnen Sie **ArbeitszeitCheck → Admin-Einstellungen**.
+2. Wählen Sie im Bereich **App-Administratoren (ArbeitszeitCheck)** die Nextcloud-Admin-Konten aus, die diese App verwalten dürfen.
+3. Speichern Sie die Einstellungen.
+4. Lassen Sie die Liste leer, wenn das rückwärtskompatible Standardverhalten gelten soll (**alle** Nextcloud-Admins dürfen ArbeitszeitCheck verwalten).
+
+Im Auswahldialog erscheinen nur Konten aus der Nextcloud-`admin`-Gruppe.
 
 ---
 

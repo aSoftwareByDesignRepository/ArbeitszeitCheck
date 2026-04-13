@@ -7,7 +7,9 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Service;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\AppInfo\Application;
+use OCA\ArbeitszeitCheck\Constants;
 use OCP\App\IAppManager;
+use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
@@ -15,11 +17,18 @@ use Psr\Log\LoggerInterface;
 
 class PermissionServiceTest extends TestCase
 {
-	private function createService(IGroupManager $groupManager, TeamResolverService $teamResolver, ?IAppManager $appManager = null, ?IUserManager $userManager = null): PermissionService
+	private function createService(IGroupManager $groupManager, TeamResolverService $teamResolver, ?IAppManager $appManager = null, ?IConfig $config = null, ?IUserManager $userManager = null): PermissionService
 	{
+		if ($config === null) {
+			$configMock = $this->createMock(IConfig::class);
+			$configMock->method('getAppValue')->willReturn('[]');
+			$config = $configMock;
+		}
+
 		return new PermissionService(
 			$groupManager,
 			$appManager ?? $this->createMock(IAppManager::class),
+			$config,
 			$userManager ?? $this->createMock(IUserManager::class),
 			$teamResolver,
 			$this->createMock(LoggerInterface::class)
@@ -151,7 +160,7 @@ class PermissionServiceTest extends TestCase
 		$userManager = $this->createMock(IUserManager::class);
 		$userManager->method('get')->with('user1')->willReturn($this->createMock(\OCP\IUser::class));
 		$teamResolver = $this->createMock(TeamResolverService::class);
-		$service = $this->createService($groupManager, $teamResolver, $appManager, $userManager);
+		$service = $this->createService($groupManager, $teamResolver, $appManager, null, $userManager);
 
 		$this->assertTrue($service->isUserAllowedByAccessGroups('user1'));
 	}
@@ -162,7 +171,7 @@ class PermissionServiceTest extends TestCase
 		$appManager = $this->createMock(IAppManager::class);
 		$appManager->method('getAppRestriction')->with(Application::APP_ID)->willReturn(['group_a', 'group_a', 'group_b']);
 		$teamResolver = $this->createMock(TeamResolverService::class);
-		$service = $this->createService($groupManager, $teamResolver, $appManager, $this->createMock(IUserManager::class));
+		$service = $this->createService($groupManager, $teamResolver, $appManager, null, $this->createMock(IUserManager::class));
 
 		$this->assertSame(['group_a', 'group_b'], $service->getAllowedAccessGroups());
 	}
@@ -174,9 +183,24 @@ class PermissionServiceTest extends TestCase
 		$appManager = $this->createMock(IAppManager::class);
 		$appManager->expects($this->never())->method('isEnabledForUser');
 		$teamResolver = $this->createMock(TeamResolverService::class);
-		$service = $this->createService($groupManager, $teamResolver, $appManager, $this->createMock(IUserManager::class));
+		$service = $this->createService($groupManager, $teamResolver, $appManager, null, $this->createMock(IUserManager::class));
 
 		$this->assertTrue($service->isUserAllowedByAccessGroups('admin1'));
+	}
+
+	public function testIsAdminRespectsConfiguredAppAdminSubset(): void
+	{
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('isAdmin')->willReturn(true);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')
+			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
+			->willReturn('["hr_admin"]');
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$service = $this->createService($groupManager, $teamResolver, null, $config);
+
+		$this->assertTrue($service->isAdmin('hr_admin'));
+		$this->assertFalse($service->isAdmin('other_admin'));
 	}
 }
 

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Controller\AdminController;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
@@ -221,6 +222,34 @@ class AdminControllerTest extends TestCase
 		$this->assertArrayHasKey('accessAllowedGroups', $data['settings']);
 	}
 
+	public function testGetAdminSettingsReturnsConfiguredAppAdminsAndAvailableList(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function (string $key, string $default = '') {
+				if ($key === Constants::CONFIG_APP_ADMIN_USER_IDS) {
+					return '["hr_admin"]';
+				}
+				return $default;
+			});
+		$adminGroup = $this->createMock(\OCP\IGroup::class);
+		$adminUser = $this->createMock(IUser::class);
+		$adminUser->method('getUID')->willReturn('hr_admin');
+		$adminUser->method('getDisplayName')->willReturn('HR Admin');
+		$adminGroup->method('getUsers')->willReturn([$adminUser]);
+		$this->groupManager->method('get')->with('admin')->willReturn($adminGroup);
+		$this->groupManager->method('isAdmin')->willReturnCallback(static fn (string $uid): bool => $uid === 'hr_admin');
+		$this->userManager->method('get')->with('hr_admin')->willReturn($adminUser);
+
+		$response = $this->controller->getAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+		$this->assertSame(['hr_admin'], $data['settings']['appAdminUserIds']);
+		$this->assertArrayHasKey('availableAppAdmins', $data);
+		$this->assertCount(1, $data['availableAppAdmins']);
+		$this->assertSame('hr_admin', $data['availableAppAdmins'][0]['id']);
+	}
+
 	public function testUpdateAdminSettingsNormalizesAccessAllowedGroups(): void
 	{
 		$this->request->method('getParams')
@@ -270,6 +299,35 @@ class AdminControllerTest extends TestCase
 
 		$this->assertTrue($data['success']);
 		$this->assertArrayHasKey('settings', $data);
+	}
+
+	public function testUpdateAdminSettingsNormalizesAppAdminUsers(): void
+	{
+		$this->request->method('getParams')
+			->willReturn([
+				'appAdminUserIds' => ['hr_admin', 'hr_admin', 'missing', 'non_admin', 'security_admin'],
+			]);
+
+		$this->groupManager->method('isAdmin')->willReturnCallback(static function (string $uid): bool {
+			return in_array($uid, ['hr_admin', 'security_admin'], true);
+		});
+		$this->userManager->method('get')->willReturnCallback(function (string $uid) {
+			if (!in_array($uid, ['hr_admin', 'security_admin'], true)) {
+				return null;
+			}
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn($uid);
+			return $user;
+		});
+		$this->appConfig->expects($this->once())
+			->method('setAppValueString')
+			->with(Constants::CONFIG_APP_ADMIN_USER_IDS, '["hr_admin","security_admin"]');
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+		$this->assertSame(['hr_admin', 'security_admin'], $data['settings']['appAdminUserIds']);
 	}
 
 	/**

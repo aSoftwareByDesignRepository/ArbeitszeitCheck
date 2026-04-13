@@ -72,11 +72,13 @@ class AdminSettings implements ISettings
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
 			'accessAllowedGroups' => $this->readAccessAllowedGroups(),
+			'appAdminUserIds' => $this->readConfiguredAppAdminUserIds(),
 		];
 
 		return new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
 			'settings' => $settings,
 			'availableGroups' => $this->getAvailableGroups(),
+			'availableAppAdmins' => $this->getAvailableAppAdmins(),
 			'l' => $this->l10n,
 		]);
 	}
@@ -122,6 +124,59 @@ class AdminSettings implements ISettings
 			$displayName = trim((string)$group->getDisplayName());
 			$out[] = ['id' => $gid, 'displayName' => $displayName !== '' ? $displayName : $gid];
 		}
+		usort($out, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
+		return $out;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function readConfiguredAppAdminUserIds(): array
+	{
+		$raw = $this->appConfig->getAppValueString(Constants::CONFIG_APP_ADMIN_USER_IDS, '[]');
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+
+		$unique = [];
+		foreach ($decoded as $candidate) {
+			$userId = trim((string)$candidate);
+			if ($userId === '' || isset($unique[$userId])) {
+				continue;
+			}
+			if (!$this->groupManager->isAdmin($userId)) {
+				continue;
+			}
+			$unique[$userId] = true;
+		}
+
+		return array_keys($unique);
+	}
+
+	/**
+	 * @return list<array{id: string, displayName: string}>
+	 */
+	private function getAvailableAppAdmins(): array
+	{
+		$out = [];
+		$adminGroup = $this->groupManager->get('admin');
+		if ($adminGroup === null) {
+			return [];
+		}
+
+		foreach ($adminGroup->getUsers() as $adminUser) {
+			$userId = trim((string)$adminUser->getUID());
+			if ($userId === '') {
+				continue;
+			}
+			$displayName = trim((string)$adminUser->getDisplayName());
+			$out[] = [
+				'id' => $userId,
+				'displayName' => $displayName !== '' ? $displayName : $userId,
+			];
+		}
+
 		usort($out, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
 		return $out;
 	}

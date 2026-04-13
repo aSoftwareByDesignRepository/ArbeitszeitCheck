@@ -8,7 +8,7 @@ archive_name = $(app_name)-$(version).tar.gz
 archive_path = $(release_dir)/$(archive_name)
 occ = ../../occ
 
-.PHONY: release verify-release verify-signature-manifest sign-release release-signed clean
+.PHONY: release verify-release verify-signature-manifest sign-release release-signed clean test-security-role-gating-docker
 
 release:
 	@echo "Building $(app_name) v$(version)..."
@@ -80,3 +80,6 @@ sign-release: verify-release
 
 release-signed: release sign-release verify-signature-manifest
 	@echo "Release build + Nextcloud signature complete."
+
+test-security-role-gating-docker:
+	@bash scripts/test-security-role-gating-docker.sh

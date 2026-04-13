@@ -16,6 +16,7 @@ $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $settings = $_['settings'] ?? [];
 $availableGroups = is_array($_['availableGroups'] ?? null) ? $_['availableGroups'] : [];
+$availableAppAdmins = is_array($_['availableAppAdmins'] ?? null) ? $_['availableAppAdmins'] : [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdminSettings');
 $monthClosureReopenUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.month_closure.reopen');
@@ -56,6 +57,54 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
                 <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
                 <section class="admin-settings-section" aria-labelledby="section-access-heading">
                     <h3 id="section-access-heading" class="admin-settings-section__title"><?php p($l->t('Access control')); ?></h3>
+                    <div class="form-group">
+                        <?php $selectedAppAdmins = is_array($settings['appAdminUserIds'] ?? null) ? $settings['appAdminUserIds'] : []; ?>
+                        <label for="appAdminUsersSearch" class="form-label"><?php p($l->t('ArbeitszeitCheck app administrators')); ?></label>
+                        <input type="text"
+                               id="appAdminUsersSearch"
+                               class="form-input"
+                               autocomplete="off"
+                               spellcheck="false"
+                               placeholder="<?php p($l->t('Search administrators...')); ?>"
+                               aria-describedby="appAdminUsers-help appAdminUsers-note appAdminUsersCount">
+                        <p id="appAdminUsersCount" class="form-help form-help--note" aria-live="polite">
+                            <?php
+                            $selectedAdminCount = count($selectedAppAdmins);
+                            p($selectedAdminCount > 0
+                                ? $l->t('%d app admin(s) selected', [$selectedAdminCount])
+                                : $l->t('No app admins selected (all Nextcloud admins are allowed).'));
+                            ?>
+                        </p>
+                        <div id="appAdminUsersList" class="access-groups-list" role="group" aria-label="<?php p($l->t('App administrator selection')); ?>">
+                            <?php foreach ($availableAppAdmins as $adminOption): ?>
+                                <?php
+                                $adminId = (string)($adminOption['id'] ?? '');
+                                if ($adminId === '') {
+                                    continue;
+                                }
+                                $adminDisplayName = (string)($adminOption['displayName'] ?? $adminId);
+                                $isSelectedAdmin = in_array($adminId, $selectedAppAdmins, true);
+                                ?>
+                                <label class="access-groups-item" data-app-admin-search="<?php p(strtolower($adminDisplayName . ' ' . $adminId)); ?>">
+                                    <input type="checkbox"
+                                           name="appAdminUserIds[]"
+                                           value="<?php p($adminId); ?>"
+                                           <?php echo $isSelectedAdmin ? 'checked' : ''; ?>>
+                                    <span class="access-groups-item__label"><?php p($adminDisplayName); ?></span>
+                                    <span class="access-groups-item__meta"><?php p($adminId); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <p id="appAdminUsersEmpty" class="form-help form-help--note" hidden>
+                            <?php p($l->t('No matching administrators found for your search.')); ?>
+                        </p>
+                        <p id="appAdminUsers-help" class="form-help">
+                            <?php p($l->t('Select who can administer ArbeitszeitCheck. If empty, every Nextcloud admin can administer the app (backward compatible default).')); ?>
+                        </p>
+                        <p id="appAdminUsers-note" class="form-help form-help--note">
+                            <?php p($l->t('Only users in the Nextcloud admin group are listed. Changes take effect immediately after saving.')); ?>
+                        </p>
+                    </div>
                     <div class="form-group">
                         <?php $selectedAccessGroups = is_array($settings['accessAllowedGroups'] ?? null) ? $settings['accessAllowedGroups'] : []; ?>
                         <label for="accessAllowedGroupsSearch" class="form-label"><?php p($l->t('Allowed Nextcloud groups')); ?></label>
@@ -673,4 +722,6 @@ window.ArbeitszeitCheck.l10n.monthReopenConfirm = <?php echo json_encode($l->t('
 window.ArbeitszeitCheck.l10n.monthReopenSuccess = <?php echo json_encode($l->t('Month reopened.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.accessGroupsSelected = <?php echo json_encode($l->t('%s group(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.accessGroupsAllUsers = <?php echo json_encode($l->t('No groups selected (all users are allowed).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.appAdminsSelected = <?php echo json_encode($l->t('%s app admin(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.appAdminsAllAdmins = <?php echo json_encode($l->t('No app admins selected (all Nextcloud admins are allowed).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>

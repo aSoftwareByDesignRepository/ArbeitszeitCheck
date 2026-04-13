@@ -441,11 +441,13 @@ class AdminController extends Controller
 			'vacationRolloverEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_ENABLED, '1') === '1',
 			'vacationRolloverIncludeUnusedAnnual' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL, '0') === '1',
 			'accessAllowedGroups' => $this->getAllowedAccessGroupsFromConfig(),
+			'appAdminUserIds' => $this->getConfiguredAppAdminUserIds(),
 		];
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
 			'settings' => $settings,
 			'availableGroups' => $this->getAvailableGroupsForAccessControl(),
+			'availableAppAdmins' => $this->getAvailableAppAdminsForAccessControl(),
 			'urlGenerator' => $this->urlGenerator,
 			'l' => $this->l10n,
 			'showSubstitutionLink' => false,
@@ -1240,12 +1242,14 @@ class AdminController extends Controller
 				'vacationRolloverEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_ENABLED, '1') === '1',
 				'vacationRolloverIncludeUnusedAnnual' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL, '0') === '1',
 				'accessAllowedGroups' => $this->getAllowedAccessGroupsFromConfig(),
+				'appAdminUserIds' => $this->getConfiguredAppAdminUserIds(),
 			];
 
 			return new JSONResponse([
 				'success' => true,
 				'settings' => $settings,
 				'availableGroups' => $this->getAvailableGroupsForAccessControl(),
+				'availableAppAdmins' => $this->getAvailableAppAdminsForAccessControl(),
 			]);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
@@ -1392,6 +1396,17 @@ class AdminController extends Controller
 				$updatedSettings['accessAllowedGroups'] = $this->getAllowedAccessGroupsFromConfig();
 			}
 
+			if (array_key_exists('appAdminUserIds', $params)) {
+				$userIdsRaw = $params['appAdminUserIds'];
+				$userIds = is_array($userIdsRaw) ? $userIdsRaw : (is_string($userIdsRaw) ? json_decode($userIdsRaw, true) : []);
+				if (!is_array($userIds)) {
+					$userIds = [];
+				}
+				$normalizedAdminUserIds = $this->normalizeAppAdminUserIds($userIds);
+				$this->appConfig->setAppValueString(Constants::CONFIG_APP_ADMIN_USER_IDS, json_encode($normalizedAdminUserIds));
+				$updatedSettings['appAdminUserIds'] = $normalizedAdminUserIds;
+			}
+
 			if (empty($updatedSettings)) {
 				return new JSONResponse([
 					'success' => false,
@@ -1418,6 +1433,44 @@ class AdminController extends Controller
 	private function getAllowedAccessGroupsFromConfig(): array
 	{
 		return $this->normalizeExistingGroupIds($this->appManager->getAppRestriction('arbeitszeitcheck'));
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function getConfiguredAppAdminUserIds(): array
+	{
+		$raw = $this->appConfig->getAppValueString(Constants::CONFIG_APP_ADMIN_USER_IDS, '[]');
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+
+		return $this->normalizeAppAdminUserIds($decoded);
+	}
+
+	/**
+	 * @param array<mixed> $userIds
+	 * @return list<string>
+	 */
+	private function normalizeAppAdminUserIds(array $userIds): array
+	{
+		$unique = [];
+		foreach ($userIds as $userId) {
+			$candidate = trim((string)$userId);
+			if ($candidate === '' || isset($unique[$candidate])) {
+				continue;
+			}
+			if (!$this->groupManager->isAdmin($candidate)) {
+				continue;
+			}
+			if ($this->userManager->get($candidate) === null) {
+				continue;
+			}
+			$unique[$candidate] = true;
+		}
+
+		return array_keys($unique);
 	}
 
 	/**
@@ -1486,6 +1539,33 @@ class AdminController extends Controller
 		usort($out, static function (array $a, array $b): int {
 			return strcasecmp($a['displayName'], $b['displayName']);
 		});
+		return $out;
+	}
+
+	/**
+	 * @return list<array{id: string, displayName: string}>
+	 */
+	private function getAvailableAppAdminsForAccessControl(): array
+	{
+		$out = [];
+		$adminGroup = $this->groupManager->get('admin');
+		if ($adminGroup === null) {
+			return [];
+		}
+
+		foreach ($adminGroup->getUsers() as $adminUser) {
+			$userId = trim((string)$adminUser->getUID());
+			if ($userId === '') {
+				continue;
+			}
+			$displayName = trim((string)$adminUser->getDisplayName());
+			$out[] = [
+				'id' => $userId,
+				'displayName' => $displayName !== '' ? $displayName : $userId,
+			];
+		}
+
+		usort($out, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
 		return $out;
 	}
 

@@ -10,16 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Month closure grace period and auto-finalization**: Admin setting `month_closure_grace_days_after_eom` (0–90, default 0). After end-of-month, employees have that many calendar days to finalize manually; if the month is still open afterward, a daily background job finalizes it automatically (same snapshot as manual finalize). Pending time entry approvals and open absence workflow states block auto-finalization. Reopening remains admin-only.
+- **App-admin allowlist**: New admin setting `app_admin_user_ids` to restrict ArbeitszeitCheck administration to a selected subset of Nextcloud admins. Empty selection keeps backward-compatible behavior (all Nextcloud admins can administer the app).
+- **Security role-gating Docker test target**: Added `scripts/test-security-role-gating-docker.sh` wiring via `make test-security-role-gating-docker` and `composer test:security-role-gating:docker` for fast authorization regression checks in containerized setups.
 
 ### Changed
 
 - **Month closure UX and API**: Employee UI uses a clearer card layout, visible feedback for success/errors (WCAG-friendly), server-driven `canFinalize` with localized block reasons (feature off, future month, pending approvals). Manual finalize rejects future calendar months. Absence workflow (`pending`, `substitute_pending`, `substitute_declined`) is enforced alongside pending time entry corrections. Unauthorized API access returns 401 where appropriate. Admin settings: dedicated “Month closure” section; grace-days field stays editable with copy explaining it is saved even when closure is off; reopen uses searchable employee picker and clearer administrator vs. employee wording. Form validation error callouts use higher-contrast text and tinted surfaces across themes. Auto-finalize job logs per-user failures for operations.
 - **Release/signing workflow hardened for integrity checks**: `make release-signed` now signs the extracted release archive payload (not the local development checkout), validates forbidden development paths are excluded, and repacks the signed archive for deployment/App Store upload.
+- **Admin authorization enforcement**: Access to `AdminController` routes now uses middleware-level app-admin checks with a dedicated exception and a consistent 403 response page for authenticated users without app-admin rights.
 
 ### Documentation
 
 - **Deployment guidance**: Release docs now explicitly require production deployment from the signed tarball only and document the common integrity-failure pattern (`.git/*` / `node_modules/*` lists) caused by signing a dev tree.
 - **Deployment helper script**: Added `release/deploy-from-release.sh` to deploy from signed release archives with safety checks (forbidden path scan, required `signature.json`, optional app disable/enable and `occ integrity:check-app`).
+- **Admin operations**: User/developer docs now describe how to configure app-admin allowlisting, what the default fallback is, and how to verify authorization gating in Docker-based test runs.
 
 ## 1.1.12 - 2026-04-09
 

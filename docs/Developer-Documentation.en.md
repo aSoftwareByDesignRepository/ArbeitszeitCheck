@@ -1,7 +1,7 @@
 # Developer Documentation – ArbeitszeitCheck
 
 **Version:** 1.1.12  
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-13
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.
 
@@ -699,6 +699,13 @@ docker compose exec -T nextcloud-app bash -lc "cd /var/www/html/custom_apps/arbe
 docker compose exec -T nextcloud-app bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && composer test:integration"
 ```
 
+Run focused security role-gating checks in Docker:
+```bash
+make test-security-role-gating-docker
+# or
+composer test:security-role-gating:docker
+```
+
 Run JS unit tests inside the Nextcloud container:
 ```bash
 docker compose exec -T nextcloud bash -lc "cd /var/www/html/custom_apps/arbeitszeitcheck && npm ci && npm test"
@@ -834,6 +841,14 @@ public function getEntry(int $id): JSONResponse
     return new JSONResponse($entry->getSummary());
 }
 ```
+
+### App-admin authorization model
+
+- The app distinguishes between **Nextcloud platform admins** and optional **ArbeitszeitCheck app admins**.
+- Config key: `app_admin_user_ids` (`Constants::CONFIG_APP_ADMIN_USER_IDS`) stores a JSON array of allowed user IDs.
+- Empty list is intentionally backward compatible: all Nextcloud admins are app admins.
+- `AppAdminMiddleware` is registered in `Application::register()` and gates `AdminController` methods centrally.
+- Unauthorized access to admin pages throws `NotAppAdminException` and resolves to a 403 response.
 
 ### SQL Injection Prevention
 

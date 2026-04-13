@@ -17,6 +17,7 @@ use OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays;
 use OCA\ArbeitszeitCheck\Listener\LoadSidebarScripts;
 use OCA\ArbeitszeitCheck\Listener\CSPListener;
 use OCA\ArbeitszeitCheck\Listener\UserDeletedListener;
+use OCA\ArbeitszeitCheck\Middleware\AppAdminMiddleware;
 use OCA\ArbeitszeitCheck\Notification\Notifier;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
@@ -64,6 +65,7 @@ class Application extends App implements IBootstrap {
 
 		// Register notification provider
 		$context->registerNotifierService(Notifier::class);
+		$context->registerMiddleware(AppAdminMiddleware::class);
 
 		// Register event listeners
 		$context->registerEventListener(LoadSidebar::class, LoadSidebarScripts::class);
@@ -373,6 +375,7 @@ class Application extends App implements IBootstrap {
 			return new PermissionService(
 				$c->query(\OCP\IGroupManager::class),
 				$c->query(\OCP\App\IAppManager::class),
+				$c->query(\OCP\IConfig::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(TeamResolverService::class),
 				$c->query(\Psr\Log\LoggerInterface::class)

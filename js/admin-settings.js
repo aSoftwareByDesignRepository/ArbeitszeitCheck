@@ -40,7 +40,61 @@
         });
 
         initMonthReopenUserPicker();
+        initAppAdminsPicker();
         initAccessGroupsPicker();
+    }
+
+    function initAppAdminsPicker() {
+        const search = Utils.$('#appAdminUsersSearch');
+        const list = Utils.$('#appAdminUsersList');
+        const empty = Utils.$('#appAdminUsersEmpty');
+        const countEl = Utils.$('#appAdminUsersCount');
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        if (!search || !list) {
+            return;
+        }
+
+        const items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
+        const checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="appAdminUserIds[]"]'));
+
+        function updateCount() {
+            if (!countEl) {
+                return;
+            }
+            const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
+            if (selectedCount === 0) {
+                countEl.textContent = l10n.appAdminsAllAdmins || 'No app admins selected (all Nextcloud admins are allowed).';
+                return;
+            }
+            const template = l10n.appAdminsSelected || '%s app admin(s) selected';
+            countEl.textContent = template.indexOf('%s') !== -1
+                ? template.replace('%s', String(selectedCount))
+                : String(selectedCount) + ' ' + template;
+        }
+
+        function applyFilter() {
+            const q = String(search.value || '').trim().toLowerCase();
+            let visible = 0;
+            items.forEach(function(item) {
+                const haystack = String(item.getAttribute('data-app-admin-search') || '');
+                const show = q === '' || haystack.indexOf(q) !== -1;
+                item.hidden = !show;
+                if (show) {
+                    visible++;
+                }
+            });
+            if (empty) {
+                empty.hidden = visible !== 0;
+            }
+        }
+
+        Utils.on(search, 'input', applyFilter);
+        checkboxes.forEach(function(box) {
+            Utils.on(box, 'change', updateCount);
+        });
+
+        updateCount();
+        applyFilter();
     }
 
     function initAccessGroupsPicker() {
@@ -136,6 +190,11 @@
             ? []
             : (Array.isArray(accessGroupsRaw) ? accessGroupsRaw : [accessGroupsRaw]);
         delete formData['accessAllowedGroups[]'];
+        const appAdminRaw = formData['appAdminUserIds[]'];
+        formData.appAdminUserIds = appAdminRaw === undefined
+            ? []
+            : (Array.isArray(appAdminRaw) ? appAdminRaw : [appAdminRaw]);
+        delete formData['appAdminUserIds[]'];
 
         // Convert numbers (use defaults on invalid/empty)
         const num = (v, def) => { const n = parseFloat(v); return (Number.isFinite(n) ? n : def); };
