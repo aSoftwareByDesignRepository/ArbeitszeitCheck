@@ -17,6 +17,7 @@ use OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays;
 use OCA\ArbeitszeitCheck\Listener\LoadSidebarScripts;
 use OCA\ArbeitszeitCheck\Listener\CSPListener;
 use OCA\ArbeitszeitCheck\Listener\UserDeletedListener;
+use OCA\ArbeitszeitCheck\Middleware\AppAdminMiddleware;
 use OCA\ArbeitszeitCheck\Notification\Notifier;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
@@ -64,6 +65,7 @@ class Application extends App implements IBootstrap {
 
 		// Register notification provider
 		$context->registerNotifierService(Notifier::class);
+		$context->registerMiddleware(AppAdminMiddleware::class);
 
 		// Register event listeners
 		$context->registerEventListener(LoadSidebar::class, LoadSidebarScripts::class);
@@ -147,6 +149,40 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\MonthClosureMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\MonthClosureMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\MonthClosureRevisionMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\MonthClosureRevisionMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Service\MonthClosureService(
+				$c->query(\OCA\ArbeitszeitCheck\Db\MonthClosureMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\MonthClosureRevisionMapper::class),
+				$c->query(ReportingService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
+				$c->query(IDBConnection::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\Psr\Log\LoggerInterface::class),
+				$c->query(PermissionService::class)
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\MonthClosureGuard::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Service\MonthClosureGuard(
+				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class)
+			);
+		});
+
 		$context->registerService(BackfillAbsenceDays::class, function($c) {
 			return new BackfillAbsenceDays(
 				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
@@ -181,7 +217,8 @@ class Application extends App implements IBootstrap {
 				$c->query(ComplianceService::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(\OCP\IConfig::class),
-				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class)
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureGuard::class)
 			);
 		});
 
@@ -224,7 +261,8 @@ class Application extends App implements IBootstrap {
 				$c->query(HolidayService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class),
 				$c->query(VacationAllocationService::class),
-				$c->query(AbsenceNotificationMailService::class)
+				$c->query(AbsenceNotificationMailService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class)
 			);
 		});
 
@@ -238,7 +276,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IL10N::class),
 				$c->query(NotificationService::class),
 				$c->query(HolidayService::class),
-				$c->query(\OCP\IConfig::class)
+				$c->query(\OCP\IConfig::class),
+				$c->query(PermissionService::class)
 			);
 		});
 
@@ -271,7 +310,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationRolloverLogMapper::class),
 				$c->query(\OCP\IUserManager::class),
-				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class)
+				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
+				$c->query(PermissionService::class)
 			);
 		});
 
@@ -315,7 +355,8 @@ class Application extends App implements IBootstrap {
 				$c->query(OvertimeService::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\IL10N::class),
-				$c->query(HolidayService::class)
+				$c->query(HolidayService::class),
+				$c->query(PermissionService::class)
 			);
 		});
 
@@ -333,6 +374,9 @@ class Application extends App implements IBootstrap {
 		$context->registerService(PermissionService::class, function($c) {
 			return new PermissionService(
 				$c->query(\OCP\IGroupManager::class),
+				$c->query(\OCP\App\IAppManager::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IUserManager::class),
 				$c->query(TeamResolverService::class),
 				$c->query(\Psr\Log\LoggerInterface::class)
 			);

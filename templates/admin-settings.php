@@ -15,8 +15,12 @@ declare(strict_types=1);
 $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $settings = $_['settings'] ?? [];
+$availableGroups = is_array($_['availableGroups'] ?? null) ? $_['availableGroups'] : [];
+$availableAppAdmins = is_array($_['availableAppAdmins'] ?? null) ? $_['availableAppAdmins'] : [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdminSettings');
+$monthClosureReopenUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.month_closure.reopen');
+$adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers');
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -51,6 +55,105 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
 
             <form id="admin-settings-form" class="form admin-settings-form" method="post" action="#" novalidate>
                 <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
+                <section class="admin-settings-section" aria-labelledby="section-access-heading">
+                    <h3 id="section-access-heading" class="admin-settings-section__title"><?php p($l->t('Access control')); ?></h3>
+                    <div class="form-group">
+                        <?php $selectedAppAdmins = is_array($settings['appAdminUserIds'] ?? null) ? $settings['appAdminUserIds'] : []; ?>
+                        <label for="appAdminUsersSearch" class="form-label"><?php p($l->t('ArbeitszeitCheck app administrators')); ?></label>
+                        <input type="text"
+                               id="appAdminUsersSearch"
+                               class="form-input"
+                               autocomplete="off"
+                               spellcheck="false"
+                               placeholder="<?php p($l->t('Search administrators...')); ?>"
+                               aria-describedby="appAdminUsers-help appAdminUsers-note appAdminUsersCount">
+                        <p id="appAdminUsersCount" class="form-help form-help--note" aria-live="polite">
+                            <?php
+                            $selectedAdminCount = count($selectedAppAdmins);
+                            p($selectedAdminCount > 0
+                                ? $l->t('%d app admin(s) selected', [$selectedAdminCount])
+                                : $l->t('No app admins selected (all Nextcloud admins are allowed).'));
+                            ?>
+                        </p>
+                        <div id="appAdminUsersList" class="access-groups-list" role="group" aria-label="<?php p($l->t('App administrator selection')); ?>">
+                            <?php foreach ($availableAppAdmins as $adminOption): ?>
+                                <?php
+                                $adminId = (string)($adminOption['id'] ?? '');
+                                if ($adminId === '') {
+                                    continue;
+                                }
+                                $adminDisplayName = (string)($adminOption['displayName'] ?? $adminId);
+                                $isSelectedAdmin = in_array($adminId, $selectedAppAdmins, true);
+                                ?>
+                                <label class="access-groups-item" data-app-admin-search="<?php p(strtolower($adminDisplayName . ' ' . $adminId)); ?>">
+                                    <input type="checkbox"
+                                           name="appAdminUserIds[]"
+                                           value="<?php p($adminId); ?>"
+                                           <?php echo $isSelectedAdmin ? 'checked' : ''; ?>>
+                                    <span class="access-groups-item__label"><?php p($adminDisplayName); ?></span>
+                                    <span class="access-groups-item__meta"><?php p($adminId); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <p id="appAdminUsersEmpty" class="form-help form-help--note" hidden>
+                            <?php p($l->t('No matching administrators found for your search.')); ?>
+                        </p>
+                        <p id="appAdminUsers-help" class="form-help">
+                            <?php p($l->t('Select who can administer ArbeitszeitCheck. If empty, every Nextcloud admin can administer the app (backward compatible default).')); ?>
+                        </p>
+                        <p id="appAdminUsers-note" class="form-help form-help--note">
+                            <?php p($l->t('Only users in the Nextcloud admin group are listed. Changes take effect immediately after saving.')); ?>
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <?php $selectedAccessGroups = is_array($settings['accessAllowedGroups'] ?? null) ? $settings['accessAllowedGroups'] : []; ?>
+                        <label for="accessAllowedGroupsSearch" class="form-label"><?php p($l->t('Allowed Nextcloud groups')); ?></label>
+                        <input type="text"
+                               id="accessAllowedGroupsSearch"
+                               class="form-input"
+                               autocomplete="off"
+                               spellcheck="false"
+                               placeholder="<?php p($l->t('Search groups...')); ?>"
+                               aria-describedby="accessAllowedGroups-help accessAllowedGroups-note accessAllowedGroupsCount">
+                        <p id="accessAllowedGroupsCount" class="form-help form-help--note" aria-live="polite">
+                            <?php
+                            $selectedCount = count($selectedAccessGroups);
+                            p($selectedCount > 0
+                                ? $l->t('%d group(s) selected', [$selectedCount])
+                                : $l->t('No groups selected (all users are allowed).'));
+                            ?>
+                        </p>
+                        <div id="accessAllowedGroupsList" class="access-groups-list" role="group" aria-label="<?php p($l->t('Group selection')); ?>">
+                            <?php foreach ($availableGroups as $groupOption): ?>
+                                <?php
+                                $groupId = (string)($groupOption['id'] ?? '');
+                                if ($groupId === '') {
+                                    continue;
+                                }
+                                $groupDisplayName = (string)($groupOption['displayName'] ?? $groupId);
+                                $isSelected = in_array($groupId, $selectedAccessGroups, true);
+                                ?>
+                                <label class="access-groups-item" data-access-group-search="<?php p(strtolower($groupDisplayName . ' ' . $groupId)); ?>">
+                                    <input type="checkbox"
+                                           name="accessAllowedGroups[]"
+                                           value="<?php p($groupId); ?>"
+                                           <?php echo $isSelected ? 'checked' : ''; ?>>
+                                    <span class="access-groups-item__label"><?php p($groupDisplayName); ?></span>
+                                    <span class="access-groups-item__meta"><?php p($groupId); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <p id="accessAllowedGroupsEmpty" class="form-help form-help--note" hidden>
+                            <?php p($l->t('No matching groups found for your search.')); ?>
+                        </p>
+                        <p id="accessAllowedGroups-help" class="form-help">
+                            <?php p($l->t('Leave empty to allow all users (default behavior). If one or more groups are selected, only members of these groups can use this app. Administrators are always allowed.')); ?>
+                        </p>
+                        <p id="accessAllowedGroups-note" class="form-help form-help--note">
+                            <?php p($l->t('Select one or more groups. The rule applies immediately after saving settings.')); ?>
+                        </p>
+                    </div>
+                </section>
                 <section class="admin-settings-section" aria-labelledby="section-compliance-heading">
                     <h3 id="section-compliance-heading" class="admin-settings-section__title"><?php p($l->t('Compliance and working time rules')); ?></h3>
                 <div class="form-group">
@@ -134,8 +237,118 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
                     </div>
                 </section>
 
+                <?php $monthClosureOn = !empty($settings['monthClosureEnabled']); ?>
+                <section class="admin-settings-section" aria-labelledby="section-month-closure-heading">
+                    <h3 id="section-month-closure-heading" class="admin-settings-section__title"><?php p($l->t('Month closure (revision-safe)')); ?></h3>
+                    <p class="form-help form-help--block" id="month-closure-section-intro">
+                        <?php p($l->t('Employees seal a calendar month when work is complete. Administrators can reopen a sealed month if corrections are needed.')); ?>
+                    </p>
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox"
+                                   id="monthClosureEnabled"
+                                   name="monthClosureEnabled"
+                                   <?php echo $monthClosureOn ? 'checked' : ''; ?>
+                                   aria-describedby="month-closure-section-intro monthClosureEnabled-help">
+                            <label for="monthClosureEnabled" class="form-label">
+                                <?php p($l->t('Enable revision-safe month finalization')); ?>
+                            </label>
+                        </div>
+                        <p id="monthClosureEnabled-help" class="form-help">
+                            <?php p($l->t('When enabled, employees can finalize a calendar month to create a tamper-evident snapshot (hash) and PDF. Finalized months stay locked even if this option is turned off later. Reopening a month is limited to administrators.')); ?>
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label for="monthClosureGraceDaysAfterEom" class="form-label"><?php p($l->t('Grace days after month end')); ?></label>
+                        <input type="number"
+                            class="form-input"
+                            id="monthClosureGraceDaysAfterEom"
+                            name="monthClosureGraceDaysAfterEom"
+                            min="0"
+                            max="90"
+                            step="1"
+                            value="<?php p((string)($settings['monthClosureGraceDaysAfterEom'] ?? 0)); ?>"
+                            aria-describedby="month-closure-section-intro monthClosureGraceDaysAfterEom-help monthClosureGraceDaysAfterEom-editable-note">
+                        <p id="monthClosureGraceDaysAfterEom-help" class="form-help">
+                            <?php p($l->t('Number of calendar days after the last day of each month for employees to finalize manually. If the month is still open after that, a daily job seals it automatically (same snapshot as manual finalize). Pending time entry or absence approvals block auto-finalization. Use 0 to disable automatic sealing.')); ?>
+                        </p>
+                        <p id="monthClosureGraceDaysAfterEom-editable-note" class="form-help form-help--note">
+                            <?php p($l->t('You can set this even while month finalization is disabled; the value is saved with “Save all settings” and applies when you enable month finalization above.')); ?>
+                        </p>
+                    </div>
+
+                    <fieldset class="form-fieldset" aria-labelledby="month-closure-reopen-legend" aria-describedby="month-closure-reopen-intro month-closure-reopen-separate-notice">
+                        <legend id="month-closure-reopen-legend" class="form-legend"><?php p($l->t('Reopen a finalized month (admin)')); ?></legend>
+                        <p class="form-help form-help--block" id="month-closure-reopen-intro">
+                            <?php p($l->t('If a calendar month was finalized by mistake or a correction is required, you can reopen it here as an administrator for the employee whose month should be opened again. Use the search field to select that person (their Nextcloud account). You must enter a reason; the audit log records your administrator action, the reason, and who the change applies to. Previous snapshot rows remain in the database for traceability.')); ?>
+                        </p>
+                        <p class="form-help form-help--block form-help--note" id="month-closure-reopen-separate-notice">
+                            <?php p($l->t('The "Reopen month" button runs immediately and only performs this reopening step. It is not saved with "Save all settings" at the bottom of the page.')); ?>
+                        </p>
+                        <div class="form-group month-reopen-user-picker">
+                            <label for="monthClosureReopenUserSearch" class="form-label"><?php p($l->t('Employee')); ?></label>
+                            <input type="hidden" id="monthClosureReopenUserId" value="">
+                            <div class="user-picker">
+                                <input type="text"
+                                    id="monthClosureReopenUserSearch"
+                                    class="form-input user-picker__search"
+                                    autocomplete="off"
+                                    autocapitalize="none"
+                                    spellcheck="false"
+                                    placeholder="<?php p($l->t('Search by name, email, or user ID…')); ?>"
+                                    role="combobox"
+                                    aria-autocomplete="list"
+                                    aria-expanded="false"
+                                    aria-controls="monthClosureReopenUserListbox"
+                                    aria-describedby="monthClosureReopenUserSearch-help">
+                                <ul id="monthClosureReopenUserListbox"
+                                    class="user-picker__list"
+                                    role="listbox"
+                                    hidden
+                                    aria-label="<?php p($l->t('Matching users')); ?>"></ul>
+                            </div>
+                            <p id="monthClosureReopenUserSearch-help" class="form-help">
+                                <?php p($l->t('Type to filter, then pick the employee whose finalized month you are reopening (their account).')); ?>
+                            </p>
+                        </div>
+                        <div class="form-row form-row--inline" role="group" aria-labelledby="month-closure-reopen-legend" aria-describedby="month-closure-reopen-intro month-closure-reopen-separate-notice">
+                            <div class="form-group">
+                                <label for="monthClosureReopenYear" class="form-label"><?php p($l->t('Year')); ?></label>
+                                <input type="number" id="monthClosureReopenYear" class="form-input" min="1970" max="2100" step="1" aria-required="true">
+                            </div>
+                            <div class="form-group">
+                                <label for="monthClosureReopenMonth" class="form-label"><?php p($l->t('Month')); ?></label>
+                                <input type="number" id="monthClosureReopenMonth" class="form-input" min="1" max="12" step="1" aria-required="true">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="monthClosureReopenReason" class="form-label"><?php p($l->t('Reason (required)')); ?></label>
+                            <textarea id="monthClosureReopenReason" class="form-input" rows="3" aria-required="true" aria-describedby="month-closure-reopen-intro"></textarea>
+                        </div>
+                        <div class="card-actions card-actions--inline">
+                            <button type="button" id="monthClosureReopenBtn" class="btn btn--secondary">
+                                <?php p($l->t('Reopen month')); ?>
+                            </button>
+                        </div>
+                        <div id="monthClosureReopenLive" class="form-help" role="status" aria-live="polite" aria-atomic="true"></div>
+                    </fieldset>
+                </section>
+
                 <section class="admin-settings-section" aria-labelledby="section-absences-heading">
                     <h3 id="section-absences-heading" class="admin-settings-section__title"><?php p($l->t('Absences and notifications')); ?></h3>
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="missingClockInRemindersEnabled" name="missingClockInRemindersEnabled"
+                            <?php echo ($settings['missingClockInRemindersEnabled'] ?? true) ? 'checked' : ''; ?>
+                            aria-describedby="missingClockInRemindersEnabled-help">
+                        <label for="missingClockInRemindersEnabled" class="form-label">
+                            <?php p($l->t('Enable missing clock-in reminders globally')); ?>
+                        </label>
+                    </div>
+                    <p id="missingClockInRemindersEnabled-help" class="form-help">
+                        <?php p($l->t('If enabled, users can still turn this reminder off in their personal settings. Reminders are sent only for expected workdays (not weekends, holidays, or approved absences).')); ?>
+                    </p>
+                </div>
                 <fieldset class="form-fieldset" aria-labelledby="vacation-carryover-expiry-legend">
                     <legend id="vacation-carryover-expiry-legend" class="form-legend"><?php p($l->t('Vacation carryover expiry')); ?></legend>
                     <p class="form-help form-help--block" id="vacation-carryover-expiry-intro">
@@ -488,6 +701,8 @@ $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdmin
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
 window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
 window.ArbeitszeitCheck.adminSettingsApiUrl = <?php echo json_encode($apiSettingsUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.monthClosureReopenUrl = <?php echo json_encode($monthClosureReopenUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.adminUsersListUrl = <?php echo json_encode($adminUsersListUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
 window.ArbeitszeitCheck.l10n.settingsSavedSuccessfully = <?php echo json_encode($l->t('Settings saved successfully'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.failedToSaveSettings = <?php echo json_encode($l->t('Failed to save settings'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -500,4 +715,13 @@ window.ArbeitszeitCheck.l10n.carryoverMonthRange = <?php echo json_encode($l->t(
 window.ArbeitszeitCheck.l10n.carryoverDayRange = <?php echo json_encode($l->t('Carryover expiry day must be between 1 and 31'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.maxCarryoverDaysRange = <?php echo json_encode($l->t('Maximum carryover days must be empty (unlimited) or between 0 and 366'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.valueBetweenMinMax = <?php echo json_encode($l->t('Value must be between {min} and {max}'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.monthReopenFillAll = <?php echo json_encode($l->t('Please select an employee, and enter year, month, and a reason.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.loadingEllipsis = <?php echo json_encode($l->t('Loading…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.noUsersFound = <?php echo json_encode($l->t('No users found'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.monthReopenConfirm = <?php echo json_encode($l->t('Reopen this finalized month? The employee will be able to edit times again until the month is finalized once more.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.monthReopenSuccess = <?php echo json_encode($l->t('Month reopened.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.accessGroupsSelected = <?php echo json_encode($l->t('%s group(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.accessGroupsAllUsers = <?php echo json_encode($l->t('No groups selected (all users are allowed).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.appAdminsSelected = <?php echo json_encode($l->t('%s app admin(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.appAdminsAllAdmins = <?php echo json_encode($l->t('No app admins selected (all Nextcloud admins are allowed).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>

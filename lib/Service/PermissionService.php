@@ -12,16 +12,57 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Service;
 
+use OCA\ArbeitszeitCheck\AppInfo\Application;
+use OCA\ArbeitszeitCheck\Constants;
+use OCP\App\IAppManager;
+use OCP\IConfig;
 use OCP\IGroupManager;
+use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
 
 class PermissionService
 {
 	public function __construct(
 		private readonly IGroupManager $groupManager,
+		private readonly IAppManager $appManager,
+		private readonly IConfig $config,
+		private readonly IUserManager $userManager,
 		private readonly TeamResolverService $teamResolver,
 		private readonly LoggerInterface $logger,
 	) {
+	}
+
+	/**
+	 * Returns configured allowlist group IDs.
+	 *
+	 * Empty list means unrestricted access for backwards compatibility.
+	 *
+	 * @return list<string>
+	 */
+	public function getAllowedAccessGroups(): array
+	{
+		$groups = [];
+		foreach ($this->appManager->getAppRestriction(Application::APP_ID) as $groupId) {
+			$candidate = trim((string)$groupId);
+			if ($candidate === '') {
+				continue;
+			}
+			$groups[$candidate] = true;
+		}
+
+		return array_keys($groups);
+	}
+
+	/**
+	 * Whether the user is allowed to use the app according to group allowlist.
+	 */
+	public function isUserAllowedByAccessGroups(string $userId): bool
+	{
+		if ($this->groupManager->isAdmin($userId)) {
+			return true;
+		}
+		$user = $this->userManager->get($userId);
+		return $this->appManager->isEnabledForUser(Application::APP_ID, $user);
 	}
 
 	/**
@@ -29,7 +70,47 @@ class PermissionService
 	 */
 	public function isAdmin(string $userId): bool
 	{
-		return $this->groupManager->isAdmin($userId);
+		if (!$this->groupManager->isAdmin($userId)) {
+			return false;
+		}
+
+		$allowedAdminIds = $this->getConfiguredAppAdminUserIds();
+		if ($allowedAdminIds === []) {
+			return true;
+		}
+
+		return in_array($userId, $allowedAdminIds, true);
+	}
+
+	/**
+	 * Returns configured app admin user IDs.
+	 *
+	 * Empty list means all Nextcloud admins are app-admins (backward compatibility).
+	 *
+	 * @return list<string>
+	 */
+	public function getConfiguredAppAdminUserIds(): array
+	{
+		$raw = trim($this->config->getAppValue(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]'));
+		if ($raw === '') {
+			return [];
+		}
+
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+
+		$unique = [];
+		foreach ($decoded as $candidate) {
+			$userId = trim((string)$candidate);
+			if ($userId === '' || isset($unique[$userId])) {
+				continue;
+			}
+			$unique[$userId] = true;
+		}
+
+		return array_keys($unique);
 	}
 
 	/**

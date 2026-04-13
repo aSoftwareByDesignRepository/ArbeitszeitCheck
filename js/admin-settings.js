@@ -27,6 +27,10 @@
         if (form) {
             Utils.on(form, 'submit', handleFormSubmit);
         }
+        const reopenBtn = Utils.$('#monthClosureReopenBtn');
+        if (reopenBtn) {
+            Utils.on(reopenBtn, 'click', handleMonthReopen);
+        }
         // Real-time validation
         const numberInputs = Utils.$$('#admin-settings-form input[type="number"]');
         numberInputs.forEach(input => {
@@ -34,6 +38,116 @@
                 validateField(this);
             });
         });
+
+        initMonthReopenUserPicker();
+        initAppAdminsPicker();
+        initAccessGroupsPicker();
+    }
+
+    function initAppAdminsPicker() {
+        const search = Utils.$('#appAdminUsersSearch');
+        const list = Utils.$('#appAdminUsersList');
+        const empty = Utils.$('#appAdminUsersEmpty');
+        const countEl = Utils.$('#appAdminUsersCount');
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        if (!search || !list) {
+            return;
+        }
+
+        const items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
+        const checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="appAdminUserIds[]"]'));
+
+        function updateCount() {
+            if (!countEl) {
+                return;
+            }
+            const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
+            if (selectedCount === 0) {
+                countEl.textContent = l10n.appAdminsAllAdmins || 'No app admins selected (all Nextcloud admins are allowed).';
+                return;
+            }
+            const template = l10n.appAdminsSelected || '%s app admin(s) selected';
+            countEl.textContent = template.indexOf('%s') !== -1
+                ? template.replace('%s', String(selectedCount))
+                : String(selectedCount) + ' ' + template;
+        }
+
+        function applyFilter() {
+            const q = String(search.value || '').trim().toLowerCase();
+            let visible = 0;
+            items.forEach(function(item) {
+                const haystack = String(item.getAttribute('data-app-admin-search') || '');
+                const show = q === '' || haystack.indexOf(q) !== -1;
+                item.hidden = !show;
+                if (show) {
+                    visible++;
+                }
+            });
+            if (empty) {
+                empty.hidden = visible !== 0;
+            }
+        }
+
+        Utils.on(search, 'input', applyFilter);
+        checkboxes.forEach(function(box) {
+            Utils.on(box, 'change', updateCount);
+        });
+
+        updateCount();
+        applyFilter();
+    }
+
+    function initAccessGroupsPicker() {
+        const search = Utils.$('#accessAllowedGroupsSearch');
+        const list = Utils.$('#accessAllowedGroupsList');
+        const empty = Utils.$('#accessAllowedGroupsEmpty');
+        const countEl = Utils.$('#accessAllowedGroupsCount');
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        if (!search || !list) {
+            return;
+        }
+
+        const items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
+        const checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="accessAllowedGroups[]"]'));
+
+        function updateCount() {
+            if (!countEl) {
+                return;
+            }
+            const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
+            if (selectedCount === 0) {
+                countEl.textContent = l10n.accessGroupsAllUsers || 'No groups selected (all users are allowed).';
+                return;
+            }
+            const template = l10n.accessGroupsSelected || '%s group(s) selected';
+            countEl.textContent = template.indexOf('%s') !== -1
+                ? template.replace('%s', String(selectedCount))
+                : String(selectedCount) + ' ' + template;
+        }
+
+        function applyFilter() {
+            const q = String(search.value || '').trim().toLowerCase();
+            let visible = 0;
+            items.forEach(function(item) {
+                const haystack = String(item.getAttribute('data-access-group-search') || '');
+                const show = q === '' || haystack.indexOf(q) !== -1;
+                item.hidden = !show;
+                if (show) {
+                    visible++;
+                }
+            });
+            if (empty) {
+                empty.hidden = visible !== 0;
+            }
+        }
+
+        Utils.on(search, 'input', applyFilter);
+        checkboxes.forEach(function(box) {
+            Utils.on(box, 'change', updateCount);
+        });
+
+        updateCount();
+        applyFilter();
     }
 
     /**
@@ -59,7 +173,9 @@
         formData.realtimeComplianceCheck = isChecked(formData.realtimeComplianceCheck);
         formData.complianceStrictMode = isChecked(formData.complianceStrictMode);
         formData.enableViolationNotifications = isChecked(formData.enableViolationNotifications);
+        formData.missingClockInRemindersEnabled = isChecked(formData.missingClockInRemindersEnabled);
         formData.exportMidnightSplitEnabled = isChecked(formData.exportMidnightSplitEnabled);
+        formData.monthClosureEnabled = isChecked(formData.monthClosureEnabled);
         formData.sendIcalApprovedAbsences = isChecked(formData.sendIcalApprovedAbsences);
         formData.sendIcalToSubstitute = isChecked(formData.sendIcalToSubstitute);
         formData.sendIcalToManagers = isChecked(formData.sendIcalToManagers);
@@ -69,6 +185,16 @@
         formData.statutoryAutoReseed = isChecked(formData.statutoryAutoReseed);
         formData.vacationRolloverEnabled = isChecked(formData.vacationRolloverEnabled);
         formData.vacationRolloverIncludeUnusedAnnual = isChecked(formData.vacationRolloverIncludeUnusedAnnual);
+        const accessGroupsRaw = formData['accessAllowedGroups[]'];
+        formData.accessAllowedGroups = accessGroupsRaw === undefined
+            ? []
+            : (Array.isArray(accessGroupsRaw) ? accessGroupsRaw : [accessGroupsRaw]);
+        delete formData['accessAllowedGroups[]'];
+        const appAdminRaw = formData['appAdminUserIds[]'];
+        formData.appAdminUserIds = appAdminRaw === undefined
+            ? []
+            : (Array.isArray(appAdminRaw) ? appAdminRaw : [appAdminRaw]);
+        delete formData['appAdminUserIds[]'];
 
         // Convert numbers (use defaults on invalid/empty)
         const num = (v, def) => { const n = parseFloat(v); return (Number.isFinite(n) ? n : def); };
@@ -79,6 +205,8 @@
         formData.retentionPeriod = int(formData.retentionPeriod, 2);
         formData.vacationCarryoverExpiryMonth = int(formData.vacationCarryoverExpiryMonth, 3);
         formData.vacationCarryoverExpiryDay = int(formData.vacationCarryoverExpiryDay, 31);
+        const graceInput = Utils.$('#monthClosureGraceDaysAfterEom');
+        formData.monthClosureGraceDaysAfterEom = graceInput ? int(graceInput.value, 0) : int(formData.monthClosureGraceDaysAfterEom, 0);
 
         // Validate
         if (!validateForm(formData)) {
@@ -99,6 +227,203 @@
             },
             onError: function(_error) {
                 Messaging.showError(window.ArbeitszeitCheck?.l10n?.errorSavingSettings || (window.t ? window.t('arbeitszeitcheck', 'An error occurred while saving settings') : 'An error occurred while saving settings'));
+            }
+        });
+    }
+
+    /**
+     * Searchable user picker for month reopen (uses GET /api/admin/users).
+     */
+    function initMonthReopenUserPicker() {
+        const hidden = Utils.$('#monthClosureReopenUserId');
+        const search = Utils.$('#monthClosureReopenUserSearch');
+        const list = Utils.$('#monthClosureReopenUserListbox');
+        const wrap = Utils.$('.month-reopen-user-picker');
+        const baseUrl = window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminUsersListUrl;
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        if (!hidden || !search || !list || !baseUrl) {
+            return;
+        }
+
+        let debounceTimer = null;
+        let selectedLabel = '';
+
+        function closeList() {
+            list.hidden = true;
+            list.innerHTML = '';
+            search.setAttribute('aria-expanded', 'false');
+        }
+
+        function openList() {
+            list.hidden = false;
+            search.setAttribute('aria-expanded', 'true');
+        }
+
+        function showLoading() {
+            const msg = l10n.loadingEllipsis || 'Loading…';
+            list.innerHTML = '<li class="user-picker__item user-picker__item--muted" role="presentation">' + Utils.escapeHtml(msg) + '</li>';
+            openList();
+        }
+
+        function fetchUsers(query) {
+            const q = typeof query === 'string' ? query.trim() : '';
+            const url = baseUrl + (q !== '' ? '?search=' + encodeURIComponent(q) : '');
+            showLoading();
+            Utils.ajax(url, {
+                method: 'GET',
+                onSuccess: function(data) {
+                    if (!data || !data.success || !Array.isArray(data.users)) {
+                        closeList();
+                        return;
+                    }
+                    renderUsers(data.users);
+                },
+                onError: function() {
+                    closeList();
+                }
+            });
+        }
+
+        function renderUsers(users) {
+            const emptyMsg = l10n.noUsersFound || 'No users found';
+            if (users.length === 0) {
+                list.innerHTML = '<li class="user-picker__item user-picker__item--muted" role="presentation">' + Utils.escapeHtml(emptyMsg) + '</li>';
+                openList();
+                return;
+            }
+            list.innerHTML = users.map(function(u) {
+                const uid = u.userId || '';
+                const name = (u.displayName && String(u.displayName).trim()) ? String(u.displayName) : uid;
+                const email = u.email ? String(u.email) : '';
+                const meta = email ? (uid + ' · ' + email) : uid;
+                return '<li role="option" tabindex="0" class="user-picker__item" data-user-id="' + Utils.escapeHtml(uid) + '">' +
+                    '<span class="user-picker__name">' + Utils.escapeHtml(name) + '</span>' +
+                    '<span class="user-picker__meta">' + Utils.escapeHtml(meta) + '</span></li>';
+            }).join('');
+            openList();
+            Utils.$$('.user-picker__item[data-user-id]', list).forEach(function(li) {
+                Utils.on(li, 'mousedown', function(e) {
+                    e.preventDefault();
+                });
+                Utils.on(li, 'click', function() {
+                    const uid = li.getAttribute('data-user-id') || '';
+                    const nameEl = li.querySelector('.user-picker__name');
+                    const displayName = nameEl ? nameEl.textContent : uid;
+                    hidden.value = uid;
+                    selectedLabel = displayName + ' (' + uid + ')';
+                    search.value = selectedLabel;
+                    closeList();
+                });
+            });
+        }
+
+        Utils.on(search, 'input', function() {
+            if (search.value !== selectedLabel) {
+                hidden.value = '';
+                selectedLabel = '';
+            }
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                fetchUsers(search.value);
+            }, 300);
+        });
+
+        Utils.on(search, 'focus', function() {
+            const q = (hidden.value && search.value === selectedLabel)
+                ? hidden.value
+                : search.value.trim();
+            fetchUsers(q);
+        });
+
+        Utils.on(search, 'keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeList();
+            }
+        });
+
+        document.addEventListener('click', function(ev) {
+            if (!wrap || wrap.contains(ev.target)) {
+                return;
+            }
+            closeList();
+        });
+    }
+
+    /**
+     * Admin: reopen a finalized calendar month for an employee (revision-safe closure).
+     */
+    function handleMonthReopen() {
+        const userEl = Utils.$('#monthClosureReopenUserId');
+        const yearEl = Utils.$('#monthClosureReopenYear');
+        const monthEl = Utils.$('#monthClosureReopenMonth');
+        const reasonEl = Utils.$('#monthClosureReopenReason');
+        const live = Utils.$('#monthClosureReopenLive');
+        const btn = Utils.$('#monthClosureReopenBtn');
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        const userId = userEl && userEl.value ? String(userEl.value).trim() : '';
+        const reason = reasonEl && reasonEl.value ? String(reasonEl.value).trim() : '';
+        const year = yearEl ? parseInt(String(yearEl.value), 10) : NaN;
+        const month = monthEl ? parseInt(String(monthEl.value), 10) : NaN;
+
+        if (!userId || !reason || !Number.isInteger(year) || !Number.isInteger(month)) {
+            Messaging.showError(l10n.monthReopenFillAll || 'Please select an employee, and enter year, month, and a reason.');
+            return;
+        }
+        if (year < 1970 || year > 2100 || month < 1 || month > 12) {
+            Messaging.showError(window.t ? window.t('arbeitszeitcheck', 'Invalid month') : 'Invalid month');
+            return;
+        }
+        const confirmMsg = l10n.monthReopenConfirm || 'Reopen this finalized month?';
+        if (typeof window.confirm === 'function' && !window.confirm(confirmMsg)) {
+            return;
+        }
+        const url = window.ArbeitszeitCheck && window.ArbeitszeitCheck.monthClosureReopenUrl;
+        if (!url) {
+            return;
+        }
+        if (btn) {
+            btn.disabled = true;
+        }
+        if (live) {
+            live.textContent = '';
+        }
+        Utils.ajax(url, {
+            method: 'POST',
+            data: { userId: userId, year: year, month: month, reason: reason },
+            onSuccess: function (data) {
+                if (data && data.success) {
+                    const ok = l10n.monthReopenSuccess || 'Month reopened.';
+                    Messaging.showSuccess(ok);
+                    if (live) {
+                        live.textContent = ok;
+                    }
+                    const searchEl = Utils.$('#monthClosureReopenUserSearch');
+                    if (userEl) {
+                        userEl.value = '';
+                    }
+                    if (searchEl) {
+                        searchEl.value = '';
+                        searchEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    if (reasonEl) {
+                        reasonEl.value = '';
+                    }
+                } else {
+                    Messaging.showError((data && data.error) ? data.error : 'Error');
+                }
+                if (btn) {
+                    btn.disabled = false;
+                }
+            },
+            onError: function (err) {
+                const msg = (err && err.error) ? err.error : ((err && err.message) ? err.message : 'Error');
+                Messaging.showError(msg);
+                if (live) {
+                    live.textContent = msg;
+                }
+                if (btn) {
+                    btn.disabled = false;
+                }
             }
         });
     }
@@ -138,6 +463,12 @@
         }
         if (data.vacationCarryoverExpiryDay < 1 || data.vacationCarryoverExpiryDay > 31) {
             const msg = window.ArbeitszeitCheck?.l10n?.carryoverDayRange || (window.t && window.t('arbeitszeitcheck', 'Carryover expiry day must be between 1 and 31')) || 'Carryover expiry day must be between 1 and 31';
+            Messaging.showError(msg);
+            return false;
+        }
+
+        if (data.monthClosureGraceDaysAfterEom < 0 || data.monthClosureGraceDaysAfterEom > 90) {
+            const msg = window.ArbeitszeitCheck?.l10n?.monthClosureGraceDaysRange || (window.t && window.t('arbeitszeitcheck', 'Grace days after month end must be between 0 and 90')) || 'Grace days after month end must be between 0 and 90';
             Messaging.showError(msg);
             return false;
         }

@@ -35,8 +35,18 @@ All data stays in your **Nextcloud** instance.
 - **Substitute** (if used): Approve or reject coverage for an absence.
 - **Manager / team lead**: Approve absences for team members, see team views where permitted.
 - **Administrator**: Global settings, users, holidays, compliance options, exports.
+- **App administrator (optional restriction)**: Your organization can limit ArbeitszeitCheck administration to selected Nextcloud admins only. If this is configured, other Nextcloud admins may still be platform admins but will see access denied for ArbeitszeitCheck admin pages.
 
 Exact permissions depend on your Nextcloud groups and app configuration.
+
+### For administrators: how to configure app administrators
+
+1. Open **ArbeitszeitCheck → Admin settings**.
+2. In **App administrators (ArbeitszeitCheck)**, search/select the Nextcloud admin accounts that should manage this app.
+3. Save settings.
+4. Leave the list empty if you want the backward-compatible default (**all** Nextcloud admins can administer ArbeitszeitCheck).
+
+Only users in Nextcloud's `admin` group are eligible in this picker.
 
 ---
 
@@ -44,26 +54,45 @@ Exact permissions depend on your Nextcloud groups and app configuration.
 
 - **Clock in / out** and **breaks**: Use the time tracking UI; follow your organization’s rules for corrections and comments.
 - **Absences**: Create requests; wait for approval if your workflow requires it. Vacation balances and carryover (**Resturlaub**) may be shown if your admin configured them.
-- **Manager dashboard** (if you are a team lead): Under **Pending approvals**, absence requests list each person with the **absence type in your language** (e.g. vacation vs sick leave), not raw internal codes.
+- **Manager dashboard** (if you are a team lead): Under **Pending approvals**, absence requests list each person with the **absence type in your language** (e.g. vacation vs sick leave), not raw internal codes. Where enabled, **Employee absences** provides a dedicated list/filter view of team absences.
 - **Reports**: Generate period reports or exports your admin allows (CSV, DATEV, etc.).
 - **Compliance**: The app may flag violations (e.g. missing breaks); your employer defines how those are handled.
 
 ---
 
-## 5. Holidays (Germany)
+## 5. Monthly record (revision-safe)
+
+**Legal note (not legal advice):** German law requires employers to **record and retain** working time (ArbZG / case law). It does **not** prescribe that an employee must “click finalize” in software, nor a specific **deadline** for that action—those are **organizational** choices (works agreement, company policy, payroll process). This app’s optional monthly seal is a **technical audit aid** (snapshot + hash), not a statutory formality by itself.
+
+If your administrator enabled **revision-safe month finalization**, the **Time entries** page can show a **Monthly record** section.
+
+- Choose the **calendar month** (month and year in one list, shown with a readable month name). The list includes **only months that have ended and contain at least one time entry** (so empty months are not shown). Review your times until that month is complete (including resolving **pending correction** requests—finalization is blocked while any correction is still pending).
+- **Finalize month** stores a **fixed snapshot** of that calendar month (working time and related report totals as implemented by the app), a **cryptographic hash**, and allows downloading a **PDF** for your records.
+- **Grace period (if configured):** Administrators may set **calendar days after month-end** during which you are expected to finalize manually; the UI may show that deadline. If the month is **still open** after the grace period ends, a **daily background job** may seal it automatically using the **same snapshot** as a manual finalize. **Pending** time-entry correction requests or **open absence workflow** steps (e.g. approval or substitute steps) **block** automatic sealing until resolved.
+- After finalization, you **cannot change** time entries or absences that fall in that month through the normal app—your organization’s **administrator** can **reopen** a month only with a **documented reason** (audited).
+
+Turning the feature **off** later does **not** unlock months that were already finalized.
+
+**Administrator reopen:** An administrator can reopen a finalized month **in the app** (admin settings area) with a **mandatory reason** (audited), not only via API.
+
+This is an **in-app integrity** feature (hash + audit). It is **not** a qualified electronic signature. Direct database access by server operators is outside what the app can prevent—your organization’s IT and retention policies apply.
+
+---
+
+## 6. Holidays (Germany)
 
 Statutory and optional holidays depend on the **federal state (Bundesland)** and settings your **administrator** maintains under the holidays / admin area. The app uses this data for working-day calculations and checks—not for pushing events into the Nextcloud Calendar app.
 
 ---
 
-## 6. Privacy and data
+## 7. Privacy and data
 
 - Personal data is processed for **time recording and HR-related processes** as configured by your organization.
 - Use **GDPR export / deletion** features only as allowed by policy and retention rules (see the GDPR guide linked above).
 
 ---
 
-## 7. Getting help
+## 8. Getting help
 
 - **Issues with the product**: Contact your internal IT or the person who runs Nextcloud.
 - **Bugs in the app**: Your administrator can report issues via the repository linked in the app metadata on the App Store page.
