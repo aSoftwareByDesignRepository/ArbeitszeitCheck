@@ -11,18 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Approver deadlock (app teams)**: Absence and time-entry correction workflows no longer treat “has colleagues” as “has a manager”. Auto-approval when **no assignable approver** exists now follows `TeamResolverService::hasAssignableManagerForEmployee()` (explicit team managers in app-teams mode; legacy group mode still uses colleagues as a proxy). Prevents requests stuck in “awaiting manager approval” when nobody can approve.
 - **Time entry corrections**: Same assignability rule as absences (previously used colleague IDs only).
+- **Admin users API requests on `/index.php` instances**: Refresh/edit/history/update actions now reliably resolve app URLs and no longer produce invalid requests like `search=[object PointerEvent]`.
+- **Admin teams and settings API reliability on rewrite-less setups**: Central URL resolution now includes a robust `/index.php` fallback when `OC.generateUrl()` is unavailable/incomplete in page context.
 
 ### Added
 
 - **Repair step** `ReleaseStuckPendingAbsences`: post-migration repair auto-approves legacy `pending` absences that still match the “no assignable approver” condition (idempotent).
+- **Frontend URL security guardrails**: Shared AJAX layer now blocks external cross-origin calls by default (explicit `allowExternal: true` required), with unit tests covering URL normalization and external URL handling.
+- **Lint guardrails**: ESLint rules now prevent introducing raw `fetch('/apps/arbeitszeitcheck/...')` and implicit external `fetch(...)` patterns outside approved abstractions.
 
 ### Changed
 
 - **UX**: Absences UI shows an informational callout when app teams are enabled and no approver is assigned; detail view shows a defensive warning if an old `pending` row is still stuck (until repair/admin fixes team setup).
+- **Frontend architecture**: `ArbeitszeitCheckUtils` now provides centralized `getRequestToken()`, `resolveUrl()`, and `isExternalUrl()` primitives used by page scripts (`admin-users`, `reports`, `settings`, `validation`).
+- **Mobile UX consistency (WCAG 2.1 AA focused)**: iPhone-safe-area-aware spacing, improved touch targets, clearer section rhythm, and better visual hierarchy for normal user pages (`dashboard`, `time-entries`, `absences`) and manager pages (`manager-dashboard`, `manager-time-entries`, employee absences view).
 
 ### Documentation
 
 - User manuals (EN/DE), `tests/WORKFLOW_ROLE_MATRIX.md`, and developer documentation updated for assignable-manager semantics and repair step.
+- README and developer documentation updated with centralized frontend URL policy, strict external-call behavior, and mobile/iOS layout guidance.
 
 ## 1.1.13 - 2026-04-13
 

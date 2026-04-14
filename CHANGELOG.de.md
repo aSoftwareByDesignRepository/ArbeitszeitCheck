@@ -4,18 +4,25 @@
 
 - **Genehmigungs-Deadlock (App-Teams)**: Abwesenheiten und Zeiteintrags-Korrekturen behandeln „hat Kolleg:innen“ nicht mehr wie „hat eine:n Vorgesetzte:n“. Auto-Genehmigung, wenn **kein zuweisbarer Genehmiger** existiert, folgt `TeamResolverService::hasAssignableManagerForEmployee()` (explizite Team-Manager bei App-Teams; Legacy-Gruppenmodus weiterhin Kollegen-Proxy). Verhindert Anträge, die dauerhaft auf Managerfreigabe warten, obwohl niemand freigeben darf.
 - **Zeiteintrags-Korrekturen**: Gleiche Zuweisbarkeitsregel wie bei Abwesenheiten (zuvor nur Kollegen-IDs).
+- **Admin-Users API auf `/index.php`-Instanzen**: Refresh/Edit/History/Update nutzen nun zuverlässig aufgelöste App-URLs; fehlerhafte Requests wie `search=[object PointerEvent]` treten nicht mehr auf.
+- **Admin-Teams und Settings auf Rewrite-losen Setups**: Zentrale URL-Auflösung enthält jetzt einen robusten `/index.php`-Fallback, wenn `OC.generateUrl()` im Seitenkontext fehlt oder unvollständig ist.
 
 ### Hinzugefügt
 
 - **Repair-Schritt** `ReleaseStuckPendingAbsences`: setzt nach Migration verbliebene `pending`-Abwesenheiten unter derselben Bedingung automatisch auf genehmigt (idempotent).
+- **Frontend-URL-Sicherheitsleitplanken**: Die gemeinsame AJAX-Schicht blockiert externe Cross-Origin-Calls standardmäßig (explizit `allowExternal: true` nötig); Unit-Tests decken URL-Normalisierung und External-Handling ab.
+- **Lint-Leitplanken**: ESLint-Regeln verhindern neue rohe `fetch('/apps/arbeitszeitcheck/...')`-Aufrufe und implizite externe `fetch(...)`-Nutzung außerhalb der vorgesehenen Abstraktionen.
 
 ### Geändert
 
 - **UX**: Abwesenheiten zeigen einen Hinweis, wenn App-Teams aktiv sind und kein Genehmiger zugeordnet ist; in der Detailansicht erscheint bei veralteten hängenden Anträgen ein Warnhinweis (bis Repair/Admin die Teamkonfiguration korrigiert).
+- **Frontend-Architektur**: `ArbeitszeitCheckUtils` stellt nun zentral `getRequestToken()`, `resolveUrl()` und `isExternalUrl()` bereit; genutzt u. a. in `admin-users`, `reports`, `settings` und `validation`.
+- **Mobile UX Konsistenz (WCAG 2.1 AA)**: iPhone-Safe-Area-konforme Abstände, bessere Touch-Targets, klarere Abschnittsstruktur und visuelle Hierarchie für Nutzerseiten (`dashboard`, `time-entries`, `absences`) sowie Managerseiten (`manager-dashboard`, `manager-time-entries`, Mitarbeiter-Abwesenheiten).
 
 ### Dokumentation
 
 - Nutzerhandbücher (EN/DE), `tests/WORKFLOW_ROLE_MATRIX.md` und Entwicklerdokumentation zur Semantik „zuweisbarer Manager“ und zum Repair-Schritt ergänzt.
+- README und Entwicklerdokumentation um zentrale Frontend-URL-Policy, striktes External-Call-Verhalten und Mobile/iOS-Layout-Hinweise ergänzt.
 
 ## 1.1.13 – 2026-04-13
 

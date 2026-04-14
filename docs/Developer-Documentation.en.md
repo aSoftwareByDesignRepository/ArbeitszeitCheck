@@ -1,7 +1,7 @@
 # Developer Documentation – ArbeitszeitCheck
 
-**Version:** 1.1.12  
-**Last Updated:** 2026-04-13
+**Version:** 1.1.13  
+**Last Updated:** 2026-04-14
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.
 
@@ -594,6 +594,35 @@ ArbeitszeitCheckMessaging.showError('Operation failed');
 ArbeitszeitCheckComponents.openModal('my-modal-id');
 ```
 
+### Frontend URL and request policy (important)
+
+For reliability and security, all frontend network calls should follow one path:
+
+1. **Prefer** `ArbeitszeitCheckUtils.ajax(...)` for app API calls.
+2. If a raw `fetch(...)` is unavoidable, resolve URLs with `ArbeitszeitCheckUtils.resolveUrl(...)` and read CSRF token via `ArbeitszeitCheckUtils.getRequestToken()`.
+3. Do not hardcode raw app URLs in fetch calls (e.g. `fetch('/apps/arbeitszeitcheck/...')`) — lint rules reject this.
+
+Behavior implemented in `js/common/utils.js`:
+
+- `resolveUrl(...)` normalizes app URLs for both pretty-URL and `/index.php` deployments.
+- `ajax(...)` injects `requesttoken` and `credentials: 'same-origin'`.
+- External cross-origin URLs are blocked by default in `ajax(...)`; explicit opt-in is required with `allowExternal: true`.
+
+### Mobile/iPhone layout guidance
+
+Shared layout behavior is centralized in:
+
+- `css/common/app-layout.css`
+- `css/common/responsive.css`
+- `css/navigation.css`
+
+Key rules:
+
+- Use safe-area aware spacing (`env(safe-area-inset-*)`) for iPhone notch/home-indicator devices.
+- Keep interactive controls at least ~44px height (WCAG touch-target guidance).
+- Preserve clear section hierarchy: one strong heading, concise helper text, and consistent card/action spacing.
+- Keep mobile behavior in shared CSS first; page CSS should only add local adjustments.
+
 ### CSS Organization
 
 **Use BEM naming:**
@@ -867,6 +896,13 @@ public function getEntry(int $id): JSONResponse
 - Empty list is intentionally backward compatible: all Nextcloud admins are app admins.
 - `AppAdminMiddleware` is registered in `Application::register()` and gates `AdminController` methods centrally.
 - Unauthorized access to admin pages throws `NotAppAdminException` and resolves to a 403 response.
+
+### Frontend request security model
+
+- Central request guardrails are implemented in `ArbeitszeitCheckUtils.ajax(...)`.
+- Cross-origin URLs are denied by default; callers must explicitly set `allowExternal: true`.
+- URL normalization and token handling are centralized to avoid route drift and accidental insecure request patterns.
+- ESLint guardrails in `.eslintrc.cjs` enforce this policy for `fetch(...)` usage.
 
 ### SQL Injection Prevention
 

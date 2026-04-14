@@ -16,6 +16,7 @@ Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instan
 - **Team‑ und Manager‑Ansicht**: Genehmigungen, Team‑Übersichten, Compliance‑Status
 - **Berichte & Exporte**: Tages/Wochen/Monats‑Reports, Overtime‑Reports, Absenzberichte, DATEV‑Export
 - **Audit‑Logs**: Lückenlose Nachvollziehbarkeit von Änderungen an Zeiten, Abwesenheiten und Einstellungen
+- **Revisionssichere Monatsfinalisierung** (optional, Admin‑Schalter): Kalendermonat mit Snapshot, Hash und PDF‑Nachweis abschließen; finalisierte Monate bleiben gesperrt, bis eine Administratorin/ein Administrator mit Begründung wieder öffnet
 - **DSGVO‑Support**: Exporte, Löschkonzepte (unter Beachtung der gesetzlichen Aufbewahrung), DPIA‑/Verarbeitungsverzeichnis‑Vorlagen
 
 > **Rechtlicher Hinweis (DE):**  
@@ -100,12 +101,23 @@ Diese Dateien werden vom Nextcloud App Store für Listung, Detailseite und Revie
 
 ### Entwicklung & Tests
 
-- PHPUnit‑Tests: `composer test` (bzw. `phpunit` mit bereitgestellter `phpunit.xml`)  
-- JS‑Build: `npm run build`, Dev‑Watch: `npm run watch`  
-- Test‑Abdeckung:
-  - Controller‑Tests (`tests/Unit/Controller/*Test.php`)
-  - Service‑Tests (z. B. `ComplianceServiceTest`, `TimeTrackingServiceTest`, `OvertimeServiceTest`)
-  - Integrationstests für zentrale API‑Flows (`tests/Integration/`, falls vorhanden)
+**Voraussetzungen:** Node.js **20 oder 22** und npm **10+** (siehe `package.json` → `engines`), Composer, PHPUnit über `composer.json`.
+
+- **PHP:** `composer test` (alle Suites), `composer test:unit`, `composer test:integration` (Integration unter `tests/Integration/`), optional `composer test:coverage`
+- **PHP im Docker‑Stack dieses Monorepos:** vom Nextcloud‑Server‑Root `./docker/run-app-phpunit.sh arbeitszeitcheck` oder in der App `composer test:docker` bzw. `npm run test:php:docker`
+- **JavaScript (Vitest):** `npm test`, bei Bedarf `npm run test:watch`
+- **Lint:** `npm run lint`, `npm run stylelint` (sowie `composer lint` für PHP‑Syntaxcheck unter `lib/`)
+- **E2E (Playwright):** `npm run e2e` — erfordert laufende Nextcloud‑Instanz und Umgebungsvariablen (`NC_BASE_URL`, Testnutzer); siehe `docs/Developer-Documentation.en.md`
+- **Alle Tests im Container (Hilfsskript):** `scripts/run-tests-docker.sh` vom App‑ bzw. Repo‑Kontext
+
+Hinweis: `npm run build` ist ein Platzhalter (**kein** Bundler‑Build; Frontend ist Vanilla‑JS mit PHP‑Templates).
+
+### Frontend Runtime & UX Guardrails
+
+- **One URL resolution path:** Frontend requests should use `ArbeitszeitCheckUtils.ajax(...)` (or `ArbeitszeitCheckUtils.resolveUrl(...)` when using `fetch` explicitly) to normalize app URLs reliably on both pretty-URL and `/index.php` installations.
+- **Strict external-call policy:** `ArbeitszeitCheckUtils.ajax(...)` blocks cross-origin URLs by default. External calls require explicit opt-in via `allowExternal: true`.
+- **Lint enforcement:** ESLint rejects raw `fetch('/apps/arbeitszeitcheck/...')` and implicit external `fetch(...)` patterns outside approved abstractions.
+- **Mobile/iPhone consistency:** Shared layout styles in `css/common/` include safe-area-aware spacing and touch-target improvements (WCAG 2.1 AA focus) for user and manager pages.
 
 Weitere Details zur Architektur und zu Beitrag‑Richtlinien finden sich in `docs/Developer-Documentation.en.md`.
 

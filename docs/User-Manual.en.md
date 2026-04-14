@@ -57,6 +57,7 @@ Only users in Nextcloud's `admin` group are eligible in this picker.
   - **App teams (recommended setup):** If your organization uses **app-managed teams** and **no manager is assigned** to your team in the app, requests you submit **without** a substitute are **approved automatically** when you send them—there is nobody who could approve them in the manager workflow. If you **do** pick a substitute, the substitute step still runs first. The UI may show a short explanation when this applies.
   - **Legacy group-based setup:** Behavior follows the older “same group” model; your admin should ensure approvals remain workable for your organization.
 - **Manager dashboard** (if you are a team lead): Under **Pending approvals**, absence requests list each person with the **absence type in your language** (e.g. vacation vs sick leave), not raw internal codes. Where enabled, **Employee absences** provides a dedicated list/filter view of team absences.
+- **Mobile use (phones/tablets):** The UI is optimized for responsive use with clearer section spacing, larger touch targets, and iPhone safe-area aware layout. If you use a very small screen, prefer portrait mode for forms and landscape for wide tables/reports.
 - **Reports**: Generate period reports or exports your admin allows (CSV, DATEV, etc.).
 - **Compliance**: The app may flag violations (e.g. missing breaks); your employer defines how those are handled.
 
