@@ -1,6 +1,6 @@
 {
   "name": "arbeitszeitcheck",
-  "version": "1.1.7",
+  "version": "1.1.14",
   "description": "German labor law compliant time tracking system for Nextcloud",
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "stylelint": "stylelint 'css/**/*.css'",
     "stylelint:fix": "stylelint 'css/**/*.css' --fix",
     "test": "vitest run",
+    "test:php:docker": "bash ../../docker/run-app-phpunit.sh arbeitszeitcheck",
     "test:watch": "vitest",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",

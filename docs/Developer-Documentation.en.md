@@ -1,6 +1,6 @@
 # Developer Documentation – ArbeitszeitCheck
 
-**Version:** 1.1.13  
+**Version:** 1.1.14  
 **Last Updated:** 2026-04-14
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.

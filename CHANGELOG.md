@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.1.14 - 2026-04-14
+
 ### Fixed
 
 - **Approver deadlock (app teams)**: Absence and time-entry correction workflows no longer treat “has colleagues” as “has a manager”. Auto-approval when **no assignable approver** exists now follows `TeamResolverService::hasAssignableManagerForEmployee()` (explicit team managers in app-teams mode; legacy group mode still uses colleagues as a proxy). Prevents requests stuck in “awaiting manager approval” when nobody can approve.
