@@ -388,17 +388,17 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
     background-color: var(--arbeitszeitcheck-color-background);
     border: 1px solid var(--arbeitszeitcheck-color-border);
     border-radius: var(--radius-base);
     cursor: pointer;
     position: fixed;
-    top: var(--space-4);
-    left: var(--space-4);
+    top: calc(env(safe-area-inset-top, 0px) + var(--space-3));
+    left: calc(env(safe-area-inset-left, 0px) + var(--space-3));
     z-index: 1021;
     transition: background-color 0.2s ease, transform 0.2s ease;
     padding: 0;
@@ -479,12 +479,15 @@
         top: 0;
         width: 280px;
         max-width: 85vw;
-        height: 100vh;
+        height: 100dvh;
         z-index: 1020;
         transform: translateX(-100%);
         transition: transform 0.3s ease-in-out;
         box-shadow: var(--shadow-xl);
         overflow-y: auto;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--space-2));
+        box-sizing: border-box;
     }
 
     /* Show navigation when mobile menu is open */
@@ -503,7 +506,7 @@
     }
 
     .sidebar-header {
-        padding: 1rem;
+        padding: var(--space-4);
     }
 
     .app-brand {

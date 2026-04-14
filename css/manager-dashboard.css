@@ -198,6 +198,7 @@
 
   .manager-dashboard .section {
     padding: 1rem;
+    border-radius: var(--border-radius-large, 8px);
   }
 
   .manager-stats-grid {
@@ -212,5 +213,41 @@
   .pending-approvals-tab {
     padding: 0.5rem 0.75rem;
     font-size: 0.9375rem;
+  }
+
+  .pending-approvals-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .pending-approval-card {
+    padding: 0.875rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .manager-dashboard__title {
+    font-size: 1.125rem;
+    line-height: 1.35;
+  }
+
+  .manager-dashboard__subtitle {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .manager-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pending-approvals-tab {
+    min-height: 46px;
+    white-space: nowrap;
+  }
+
+  .manager-dashboard .table th,
+  .manager-dashboard .table td {
+    padding: 0.625rem 0.75rem;
   }
 }

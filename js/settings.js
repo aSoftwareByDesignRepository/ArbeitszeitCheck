@@ -10,6 +10,9 @@
     'use strict';
 
     function azcGenerateUrl(path) {
+        if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.resolveUrl === 'function') {
+            return window.ArbeitszeitCheckUtils.resolveUrl(path);
+        }
         if (typeof window !== 'undefined' && window.OC && typeof window.OC.generateUrl === 'function') {
             return window.OC.generateUrl(path);
         }
@@ -17,6 +20,9 @@
     }
 
     function azcRequestToken() {
+        if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.getRequestToken === 'function') {
+            return window.ArbeitszeitCheckUtils.getRequestToken();
+        }
         if (typeof window !== 'undefined' && window.OC && window.OC.requestToken) {
             return window.OC.requestToken;
         }

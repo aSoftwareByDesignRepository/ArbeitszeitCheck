@@ -26,6 +26,17 @@
 
     let searchTimeout = null;
 
+    function buildApiUrl(path) {
+        if (Utils && typeof Utils.resolveUrl === 'function') {
+            return Utils.resolveUrl(path);
+        }
+        const oc = (typeof window !== 'undefined' && window.OC) || (typeof OC !== 'undefined' ? OC : null);
+        if (oc && typeof oc.generateUrl === 'function') {
+            return oc.generateUrl(path);
+        }
+        return path;
+    }
+
     /**
      * Initialize users page
      */
@@ -44,7 +55,7 @@
 
         const refreshBtn = Utils.$('#refresh-users');
         if (refreshBtn) {
-            Utils.on(refreshBtn, 'click', loadUsers);
+            Utils.on(refreshBtn, 'click', function() { loadUsers(''); });
         }
 
         const editButtons = Utils.$$('[data-action="edit-user"]');
@@ -73,10 +84,18 @@
         const tbody = Utils.$('#users-tbody');
         if (!tbody) return;
 
+        if (search && typeof search === 'object' && typeof search.preventDefault === 'function') {
+            search = '';
+        }
+        if (typeof search !== 'string') {
+            search = String(search || '');
+        }
+        search = search.trim();
+
         // Show loading
         tbody.innerHTML = '<tr><td colspan="7" class="text-center">' + auMsg('loadingEllipsis', 'Loading…') + '</td></tr>';
 
-        const url = '/apps/arbeitszeitcheck/api/admin/users' + (search ? '?search=' + encodeURIComponent(search) : '');
+        const url = buildApiUrl('/apps/arbeitszeitcheck/api/admin/users' + (search ? '?search=' + encodeURIComponent(search) : ''));
         
         Utils.ajax(url, {
             method: 'GET',
@@ -183,7 +202,7 @@
         if (!userId) return;
 
         // Load user details and show modal
-        Utils.ajax('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId), {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId)), {
             method: 'GET',
             onSuccess: function(data) {
                 if (data.success && data.user) {
@@ -245,7 +264,7 @@
             modal.querySelector('.modal-close').setAttribute('aria-label', closeLabel);
         }
 
-        Utils.ajax('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model/history', {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model/history'), {
             method: 'GET',
             onSuccess: function(data) {
                 const loadingEl = document.getElementById('history-modal-loading');
@@ -453,7 +472,7 @@
             germanState: (formData.get('germanState') || '').toString()
         };
 
-        Utils.ajax('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model', {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model'), {
             method: 'PUT',
             data: data,
             onSuccess: function(response) {

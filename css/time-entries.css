@@ -475,6 +475,29 @@
     .form-actions .btn {
         width: 100%;
     }
+
+    .section--form {
+        border-radius: var(--radius-xl, 12px);
+    }
+
+    .section--form .form-actions {
+        gap: var(--space-3);
+        margin-top: var(--space-6);
+        padding-top: var(--space-4);
+    }
+
+    .section--form .form-actions .btn {
+        min-height: 46px;
+    }
+
+    .stats-grid .stat-card {
+        text-align: left;
+        align-items: flex-start;
+    }
+
+    .stats-grid .stat-card .stat-value {
+        font-size: 1.75rem;
+    }
 }
 
 /* Time pair matrix: narrow screens — stack fields; hide redundant column headers (labels remain on each control) */
@@ -500,6 +523,13 @@
         width: 100%;
         max-width: 100%;
         justify-content: center;
+    }
+
+    .time-pair-matrix--breaks .break-entry {
+        background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover));
+        border: 1px solid var(--arbeitszeitcheck-color-border);
+        border-radius: var(--radius-base, 8px);
+        padding: var(--space-3);
     }
 
     .time-pair-matrix__grid--row + .time-pair-matrix__grid--row {

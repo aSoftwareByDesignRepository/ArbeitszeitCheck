@@ -258,6 +258,14 @@
   line-height: var(--arbeitszeitcheck-line-height-relaxed);
 }
 
+/* Consistent action rhythm inside all sections */
+#app-content-wrapper .section .card-actions,
+#app-content-wrapper .section .form-actions,
+#app-content-wrapper .section .manager-time-entries-page__filter-actions,
+#app-content-wrapper .section .pending-approval-card__actions {
+  gap: var(--space-3);
+}
+
 /* ===== CARDS INSIDE SECTIONS ===== */
 
 #app-content-wrapper .card {
@@ -322,12 +330,16 @@
 
 @media (max-width: 768px) {
   #app-content-wrapper {
-    padding: var(--space-5) var(--space-4) var(--space-12);
+    padding:
+      calc(var(--space-4) + env(safe-area-inset-top, 0px))
+      calc(var(--space-4) + env(safe-area-inset-right, 0px))
+      calc(var(--space-12) + env(safe-area-inset-bottom, 0px))
+      calc(var(--space-4) + env(safe-area-inset-left, 0px));
   }
 
   #app-content-wrapper>.section {
-    padding: var(--space-6) var(--space-5);
-    margin-bottom: var(--space-10);
+    padding: var(--space-5);
+    margin-bottom: var(--space-8);
     border-radius: var(--radius-xl);
   }
 
@@ -338,14 +350,14 @@
   }
 
   .page-header-section {
-    margin-bottom: var(--space-6);
-    padding: var(--space-4) 0;
+    margin-bottom: var(--space-5);
+    padding: var(--space-3) 0;
   }
 
   .page-header-section .header-content {
     flex-direction: column;
     align-items: stretch;
-    gap: var(--space-4);
+    gap: var(--space-3);
   }
 
   .page-header-section .header-actions {
@@ -356,6 +368,7 @@
   .page-header-section .header-actions .btn {
     width: 100%;
     justify-content: center;
+    min-height: 46px;
   }
 
   #app-content-wrapper .section-header {
@@ -366,6 +379,11 @@
 
   #app-content-wrapper .section__title {
     font-size: var(--arbeitszeitcheck-font-size-lg);
+    line-height: 1.35;
+  }
+
+  #app-content-wrapper .section .btn {
+    border-radius: var(--radius-base);
   }
 
   .settings-container {

@@ -1412,6 +1412,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 .badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: var(--space-1, 0.25rem) var(--space-2, 0.5rem);
   font-size: var(--arbeitszeitcheck-font-size-xs, 0.75rem);
   font-weight: var(--arbeitszeitcheck-font-weight-medium, 500);
@@ -1425,6 +1426,13 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   opacity: 1;
   box-shadow: none;
   filter: none;
+}
+
+@media (max-width: 768px) {
+  .badge {
+    min-height: 1.5rem;
+    padding: 0.25rem 0.625rem;
+  }
 }
 
 /* In-app override to defeat any global badge dimming from core themes */

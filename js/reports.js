@@ -36,6 +36,9 @@
 
 		// Helper: get request token safely
 		function getRequestToken() {
+			if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.getRequestToken === 'function') {
+				return window.ArbeitszeitCheckUtils.getRequestToken();
+			}
 			if (typeof OC !== 'undefined' && OC.requestToken) {
 				return OC.requestToken;
 			}
@@ -45,6 +48,9 @@
 
 		/** Build app URL when OC is not yet loaded (same pattern as arbeitszeitcheck-main.js). */
 		function generateAppUrl(path) {
+			if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.resolveUrl === 'function') {
+				return window.ArbeitszeitCheckUtils.resolveUrl(path);
+			}
 			if (typeof OC !== 'undefined' && typeof OC.generateUrl === 'function') {
 				return OC.generateUrl(path);
 			}
