@@ -69,12 +69,82 @@
   margin-bottom: 0;
 }
 
+#edit-user-modal .user-edit-section {
+  padding: var(--space-4, 1rem);
+  border: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
+  border-radius: var(--border-radius-large, 10px);
+  background: var(--color-main-background, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 0.75rem);
+}
+
+#edit-user-modal .user-edit-section__heading {
+  margin: 0;
+  font-size: var(--arbeitszeitcheck-font-size-base, 1rem);
+  color: var(--color-main-text, var(--arbeitszeitcheck-color-text));
+}
+
+#edit-user-modal .user-edit-steps {
+  padding: var(--space-4, 1rem);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--border-radius-large, 10px);
+  background: color-mix(in srgb, var(--color-main-background) 92%, var(--color-primary-element) 8%);
+}
+
+#edit-user-modal .user-edit-steps__title {
+  margin: 0 0 var(--space-2, 0.5rem) 0;
+  font-weight: 600;
+}
+
+#edit-user-modal .user-edit-steps__list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: var(--space-1, 0.25rem);
+}
+
+#edit-user-modal .entitlement-preview {
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-large, 10px);
+  padding: var(--space-3, 0.75rem);
+  background: var(--color-main-background);
+}
+
+#edit-user-modal .entitlement-preview__value {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-text-maxcontrast);
+}
+
+#edit-user-modal .entitlement-preview__meta {
+  margin: var(--space-1, 0.25rem) 0 0;
+  color: var(--color-text-lighter);
+}
+
+#edit-user-modal .entitlement-preview__trace {
+  margin: var(--space-2, 0.5rem) 0 0;
+  font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+  color: var(--color-main-text);
+  word-break: break-word;
+}
+
 #edit-user-modal .form-label {
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
 }
 
 #edit-user-modal .form-help {
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+}
+
+#edit-user-modal .form-group.is-disabled {
+  opacity: 0.65;
+}
+
+#edit-user-modal .form-group.is-disabled .form-input,
+#edit-user-modal .form-group.is-disabled .form-select,
+#edit-user-modal .form-group.is-disabled .form-textarea {
+  pointer-events: none;
 }
 
 /* Strong, theme-independent colors for the work schedule dropdown */
@@ -107,6 +177,11 @@ body[data-theme-dark-highcontrast] #edit-user-modal .form-select option {
 }
 
 @media (max-width: 768px) {
+  #edit-user-modal .user-edit-section,
+  #edit-user-modal .user-edit-steps {
+    padding: var(--space-3, 0.75rem);
+  }
+
   #edit-user-modal .form-actions {
     flex-direction: column;
   }

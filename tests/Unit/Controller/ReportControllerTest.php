@@ -20,6 +20,7 @@ use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
+use OCA\ArbeitszeitCheck\Service\MonthClosureService;
 use OCP\IConfig;
 use OCP\IUserManager;
 use OCP\AppFramework\Http\DataDownloadResponse;
@@ -72,6 +73,9 @@ class ReportControllerTest extends TestCase
 	/** @var IUserManager|\PHPUnit\Framework\MockObject\MockObject */
 	private $userManager;
 
+	/** @var MonthClosureService|\PHPUnit\Framework\MockObject\MockObject */
+	private $monthClosureService;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -103,6 +107,7 @@ class ReportControllerTest extends TestCase
 			return $default;
 		});
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->monthClosureService = $this->createMock(MonthClosureService::class);
 
 		$this->controller = new ReportController(
 			'arbeitszeitcheck',
@@ -113,11 +118,12 @@ class ReportControllerTest extends TestCase
 			$this->teamMemberMapper,
 			$this->teamManagerMapper,
 			$this->timeEntryMapper,
-			new TimeEntryExportTransformer(),
+			new TimeEntryExportTransformer($this->appConfig),
 			$this->appConfig,
 			$this->userManager,
 			$this->userSession,
-			$this->l10n
+			$this->l10n,
+			$this->monthClosureService
 		);
 	}
 
@@ -786,11 +792,12 @@ class ReportControllerTest extends TestCase
 			$this->teamMemberMapper,
 			$this->teamManagerMapper,
 			$this->timeEntryMapper,
-			new TimeEntryExportTransformer(),
+			new TimeEntryExportTransformer($this->appConfig),
 			$this->appConfig,
 			$this->userManager,
 			$this->userSession,
-			$this->l10n
+			$this->l10n,
+			$this->monthClosureService
 		);
 
 		$reportData = [
@@ -849,11 +856,12 @@ class ReportControllerTest extends TestCase
 			$this->teamMemberMapper,
 			$this->teamManagerMapper,
 			$this->timeEntryMapper,
-			new TimeEntryExportTransformer(),
+			new TimeEntryExportTransformer($this->appConfig),
 			$this->appConfig,
 			$this->userManager,
 			$this->userSession,
-			$this->l10n
+			$this->l10n,
+			$this->monthClosureService
 		);
 
 		$userId = 'manager1';

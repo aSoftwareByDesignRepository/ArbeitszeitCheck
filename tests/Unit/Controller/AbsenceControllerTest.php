@@ -18,6 +18,8 @@ use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureService;
+use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IL10N;
@@ -71,6 +73,9 @@ class AbsenceControllerTest extends TestCase
 	/** @var IConfig|\PHPUnit\Framework\MockObject\MockObject */
 	private $config;
 
+	/** @var MonthClosureService|\PHPUnit\Framework\MockObject\MockObject */
+	private $monthClosureService;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -87,6 +92,7 @@ class AbsenceControllerTest extends TestCase
 		$this->l10n->method('t')->willReturnCallback(fn ($s) => $s);
 		$this->config = $this->createMock(IConfig::class);
 		$this->config->method('getAppValue')->willReturn('[]');
+		$this->monthClosureService = $this->createMock(MonthClosureService::class);
 		$this->request = $this->createMock(IRequest::class);
 		$this->request->method('getHeader')->willReturnCallback(static function (string $name): string {
 			if ($name === 'Accept') {
@@ -110,7 +116,8 @@ class AbsenceControllerTest extends TestCase
 			$this->userManager,
 			$this->cspService,
 			$this->l10n,
-			$this->config
+			$this->config,
+			$this->monthClosureService
 		);
 	}
 
@@ -312,6 +319,17 @@ class AbsenceControllerTest extends TestCase
 		$user->method('getUID')->willReturn($userId);
 
 		$this->userSession->method('getUser')->willReturn($user);
+
+		$existing = new Absence();
+		$existing->setId($absenceId);
+		$existing->setUserId($userId);
+		$existing->setStartDate(new \DateTime('2024-06-01'));
+		$existing->setEndDate(new \DateTime('2024-06-05'));
+
+		$this->absenceMapper->expects($this->once())
+			->method('find')
+			->with($absenceId)
+			->willReturn($existing);
 
 		$absence = $this->createMock(Absence::class);
 		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
@@ -610,5 +628,48 @@ class AbsenceControllerTest extends TestCase
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
+	}
+
+	public function testShortenReturnsConflictWhenMonthFinalized(): void
+	{
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'end_date' => '2024-06-05',
+		]);
+		$this->absenceService->expects($this->once())
+			->method('shortenAbsence')
+			->with(1, $userId, '2024-06-05')
+			->willThrowException(new MonthFinalizedException('locked'));
+
+		$response = $this->controller->shorten(1);
+		$this->assertEquals(Http::STATUS_CONFLICT, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringContainsString('finalized', $data['error']);
+	}
+
+	public function testShortenFormRedirectsWithMonthFinalizedError(): void
+	{
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParam')
+			->with('end_date')
+			->willReturn('2024-06-05');
+		$this->urlGenerator->method('linkToRoute')
+			->with('arbeitszeitcheck.absence.show', ['id' => 99])
+			->willReturn('/apps/arbeitszeitcheck/absences/99');
+		$this->absenceService->expects($this->once())
+			->method('shortenAbsence')
+			->with(99, $userId, '2024-06-05')
+			->willThrowException(new MonthFinalizedException('locked'));
+
+		$response = $this->controller->shortenForm(99);
+		$this->assertEquals(Http::STATUS_SEE_OTHER, $response->getStatus());
+		$this->assertStringContainsString('shorten_error=', $response->getRedirectURL());
 	}
 }

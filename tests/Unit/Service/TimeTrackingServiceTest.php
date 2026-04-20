@@ -15,9 +15,12 @@ use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
+use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
+use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCP\IConfig;
 use OCP\IL10N;
@@ -62,8 +65,13 @@ class TimeTrackingServiceTest extends TestCase {
 			'min_rest_period' => '11',
 			default => $default
 		});
+		$config->method('getUserValue')->willReturn('');
+		$config->method('setUserValue')->willReturn(null);
 		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
 		$userSettingsMapper->method('getStringSetting')->willReturn('1');
+		$userWorkingTimeModelMapper = $this->createMock(UserWorkingTimeModelMapper::class);
+		$workingTimeModelMapper = $this->createMock(WorkingTimeModelMapper::class);
+		$monthClosureGuard = $this->createMock(MonthClosureGuard::class);
 
 		$this->service = new TimeTrackingService(
 			$this->timeEntryMapper,
@@ -73,7 +81,10 @@ class TimeTrackingServiceTest extends TestCase {
 			$complianceService,
 			$this->l10n,
 			$config,
-			$userSettingsMapper
+			$userSettingsMapper,
+			$userWorkingTimeModelMapper,
+			$workingTimeModelMapper,
+			$monthClosureGuard
 		);
 	}
 
@@ -250,7 +261,7 @@ class TimeTrackingServiceTest extends TestCase {
 		$this->assertEquals(0.0, $result['working_today_hours']);
 	}
 
-	public function testClockInResumesPausedEntryAndAppendsAutomaticBreak(): void
+	public function testClockInStartsFreshEntryWhenPausedEntryExists(): void
 	{
 		$userId = 'testuser';
 
@@ -283,43 +294,36 @@ class TimeTrackingServiceTest extends TestCase {
 		$pausedEntry->setIsManualEntry(false);
 		$pausedEntry->setCreatedAt(new \DateTime());
 
-		$this->timeEntryMapper->expects($this->atLeastOnce())
-			->method('findPausedOrUnfinishedTodayByUser')
-			->with($userId)
-			->willReturn($pausedEntry);
+		$this->timeEntryMapper->expects($this->never())
+			->method('findPausedOrUnfinishedTodayByUser');
 
 		$this->timeEntryMapper->expects($this->once())
 			->method('getTotalHoursByUserAndDateRange')
 			->willReturn(0.0);
 
-		$this->timeEntryMapper->expects($this->atLeastOnce())
-			->method('update')
-			->with($pausedEntry)
-			->willReturnCallback(static fn (TimeEntry $e) => $e);
+		$this->timeEntryMapper->expects($this->once())
+			->method('insert')
+			->willReturnCallback(static function (TimeEntry $entry): TimeEntry {
+				$entry->setId(999);
+				return $entry;
+			});
 
 		$this->auditLogMapper->expects($this->once())->method('logAction')->with(
 			$userId,
-			'clock_in_resume',
+			'clock_in',
 			'time_entry',
-			123,
+			999,
 			null,
 			$this->anything()
 		);
 
 		$result = $this->service->clockIn($userId);
-		$this->assertSame(123, $result->getId());
+		$this->assertSame(999, $result->getId());
 		$this->assertSame(TimeEntry::STATUS_ACTIVE, $result->getStatus());
-		$breaks = json_decode((string)$result->getBreaks(), true);
-		$this->assertIsArray($breaks);
-		$this->assertGreaterThanOrEqual(2, count($breaks));
-		$last = $breaks[count($breaks) - 1];
-		$this->assertTrue((bool)($last['automatic'] ?? false));
-		$this->assertArrayHasKey('start', $last);
-		$this->assertArrayHasKey('end', $last);
-		$this->assertArrayHasKey('duration_minutes', $last);
+		$this->assertNull($result->getBreaks());
 	}
 
-	public function testClockInResumeDifferentDayRequiresRestPeriod(): void
+	public function testClockInWithPausedEntryFromPreviousDayStartsNewEntry(): void
 	{
 		$userId = 'testuser';
 
@@ -339,16 +343,17 @@ class TimeTrackingServiceTest extends TestCase {
 		$pausedEntry->setIsManualEntry(false);
 		$pausedEntry->setCreatedAt(new \DateTime());
 
-		$this->timeEntryMapper->method('findPausedOrUnfinishedTodayByUser')->willReturn($pausedEntry);
 		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(0.0);
+		$this->timeEntryMapper->expects($this->once())
+			->method('insert')
+			->willReturnCallback(static function (TimeEntry $entry): TimeEntry {
+				$entry->setId(321);
+				return $entry;
+			});
 
-		$this->l10n->method('t')->willReturnCallback(static fn ($s) => $s);
-
-		$this->expectException(\Exception::class);
-		// Depending on wall-clock time, either the rest-period check or the max-hours check may trigger first.
-		$this->expectExceptionMessageMatches('/(rest period|Maximum daily working hours)/i');
-
-		$this->service->clockIn($userId);
+		$result = $this->service->clockIn($userId);
+		$this->assertSame(321, $result->getId());
+		$this->assertSame(TimeEntry::STATUS_ACTIVE, $result->getStatus());
 	}
 
 	public function testClockInResumeFailsWhenMaxDailyHoursWouldBeExceeded(): void
@@ -371,9 +376,8 @@ class TimeTrackingServiceTest extends TestCase {
 		$pausedEntry->setIsManualEntry(false);
 		$pausedEntry->setCreatedAt(new \DateTime());
 
-		$this->timeEntryMapper->method('findPausedOrUnfinishedTodayByUser')->willReturn($pausedEntry);
-		// already worked 2 hours in completed entries today -> total would be 11 > 10
-		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(2.0);
+		// already worked max hours in completed entries today
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(10.0);
 
 		$this->l10n->method('t')->willReturnCallback(static fn ($s) => $s);
 

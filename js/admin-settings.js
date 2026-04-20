@@ -159,32 +159,16 @@
         const form = e.target;
         const formData = Utils.serializeForm(form);
 
-        // Normalize requireSubstituteTypes[] to requireSubstituteTypes array for backend
-        // Always send (empty array when none checked) so unchecked state is persisted
-        const raw = formData['requireSubstituteTypes[]'];
-        formData.requireSubstituteTypes = raw === undefined
-            ? []
-            : (Array.isArray(raw) ? raw : [raw]);
-        delete formData['requireSubstituteTypes[]'];
-
         // Convert checkboxes to boolean (unchecked = not in form; checked sends "on" or value e.g. "1")
         function isChecked(v) { return v === 'on' || v === '1' || v === 1 || v === true; }
         formData.autoComplianceCheck = isChecked(formData.autoComplianceCheck);
         formData.realtimeComplianceCheck = isChecked(formData.realtimeComplianceCheck);
         formData.complianceStrictMode = isChecked(formData.complianceStrictMode);
         formData.enableViolationNotifications = isChecked(formData.enableViolationNotifications);
-        formData.missingClockInRemindersEnabled = isChecked(formData.missingClockInRemindersEnabled);
+        formData.breakAutoFallbackEnabled = isChecked(formData.breakAutoFallbackEnabled);
         formData.exportMidnightSplitEnabled = isChecked(formData.exportMidnightSplitEnabled);
         formData.monthClosureEnabled = isChecked(formData.monthClosureEnabled);
-        formData.sendIcalApprovedAbsences = isChecked(formData.sendIcalApprovedAbsences);
-        formData.sendIcalToSubstitute = isChecked(formData.sendIcalToSubstitute);
-        formData.sendIcalToManagers = isChecked(formData.sendIcalToManagers);
-        formData.sendEmailSubstitutionRequest = isChecked(formData.sendEmailSubstitutionRequest);
-        formData.sendEmailSubstituteApprovedToEmployee = isChecked(formData.sendEmailSubstituteApprovedToEmployee);
-        formData.sendEmailSubstituteApprovedToManager = isChecked(formData.sendEmailSubstituteApprovedToManager);
         formData.statutoryAutoReseed = isChecked(formData.statutoryAutoReseed);
-        formData.vacationRolloverEnabled = isChecked(formData.vacationRolloverEnabled);
-        formData.vacationRolloverIncludeUnusedAnnual = isChecked(formData.vacationRolloverIncludeUnusedAnnual);
         const accessGroupsRaw = formData['accessAllowedGroups[]'];
         formData.accessAllowedGroups = accessGroupsRaw === undefined
             ? []
@@ -202,9 +186,16 @@
         formData.maxDailyHours = num(formData.maxDailyHours, 10);
         formData.minRestPeriod = num(formData.minRestPeriod, 11);
         formData.defaultWorkingHours = num(formData.defaultWorkingHours, 8);
+        formData.breakAutoFallbackMinutes = int(formData.breakAutoFallbackMinutes, 180);
+        if (formData.breakAutoFallbackMinutes < 15) {
+            formData.breakAutoFallbackMinutes = 15;
+        }
+        if (formData.breakAutoFallbackMinutes > 720) {
+            formData.breakAutoFallbackMinutes = 720;
+        }
+        formData.breakAutoFallbackFlexWindowStart = int(formData.breakAutoFallbackFlexWindowStart, 11);
+        formData.breakAutoFallbackFlexWindowEnd = int(formData.breakAutoFallbackFlexWindowEnd, 16);
         formData.retentionPeriod = int(formData.retentionPeriod, 2);
-        formData.vacationCarryoverExpiryMonth = int(formData.vacationCarryoverExpiryMonth, 3);
-        formData.vacationCarryoverExpiryDay = int(formData.vacationCarryoverExpiryDay, 31);
         const graceInput = Utils.$('#monthClosureGraceDaysAfterEom');
         formData.monthClosureGraceDaysAfterEom = graceInput ? int(graceInput.value, 0) : int(formData.monthClosureGraceDaysAfterEom, 0);
 

@@ -14,6 +14,8 @@ namespace OCA\ArbeitszeitCheck\Service;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
+use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
+use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
@@ -34,6 +36,9 @@ class TimeTrackingService
 	private IL10N $l10n;
 	private IConfig $config;
 	private UserSettingsMapper $userSettingsMapper;
+	private UserWorkingTimeModelMapper $userWorkingTimeModelMapper;
+	private WorkingTimeModelMapper $workingTimeModelMapper;
+	private MonthClosureGuard $monthClosureGuard;
 
 	public function __construct(
 		TimeEntryMapper $timeEntryMapper,
@@ -43,7 +48,10 @@ class TimeTrackingService
 		ComplianceService $complianceService,
 		IL10N $l10n,
 		IConfig $config,
-		UserSettingsMapper $userSettingsMapper
+		UserSettingsMapper $userSettingsMapper,
+		UserWorkingTimeModelMapper $userWorkingTimeModelMapper,
+		WorkingTimeModelMapper $workingTimeModelMapper,
+		MonthClosureGuard $monthClosureGuard
 	) {
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->violationMapper = $violationMapper;
@@ -53,6 +61,9 @@ class TimeTrackingService
 		$this->l10n = $l10n;
 		$this->config = $config;
 		$this->userSettingsMapper = $userSettingsMapper;
+		$this->userWorkingTimeModelMapper = $userWorkingTimeModelMapper;
+		$this->workingTimeModelMapper = $workingTimeModelMapper;
+		$this->monthClosureGuard = $monthClosureGuard;
 	}
 
 	private function getMaxDailyHours(): float
@@ -76,6 +87,8 @@ class TimeTrackingService
 	 */
 	public function clockIn(string $userId, ?string $projectCheckProjectId = null, ?string $description = null): TimeEntry
 	{
+		$this->monthClosureGuard->assertUserDayMutable($userId, new \DateTime());
+
 		// Check if user is already clocked in
 		$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
 		if ($activeEntry !== null) {
@@ -86,127 +99,6 @@ class TimeTrackingService
 		$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
 		if ($breakEntry !== null) {
 			throw new \Exception($this->l10n->t('User is currently on break. End break first.'));
-		}
-
-		// Check if there's a paused or unfinished entry for today that we can resume
-		$pausedEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId);
-		if ($pausedEntry !== null) {
-			$now = new \DateTime();
-			$pausedEntryStartTime = $pausedEntry->getStartTime();
-			$pausedEntryUpdatedAt = $pausedEntry->getUpdatedAt();
-			
-			// Check if it's the same day as the paused entry
-			$isSameDay = $pausedEntryStartTime && 
-				$pausedEntryStartTime->format('Y-m-d') === $now->format('Y-m-d');
-			
-			// Calculate total working hours for today (only from COMPLETED entries)
-			// This excludes the paused entry, which we'll add separately
-			$today = new \DateTime();
-			$today->setTime(0, 0, 0);
-			$tomorrow = clone $today;
-			$tomorrow->modify('+1 day');
-			$todayHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $today, $tomorrow);
-			
-			// Calculate working hours from the paused entry (if it was worked on)
-			$pausedEntryWorkingHours = 0.0;
-			if ($pausedEntryStartTime && $pausedEntryUpdatedAt) {
-				// Calculate duration from start to when it was paused (clock-out time)
-				$pausedDuration = ($pausedEntryUpdatedAt->getTimestamp() - $pausedEntryStartTime->getTimestamp()) / 3600;
-				
-				// Subtract break time from paused entry
-				$pausedBreakHours = $pausedEntry->getBreakDurationHours();
-				$pausedEntryWorkingHours = max(0, $pausedDuration - $pausedBreakHours);
-			}
-			
-			$maxDailyHours = $this->getMaxDailyHours();
-			$totalWorkingHoursIfResumed = $todayHours + $pausedEntryWorkingHours;
-			
-			// Check if resuming would exceed maximum daily hours (ArbZG §3)
-			// This check is always enforced, regardless of same day or different day
-			if ($totalWorkingHoursIfResumed > $maxDailyHours) {
-				throw new \Exception($this->l10n->t(
-					'Cannot resume: Maximum daily working hours (%1$dh) would be exceeded. Current: %2$.1f hours, would be: %3$.1f hours (ArbZG §3).',
-					[(int)$maxDailyHours, $todayHours, $totalWorkingHoursIfResumed]
-				));
-			}
-			
-			// Check rest period (ArbZG §5): Only required between different days
-			// On the same day, resuming is allowed without 11h rest period (it's a work interruption, not a new shift)
-			if (!$isSameDay && $pausedEntryUpdatedAt) {
-				$minRest = $this->getMinRestPeriod();
-				$hoursSincePause = ($now->getTimestamp() - $pausedEntryUpdatedAt->getTimestamp()) / 3600;
-				
-				if ($hoursSincePause < $minRest) {
-					$earliestClockIn = clone $pausedEntryUpdatedAt;
-					$earliestClockIn->modify('+' . (int)$minRest . ' hours');
-					$hoursRemaining = ($earliestClockIn->getTimestamp() - $now->getTimestamp()) / 3600;
-					
-					throw new \Exception($this->l10n->t(
-						'Minimum 11-hour rest period required between shifts (ArbZG §5). Your last shift ended at %s. You can clock in after %s (in %.1f hours).',
-						[
-							$pausedEntryUpdatedAt->format('H:i'),
-							$earliestClockIn->format('H:i'),
-							max(0, $hoursRemaining)
-						]
-					));
-				}
-			}
-			
-			// Resume the paused entry
-			// IMPORTANT: Track the pause period (time between clock-out and clock-in) in breaks JSON
-			// This ensures that the pause time is correctly subtracted from total working time
-			$pauseStartTime = $pausedEntryUpdatedAt; // When user clocked out (paused)
-			$pauseEndTime = $now; // When user clocked in again (resumed)
-			
-			// Get existing breaks
-			$breaksJson = $pausedEntry->getBreaks();
-			$breaks = [];
-			if ($breaksJson !== null && $breaksJson !== '') {
-				$breaks = json_decode($breaksJson, true) ?? [];
-			}
-			
-			// Add the pause period as a break (clock-out to clock-in)
-			$breaks[] = [
-				'start' => $pauseStartTime->format('c'),
-				'end' => $pauseEndTime->format('c'),
-				'duration_minutes' => round(($pauseEndTime->getTimestamp() - $pauseStartTime->getTimestamp()) / 60),
-				'automatic' => true,
-				'reason' => $this->l10n->t('Automatic pause: Clock-out period (resumed entry)')
-			];
-			
-			$pausedEntry->setBreaks(json_encode($breaks));
-			$pausedEntry->setStatus(TimeEntry::STATUS_ACTIVE);
-			$pausedEntry->setUpdatedAt($now);
-			
-			// Update description if provided
-			if ($description !== null) {
-				$pausedEntry->setDescription($description);
-			}
-			
-			// Update project if provided
-			if ($projectCheckProjectId !== null) {
-				$pausedEntry->setProjectCheckProjectId($projectCheckProjectId);
-			}
-
-			$savedEntry = $this->timeEntryMapper->update($pausedEntry);
-
-			// Log the action
-			try {
-				$summary = $savedEntry->getSummary();
-			} catch (\Throwable $e) {
-				\OCP\Log\logger('arbeitszeitcheck')->error('Error getting summary for clock_in (resume) audit log: ' . $e->getMessage(), ["exception" => $e]);
-				$summary = ['id' => $savedEntry->getId(), 'userId' => $userId, 'status' => $savedEntry->getStatus()];
-			}
-			$this->auditLogMapper->logAction(
-				$userId,
-				'clock_in_resume',
-				'time_entry',
-				$savedEntry->getId(),
-				null,
-				$summary
-			);
-
-			return $savedEntry;
 		}
 
 		// Validate project ID length (DB column limit; ProjectCheck may not enforce)
@@ -241,6 +133,8 @@ class TimeTrackingService
 		$timeEntry->setUserId($userId);
 		$timeEntry->setStartTime(new \DateTime());
 		$timeEntry->setStatus(TimeEntry::STATUS_ACTIVE);
+		$timeEntry->setEndedReason(null);
+		$timeEntry->setPolicyApplied(null);
 		$timeEntry->setIsManualEntry(false);
 		$timeEntry->setProjectCheckProjectId($projectCheckProjectId);
 		$timeEntry->setDescription($description);
@@ -275,7 +169,11 @@ class TimeTrackingService
 	 * @return TimeEntry
 	 * @throws \Exception
 	 */
-	public function clockOut(string $userId): TimeEntry
+	public function clockOut(
+		string $userId,
+		string $endedReason = TimeEntry::ENDED_REASON_MANUAL_CLOCK_OUT,
+		string $policyApplied = 'standard'
+	): TimeEntry
 	{
 		// Check for active entry OR break entry (user can clock out during break)
 		$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
@@ -286,36 +184,30 @@ class TimeTrackingService
 			throw new \Exception($this->l10n->t('User is not currently clocked in'));
 		}
 
+		$this->monthClosureGuard->assertTimeEntryMutable($currentEntry);
+
+		$oldSummary = $this->safeGetSummary($currentEntry, $userId);
 		$now = new \DateTime();
-		
-		// If user is on break, end the break first
-		if ($currentEntry->getStatus() === TimeEntry::STATUS_BREAK) {
-			$currentEntry->setBreakEndTime($now);
+
+		// If the user clocks out while on break, persist the break interval in JSON.
+		if ($currentEntry->getStatus() === TimeEntry::STATUS_BREAK && $currentEntry->getBreakStartTime() !== null) {
+			$this->archiveBreakToJson($currentEntry, $currentEntry->getBreakStartTime(), $now);
+			$currentEntry->setBreakStartTime(null);
+			$currentEntry->setBreakEndTime(null);
 		}
-		
-		// Don't set endTime - allow user to resume work later
-		// Only set status to paused so user can continue working later
-		$currentEntry->setStatus(TimeEntry::STATUS_PAUSED);
+
+		$currentEntry->setEndTime($now);
+		$currentEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$currentEntry->setEndedReason($endedReason);
+		$currentEntry->setPolicyApplied($policyApplied);
 		$currentEntry->setUpdatedAt($now);
 
+		// Ensure legal break requirements are still satisfied when closing the entry.
+		$this->calculateAndSetAutomaticBreak($currentEntry);
+
 		$updatedEntry = $this->timeEntryMapper->update($currentEntry);
-
-		// Note: We don't check compliance after clocking out since the entry is not completed
-		// Compliance will be checked when the entry is actually completed (endTime is set)
-
-		// Log the action
-		try {
-			$oldSummary = $currentEntry->getSummary();
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting old summary for clock_out audit log: ' . $e->getMessage(), ["exception" => $e]);
-			$oldSummary = ['id' => $currentEntry->getId(), 'userId' => $userId];
-		}
-		try {
-			$newSummary = $updatedEntry->getSummary();
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting new summary for clock_out audit log: ' . $e->getMessage(), ["exception" => $e]);
-			$newSummary = ['id' => $updatedEntry->getId(), 'userId' => $userId];
-		}
+		$this->checkComplianceAfterClockOut($updatedEntry);
+		$newSummary = $this->safeGetSummary($updatedEntry, $userId);
 		$this->auditLogMapper->logAction(
 			$userId,
 			'clock_out',
@@ -342,6 +234,8 @@ class TimeTrackingService
 			throw new \Exception($this->l10n->t('User is not currently clocked in'));
 		}
 
+		$this->monthClosureGuard->assertTimeEntryMutable($activeEntry);
+
 		// Allow multiple breaks - check if there's an active break
 		if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() === null) {
 			throw new \Exception($this->l10n->t('Break is already started'));
@@ -350,7 +244,8 @@ class TimeTrackingService
 		$now = new \DateTime();
 		// Clear previous break times if they exist (for new break)
 		if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() !== null) {
-			// Previous break was completed, start new one
+			$this->archiveBreakToJson($activeEntry, $activeEntry->getBreakStartTime(), $activeEntry->getBreakEndTime());
+			// Previous break was completed and archived, start new one.
 			$activeEntry->setBreakStartTime($now);
 			$activeEntry->setBreakEndTime(null);
 		} else {
@@ -401,6 +296,8 @@ class TimeTrackingService
 			throw new \Exception($this->l10n->t('User is not currently on break'));
 		}
 
+		$this->monthClosureGuard->assertTimeEntryMutable($breakEntry);
+
 		$now = new \DateTime();
 		$breakEntry->setBreakEndTime($now);
 		$breakEntry->setStatus(TimeEntry::STATUS_ACTIVE);
@@ -446,24 +343,16 @@ class TimeTrackingService
 			$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
 
 			$currentEntry = $activeEntry ?: $breakEntry;
+			$currentEntry = $this->enforceBreakAutoFallbackForUser($userId, $currentEntry);
 
-			// If no active entry, check for paused entry
+			// If no active entry we are fully clocked out.
 			if ($currentEntry === null) {
-				$pausedEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId);
-				if ($pausedEntry !== null && $pausedEntry->getStatus() === TimeEntry::STATUS_PAUSED) {
-					return [
-						'status' => 'paused',
-						'current_entry' => $pausedEntry->getSummary(),
-						'working_today_hours' => $this->getTodayHours($userId),
-						'current_session_duration' => null
-					];
-				}
-				return [
+				return $this->appendAutoClockoutNotice([
 					'status' => 'clocked_out',
 					'current_entry' => null,
 					'working_today_hours' => $this->getTodayHours($userId),
 					'current_session_duration' => null
-				];
+				], $userId);
 			}
 
 			// CRITICAL: Automatically complete entry if daily maximum working hours reached (ArbZG §3)
@@ -481,12 +370,12 @@ class TimeTrackingService
 					\OCP\Log\logger('arbeitszeitcheck')->error('Error getting summary for completed entry: ' . $e->getMessage(), ["exception" => $e]);
 					$summary = ['id' => $currentEntry->getId(), 'userId' => $userId, 'status' => TimeEntry::STATUS_COMPLETED];
 				}
-				return [
+				return $this->appendAutoClockoutNotice([
 					'status' => 'completed',
 					'current_entry' => $summary,
 					'working_today_hours' => $this->getTodayHours($userId),
 					'current_session_duration' => null
-				];
+				], $userId);
 			}
 			
 			$now = new \DateTime();
@@ -522,21 +411,21 @@ class TimeTrackingService
 				];
 			}
 
-			return [
+			return $this->appendAutoClockoutNotice([
 				'status' => $currentEntry->getStatus(),
 				'current_entry' => $entrySummary,
 				'working_today_hours' => $this->getTodayHours($userId),
 				'current_session_duration' => $sessionDuration
-			];
+			], $userId);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in getStatus for user ' . $userId . ': ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
 			// Return a safe default status
-			return [
+			return $this->appendAutoClockoutNotice([
 				'status' => 'clocked_out',
 				'current_entry' => null,
 				'working_today_hours' => 0.0,
 				'current_session_duration' => null
-			];
+			], $userId);
 		}
 	}
 
@@ -1136,33 +1025,9 @@ class TimeTrackingService
 	public function getBreakStatus(string $userId): array
 	{
 		try {
-			// Calculate hours worked today (including current active session)
+			// getTodayHours already includes active session duration if a session is running.
 			$hoursWorked = $this->getTodayHours($userId);
-			
-			// Add current session if active
-			$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
-			$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
-			$currentEntry = $activeEntry ?: $breakEntry;
-			
-			if ($currentEntry) {
-				$now = new \DateTime();
-				$sessionStart = $currentEntry->getStartTime();
-				if ($sessionStart) {
-					$sessionDuration = ($now->getTimestamp() - $sessionStart->getTimestamp()) / 3600; // hours
-					
-					// Subtract break time if on break
-					if ($currentEntry->getBreakStartTime() !== null && $currentEntry->getBreakEndTime() === null) {
-						$breakHours = ($now->getTimestamp() - $currentEntry->getBreakStartTime()->getTimestamp()) / 3600;
-						$sessionDuration -= $breakHours;
-					} elseif ($currentEntry->getBreakStartTime() !== null && $currentEntry->getBreakEndTime() !== null) {
-						$breakHours = ($currentEntry->getBreakEndTime()->getTimestamp() - $currentEntry->getBreakStartTime()->getTimestamp()) / 3600;
-						$sessionDuration -= $breakHours;
-					}
-					
-					$hoursWorked += $sessionDuration;
-				}
-			}
-			
+
 			$requiredBreak = $this->calculateRequiredBreakMinutes($hoursWorked);
 			$takenBreak = $this->calculateTakenBreakMinutes($userId);
 			$remainingBreak = max(0, $requiredBreak - $takenBreak);
@@ -1222,6 +1087,147 @@ class TimeTrackingService
 		}
 		
 		return 'none';
+	}
+
+	private function safeGetSummary(TimeEntry $entry, string $userId): array
+	{
+		try {
+			return $entry->getSummary();
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error getting entry summary: ' . $e->getMessage(),
+				['exception' => $e, 'entry_id' => $entry->getId(), 'user_id' => $userId]
+			);
+			return ['id' => $entry->getId(), 'userId' => $userId, 'status' => $entry->getStatus()];
+		}
+	}
+
+	public function enforceBreakAutoFallbackForUser(string $userId, ?TimeEntry $currentEntry = null): ?TimeEntry
+	{
+		$entry = $currentEntry ?? $this->timeEntryMapper->findOnBreakByUser($userId);
+		if ($entry === null || $entry->getStatus() !== TimeEntry::STATUS_BREAK) {
+			return $currentEntry;
+		}
+		$breakStart = $entry->getBreakStartTime();
+		if ($breakStart === null) {
+			return $entry;
+		}
+
+		$enabled = $this->config->getAppValue('arbeitszeitcheck', 'break_auto_fallback_enabled', '1') === '1';
+		if (!$enabled) {
+			return $entry;
+		}
+
+		$policy = $this->resolveBreakFallbackPolicyForUser($userId);
+		$thresholdMinutes = (int)$policy['threshold_minutes'];
+		if ((string)$policy['mode'] === 'flex') {
+			$currentHour = (int)(new \DateTime())->format('G');
+			$windowStart = (int)$policy['window_start_hour'];
+			$windowEnd = (int)$policy['window_end_hour'];
+			if ($windowStart >= 0 && $windowEnd <= 24 && $windowStart < $windowEnd && $currentHour >= $windowStart && $currentHour < $windowEnd) {
+				return $entry;
+			}
+		}
+
+		$now = new \DateTime();
+		$elapsedMinutes = (int)floor(($now->getTimestamp() - $breakStart->getTimestamp()) / 60);
+		if ($elapsedMinutes < $thresholdMinutes) {
+			return $entry;
+		}
+
+		try {
+			$this->clockOut($userId, TimeEntry::ENDED_REASON_AUTO_BREAK_FALLBACK, (string)$policy['mode']);
+			$noticeMessage = $this->l10n->t(
+				'Break was still active after %1$d minutes. Automatic clock-out was applied at %2$s (%3$s policy).',
+				[$thresholdMinutes, $now->format('d.m.Y H:i'), (string)$policy['mode']]
+			);
+			$this->config->setUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', json_encode([
+				'message' => $noticeMessage,
+				'reason' => TimeEntry::ENDED_REASON_AUTO_BREAK_FALLBACK,
+				'policy' => (string)$policy['mode'],
+				'at' => $now->format('c'),
+			]));
+			\OCP\Log\logger('arbeitszeitcheck')->info('Break auto-fallback clock-out executed', [
+				'user_id' => $userId,
+				'entry_id' => $entry->getId(),
+				'elapsed_minutes' => $elapsedMinutes,
+				'threshold_minutes' => $thresholdMinutes,
+				'policy' => (string)$policy['mode'],
+			]);
+			return null;
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Break auto-fallback clock-out failed: ' . $e->getMessage(), [
+				'exception' => $e,
+				'user_id' => $userId,
+				'entry_id' => $entry->getId(),
+			]);
+			return $entry;
+		}
+	}
+
+	/**
+	 * @return array{mode:string,threshold_minutes:int,window_start_hour:int,window_end_hour:int}
+	 */
+	private function resolveBreakFallbackPolicyForUser(string $userId): array
+	{
+		$defaultMode = 'flex';
+		$assignment = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
+		if ($assignment !== null) {
+			try {
+				$model = $this->workingTimeModelMapper->find($assignment->getWorkingTimeModelId());
+				$mode = $model->getType() === \OCA\ArbeitszeitCheck\Db\WorkingTimeModel::TYPE_SHIFT_WORK ? 'strict_shift' : 'flex';
+				$rules = $model->getBreakRulesArray() ?? [];
+				$threshold = isset($rules['auto_fallback_minutes']) ? (int)$rules['auto_fallback_minutes'] : null;
+				if (isset($rules['break_policy']) && in_array((string)$rules['break_policy'], ['flex', 'strict_shift'], true)) {
+					$mode = (string)$rules['break_policy'];
+				}
+				return [
+					'mode' => $mode,
+					'threshold_minutes' => max(15, min(720, $threshold ?? (int)$this->config->getAppValue('arbeitszeitcheck', 'break_auto_fallback_minutes', $mode === 'strict_shift' ? '120' : '240'))),
+					'window_start_hour' => max(0, min(23, (int)$this->config->getAppValue('arbeitszeitcheck', 'break_auto_fallback_flex_window_start', '11'))),
+					'window_end_hour' => max(1, min(24, (int)$this->config->getAppValue('arbeitszeitcheck', 'break_auto_fallback_flex_window_end', '16'))),
+				];
+			} catch (\Throwable $e) {
+				// fall through to defaults
+			}
+		}
+
+		return [
+			'mode' => $defaultMode,
+			'threshold_minutes' => max(15, min(720, (int)$this->config->getAppValue('arbeitszeitcheck', 'break_auto_fallback_minutes', '240'))),
+			'window_start_hour' => max(0, min(23, (int)$this->config->getAppValue('arbeitszeitcheck', 'break_auto_fallback_flex_window_start', '11'))),
+			'window_end_hour' => max(1, min(24, (int)$this->config->getAppValue('arbeitszeitcheck', 'break_auto_fallback_flex_window_end', '16'))),
+		];
+	}
+
+	private function archiveBreakToJson(TimeEntry $entry, \DateTime $start, \DateTime $end): void
+	{
+		$existing = $entry->getBreaks();
+		$breaks = ($existing !== null && $existing !== '') ? (json_decode($existing, true) ?? []) : [];
+		$breaks[] = [
+			'start' => $start->format('c'),
+			'end' => $end->format('c'),
+			'duration_minutes' => (int)round(($end->getTimestamp() - $start->getTimestamp()) / 60),
+		];
+		$entry->setBreaks(json_encode($breaks));
+	}
+
+	/**
+	 * @param array<string,mixed> $status
+	 * @return array<string,mixed>
+	 */
+	private function appendAutoClockoutNotice(array $status, string $userId): array
+	{
+		$raw = (string)$this->config->getUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', '');
+		if ($raw === '') {
+			return $status;
+		}
+		$decoded = json_decode($raw, true);
+		if (is_array($decoded)) {
+			$status['auto_clockout_notice'] = $decoded;
+		}
+		$this->config->setUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', '');
+		return $status;
 	}
 
 }

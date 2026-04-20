@@ -18,6 +18,7 @@ use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
+use OCA\ArbeitszeitCheck\Service\AbsenceNotificationMailService;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
@@ -213,6 +214,59 @@ class AbsenceServiceTest extends TestCase
 		$result = $this->service->createAbsence($data, $userId);
 
 		$this->assertSame($absence, $result);
+	}
+
+	public function testCreateAbsenceTriggersHrRequestCreatedNotification(): void
+	{
+		$userId = 'testuser';
+		$start = (new \DateTime())->modify('+14 days');
+		$end = (clone $start)->modify('+1 day');
+		$data = [
+			'type' => Absence::TYPE_VACATION,
+			'start_date' => $start->format('Y-m-d'),
+			'end_date' => $end->format('Y-m-d'),
+			'reason' => 'Vacation',
+		];
+
+		$this->absenceMapper->method('findOverlapping')->willReturn([]);
+		$this->absenceMapper->method('getSickLeaveDays')->willReturn(0.0);
+		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
+		$this->userSettingsMapper->method('getIntegerSetting')->willReturn(25);
+
+		$absence = new Absence();
+		$absence->setId(124);
+		$absence->setUserId($userId);
+		$absence->setType(Absence::TYPE_VACATION);
+		$absence->setStartDate(clone $start);
+		$absence->setEndDate(clone $end);
+		$absence->setStatus(Absence::STATUS_PENDING);
+		$absence->setDays(2.0);
+		$this->absenceMapper->method('insert')->willReturn($absence);
+
+		$mailService = $this->createMock(AbsenceNotificationMailService::class);
+		$mailService->expects($this->once())
+			->method('sendHrOfficeNotification')
+			->with($absence, 'request_created', $userId);
+
+		$service = new AbsenceService(
+			$this->absenceMapper,
+			$this->auditLogMapper,
+			$this->userSettingsMapper,
+			$this->teamResolver,
+			$this->userWorkingTimeModelMapper,
+			$this->config,
+			$this->db,
+			$this->userManager,
+			$this->l10n,
+			$this->notificationService,
+			null,
+			$this->holidayCalendarService,
+			$this->vacationYearBalanceMapper,
+			$this->vacationAllocationService,
+			$mailService
+		);
+
+		$service->createAbsence($data, $userId);
 	}
 
 	/**

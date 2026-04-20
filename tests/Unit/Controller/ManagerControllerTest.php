@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Controller\ManagerController;
 use OCA\ArbeitszeitCheck\Db\Absence;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
@@ -27,6 +28,8 @@ use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
+use OCA\ArbeitszeitCheck\Service\MonthClosureService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -109,6 +112,12 @@ class ManagerControllerTest extends TestCase
 	/** @var IConfig|\PHPUnit\Framework\MockObject\MockObject */
 	private $config;
 
+	/** @var MonthClosureGuard|\PHPUnit\Framework\MockObject\MockObject */
+	private $monthClosureGuard;
+
+	/** @var MonthClosureService|\PHPUnit\Framework\MockObject\MockObject */
+	private $monthClosureService;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -142,6 +151,8 @@ class ManagerControllerTest extends TestCase
 			->willReturnCallback(function (string $userId): bool {
 				return $this->isAdminAccess;
 			});
+		$this->monthClosureGuard = $this->createMock(MonthClosureGuard::class);
+		$this->monthClosureService = $this->createMock(MonthClosureService::class);
 
 		$this->controller = new ManagerController(
 			'arbeitszeitcheck',
@@ -163,7 +174,9 @@ class ManagerControllerTest extends TestCase
 			$this->notificationService,
 			$this->timeEntryMapper,
 			$this->urlGenerator,
-			$this->config
+			$this->config,
+			$this->monthClosureGuard,
+			$this->monthClosureService
 		);
 	}
 
@@ -1030,6 +1043,148 @@ class ManagerControllerTest extends TestCase
 		$this->assertCount(1, $data['entries']);
 		$this->assertSame('employee1', $data['entries'][0]['userId']);
 		$this->assertSame('vacation', $data['entries'][0]['type']);
+	}
+
+	public function testRevisionPdfUsersForbiddenWhenNeitherAdminNorManager(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('nobody');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->canAccessManagerDashboard = false;
+		$this->isAdminAccess = false;
+		$this->config->method('getAppValue')->willReturnCallback(
+			static function (string $appId, string $key, string $default = ''): string {
+				if ($appId === 'arbeitszeitcheck' && $key === Constants::CONFIG_MONTH_CLOSURE_ENABLED) {
+					return '1';
+				}
+
+				return $default;
+			}
+		);
+
+		$response = $this->controller->revisionPdfUsers();
+
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+	}
+
+	public function testRevisionPdfUsersReturnsTeamMembersForManager(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->canAccessManagerDashboard = true;
+		$this->isAdminAccess = false;
+		$this->config->method('getAppValue')->willReturnCallback(
+			static function (string $appId, string $key, string $default = ''): string {
+				if ($appId === 'arbeitszeitcheck' && $key === Constants::CONFIG_MONTH_CLOSURE_ENABLED) {
+					return '1';
+				}
+
+				return $default;
+			}
+		);
+		$this->teamResolver->method('getTeamMemberIds')->with('manager1')->willReturn(['emp1']);
+		$employee = $this->createMock(IUser::class);
+		$employee->method('getUID')->willReturn('emp1');
+		$employee->method('getDisplayName')->willReturn('Emp One');
+		$employee->method('getEMailAddress')->willReturn('e@example.org');
+		$this->userManager->method('get')->with('emp1')->willReturn($employee);
+		$this->permissionService->method('canManageEmployee')->willReturnCallback(
+			static function (string $managerId, string $employeeId): bool {
+				return $managerId === 'manager1' && $employeeId === 'emp1';
+			}
+		);
+
+		$response = $this->controller->revisionPdfUsers(null, 25);
+
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertArrayHasKey('users', $data);
+		$this->assertCount(1, $data['users']);
+		$this->assertSame('emp1', $data['users'][0]['userId']);
+	}
+
+	public function testRevisionPdfAvailableMonthsForManagerUsesTeamScope(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->canAccessManagerDashboard = true;
+		$this->isAdminAccess = false;
+		$this->config->method('getAppValue')->willReturnCallback(
+			static function (string $appId, string $key, string $default = ''): string {
+				if ($appId === 'arbeitszeitcheck' && $key === Constants::CONFIG_MONTH_CLOSURE_ENABLED) {
+					return '1';
+				}
+
+				return $default;
+			}
+		);
+		$this->teamResolver->method('getTeamMemberIds')->with('manager1')->willReturn(['e1', 'e2']);
+		$this->monthClosureService->expects($this->once())->method('listDistinctFinalizedYearMonthsForUserIds')->with(['e1', 'e2'])->willReturn([
+			['year' => 2026, 'month' => 1],
+		]);
+
+		$response = $this->controller->revisionPdfAvailableMonths();
+
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertSame(2026, $data['months'][0]['year']);
+		$this->assertSame(1, $data['months'][0]['month']);
+	}
+
+	public function testRevisionPdfUsersForMonthReturnsUsers(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->canAccessManagerDashboard = true;
+		$this->isAdminAccess = false;
+		$this->config->method('getAppValue')->willReturnCallback(
+			static function (string $appId, string $key, string $default = ''): string {
+				if ($appId === 'arbeitszeitcheck' && $key === Constants::CONFIG_MONTH_CLOSURE_ENABLED) {
+					return '1';
+				}
+
+				return $default;
+			}
+		);
+		$this->teamResolver->method('getTeamMemberIds')->with('manager1')->willReturn(['emp1']);
+		$this->monthClosureService->method('listUserIdsWithFinalizedMonth')->with(2026, 3, ['emp1'])->willReturn(['emp1']);
+		$emp = $this->createMock(IUser::class);
+		$emp->method('getUID')->willReturn('emp1');
+		$emp->method('getDisplayName')->willReturn('Emp');
+		$emp->method('getEMailAddress')->willReturn('e@test');
+		$this->userManager->method('get')->with('emp1')->willReturn($emp);
+		$this->permissionService->method('canManageEmployee')->willReturnCallback(
+			static function (string $m, string $e): bool {
+				return $m === 'manager1' && $e === 'emp1';
+			}
+		);
+
+		$this->request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			if ($name === 'year') {
+				return '2026';
+			}
+			if ($name === 'month') {
+				return '3';
+			}
+
+			return $default;
+		});
+
+		$response = $this->controller->revisionPdfUsersForMonth();
+
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertCount(1, $data['users']);
+		$this->assertSame('emp1', $data['users'][0]['userId']);
 	}
 
 }

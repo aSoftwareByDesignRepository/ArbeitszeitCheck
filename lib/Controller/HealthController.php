@@ -86,12 +86,10 @@ class HealthController extends Controller
 	private function checkDatabase(): array
 	{
 		try {
-			// Test basic query
-			$query = $this->db->getQueryBuilder();
-			$query->select('1');
-			$result = $query->executeQuery()->fetchOne();
+			// Execute a minimal DB round-trip that works across supported drivers.
+			$result = $this->db->executeQuery('SELECT 1')->fetchOne();
 
-			if ($result === '1') {
+			if ((string)$result === '1') {
 				return [
 					'status' => 'healthy',
 					'message' => $this->l10n->t('Database connection successful')

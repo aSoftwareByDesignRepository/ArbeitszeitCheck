@@ -24,6 +24,59 @@ Replace `X.Y.Z` with the real version (e.g. `1.1.6`).
 
 ## 2. Build the installable `.tar.gz`
 
+Preferred (uses this app's guarded Makefile workflow):
+
+```bash
+cd apps/arbeitszeitcheck
+make release-signed
+```
+
+This produces `build/release/arbeitszeitcheck-X.Y.Z.tar.gz`, verifies the archive does not contain development paths (for example `.git`, `node_modules`, `tests`, `build`, `scripts`), signs the extracted archive payload via `occ integrity:sign-app`, validates that `appinfo/signature.json` does not reference forbidden development paths, and repacks the signed tarball.
+
+If `make release-signed` fails on the host because `occ` cannot run (for example missing PDO driver), use the Docker signing fallback below.
+
+### Docker signing fallback (recommended when using the local Nextcloud container)
+
+Use this after creating `release/arbeitszeitcheck-X.Y.Z.tar.gz`:
+
+```bash
+VERSION=X.Y.Z
+APPID=arbeitszeitcheck
+CONTAINER=nextcloud-app
+
+# 1) Copy key material into container tmp
+docker cp "$HOME/.nextcloud/certificates/${APPID}.key" "${CONTAINER}:/tmp/${APPID}.key"
+docker cp "$HOME/.nextcloud/certificates/${APPID}.crt" "${CONTAINER}:/tmp/${APPID}.crt"
+docker exec "${CONTAINER}" sh -lc "chown www-data:www-data /tmp/${APPID}.key /tmp/${APPID}.crt && chmod 600 /tmp/${APPID}.key && chmod 644 /tmp/${APPID}.crt"
+
+# 2) Sign extracted archive payload with occ (as www-data), repack to /tmp
+docker exec -u www-data "${CONTAINER}" sh -lc "
+  set -e
+  ARCHIVE=/var/www/html/custom_apps/${APPID}/release/${APPID}-${VERSION}.tar.gz
+  STAGING=\$(mktemp -d)
+  tar -xzf \"\$ARCHIVE\" -C \"\$STAGING\"
+  php /var/www/html/occ integrity:sign-app \
+    --privateKey=/tmp/${APPID}.key \
+    --certificate=/tmp/${APPID}.crt \
+    --path=\"\$STAGING/${APPID}\"
+  tar -czf /tmp/${APPID}-signed-${VERSION}.tar.gz -C \"\$STAGING\" \"${APPID}\"
+  rm -rf \"\$STAGING\"
+"
+
+# 3) Copy signed archive back and clean temporary secrets
+docker cp "${CONTAINER}:/tmp/${APPID}-signed-${VERSION}.tar.gz" "apps/${APPID}/release/${APPID}-${VERSION}.tar.gz"
+docker exec "${CONTAINER}" sh -lc "rm -f /tmp/${APPID}.key /tmp/${APPID}.crt /tmp/${APPID}-signed-${VERSION}.tar.gz"
+```
+
+Validate the result before continuing:
+
+```bash
+cd apps/arbeitszeitcheck/release
+tar -tzf "arbeitszeitcheck-${VERSION}.tar.gz" | grep "appinfo/signature.json"
+```
+
+Manual fallback (advanced, use only if you cannot run `make release-signed` or Docker signing):
+
 From the repo root that contains `apps/arbeitszeitcheck` (here: `nextcloud-development/apps/`; local folder name may differ):
 
 ```bash
@@ -38,7 +91,29 @@ tar --exclude='arbeitszeitcheck/node_modules' \
     -czf "arbeitszeitcheck/release/arbeitszeitcheck-${VERSION}.tar.gz" arbeitszeitcheck
 ```
 
+If you use the manual fallback, you **must** re-sign the extracted archive tree with `occ integrity:sign-app` and validate that `appinfo/signature.json` contains no `.git/`, `node_modules/`, `tests/`, `build/`, or `scripts/` entries before upload.
+
 **Do not commit** the tarball (see `.gitignore`).
+
+### Critical deployment rule (prevents integrity errors)
+
+Deploy **only** from the signed release tarball.
+Do **not** copy/sync a development checkout (`git`, `rsync`, IDE upload) into production when `appinfo/signature.json` exists.
+
+If production ever shows many `FILE_MISSING` entries under `.git/*` or a huge list under `node_modules/*`, that is a strong indicator the app was signed from a development tree and then deployed in a different file layout.
+
+### Safe production deployment helper
+
+```bash
+cd apps/arbeitszeitcheck/release
+./deploy-from-release.sh \
+  --archive ../build/release/arbeitszeitcheck-X.Y.Z.tar.gz \
+  --target-apps-dir /var/www/html/custom_apps \
+  --occ /var/www/html/occ
+```
+
+This helper validates archive integrity prerequisites before replacing app files.
+By default, it now requires `--occ` so integrity checks cannot be silently skipped.
 
 ---
 
@@ -86,13 +161,57 @@ Produces `arbeitszeitcheck-X.Y.Z.tar.gz.asc` — **ignored** by git.
 
 ---
 
-## 6. Upload at apps.nextcloud.com
+## 6. GitHub Release (**required**) — **`nextcloud-arbeitszeitcheck`**
 
-Typical fields:
+You **must** create a **GitHub Release** tagged **`vX.Y.Z`** and attach **`arbeitszeitcheck-X.Y.Z.tar.gz`** before you treat the App Store upload as complete. The SHA-256, OpenSSL signature, and store upload **must** be the **same byte-identical** file as the release asset. User-facing downloads and tags belong on the **public** app repo, not on the private monorepo.
+
+| Repository | Role |
+|------------|------|
+| **This workspace** (`nextcloud-development`, …) | Development; tarball is built under `apps/arbeitszeitcheck/build/release/`. |
+| **`aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`** | **Public** — source sync + **GitHub Releases** + `.tar.gz` asset. |
+
+**Canonical repo:** https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck  
+
+Always pass **`--repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`** to `gh` (or `export GH_REPO=...`) so you never target the monorepo by mistake.
+
+**1. Push sources** (from monorepo root):
+
+```bash
+./scripts/push-public-app-subtree.sh arbeitszeitcheck aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck
+```
+
+**2. Create the release** from the built tarball (paths relative to `apps/arbeitszeitcheck`):
+
+```bash
+VERSION=X.Y.Z
+cd apps/arbeitszeitcheck
+
+gh release create "v${VERSION}" \
+  --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck \
+  --title "v${VERSION}" \
+  --notes-file "release/GITHUB_RELEASE_NOTES_${VERSION}.md" \
+  "build/release/arbeitszeitcheck-${VERSION}.tar.gz"
+```
+
+If the release **already exists** and you only need to **replace the asset**:
+
+```bash
+gh release upload "v${VERSION}" "build/release/arbeitszeitcheck-${VERSION}.tar.gz" \
+  --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck \
+  --clobber
+```
+
+Publishing the **tarball** does not push git history; subtree sync is separate. The release command only attaches the archive to **`nextcloud-arbeitszeitcheck`**.
+
+---
+
+## 7. Upload at apps.nextcloud.com
+
+Upload the **same** `build/release/arbeitszeitcheck-X.Y.Z.tar.gz` you attached to the GitHub Release.
 
 | Field | Source |
 |--------|--------|
-| **Archive** | `release/arbeitszeitcheck-X.Y.Z.tar.gz` |
+| **Archive** | `build/release/arbeitszeitcheck-X.Y.Z.tar.gz` (same bytes as GitHub asset) |
 | **SHA-256** | From `sha256sum` / `CHECKSUMS-X.Y.Z.txt` |
 | **Signature** | Output of the `openssl dgst … \| openssl base64` command |
 | **Changelog** | Paste from `CHANGELOG.md` (or shortened) |
@@ -101,55 +220,14 @@ Submit; fix any validation errors (wrong checksum/signature almost always means 
 
 ---
 
-## 7. GitHub release — **standalone app repo** (not the monorepo)
+## 8. Required chat handoff (every release)
 
-User-facing downloads and release tags belong on **`nextcloud-arbeitszeitcheck`** (the **only** public first-party app repo — see [REPOSITORY-LAYOUT.md](../../../ready2publish/REPOSITORY-LAYOUT.md)), not on the private development monorepo.
+After release creation and before closing the task, always paste these two items in chat:
 
-| Repository | Role |
-|------------|------|
-| **This workspace** (`nextcloud-development` or e.g. `nextcloud-dev`, …) | Day-to-day development; **do not** create product releases here unless you explicitly want a monorepo release. |
-| **`aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`** | **Public** ArbeitszeitCheck repo — tags, GitHub Releases, and the `.tar.gz` asset users expect. |
+1. **App Store signature** — the single-line base64 value from `SIGNATURE-X.Y.Z.txt` (or direct command output).
+2. **Direct GitHub tarball URL** — `https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck/releases/download/vX.Y.Z/arbeitszeitcheck-X.Y.Z.tar.gz`.
 
-**Canonical GitHub repo for releases**
-
-- `https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`
-- Shorthand for `gh`: `--repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`
-
-Always pass **`--repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`** (or set `GH_REPO` once) so `gh` never targets your monorepo remote by mistake.
-
-```bash
-# Optional: default for this shell session
-export GH_REPO=aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck
-```
-
-Build the tarball **here** (monorepo `apps/`), then point `gh` at the file with an absolute or correct relative path.
-
-### Create a new GitHub Release (tag + notes + asset)
-
-From `apps/arbeitszeitcheck/release` after building `arbeitszeitcheck-${VERSION}.tar.gz`:
-
-```bash
-VERSION=X.Y.Z
-cd /path/to/nextcloud-development/apps/arbeitszeitcheck/release
-
-gh release create "v${VERSION}" \
-  --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck \
-  --title "v${VERSION}" \
-  --notes-file "GITHUB_RELEASE_NOTES_${VERSION}.md" \
-  "arbeitszeitcheck-${VERSION}.tar.gz"
-```
-
-If the release **already exists** and you only need to **replace the asset** (same version, new tarball):
-
-```bash
-gh release upload "v${VERSION}" "arbeitszeitcheck-${VERSION}.tar.gz" \
-  --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck \
-  --clobber
-```
-
-### Source code on GitHub
-
-Publishing the **tarball** does not push git history. If you also publish app sources to that repo (e.g. `git subtree split` / manual sync), do that in your usual way **before or after** the release; the commands above only attach the built archive to **`nextcloud-arbeitszeitcheck`**, not to the monorepo.
+This handoff is mandatory for every release so upload data can be copied without re-running commands.
 
 ---
 
@@ -162,6 +240,7 @@ Publishing the **tarball** does not push git history. If you also publish app so
 | `CHECKSUMS-X.Y.Z.txt` | Optional (recommended for your team) |
 | `*.tar.gz`, `*.tar.gz.asc` | **No** (gitignored) |
 | `SIGNATURE-*.txt` or local signature dumps | **No** (gitignored) |
+| `appinfo/signature.json` in working tree | **No** (generated during signing, not source-controlled) |
 | Private key `*.key` | **Never** in the repo |
 
 ---
@@ -170,8 +249,10 @@ Publishing the **tarball** does not push git history. If you also publish app so
 
 - [ ] `info.xml` version = `X.Y.Z`
 - [ ] Changelog updated
-- [ ] Tarball built with excludes above
+- [ ] Tarball built (and signed) with `appinfo/signature.json` inside archive
 - [ ] SHA-256 + SHA-512 recorded; store gets **SHA-256**
 - [ ] OpenSSL base64 signature **from the same tarball file**
 - [ ] Nothing uploaded to git except docs/checksums (no `.tar.gz`, no keys)
-- [ ] GitHub Release (if used): **`gh` with `--repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`**, not the monorepo
+- [ ] **GitHub Release** on **`nextcloud-arbeitszeitcheck`**: tag `vX.Y.Z`, attach **`build/release/arbeitszeitcheck-X.Y.Z.tar.gz`**, `gh --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck` (**required**)
+- [ ] App Store upload uses **that same** tarball bytes
+- [ ] Chat handoff posted: App Store signature + direct GitHub tarball URL

@@ -536,12 +536,14 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   margin-top: var(--space-2);
 }
 
+/* Error surface: tint mixed with page background (not transparent) + main text for WCAG contrast across themes */
 .form-error,
 .field-error {
   font-size: var(--arbeitszeitcheck-font-size-sm);
-  color: var(--arbeitszeitcheck-color-error);
-  background-color: var(--arbeitszeitcheck-color-error-light);
-  border: 1px solid var(--arbeitszeitcheck-color-border-error);
+  color: var(--arbeitszeitcheck-color-main-text);
+  background-color: color-mix(in srgb, var(--color-error) 14%, var(--color-main-background));
+  border: 1px solid color-mix(in srgb, var(--color-error) 35%, var(--color-border));
+  border-left: 4px solid var(--color-error);
   border-radius: var(--radius-base);
   padding: var(--space-2) var(--space-3);
   margin-top: var(--space-1);
@@ -565,7 +567,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 
 .form-error__title {
   font-weight: var(--arbeitszeitcheck-font-weight-semibold);
-  color: var(--arbeitszeitcheck-color-error);
+  color: var(--arbeitszeitcheck-color-main-text);
   margin: 0;
 }
 
@@ -1410,6 +1412,7 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 .badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: var(--space-1, 0.25rem) var(--space-2, 0.5rem);
   font-size: var(--arbeitszeitcheck-font-size-xs, 0.75rem);
   font-weight: var(--arbeitszeitcheck-font-weight-medium, 500);
@@ -1423,6 +1426,13 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   opacity: 1;
   box-shadow: none;
   filter: none;
+}
+
+@media (max-width: 768px) {
+  .badge {
+    min-height: 1.5rem;
+    padding: 0.25rem 0.625rem;
+  }
 }
 
 /* In-app override to defeat any global badge dimming from core themes */

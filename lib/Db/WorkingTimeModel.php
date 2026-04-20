@@ -28,6 +28,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setWeeklyHours(float $weeklyHours)
  * @method float getDailyHours()
  * @method void setDailyHours(float $dailyHours)
+ * @method float getWorkDaysPerWeek()
+ * @method void setWorkDaysPerWeek(float $workDaysPerWeek)
  * @method string|null getBreakRules()
  * @method void setBreakRules(string|null $breakRules)
  * @method string|null getOvertimeRules()
@@ -62,6 +64,9 @@ class WorkingTimeModel extends Entity
     /** @var float */
     protected $dailyHours;
 
+    /** @var float */
+    protected $workDaysPerWeek = 5.0;
+
     /** @var string|null */
     protected $breakRules;
 
@@ -87,6 +92,7 @@ class WorkingTimeModel extends Entity
         $this->addType('type', 'string');
         $this->addType('weeklyHours', 'float');
         $this->addType('dailyHours', 'float');
+        $this->addType('workDaysPerWeek', 'float');
         $this->addType('breakRules', 'string');
         $this->addType('overtimeRules', 'string');
         $this->addType('isDefault', 'boolean');
@@ -177,6 +183,14 @@ class WorkingTimeModel extends Entity
             $errors['dailyHours'] = 'Daily hours must be greater than 0';
         }
 
+        if ($this->workDaysPerWeek <= 0) {
+            $errors['workDaysPerWeek'] = 'Working days per week must be greater than 0';
+        }
+
+        if ($this->workDaysPerWeek > 7) {
+            $errors['workDaysPerWeek'] = 'Working days per week cannot exceed 7';
+        }
+
         // Validate weekly hours don't exceed reasonable limits
         if ($this->weeklyHours > 80) {
             $errors['weeklyHours'] = 'Weekly hours cannot exceed 80';
@@ -212,6 +226,7 @@ class WorkingTimeModel extends Entity
             'type' => $this->getType(),
             'weeklyHours' => $this->getWeeklyHours(),
             'dailyHours' => $this->getDailyHours(),
+            'workDaysPerWeek' => $this->getWorkDaysPerWeek(),
             'breakRules' => $this->getBreakRulesArray(),
             'overtimeRules' => $this->getOvertimeRulesArray(),
             'isDefault' => $this->getIsDefault(),

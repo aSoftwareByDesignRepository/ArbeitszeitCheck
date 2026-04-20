@@ -47,6 +47,21 @@
         return locale.startsWith('de');
     }
 
+    function parseLocalizedDecimal(value, fallback) {
+        if (value === null || value === undefined || value === '') {
+            return fallback;
+        }
+        const normalized = String(value).trim().replace(/\s+/g, '').replace(',', '.');
+        if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
+            return fallback;
+        }
+        const parsed = Number(normalized);
+        if (!Number.isFinite(parsed)) {
+            return fallback;
+        }
+        return parsed;
+    }
+
     /**
      * Initialize models page
      */
@@ -92,6 +107,7 @@
         const typeLabel = window.ArbeitszeitCheck?.l10n?.type || t('Type');
         const weeklyHoursLabel = window.ArbeitszeitCheck?.l10n?.weeklyHours || t('Weekly Hours');
         const dailyHoursLabel = window.ArbeitszeitCheck?.l10n?.dailyHours || t('Daily Hours');
+        const workDaysPerWeekLabel = window.ArbeitszeitCheck?.l10n?.workDaysPerWeek || t('Work days per week');
         const isDefaultLabel = window.ArbeitszeitCheck?.l10n?.isDefault || t('Set as Default');
         
         const formContent = `
@@ -115,17 +131,24 @@
                 </div>
                 <div class="form-group">
                     <label for="model-weekly-hours" class="form-label">${weeklyHoursLabel} <span class="form-required">*</span></label>
-                    <input type="number" id="model-weekly-hours" name="weeklyHours" class="form-input" 
-                           min="0" max="168" step="0.1" value="40" required
+                    <input type="text" id="model-weekly-hours" name="weeklyHours" class="form-input" 
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="168" step="0.01" value="40" required
                            aria-describedby="model-weekly-hours-help">
                     <p id="model-weekly-hours-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.weeklyHoursHelp || ''}</p>
                 </div>
                 <div class="form-group">
                     <label for="model-daily-hours" class="form-label">${dailyHoursLabel} <span class="form-required">*</span></label>
-                    <input type="number" id="model-daily-hours" name="dailyHours" class="form-input" 
-                           min="0" max="24" step="0.1" value="8" required
+                    <input type="text" id="model-daily-hours" name="dailyHours" class="form-input" 
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="24" step="0.01" value="8" required
                            aria-describedby="model-daily-hours-help">
                     <p id="model-daily-hours-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.dailyHoursHelp || ''}</p>
+                </div>
+                <div class="form-group">
+                    <label for="model-work-days-per-week" class="form-label">${workDaysPerWeekLabel} <span class="form-required">*</span></label>
+                    <input type="text" id="model-work-days-per-week" name="workDaysPerWeek" class="form-input"
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="1" max="7" step="0.01" value="5" required
+                           aria-describedby="model-work-days-per-week-help">
+                    <p id="model-work-days-per-week-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.workDaysPerWeekHelp || ''}</p>
                 </div>
                 <div class="form-group">
                     <div class="form-checkbox">
@@ -300,6 +323,7 @@
                     type: model.type || 'full_time',
                     weeklyHours: Number(model.weeklyHours) || 40,
                     dailyHours: Number(model.dailyHours) || 8,
+                    workDaysPerWeek: Number(model.workDaysPerWeek) || 5,
                     breakRules: model.breakRules || [],
                     overtimeRules: model.overtimeRules || [],
                     isDefault: false
@@ -387,6 +411,7 @@
         const typeLabel = window.ArbeitszeitCheck?.l10n?.type || 'Type';
         const weeklyHoursLabel = window.ArbeitszeitCheck?.l10n?.weeklyHours || 'Weekly Hours';
         const dailyHoursLabel = window.ArbeitszeitCheck?.l10n?.dailyHours || 'Daily Hours';
+        const workDaysPerWeekLabel = window.ArbeitszeitCheck?.l10n?.workDaysPerWeek || 'Work days per week';
         const isDefaultLabel = window.ArbeitszeitCheck?.l10n?.isDefault || 'Set as Default';
         
         const formContent = `
@@ -410,17 +435,24 @@
                 </div>
                 <div class="form-group">
                     <label for="edit-model-weekly-hours" class="form-label">${weeklyHoursLabel} <span class="form-required">*</span></label>
-                    <input type="number" id="edit-model-weekly-hours" name="weeklyHours" class="form-input" 
-                           min="0" max="168" step="0.1" value="${model.weeklyHours || 40}" required
+                    <input type="text" id="edit-model-weekly-hours" name="weeklyHours" class="form-input" 
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="168" step="0.01" value="${model.weeklyHours || 40}" required
                            aria-describedby="edit-model-weekly-hours-help">
                     <p id="edit-model-weekly-hours-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.weeklyHoursHelp || ''}</p>
                 </div>
                 <div class="form-group">
                     <label for="edit-model-daily-hours" class="form-label">${dailyHoursLabel} <span class="form-required">*</span></label>
-                    <input type="number" id="edit-model-daily-hours" name="dailyHours" class="form-input" 
-                           min="0" max="24" step="0.1" value="${model.dailyHours || 8}" required
+                    <input type="text" id="edit-model-daily-hours" name="dailyHours" class="form-input" 
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="24" step="0.01" value="${model.dailyHours || 8}" required
                            aria-describedby="edit-model-daily-hours-help">
                     <p id="edit-model-daily-hours-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.dailyHoursHelp || ''}</p>
+                </div>
+                <div class="form-group">
+                    <label for="edit-model-work-days-per-week" class="form-label">${workDaysPerWeekLabel} <span class="form-required">*</span></label>
+                    <input type="text" id="edit-model-work-days-per-week" name="workDaysPerWeek" class="form-input"
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="1" max="7" step="0.01" value="${model.workDaysPerWeek || 5}" required
+                           aria-describedby="edit-model-work-days-per-week-help">
+                    <p id="edit-model-work-days-per-week-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.workDaysPerWeekHelp || ''}</p>
                 </div>
                 <div class="form-group">
                     <div class="form-checkbox">
@@ -478,8 +510,9 @@
             name: formData.get('name'),
             description: formData.get('description') || null,
             type: formData.get('type') || 'full_time',
-            weeklyHours: parseFloat(formData.get('weeklyHours')) || 40,
-            dailyHours: parseFloat(formData.get('dailyHours')) || 8,
+            weeklyHours: parseLocalizedDecimal(formData.get('weeklyHours'), 40),
+            dailyHours: parseLocalizedDecimal(formData.get('dailyHours'), 8),
+            workDaysPerWeek: parseLocalizedDecimal(formData.get('workDaysPerWeek'), 5),
             isDefault: formData.get('isDefault') === '1'
         };
 
@@ -514,8 +547,9 @@
             name: formData.get('name'),
             description: formData.get('description') || null,
             type: formData.get('type') || 'full_time',
-            weeklyHours: parseFloat(formData.get('weeklyHours')) || 40,
-            dailyHours: parseFloat(formData.get('dailyHours')) || 8,
+            weeklyHours: parseLocalizedDecimal(formData.get('weeklyHours'), 40),
+            dailyHours: parseLocalizedDecimal(formData.get('dailyHours'), 8),
+            workDaysPerWeek: parseLocalizedDecimal(formData.get('workDaysPerWeek'), 5),
             isDefault: formData.get('isDefault') === '1'
         };
 

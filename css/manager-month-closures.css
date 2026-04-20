@@ -1,0 +1,211 @@
+/**
+ * Manager — revision PDF (month closure): month first, then people with per-row download.
+ *
+ * @copyright Copyright (c) 2026
+ * @license AGPL-3.0-or-later
+ */
+
+.manager-month-closures-page__content {
+	max-width: 42rem;
+	margin-inline: auto;
+}
+
+.manager-mc-header {
+	margin-bottom: 1.75rem;
+}
+
+.manager-mc-header__title {
+	margin: 0 0 0.5rem;
+	font-size: var(--arbeitszeitcheck-font-size-h1, 1.5rem);
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--color-main-text);
+}
+
+.manager-mc-header__intro {
+	margin: 0;
+	color: var(--color-text-maxcontrast);
+	line-height: 1.5;
+}
+
+.manager-mc-flow {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+
+.manager-mc-panel {
+	margin: 0;
+	padding: 1.25rem 1.25rem 1.35rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, var(--border-radius-element));
+	background: var(--color-main-background);
+	box-shadow: var(--arbeitszeitcheck-shadow-base, 0 1px 2px color-mix(in srgb, var(--color-main-text) 6%, transparent));
+}
+
+.manager-mc-panel__legend {
+	display: flex;
+	align-items: center;
+	gap: 0.65rem;
+	margin: 0 0 0.75rem;
+	padding: 0;
+	font-size: 1.05rem;
+	font-weight: 700;
+	color: var(--color-main-text);
+}
+
+.manager-mc-step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 2rem;
+	min-height: 2rem;
+	padding: 0 0.35rem;
+	border-radius: 999px;
+	font-size: 0.95rem;
+	font-weight: 700;
+	line-height: 1;
+	color: var(--color-primary-element-text);
+	background: var(--color-primary-element);
+	flex-shrink: 0;
+}
+
+.manager-mc-panel__legend-text {
+	flex: 1;
+}
+
+.manager-mc-panel__hint {
+	margin: 0 0 0.85rem;
+	font-size: 0.92rem;
+	line-height: 1.45;
+	color: var(--color-text-maxcontrast);
+}
+
+.manager-mc-month-row {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+
+.manager-mc-label {
+	font-weight: 600;
+	font-size: 0.95rem;
+	color: var(--color-main-text);
+}
+
+.manager-mc-select {
+	width: 100%;
+	min-height: 44px;
+	box-sizing: border-box;
+}
+
+.manager-mc-select:focus {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+}
+
+.manager-mc-month-status {
+	margin: 0.5rem 0 0;
+	min-height: 1.25rem;
+	font-size: 0.92rem;
+	color: var(--color-text-maxcontrast);
+}
+
+/* People list */
+.manager-mc-people-region {
+	min-height: 3rem;
+}
+
+.manager-mc-empty {
+	margin: 0;
+	padding: 1rem 1.1rem;
+	border-radius: var(--border-radius-element);
+	background: var(--color-background-dark, color-mix(in srgb, var(--color-main-text) 4%, var(--color-main-background)));
+	color: var(--color-text-maxcontrast);
+	line-height: 1.5;
+	font-size: 0.95rem;
+}
+
+.manager-mc-people-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+}
+
+.manager-mc-person-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem 1rem;
+	padding: 0.85rem 1rem;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-element);
+	background: var(--color-main-background);
+}
+
+.manager-mc-person-info {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	min-width: 0;
+	flex: 1 1 12rem;
+}
+
+.manager-mc-person-name {
+	font-weight: 600;
+	color: var(--color-main-text);
+	word-break: break-word;
+}
+
+.manager-mc-person-meta {
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+	word-break: break-all;
+}
+
+.manager-mc-person-download {
+	flex-shrink: 0;
+	min-height: 44px;
+	min-width: 9rem;
+	text-align: center;
+	text-decoration: none;
+	box-sizing: border-box;
+}
+
+.manager-mc-person-download:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+}
+
+.manager-mc-person-download--disabled {
+	pointer-events: none;
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.manager-mc-page-error {
+	margin-top: 0.5rem;
+}
+
+@media (max-width: 768px) {
+	.manager-month-closures-page__content {
+		max-width: none;
+	}
+
+	.manager-mc-panel {
+		padding: 1rem 1rem 1.15rem;
+	}
+
+	.manager-mc-person-row {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.manager-mc-person-download {
+		width: 100%;
+	}
+}

@@ -207,7 +207,8 @@ class SettingsController extends Controller
 			$allowedKeys = [
 				'notifications_enabled',
 				'break_reminders_enabled',
-				'auto_break_calculation'
+				'auto_break_calculation',
+				'missing_clock_in_reminders_enabled'
 			];
 
 			$updatedSettings = [];
@@ -224,7 +225,7 @@ class SettingsController extends Controller
 					$value = $params[$key];
 
 					// Validate value based on key type
-					if ($key === 'notifications_enabled' || $key === 'break_reminders_enabled' || $key === 'auto_break_calculation') {
+					if ($key === 'notifications_enabled' || $key === 'break_reminders_enabled' || $key === 'auto_break_calculation' || $key === 'missing_clock_in_reminders_enabled') {
 						$value = $value === true || $value === 'true' || $value === '1' ? '1' : '0';
 					} else {
 						$value = (string)$value;

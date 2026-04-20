@@ -81,6 +81,10 @@ return [
 		['name' => 'manager#dashboard', 'url' => '/manager', 'verb' => 'GET'],
 		['name' => 'manager#employeeTimeEntriesPage', 'url' => '/manager/time-entries', 'verb' => 'GET'],
 		['name' => 'manager#employeeAbsencesPage', 'url' => '/manager/absences', 'verb' => 'GET'],
+		['name' => 'manager#monthClosuresPage', 'url' => '/manager/month-closures', 'verb' => 'GET'],
+		['name' => 'manager#revisionPdfUsers', 'url' => '/api/manager/revision-pdf/users', 'verb' => 'GET'],
+		['name' => 'manager#revisionPdfAvailableMonths', 'url' => '/api/manager/revision-pdf/available-months', 'verb' => 'GET'],
+		['name' => 'manager#revisionPdfUsersForMonth', 'url' => '/api/manager/revision-pdf/users-for-month', 'verb' => 'GET'],
 		['name' => 'manager#getTeamOverview', 'url' => '/api/manager/team-overview', 'verb' => 'GET'],
 		['name' => 'manager#getEmployeeTimeEntries', 'url' => '/api/manager/employee-time-entries', 'verb' => 'GET'],
 		['name' => 'manager#getEmployeeAbsences', 'url' => '/api/manager/employee-absences', 'verb' => 'GET'],
@@ -134,11 +138,14 @@ return [
 		['name' => 'admin#dashboard', 'url' => '/admin', 'verb' => 'GET'],
 		['name' => 'admin#users', 'url' => '/admin/users', 'verb' => 'GET'],
 		['name' => 'admin#settings', 'url' => '/admin/settings', 'verb' => 'GET'],
+		['name' => 'admin#notifications', 'url' => '/admin/notifications', 'verb' => 'GET'],
 		['name' => 'admin#holidays', 'url' => '/admin/holidays', 'verb' => 'GET'],
 		['name' => 'admin#workingTimeModels', 'url' => '/admin/working-time-models', 'verb' => 'GET'],
 		['name' => 'admin#auditLog', 'url' => '/admin/audit-log', 'verb' => 'GET'],
 		['name' => 'admin#getAdminSettings', 'url' => '/api/admin/settings', 'verb' => 'GET'],
 		['name' => 'admin#updateAdminSettings', 'url' => '/api/admin/settings', 'verb' => 'POST'],
+		['name' => 'admin#getNotificationSettings', 'url' => '/api/admin/notifications/settings', 'verb' => 'GET'],
+		['name' => 'admin#updateNotificationSettings', 'url' => '/api/admin/notifications/settings', 'verb' => 'POST'],
 		// Legacy company_holidays JSON (kept for backward compatibility; new code should use state-holidays endpoints)
 		['name' => 'admin#getCompanyHolidays', 'url' => '/api/admin/holidays', 'verb' => 'GET'],
 		['name' => 'admin#saveCompanyHoliday', 'url' => '/api/admin/holidays', 'verb' => 'POST'],
@@ -161,6 +168,13 @@ return [
 		['name' => 'admin#createWorkingTimeModel', 'url' => '/api/admin/working-time-models', 'verb' => 'POST'],
 		['name' => 'admin#updateWorkingTimeModel', 'url' => '/api/admin/working-time-models/{id}', 'verb' => 'PUT'],
 		['name' => 'admin#deleteWorkingTimeModel', 'url' => '/api/admin/working-time-models/{id}', 'verb' => 'DELETE'],
+		['name' => 'admin#getTariffRuleSets', 'url' => '/api/admin/tariff-rule-sets', 'verb' => 'GET'],
+		['name' => 'admin#createTariffRuleSet', 'url' => '/api/admin/tariff-rule-sets', 'verb' => 'POST'],
+		['name' => 'admin#updateTariffRuleSet', 'url' => '/api/admin/tariff-rule-sets/{id}', 'verb' => 'PUT'],
+		['name' => 'admin#activateTariffRuleSet', 'url' => '/api/admin/tariff-rule-sets/{id}/activate', 'verb' => 'POST'],
+		['name' => 'admin#retireTariffRuleSet', 'url' => '/api/admin/tariff-rule-sets/{id}/retire', 'verb' => 'POST'],
+		['name' => 'admin#assignVacationPolicy', 'url' => '/api/admin/users/{userId}/vacation-policy', 'verb' => 'PUT'],
+		['name' => 'admin#simulateVacationPolicy', 'url' => '/api/admin/vacation-policy/simulate', 'verb' => 'POST'],
 
 		// Admin teams (app-owned teams/departments)
 		['name' => 'admin#teams', 'url' => '/admin/teams', 'verb' => 'GET'],
@@ -195,5 +209,14 @@ return [
 
 		// Health check route
 		['name' => 'health#check', 'url' => '/health', 'verb' => 'GET'],
+
+		// Revision-safe month closure
+		['name' => 'month_closure#feature', 'url' => '/api/month-closure/feature', 'verb' => 'GET'],
+		['name' => 'month_closure#periods', 'url' => '/api/month-closure/periods', 'verb' => 'GET'],
+		['name' => 'month_closure#status', 'url' => '/api/month-closure/status', 'verb' => 'GET'],
+		['name' => 'month_closure#finalize', 'url' => '/api/month-closure/finalize', 'verb' => 'POST'],
+		['name' => 'month_closure#pdf', 'url' => '/api/month-closure/pdf', 'verb' => 'GET'],
+		['name' => 'month_closure#finalizedMonths', 'url' => '/api/month-closure/finalized-months', 'verb' => 'GET'],
+		['name' => 'month_closure#reopen', 'url' => '/api/month-closure/reopen', 'verb' => 'POST'],
 	],
 ];

@@ -1,5 +1,45 @@
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Auto-Fallback mit Nachvollziehbarkeit**: Zeiteinträge speichern jetzt `ended_reason` und `policy_applied` (z. B. `manual_clock_out` oder `auto_break_fallback`) für klare Audit-/Export-Nachweise.
+- **Einmalige Nutzerinfo nach Auto-Ausstempeln**: Beim nächsten Statusabruf wird eine neutrale, konkrete Meldung mit Uhrzeit und Regel eingeblendet.
+- **Urlaubsanspruch-Policy-Engine**: Neue berechnungslogikbasierte Anspruchsermittlung mit Modi `manual_fixed`, `model_based_simple`, `tariff_rule_based` und `manual_exception` inkl. Simulations-Endpunkt für Admins.
+- **Tarifregel-Datenmodell und APIs**: Versionierte Tarif-Regelwerke/Module sowie Admin-Endpunkte zum Erstellen, Aktualisieren, Aktivieren, Stilllegen und Zuweisen von Urlaubs-Policies.
+- **Snapshots der Anspruchsberechnung**: Persistente Snapshots (`at_entitlement_snapshots`) mit Berechnungstrace/Policy-Fingerprint für Nachvollziehbarkeit und Diagnose.
+- **Neue Admin-Seite „Benachrichtigungen“**: Eigene Oberfläche für HR-Empfänger und Ereignis-Matrix inkl. dedizierter Notifications-API.
+
+### Geändert
+
+- **Fallback-Logik differenziert nach Einsatzart**: Für Schichtarbeit gilt standardmäßig eine strikte Fallback-Regel; für Nicht-Schichtmodelle eine flexible Regel mit tagsüber konfigurierbarem Ruhefenster (z. B. Familien-/Mittagsunterbrechung ohne Auto-Ausstempeln).
+- **Export-Transparenz**: CSV/JSON-Zeilen enthalten jetzt `ended_reason` und `policy_applied`, damit automatische Beendigungen in Reports eindeutig erkennbar sind.
+- **Urlaubsallokation integriert**: Jahresallokation nutzt nun die neue `VacationEntitlementEngine` und liefert Quelle/Regelwerk/Trace in der Ergebnisstruktur zurück.
+- **Migrations-Kompatibilität**: Bestehende Urlaubswerte aus Nutzer-Modellzuweisungen werden in Policy-Zuordnungen überführt (`Version1018Date20260420123000`), damit Bestandsinstallationen konsistent weiterlaufen.
+- **Admin-Einstellungsfluss für Abwesenheiten**: Carryover-/Rollover-, Vertretungs- und E-Mail-Schalter sind zentral über die neue Notifications-Seite/API steuerbar.
+- **Schema Arbeitszeitmodelle**: `at_models` enthält jetzt `work_days_per_week` (`Version1019Date20260420150000`) als Grundlage für Formeln.
+
+### Behoben
+
+- **Aufräumen bei Nutzerlöschung**: Beim Entfernen eines Nutzers werden jetzt auch Urlaubs-Policy-Zuordnungen und Entitlement-Snapshots gelöscht (keine verwaisten Policy-/Berechnungsdaten).
+
+## 1.2.0 – 2026-04-15
+
+### Behoben
+
+- **Zeitzonen-Konsistenz (Europe/Berlin)**: Server-/PHP-Zeitzone für ArbeitszeitCheck auf Deutschland ausgerichtet; neue Migration `Version1015Date20260415120000` konvertiert bestehende UTC-DATETIME-Werte in App-Tabellen nach `Europe/Berlin` und setzt `app_timezone` explizit.
+- **Ausstempeln-Semantik korrigiert**: `clockOut()` finalisiert Einträge nun zuverlässig mit `end_time` und `status=completed` (statt `paused` ohne Endzeit). Dadurch sind Exporte/Reports wieder vollständig und konsistent.
+- **Historische Pausiert-Einträge repariert**: Migration schließt verwaiste Einträge mit `status=paused` und `end_time IS NULL` automatisch über `end_time = updated_at` und Statuswechsel auf `completed`.
+- **Mehrfach-Pausen ohne Datenverlust**: Beim Start einer weiteren Pause wird die zuvor abgeschlossene Pause zuerst in `breaks` (JSON) archiviert; Break-Dauern bleiben vollständig für ArbZG-Prüfungen erhalten.
+- **Break-Status-Berechnung korrigiert**: `getBreakStatus()` zählt aktive Sitzungszeit nicht mehr doppelt; Warnstufen und Restpausen-Hinweise sind wieder korrekt.
+- **Export-Spalten korrigiert**: `duration_hours` liefert jetzt Brutto-Dauer (Wall-Clock), `working_hours` Netto-Arbeitszeit (abzgl. Pausen). Vorher waren beide Spalten identisch.
+
+### Geändert
+
+- **Export-Transparenz**: CSV/JSON-Exporte enthalten jetzt explizite Zeitzonen-Metadaten (`timezone`, `exported_at`), damit nachgelagerte Systeme die Uhrzeiten eindeutig interpretieren.
+- **UI-Klarheit**: Dashboard zeigt sichtbaren Zeitzonen-Hinweis (`Europe/Berlin (MEZ/MESZ)`), Export-Hinweis auf der Zeiteintragsseite nennt die verwendete Zeitzone.
+- **Bediensicherheit**: Vor `Clock Out` erscheint eine Bestätigungsabfrage mit klarer Abgrenzung zwischen „Pause starten“ und „Ausstempeln“.
+- **Admin-Transparenz**: In den Admin-Einstellungen wird die konfigurierte Zeitzone sichtbar angezeigt.
+
 ## 1.1.14 – 2026-04-14
 
 ### Behoben

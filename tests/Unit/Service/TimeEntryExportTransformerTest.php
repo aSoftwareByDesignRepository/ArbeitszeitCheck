@@ -11,6 +11,7 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Service;
 
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
+use OCP\IConfig;
 use PHPUnit\Framework\TestCase;
 
 class TimeEntryExportTransformerTest extends TestCase
@@ -20,15 +21,17 @@ class TimeEntryExportTransformerTest extends TestCase
 	protected function setUp(): void
 	{
 		parent::setUp();
-		$this->transformer = new TimeEntryExportTransformer();
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('Europe/Berlin');
+		$this->transformer = new TimeEntryExportTransformer($config);
 	}
 
 	public function testNoSplitWhenDisabled(): void
 	{
 		$entry = $this->makeEntry(
 			1,
-			new \DateTime('2024-06-10 22:00:00'),
-			new \DateTime('2024-06-11 06:00:00')
+			new \DateTime('2024-06-10 22:00:00', new \DateTimeZone('Europe/Berlin')),
+			new \DateTime('2024-06-11 06:00:00', new \DateTimeZone('Europe/Berlin'))
 		);
 		$rows = $this->transformer->entryToExportRows($entry, false);
 		$this->assertCount(1, $rows);
@@ -39,8 +42,8 @@ class TimeEntryExportTransformerTest extends TestCase
 	{
 		$entry = $this->makeEntry(
 			2,
-			new \DateTime('2024-06-10 22:00:00'),
-			new \DateTime('2024-06-11 06:00:00')
+			new \DateTime('2024-06-10 22:00:00', new \DateTimeZone('Europe/Berlin')),
+			new \DateTime('2024-06-11 06:00:00', new \DateTimeZone('Europe/Berlin'))
 		);
 		$rows = $this->transformer->entryToExportRows($entry, true);
 		$this->assertCount(2, $rows);
@@ -56,8 +59,8 @@ class TimeEntryExportTransformerTest extends TestCase
 	{
 		$entry = $this->makeEntry(
 			3,
-			new \DateTime('2024-06-10 20:00:00'),
-			new \DateTime('2024-06-12 04:00:00')
+			new \DateTime('2024-06-10 20:00:00', new \DateTimeZone('Europe/Berlin')),
+			new \DateTime('2024-06-12 04:00:00', new \DateTimeZone('Europe/Berlin'))
 		);
 		$rows = $this->transformer->entryToExportRows($entry, true);
 		$this->assertCount(3, $rows);

@@ -34,6 +34,8 @@ class VacationAllocationService
 		private UserSettingsMapper $userSettingsMapper,
 		private VacationYearBalanceMapper $vacationYearBalanceMapper,
 		private HolidayService $holidayCalendarService,
+		private VacationEntitlementEngine $vacationEntitlementEngine,
+		private EntitlementSnapshotService $entitlementSnapshotService,
 	) {
 	}
 
@@ -137,24 +139,15 @@ class VacationAllocationService
 	/**
 	 * Annual vacation entitlement (same rules as AbsenceService::getVacationStats).
 	 */
-	public function getAnnualEntitlementDays(string $userId): int
+	public function getAnnualEntitlementDays(string $userId, ?\DateTimeInterface $asOfDate = null): int
 	{
-		$totalEntitlement = Constants::DEFAULT_VACATION_DAYS_PER_YEAR;
 		try {
-			$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
-			if ($currentModel !== null && $currentModel->getVacationDaysPerYear() !== null) {
-				$totalEntitlement = $currentModel->getVacationDaysPerYear();
-			} else {
-				$totalEntitlement = $this->userSettingsMapper->getIntegerSetting(
-					$userId,
-					'vacation_days_per_year',
-					Constants::DEFAULT_VACATION_DAYS_PER_YEAR
-				);
-			}
+			$resolved = $this->vacationEntitlementEngine->computeForDate($userId, $asOfDate ?? new \DateTimeImmutable('today'));
+			return max(0, min(366, (int)round((float)$resolved['days'])));
 		} catch (\Throwable $e) {
 			$totalEntitlement = Constants::DEFAULT_VACATION_DAYS_PER_YEAR;
+			return max(0, min(366, (int)$totalEntitlement));
 		}
-		return max(0, min(366, (int)$totalEntitlement));
 	}
 
 	/**
@@ -246,7 +239,8 @@ class VacationAllocationService
 		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
 	): array {
 		$asOf = $asOf ?? new \DateTime('today');
-		$annualEntitlement = (float)$this->getAnnualEntitlementDays($userId);
+		$entitlementResolved = $this->vacationEntitlementEngine->computeForDate($userId, $asOf);
+		$annualEntitlement = (float)$entitlementResolved['days'];
 		$carryoverOpening = $this->vacationYearBalanceMapper->getCarryoverDays($userId, $year);
 		$carryoverOpening = $this->applyCapToOpeningBalance($carryoverOpening);
 
@@ -341,7 +335,7 @@ class VacationAllocationService
 
 		$totalForNew = $annualRem + $carryoverUsable;
 
-		return [
+		$result = [
 			'year' => $year,
 			'entitlement' => $annualEntitlement,
 			'carryover_opening' => round($carryoverOpening, 4),
@@ -353,6 +347,23 @@ class VacationAllocationService
 			'used_total_working_days' => round($usedTotal, 4),
 			'allocation_valid' => $valid,
 			'shortfall' => round($shortfall, 4),
+			'entitlement_source' => $entitlementResolved['source'],
+			'entitlement_rule_set_id' => $entitlementResolved['ruleSetId'],
+			'entitlement_trace' => $entitlementResolved['trace'],
 		];
+
+		$this->entitlementSnapshotService->store(
+			$userId,
+			$year,
+			$asOf,
+			$annualEntitlement,
+			(string)$entitlementResolved['source'],
+			$entitlementResolved['ruleSetId'],
+			(array)$entitlementResolved['trace'],
+			'system',
+			hash('sha256', json_encode([$entitlementResolved['source'], $entitlementResolved['ruleSetId'], $entitlementResolved['trace'], $annualEntitlement]))
+		);
+
+		return $result;
 	}
 }

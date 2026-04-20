@@ -15,6 +15,7 @@ use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Service\DatevExportService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
 use OCA\ArbeitszeitCheck\Constants;
 use OCP\AppFramework\Controller;
@@ -41,6 +42,7 @@ class ExportController extends Controller
 	private IUserSession $userSession;
 	private IL10N $l10n;
 	private IConfig $config;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		string $appName,
@@ -52,7 +54,8 @@ class ExportController extends Controller
 		TimeEntryExportTransformer $timeEntryExportTransformer,
 		IUserSession $userSession,
 		IL10N $l10n,
-		IConfig $config
+		IConfig $config,
+		PermissionService $permissionService
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -63,6 +66,7 @@ class ExportController extends Controller
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
 		$this->config = $config;
+		$this->permissionService = $permissionService;
 	}
 
 	/**
@@ -156,17 +160,18 @@ class ExportController extends Controller
 				], Http::STATUS_UNPROCESSABLE_ENTITY);
 			}
 
+			$timezone = $this->getExportTimezone();
 			return match($format) {
-				'csv' => $this->exportAsCsv($data, $filename),
-				'json' => $this->exportAsJson($data, $filename),
+				'csv' => $this->exportAsCsv($data, $filename, $timezone),
+				'json' => $this->exportAsJson($data, $filename, $timezone),
 				'datev' => $this->exportAsDatev($userId, $start, $end),
-				default => $this->exportAsCsv($data, $filename)
+				default => $this->exportAsCsv($data, $filename, $timezone)
 			};
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::timeEntries: ' . $e->getMessage(), ["exception" => $e]);
 			// Return error as CSV with error message
 			$errorData = [['error' => $this->l10n->t('Export failed: %s', [$e->getMessage()])]];
-			return $this->exportAsCsv($errorData, 'time-entries-export-error-' . date('Y-m-d') . '.csv');
+			return $this->exportAsCsv($errorData, 'time-entries-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
 
@@ -251,16 +256,17 @@ class ExportController extends Controller
 				], Http::STATUS_UNPROCESSABLE_ENTITY);
 			}
 
+			$timezone = $this->getExportTimezone();
 			return match($format) {
-				'csv' => $this->exportAsCsv($data, $filename),
-				'json' => $this->exportAsJson($data, $filename),
-				default => $this->exportAsCsv($data, $filename)
+				'csv' => $this->exportAsCsv($data, $filename, $timezone),
+				'json' => $this->exportAsJson($data, $filename, $timezone),
+				default => $this->exportAsCsv($data, $filename, $timezone)
 			};
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::absences: ' . $e->getMessage(), ["exception" => $e]);
 			// Return error as CSV with error message
 			$errorData = [['error' => $this->l10n->t('Export failed: %s', [$e->getMessage()])]];
-			return $this->exportAsCsv($errorData, 'absences-export-error-' . date('Y-m-d') . '.csv');
+			return $this->exportAsCsv($errorData, 'absences-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
 
@@ -335,16 +341,17 @@ class ExportController extends Controller
 
 			$filename = 'compliance-report-' . date('Y-m-d') . '.' . $format;
 
+			$timezone = $this->getExportTimezone();
 			return match($format) {
-				'csv' => $this->exportAsCsv($data, $filename),
-				'json' => $this->exportAsJson($data, $filename),
-				default => $this->exportAsCsv($data, $filename)
+				'csv' => $this->exportAsCsv($data, $filename, $timezone),
+				'json' => $this->exportAsJson($data, $filename, $timezone),
+				default => $this->exportAsCsv($data, $filename, $timezone)
 			};
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::compliance: ' . $e->getMessage(), ["exception" => $e]);
 			// Return error as CSV with error message
 			$errorData = [['error' => $this->l10n->t('Export failed: %s', [$e->getMessage()])]];
-			return $this->exportAsCsv($errorData, 'compliance-export-error-' . date('Y-m-d') . '.csv');
+			return $this->exportAsCsv($errorData, 'compliance-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
 
@@ -355,26 +362,23 @@ class ExportController extends Controller
 	 * @param string $filename Filename
 	 * @return DataDownloadResponse
 	 */
-	private function exportAsCsv(array $data, string $filename): DataDownloadResponse
+	private function exportAsCsv(array $data, string $filename, string $timezone): DataDownloadResponse
 	{
-		if (empty($data)) {
-			$csv = "No data available\n";
-		} else {
-			// Create CSV content
-			$fp = fopen('php://temp', 'r+');
-			
-			// Write header
+		$fp = fopen('php://temp', 'r+');
+		fputcsv($fp, ['# ' . $this->l10n->t('Timezone'), $timezone]);
+		fputcsv($fp, ['# ' . $this->l10n->t('Exported at'), (new \DateTime('now', new \DateTimeZone($timezone)))->format('Y-m-d H:i:s T')]);
+
+		if (!empty($data)) {
 			fputcsv($fp, array_keys($data[0]));
-			
-			// Write data rows
 			foreach ($data as $row) {
 				fputcsv($fp, $row);
 			}
-			
-			rewind($fp);
-			$csv = stream_get_contents($fp);
-			fclose($fp);
+		} else {
+			fputcsv($fp, ['message', 'No data available']);
 		}
+		rewind($fp);
+		$csv = stream_get_contents($fp);
+		fclose($fp);
 
 		return new DataDownloadResponse($csv, $filename, 'text/csv; charset=utf-8');
 	}
@@ -386,9 +390,14 @@ class ExportController extends Controller
 	 * @param string $filename Filename
 	 * @return DataDownloadResponse
 	 */
-	private function exportAsJson(array $data, string $filename): DataDownloadResponse
+	private function exportAsJson(array $data, string $filename, string $timezone): DataDownloadResponse
 	{
-		$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		$json = json_encode([
+			'timezone' => $timezone,
+			'exported_at' => (new \DateTime('now', new \DateTimeZone($timezone)))->format('c'),
+			'record_count' => count($data),
+			'entries' => $data,
+		], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 		
 		if ($json === false) {
 			throw new \Exception($this->l10n->t('Failed to encode data as JSON'));
@@ -411,7 +420,7 @@ class ExportController extends Controller
 		// For now, export as CSV since PDF generation requires external libraries
 		// In production, this should use a proper PDF library
 		// This is a workaround that provides the data in a usable format
-		return $this->exportAsCsv($data, str_replace('.pdf', '.csv', $filename));
+		return $this->exportAsCsv($data, str_replace('.pdf', '.csv', $filename), $this->getExportTimezone());
 	}
 
 	/**
@@ -432,8 +441,13 @@ class ExportController extends Controller
 		} catch (\Throwable $e) {
 			// Return error as CSV with error message
 			$errorData = [['error' => $e->getMessage()]];
-			return $this->exportAsCsv($errorData, 'datev-export-error-' . date('Y-m-d') . '.csv');
+			return $this->exportAsCsv($errorData, 'datev-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
+	}
+
+	private function getExportTimezone(): string
+	{
+		return $this->timeEntryExportTransformer->getTimezone();
 	}
 
 	/**
@@ -484,7 +498,7 @@ class ExportController extends Controller
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::datev: ' . $e->getMessage(), ["exception" => $e]);
 			// Return error as CSV with error message
 			$errorData = [['error' => $e->getMessage()]];
-			return $this->exportAsCsv($errorData, 'datev-export-error-' . date('Y-m-d') . '.csv');
+			return $this->exportAsCsv($errorData, 'datev-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
 
@@ -498,6 +512,21 @@ class ExportController extends Controller
 	public function datevConfig(): JSONResponse
 	{
 		try {
+			$user = $this->userSession->getUser();
+			if ($user === null) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('User not authenticated')
+				], Http::STATUS_UNAUTHORIZED);
+			}
+			$userId = $user->getUID();
+			if (!$this->permissionService->isAdmin($userId)) {
+				$this->permissionService->logPermissionDenied($userId, 'read_datev_config', 'datev_config');
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Access denied')
+				], Http::STATUS_FORBIDDEN);
+			}
 			$status = $this->datevExportService->getConfigurationStatus();
 			return new JSONResponse([
 				'success' => true,

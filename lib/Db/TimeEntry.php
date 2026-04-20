@@ -36,6 +36,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setProjectCheckProjectId(string|null $projectCheckProjectId)
  * @method string getStatus()
  * @method void setStatus(string $status)
+ * @method string|null getEndedReason()
+ * @method void setEndedReason(string|null $endedReason)
+ * @method string|null getPolicyApplied()
+ * @method void setPolicyApplied(string|null $policyApplied)
  * @method bool getIsManualEntry()
  * @method void setIsManualEntry(bool $isManualEntry)
  * @method string|null getJustification()
@@ -62,6 +66,8 @@ class TimeEntry extends Entity
 	public const STATUS_PAUSED = 'paused';
 	public const STATUS_PENDING_APPROVAL = 'pending_approval';
 	public const STATUS_REJECTED = 'rejected';
+	public const ENDED_REASON_MANUAL_CLOCK_OUT = 'manual_clock_out';
+	public const ENDED_REASON_AUTO_BREAK_FALLBACK = 'auto_break_fallback';
 
 	/** @var string */
 	protected $userId;
@@ -89,6 +95,12 @@ class TimeEntry extends Entity
 
 	/** @var string */
 	protected $status;
+
+	/** @var string|null */
+	protected $endedReason;
+
+	/** @var string|null */
+	protected $policyApplied;
 
 	/** @var bool */
 	protected $isManualEntry = false;
@@ -125,6 +137,8 @@ class TimeEntry extends Entity
 		$this->addType('description', 'string');
 		$this->addType('projectCheckProjectId', 'string');
 		$this->addType('status', 'string');
+		$this->addType('endedReason', 'string');
+		$this->addType('policyApplied', 'string');
 		$this->addType('isManualEntry', 'boolean');
 		$this->addType('justification', 'string');
 		$this->addType('createdAt', 'datetime');
@@ -135,7 +149,7 @@ class TimeEntry extends Entity
 	}
 
 	/**
-	 * Get the duration in hours
+	 * Get net working duration in hours (total duration minus breaks).
 	 *
 	 * @return float|null
 	 */
@@ -154,6 +168,20 @@ class TimeEntry extends Entity
 
 		$totalDuration = ($end->getTimestamp() - $start->getTimestamp()) / 3600;
 		return max(0, $totalDuration - $totalBreakDuration);
+	}
+
+	/**
+	 * Get wall-clock duration in hours (without subtracting breaks).
+	 *
+	 * @return float|null
+	 */
+	public function getTotalDurationHours(): ?float
+	{
+		if (!$this->endTime || !$this->startTime) {
+			return null;
+		}
+
+		return max(0, ($this->endTime->getTimestamp() - $this->startTime->getTimestamp()) / 3600);
 	}
 
 	/**
@@ -456,6 +484,8 @@ class TimeEntry extends Entity
 			'description' => $this->getDescription(),
 			'projectCheckProjectId' => $this->getProjectCheckProjectId(),
 			'status' => $this->getStatus(),
+			'endedReason' => $this->getEndedReason(),
+			'policyApplied' => $this->getPolicyApplied(),
 			'isManualEntry' => $this->getIsManualEntry(),
 			'justification' => $this->getJustification(),
 			'createdAt' => $createdAt ? $createdAt->format('c') : null,

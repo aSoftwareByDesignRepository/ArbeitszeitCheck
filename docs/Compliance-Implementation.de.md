@@ -229,6 +229,14 @@
 - Keine Gewährleistung für vollständige Compliance
 - Unternehmen sind selbst verantwortlich für die Einhaltung der Gesetze
 
+## Revisionssichere Monatsfinalisierung (Produktfunktion)
+
+ArbeitszeitCheck kann optional einen **Kalendermonat pro Person finalisieren**: Die App speichert einen **kanonischen Snapshot** (JSON), eine **SHA-256-Hashkette**, anhängende **Revisionszeilen** und **Audit-Log**-Einträge. **Monatsberichte** für diesen Monat lesen bei Finalisierung den Snapshot.
+
+**Was das nicht ist:** Es handelt sich **nicht** um eine **qualifizierte elektronische Signatur** (QES). **Aufbewahrung:** Finalisierte Snapshots sind wie andere Zeitnachweise zu behandeln—Abgleich mit gesetzlichen Fristen und Ihrer DSGVO-/Unternehmenspolicy. **Direkter Datenbankzugriff oder Wiederherstellung** außerhalb der App kann Daten ohne diese Prüfpfade ändern; der Hash dient der **Erkennung** von Inkonsistenz, nicht der physischen Sperre auf dem Server.
+
+---
+
 ## Weiterführende Informationen
 
 - [Arbeitszeitgesetz (ArbZG)](https://www.gesetze-im-internet.de/arbzg/)

@@ -36,6 +36,15 @@ final class Constants
 	 */
 	public const DEFAULT_VACATION_DAYS_PER_YEAR = 25;
 
+	public const VACATION_MODE_MANUAL_FIXED = 'manual_fixed';
+	public const VACATION_MODE_MODEL_BASED_SIMPLE = 'model_based_simple';
+	public const VACATION_MODE_TARIFF_RULE_BASED = 'tariff_rule_based';
+	public const VACATION_MODE_MANUAL_EXCEPTION = 'manual_exception';
+
+	public const TARIFF_RULE_SET_STATUS_DRAFT = 'draft';
+	public const TARIFF_RULE_SET_STATUS_ACTIVE = 'active';
+	public const TARIFF_RULE_SET_STATUS_RETIRED = 'retired';
+
 	/** App config: month (1–12) when carryover from the previous year expires (default March). */
 	public const CONFIG_VACATION_CARRYOVER_EXPIRY_MONTH = 'vacation_carryover_expiry_month';
 
@@ -89,6 +98,36 @@ final class Constants
 	 * "0" = no automatic finalization (employees must finalize manually, or admin reopens).
 	 */
 	public const CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM = 'month_closure_grace_days_after_eom';
+
+	/** App config: when "1", HR absence email notifications are enabled globally. */
+	public const CONFIG_HR_NOTIFICATIONS_ENABLED = 'hr_notifications_enabled';
+	/** App config: comma-separated HR recipient email list (legacy readable). */
+	public const CONFIG_HR_NOTIFICATION_RECIPIENTS = 'hr_notification_recipients';
+	/** App config: versioned JSON matrix of absence_type => event => bool. */
+	public const CONFIG_HR_NOTIFICATION_MATRIX_V1 = 'hr_notification_matrix_v1';
+
+	/** @var list<string> */
+	public const HR_NOTIFICATION_EVENTS = [
+		'request_created',
+		'substitute_approved',
+		'substitute_declined',
+		'manager_approved',
+		'manager_rejected',
+		'employee_cancelled',
+		'employee_shortened',
+	];
+
+	/** @var list<string> */
+	public const ABSENCE_TYPES = [
+		'vacation',
+		'sick_leave',
+		'personal_leave',
+		'parental_leave',
+		'special_leave',
+		'unpaid_leave',
+		'home_office',
+		'business_trip',
+	];
 
 	/**
 	 * Compliance score weights (critical, warning, info).

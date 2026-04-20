@@ -415,7 +415,11 @@
             clockOutButtons.forEach(function(btn) {
                 btn.addEventListener('click', function(e) {
                     e.preventDefault();
-                    this.clockOut();
+                    const confirmMsg = mainT('Clock out and end your working day?') + '\n\n' +
+                        mainT('Your time entry will be finalized. To pause and continue working, use "Start Break" instead.');
+                    if (window.confirm(confirmMsg)) {
+                        this.clockOut();
+                    }
                 }.bind(this));
             }.bind(this));
 
@@ -899,7 +903,21 @@
          * Get current status
          */
         getStatus: function() {
-            return this.callApi('/apps/arbeitszeitcheck/api/clock/status', 'GET', null, false);
+            return this.callApi('/apps/arbeitszeitcheck/api/clock/status', 'GET', null, false).then((response) => {
+                try {
+                    const notice = response && response.status ? response.status.auto_clockout_notice : null;
+                    if (notice && notice.message) {
+                        const noticeKey = String(notice.at || notice.message);
+                        if (this._lastAutoClockoutNoticeKey !== noticeKey) {
+                            this._lastAutoClockoutNoticeKey = noticeKey;
+                            this.showSuccess(String(notice.message));
+                        }
+                    }
+                } catch (e) {
+                    // keep status polling resilient
+                }
+                return response;
+            });
         },
 
         /**

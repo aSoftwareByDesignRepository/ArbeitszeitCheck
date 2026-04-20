@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Vacation entitlement policy engine**: New policy-driven calculation flow with support for `manual_fixed`, `model_based_simple`, `tariff_rule_based`, and `manual_exception`, plus admin simulation endpoint.
+- **Tariff rule data model and APIs**: Added versioned tariff rule sets/modules and admin endpoints to create, update, activate, retire, and assign policies to users.
+- **Entitlement computation snapshots**: Added persistent entitlement snapshots (`at_entitlement_snapshots`) with calculation trace/policy fingerprint for auditability and diagnostics.
+- **Admin notifications page**: New dedicated admin UI (`/admin/notifications`) with HR recipient + event matrix management and a dedicated notifications settings API.
+
+### Changed
+
+- **Vacation allocation integration**: Year allocation now resolves entitlement via `VacationEntitlementEngine` and returns entitlement source/rule-set/trace metadata in allocation payloads.
+- **Policy migration compatibility**: Existing user model vacation values are backfilled into policy assignments during migration (`Version1018Date20260420123000`) to keep legacy installs consistent.
+- **Admin settings flow**: Absence notification-related controls (carryover expiry/cap, rollover switches, substitute-required types, iCal and substitution-mail toggles) are centralized on admin notifications APIs/UI.
+- **Working time model schema**: Added `work_days_per_week` to `at_models` (`Version1019Date20260420150000`) to support entitlement formulas.
+
+### Fixed
+
+- **User deletion cleanup**: Deleting a user now also removes vacation policy assignments and entitlement snapshots, preventing orphaned policy/computation data.
+
 ## 1.1.14 - 2026-04-14
 
 ### Fixed

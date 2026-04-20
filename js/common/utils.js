@@ -160,6 +160,96 @@ const ArbeitszeitCheckUtils = {
   // ===== AJAX UTILITIES =====
 
   /**
+   * Get Nextcloud OC object in a safe way.
+   */
+  getOc() {
+    if (typeof window !== 'undefined' && window.OC) {
+      return window.OC;
+    }
+    if (typeof OC !== 'undefined') {
+      return OC;
+    }
+    return null;
+  },
+
+  /**
+   * Read request token from OC or <head> fallback.
+   */
+  getRequestToken() {
+    const oc = this.getOc();
+    if (oc && oc.requestToken) {
+      return oc.requestToken;
+    }
+    const head = document.querySelector('head');
+    return head ? (head.getAttribute('data-requesttoken') || '') : '';
+  },
+
+  /**
+   * Resolve app and API URLs in one place.
+   * - Keeps absolute URLs unchanged.
+   * - Normalizes /apps/arbeitszeitcheck/... through OC.generateUrl when available.
+   * - Keeps other root-relative paths unchanged.
+   * - For relative paths, applies OC.generateUrl when available.
+   */
+  resolveUrl(url) {
+    const oc = this.getOc();
+    if (typeof url !== 'string') {
+      return url;
+    }
+
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) {
+      return url;
+    }
+
+    if (url.startsWith('/')) {
+      // Already normalized app path.
+      if (url.startsWith('/index.php/apps/arbeitszeitcheck/')) {
+        return url;
+      }
+      if (oc && typeof oc.generateUrl === 'function' && url.startsWith('/apps/arbeitszeitcheck/')) {
+        return oc.generateUrl(url);
+      }
+      // Fallback for deployments requiring /index.php where OC is unavailable or incomplete.
+      if (url.startsWith('/apps/arbeitszeitcheck/') &&
+        typeof window !== 'undefined' &&
+        window.location &&
+        typeof window.location.pathname === 'string' &&
+        window.location.pathname.includes('/index.php/')) {
+        return '/index.php' + url;
+      }
+      return url;
+    }
+
+    if (oc && typeof oc.generateUrl === 'function') {
+      return oc.generateUrl(url);
+    }
+
+    return url;
+  },
+
+  /**
+   * Check whether a URL targets an external origin.
+   */
+  isExternalUrl(url) {
+    if (typeof url !== 'string') {
+      return false;
+    }
+    if (!(url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//'))) {
+      return false;
+    }
+    if (typeof window === 'undefined' || !window.location || !window.location.origin) {
+      return true;
+    }
+    try {
+      const absoluteUrl = url.startsWith('//') ? (window.location.protocol + url) : url;
+      const parsed = new URL(absoluteUrl);
+      return parsed.origin !== window.location.origin;
+    } catch (e) {
+      return true;
+    }
+  },
+
+  /**
    * Make AJAX request using Nextcloud's OC.generateUrl
    */
   ajax(url, options = {}) {
@@ -168,22 +258,28 @@ const ArbeitszeitCheckUtils = {
       data = null,
       headers = {},
       onSuccess = null,
-      onError = null
+      onError = null,
+      allowExternal = false
     } = options;
 
-    const requestToken = (typeof OC !== 'undefined' && OC.requestToken) ||
-      (document.querySelector('head') && document.querySelector('head').getAttribute('data-requesttoken')) || '';
+    const requestToken = this.getRequestToken();
+    const methodUpper = String(method).toUpperCase();
     const defaultHeaders = {
-      'Content-Type': 'application/json',
+      'Accept': 'application/json',
       'requesttoken': requestToken
     };
+    // Avoid sending Content-Type on GET/HEAD: some stacks and intermediaries mishandle it; body is absent anyway.
+    if (methodUpper !== 'GET' && methodUpper !== 'HEAD') {
+      defaultHeaders['Content-Type'] = 'application/json';
+    }
 
     const config = {
       method: method,
-      headers: { ...defaultHeaders, ...headers }
+      headers: { ...defaultHeaders, ...headers },
+      credentials: 'same-origin'
     };
 
-    if (data && method !== 'GET') {
+    if (data && methodUpper !== 'GET' && methodUpper !== 'HEAD') {
       if (config.headers['Content-Type'] === 'application/json') {
         config.body = JSON.stringify(data);
       } else {
@@ -191,22 +287,18 @@ const ArbeitszeitCheckUtils = {
       }
     }
 
-    const resolvedUrl = (() => {
-      if (typeof url !== 'string') {
-        return url;
+    const resolvedUrl = this.resolveUrl(url);
+    if (!allowExternal && this.isExternalUrl(resolvedUrl)) {
+      const error = new Error('External URL blocked by ArbeitszeitCheckUtils.ajax');
+      error.error = error.message;
+      error.status = 0;
+      error.data = null;
+      if (onError) {
+        onError(error);
+        return Promise.resolve(null);
       }
-
-      // Keep fully-qualified and already-generated Nextcloud paths unchanged.
-      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//') || url.startsWith('/index.php/')) {
-        return url;
-      }
-
-      if (typeof OC !== 'undefined' && typeof OC.generateUrl === 'function') {
-        return OC.generateUrl(url);
-      }
-
-      return url;
-    })();
+      return Promise.reject(error);
+    }
 
     return fetch(resolvedUrl, config)
       .then(async response => {

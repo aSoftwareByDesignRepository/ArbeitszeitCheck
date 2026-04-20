@@ -33,13 +33,18 @@ Util::addScript('arbeitszeitcheck', 'common/datepicker');
 Util::addScript('arbeitszeitcheck', 'common/validation');
 Util::addScript('arbeitszeitcheck', 'time-entry-form-accessibility');
 Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
+if (!empty($_['monthClosureEnabled'])) {
+    Util::addScript('arbeitszeitcheck', 'month-closure');
+}
 
 $entries = $_['entries'] ?? [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $stats = $_['stats'] ?? [];
+$monthClosureEnabled = !empty($_['monthClosureEnabled']);
 $mode = $_['mode'] ?? 'list'; // 'list', 'create', 'edit'
 $entry = $_['entry'] ?? null;
 $error = $_['error'] ?? null;
+$appTimezone = \OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitcheck', 'app_timezone', 'Europe/Berlin');
 ?>
 
 <?php include __DIR__ . '/common/navigation.php'; ?>
@@ -105,6 +110,7 @@ $error = $_['error'] ?? null;
                     </div>
                     <p class="form-help header-actions-help" id="time-entries-export-hint">
                         <?php p($l->t('Quick CSV uses the long layout (columns include start and end times). Overnight entries can appear as two rows after midnight if the administrator enabled split in export settings.')); ?>
+                        <?php p($l->t('All exported timestamps use timezone: %s (MEZ/MESZ).', [$appTimezone])); ?>
                     </p>
                 <?php endif; ?>
             </div>
@@ -124,6 +130,46 @@ $error = $_['error'] ?? null;
                         <span class="stat-value"><?php p(round($stats['total_hours'] ?? 0, 2)); ?> h</span>
                     </div>
                 </div>
+                <?php if ($monthClosureEnabled): ?>
+                <section class="section month-closure-section" aria-labelledby="month-closure-heading">
+                    <div class="month-closure-card card card--elevated" role="region" aria-labelledby="month-closure-heading">
+                        <h3 id="month-closure-heading" class="month-closure-section__title"><?php p($l->t('Monthly record (revision-safe)')); ?></h3>
+                        <p class="month-closure-lead form-help" id="month-closure-intro"><?php p($l->t('Finalize a full calendar month after it has ended, when your times are complete. The app stores a cryptographic snapshot and a PDF you can archive.')); ?></p>
+
+                        <div class="month-closure-layout">
+                            <div class="month-closure-block month-closure-block--period">
+                                <div class="month-closure-field">
+                                    <label for="month-closure-period" class="month-closure-field__label" id="month-closure-period-label"><?php p($l->t('Calendar month to finalize')); ?></label>
+                                    <p id="month-closure-field-hint" class="form-help month-closure-field__hint"><?php p($l->t('The seal applies to one full calendar month. Only calendar months that have ended and contain at least one time entry are listed.')); ?></p>
+                                    <div class="month-closure-toolbar">
+                                        <select id="month-closure-period"
+                                            class="form-input form-input--inline month-closure-period-select"
+                                            aria-busy="true"
+                                            aria-labelledby="month-closure-period-label"
+                                            aria-describedby="month-closure-intro month-closure-field-hint month-closure-deadline month-closure-blocked"></select>
+                                        <span id="month-closure-status" class="month-closure-badge" role="status" aria-live="polite"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="month-closure-block month-closure-block--outcome">
+                                <p id="month-closure-blocked" class="month-closure-blocked form-help" role="status" aria-live="polite" hidden></p>
+                                <p id="month-closure-deadline" class="month-closure-deadline form-help form-help--note" hidden></p>
+                                <div class="month-closure-actions">
+                                    <button type="button"
+                                        id="month-closure-finalize"
+                                        class="btn btn--primary"
+                                        disabled
+                                        data-confirm-finalize="<?php p($l->t('Really finalize this month? You will not be able to change time entries afterward unless an administrator reopens the month.')); ?>"><?php p($l->t('Finalize month')); ?></button>
+                                    <a id="month-closure-pdf" class="btn btn--secondary month-closure-pdf-link" href="#" style="display:none"><?php p($l->t('Download PDF')); ?></a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p id="month-closure-feedback" class="month-closure-feedback" role="status" aria-live="polite" aria-atomic="true"></p>
+                    </div>
+                </section>
+                <?php endif; ?>
             <?php endif; ?>
         </header>
 
@@ -161,11 +207,15 @@ $error = $_['error'] ?? null;
                             <h4 class="time-summary-title"><?php p($l->t('Summary')); ?></h4>
                             <div class="summary-row">
                                 <span class="summary-label"><?php p($l->t('Working Hours')); ?>:</span>
-                                <span id="summary-working-hours" class="summary-value">0.0</span> h
+                                <span class="summary-amount">
+                                    <span id="summary-working-hours" class="summary-value">0.0</span><span class="summary-unit"> h</span>
+                                </span>
                             </div>
                             <div class="summary-row">
                                 <span class="summary-label"><?php p($l->t('Break Time')); ?>:</span>
-                                <span id="summary-break-time" class="summary-value">0.0</span> h
+                                <span class="summary-amount">
+                                    <span id="summary-break-time" class="summary-value">0.0</span><span class="summary-unit"> h</span>
+                                </span>
                             </div>
                             <div id="compliance-status" class="compliance-status" role="status" aria-live="polite"></div>
                         </div>
@@ -173,7 +223,7 @@ $error = $_['error'] ?? null;
                         <!-- Date and Time Section -->
                         <div class="form-section" role="group" aria-labelledby="date-time-section-title">
                             <h3 id="date-time-section-title" class="form-section-title"><?php p($l->t('Date and time')); ?></h3>
-                            <div class="form-grid form-grid--2">
+                            <div class="time-entry-form__date">
                                 <div class="form-group">
                                     <label for="entry-date" id="entry-date-label" class="form-label">
                                         <span class="form-label-icon" aria-hidden="true">📅</span>
@@ -207,7 +257,15 @@ $error = $_['error'] ?? null;
                                     <div id="entry-date-error" role="alert" aria-live="polite" class="form-error-container" style="display: none;"></div>
                                 </div>
                             </div>
-                            <div class="form-grid form-grid--2">
+
+                            <p class="time-pair-matrix__intro" id="work-time-intro"><?php p($l->t('Working Hours')); ?></p>
+                            <div class="time-pair-matrix" role="group" aria-labelledby="work-time-intro">
+                                <div class="time-pair-matrix__grid time-pair-matrix__grid--header">
+                                    <span class="time-pair-matrix__colhead"><?php p($l->t('Start Time')); ?></span>
+                                    <span class="time-pair-matrix__colhead"><?php p($l->t('End Time')); ?></span>
+                                    <span class="time-pair-matrix__colhead time-pair-matrix__colhead--action" aria-hidden="true"></span>
+                                </div>
+                                <div class="time-pair-matrix__grid time-pair-matrix__grid--row">
                                 <div class="form-group">
                                     <label for="entry-start-time" id="entry-start-time-label" class="form-label">
                                         <span class="form-label-icon" aria-hidden="true">🕐</span>
@@ -319,6 +377,8 @@ $error = $_['error'] ?? null;
                                     </p>
                                     <div id="entry-end-time-error" role="alert" aria-live="polite" class="form-error-container" style="display: none;"></div>
                                 </div>
+                                <div class="time-pair-matrix__action time-pair-matrix__action--spacer" aria-hidden="true"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -343,6 +403,13 @@ $error = $_['error'] ?? null;
                                 </small>
                             </div>
 
+                            <p class="time-pair-matrix__intro time-pair-matrix__intro--breaks" id="break-times-intro"><?php p($l->t('Break times')); ?></p>
+                            <div class="time-pair-matrix time-pair-matrix--breaks" role="group" aria-labelledby="break-times-intro">
+                                <div class="time-pair-matrix__grid time-pair-matrix__grid--header">
+                                    <span class="time-pair-matrix__colhead"><?php p($l->t('Start Time')); ?></span>
+                                    <span class="time-pair-matrix__colhead"><?php p($l->t('End Time')); ?></span>
+                                    <span class="time-pair-matrix__colhead time-pair-matrix__colhead--action"><?php p($l->t('Actions')); ?></span>
+                                </div>
                             <div id="breaks-container">
                                 <?php
                                 // Load existing breaks from breaks JSON field
@@ -396,10 +463,10 @@ $error = $_['error'] ?? null;
                                 foreach ($existingBreaks as $index => $break):
                                 ?>
                                     <div class="break-entry" data-break-index="<?php p((string)$index); ?>">
-                                        <div class="form-grid form-grid--2">
+                                        <div class="time-pair-matrix__grid time-pair-matrix__grid--row">
                                             <div class="form-group">
-                                                <label class="form-label">
-                                                    <span class="form-label-icon">☕</span>
+                                                <label class="form-label" id="break-<?php p((string)$index); ?>-start-label">
+                                                    <span class="form-label-icon" aria-hidden="true">☕</span>
                                                     <?php p($l->t('Break Start Time')); ?>
                                                 </label>
                                                 <?php 
@@ -409,7 +476,7 @@ $error = $_['error'] ?? null;
                                                 $breakStartHour = $breakStartParts[0] ?? '';
                                                 $breakStartMinute = $breakStartParts[1] ?? '';
                                                 ?>
-                                                <div class="time-input-group" data-time-input="break-start-<?php p((string)$index); ?>">
+                                                <div class="time-input-group" data-time-input="break-start-<?php p((string)$index); ?>" role="group" aria-labelledby="break-<?php p((string)$index); ?>-start-label">
                                                     <select class="form-input time-hour break-start-time-hour" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break start hour')); ?>">
                                                         <option value="">--</option>
                                                         <?php for ($h = 0; $h < 24; $h++): ?>
@@ -418,7 +485,7 @@ $error = $_['error'] ?? null;
                                                             </option>
                                                         <?php endfor; ?>
                                                     </select>
-                                                    <span class="time-separator">:</span>
+                                                    <span class="time-separator" aria-hidden="true">:</span>
                                                     <select class="form-input time-minute break-start-time-minute" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break start minute')); ?>">
                                                         <option value="">--</option>
                                                         <?php for ($m = 0; $m < 60; $m += 1): ?>
@@ -433,11 +500,10 @@ $error = $_['error'] ?? null;
                                             </div>
 
                                             <div class="form-group">
-                                                <label class="form-label">
-                                                    <span class="form-label-icon">☕</span>
+                                                <label class="form-label" id="break-<?php p((string)$index); ?>-end-label">
+                                                    <span class="form-label-icon" aria-hidden="true">☕</span>
                                                     <?php p($l->t('Break End Time')); ?>
                                                 </label>
-                                                <div class="form-input-group">
                                                     <?php 
                                                     // Custom 24-hour time input - always shows 24h format
                                                     $breakEndValue = $break['end'] ?? '';
@@ -445,7 +511,7 @@ $error = $_['error'] ?? null;
                                                     $breakEndHour = $breakEndParts[0] ?? '';
                                                     $breakEndMinute = $breakEndParts[1] ?? '';
                                                     ?>
-                                                    <div class="time-input-group" data-time-input="break-end-<?php p((string)$index); ?>">
+                                                    <div class="time-input-group" data-time-input="break-end-<?php p((string)$index); ?>" role="group" aria-labelledby="break-<?php p((string)$index); ?>-end-label">
                                                         <select class="form-input time-hour break-end-time-hour" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break end hour')); ?>">
                                                             <option value="">--</option>
                                                             <?php for ($h = 0; $h < 24; $h++): ?>
@@ -454,28 +520,30 @@ $error = $_['error'] ?? null;
                                                                 </option>
                                                             <?php endfor; ?>
                                                         </select>
-                                                        <span class="time-separator">:</span>
+                                                        <span class="time-separator" aria-hidden="true">:</span>
                                                         <select class="form-input time-minute break-end-time-minute" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break end minute')); ?>">
                                                             <option value="">--</option>
                                                             <?php for ($m = 0; $m < 60; $m += 1): ?>
-<option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $breakEndMinute ? 'selected' : ''); ?>>
-                                                                <?php p(sprintf('%02d', $m)); ?>
+                                                                <option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $breakEndMinute ? 'selected' : ''); ?>>
+                                                                    <?php p(sprintf('%02d', $m)); ?>
                                                                 </option>
                                                             <?php endfor; ?>
                                                         </select>
                                                         <input type="hidden" class="break-end-time" data-break-index="<?php p((string)$index); ?>" name="breaks[<?php p((string)$index); ?>][end]" value="<?php p($breakEndValue); ?>">
                                                     </div>
+                                                <p class="form-help"><?php p($l->t('Optional: When did your break end? Use automatic breaks for legal compliance.')); ?></p>
+                                            </div>
+                                            <div class="time-pair-matrix__action">
                                                     <?php if ($index > 0): ?>
-                                                        <button type="button" class="btn btn--sm btn--danger btn-remove-break" data-break-index="<?php p((string)$index); ?>" title="<?php p($l->t('Remove break')); ?>">
+                                                        <button type="button" class="btn btn--sm btn--danger btn-remove-break" data-break-index="<?php p((string)$index); ?>" title="<?php p($l->t('Remove break')); ?>" aria-label="<?php p($l->t('Remove this break')); ?>">
                                                             <?php p($l->t('Remove')); ?>
                                                         </button>
                                                     <?php endif; ?>
-                                                </div>
-                                                <p class="form-help"><?php p($l->t('Optional: When did your break end? Use automatic breaks for legal compliance.')); ?></p>
                                             </div>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
+                            </div>
                             </div>
 
                             <div class="form-actions">
@@ -816,6 +884,10 @@ $error = $_['error'] ?? null;
 
 <!-- Initialize JavaScript -->
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>" type="text/javascript">
+<?php
+/** Flags for embedding translated strings and URLs inside this script (prevents </script> / quote breakage). */
+$__jsEnc = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
+?>
     // Pass essential data to JS
     window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.page = 'time-entries';
@@ -838,6 +910,23 @@ $error = $_['error'] ?? null;
     window.ArbeitszeitCheck.l10n.confirmDeleteTimeEntry = <?php echo json_encode($l->t('Are you sure you want to delete this time entry?\n\nThis will permanently remove this record of your working time. This action cannot be undone.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.error = <?php echo json_encode($l->t('An error occurred'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.deleted = <?php echo json_encode($l->t('Time entry deleted successfully'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.autoBreakDuration30 = <?php echo json_encode($l->t('30 minutes'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.autoBreakDuration45 = <?php echo json_encode($l->t('45 minutes'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+<?php if ($monthClosureEnabled): ?>
+    window.ArbeitszeitCheck.l10n.monthClosureStatusOpen = <?php echo json_encode($l->t('Open (month status)'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureStatusFinalized = <?php echo json_encode($l->t('Finalized'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureStatusFinalizedAuto = <?php echo json_encode($l->t('Finalized automatically'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureDeadline = <?php echo json_encode($l->t('Please finalize this month by {date} (end of the configured grace period). After that, it may be sealed automatically if it is still open.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureFinalizedSuccess = <?php echo json_encode($l->t('Month finalized.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureError = <?php echo json_encode($l->t('Error'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureLoading = <?php echo json_encode($l->t('Loading…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureNoPeriods = <?php echo json_encode($l->t('No completed months with time entries yet.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureNoPeriodsHint = <?php echo json_encode($l->t('Record working time in a month first. After that calendar month has ended, you can seal it here.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosurePeriodsLoadError = <?php echo json_encode($l->t('Could not load months.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureLoadingPeriods = <?php echo json_encode($l->t('Loading months…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosurePdfDownloadAria = <?php echo json_encode($l->t('Download revision-safe monthly certificate PDF for {period}'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureStatusError = <?php echo json_encode($l->t('Could not load status. Try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+<?php endif; ?>
 
     // API URLs
     window.ArbeitszeitCheck.apiUrl = {
@@ -852,6 +941,25 @@ $error = $_['error'] ?? null;
     const _escapeHtml = (typeof window.ArbeitszeitCheckUtils !== 'undefined' && window.ArbeitszeitCheckUtils.escapeHtml)
         ? window.ArbeitszeitCheckUtils.escapeHtml
         : function(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+
+    /**
+     * Parse JSON from a fetch Response. Rejects HTML bodies (login/error pages) so we never treat markup as data.
+     */
+    async function parseJsonFromTimeEntryResponse(response) {
+        const text = await response.text();
+        const trimmed = text.trim();
+        if (trimmed.length === 0) {
+            throw new Error('EMPTY_RESPONSE');
+        }
+        if (trimmed[0] === '<') {
+            throw new Error('HTML_RESPONSE');
+        }
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            throw new Error('INVALID_JSON');
+        }
+    }
 
     // Handle form submission for create/edit
     <?php if ($mode === 'create' || $mode === 'edit'): ?>
@@ -1093,11 +1201,12 @@ $error = $_['error'] ?? null;
 
                 // Show notification about auto-break addition
                 if (window.OC && OC.Notification) {
-                    const breakText = shortfallMinutes >= 45 ? '45 minutes' : '30 minutes';
-                    OC.Notification.showTemporary(
-                        `<?php echo addslashes($l->t('Automatic %s break added for legal compliance', ['%s'])); ?>`.replace('%s', breakText),
-                        { type: 'info', timeout: 3000 }
-                    );
+                    const loc = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n;
+                    const breakText = shortfallMinutes >= 45
+                        ? (loc && loc.autoBreakDuration45) || '45 minutes'
+                        : (loc && loc.autoBreakDuration30) || '30 minutes';
+                    const msg = <?php echo json_encode($l->t('Automatic %s break added for legal compliance', ['%s']), $__jsEnc); ?>.replace('%s', breakText);
+                    OC.Notification.showTemporary(msg, { type: 'info', timeout: 3000 });
                 }
 
                 this.updateTimeSummary();
@@ -1180,13 +1289,17 @@ $error = $_['error'] ?? null;
                 // Mark as auto-generated
                 breakEntry.setAttribute('data-auto-break', 'true');
 
-                // Add a note below the auto-break
-                const formGrid = breakEntry.querySelector('.form-grid');
+                // Add a note below the auto-break row (full width under the time pair)
+                const formGrid = breakEntry.querySelector('.time-pair-matrix__grid--row');
                 if (formGrid) {
                     const autoNote = document.createElement('p');
                     autoNote.className = 'form-help auto-break-note';
-                    autoNote.innerHTML = '<small><?php echo addslashes($l->t('Automatically added for German labor law compliance (ArbZG §4)')); ?></small>';
+                    autoNote.setAttribute('role', 'status');
+                    const autoNoteSmall = document.createElement('small');
+                    autoNoteSmall.textContent = <?php echo json_encode($l->t('Automatically added for German labor law compliance (ArbZG §4)'), $__jsEnc); ?>;
+                    autoNote.appendChild(autoNoteSmall);
                     formGrid.appendChild(autoNote);
+                    formGrid.classList.add('time-pair-matrix__grid--row--with-note');
                 }
             }
 
@@ -1223,16 +1336,16 @@ $error = $_['error'] ?? null;
                         if (this.autoBreakToggle.checked) {
                             // Re-enable auto-breaks - recalculate
                             this.handleAutoBreakCalculation();
-                    } else {
-                        // Disable auto-breaks - user can manually manage breaks
-                        if (window.OC && OC.Notification) {
-                            OC.Notification.showTemporary(
-                                '<?php echo addslashes($l->t('Automatic break generation disabled')); ?>',
-                                { type: 'info', timeout: 2000 }
-                            );
+                        } else {
+                            // Disable auto-breaks - user can manually manage breaks
+                            if (window.OC && OC.Notification) {
+                                OC.Notification.showTemporary(
+                                    <?php echo json_encode($l->t('Automatic break generation disabled'), $__jsEnc); ?>,
+                                    { type: 'info', timeout: 2000 }
+                                );
+                            }
                         }
-                    }
-                });
+                    });
                 }
             }
 
@@ -1243,7 +1356,7 @@ $error = $_['error'] ?? null;
                     if (existingBreaks.length >= this.maxBreaks) {
                         if (window.OC && OC.Notification) {
                             OC.Notification.showTemporary(
-                                '<?php echo addslashes($l->t('Maximum of %d breaks allowed', [$this->maxBreaks])); ?>'.replace('%d', this.maxBreaks),
+                                <?php echo json_encode($l->t('Maximum of %d breaks allowed', [10]), $__jsEnc); ?>,
                                 { type: 'error', timeout: 3000 }
                             );
                         }
@@ -1269,7 +1382,7 @@ $error = $_['error'] ?? null;
                 breakEntry.setAttribute('data-break-index', index);
 
                 const formGrid = document.createElement('div');
-                formGrid.className = 'form-grid form-grid--2';
+                formGrid.className = 'time-pair-matrix__grid time-pair-matrix__grid--row';
 
                 // Start time group
                 const startGroup = document.createElement('div');
@@ -1277,24 +1390,28 @@ $error = $_['error'] ?? null;
 
                 const startLabel = document.createElement('label');
                 startLabel.className = 'form-label';
+                startLabel.id = 'break-' + index + '-start-label';
                 const startIcon = document.createElement('span');
                 startIcon.className = 'form-label-icon';
+                startIcon.setAttribute('aria-hidden', 'true');
                 startIcon.textContent = '☕';
                 startLabel.appendChild(startIcon);
-                startLabel.appendChild(document.createTextNode('<?php p($l->t('Break Start Time')); ?>'));
+                startLabel.appendChild(document.createTextNode(<?php echo json_encode($l->t('Break Start Time'), $__jsEnc); ?>));
 
                 const startTimeGroup = document.createElement('div');
                 startTimeGroup.className = 'time-input-group';
+                startTimeGroup.setAttribute('role', 'group');
+                startTimeGroup.setAttribute('aria-labelledby', startLabel.id);
 
                 const startHourSelect = document.createElement('select');
                 startHourSelect.className = 'form-input time-hour break-start-time-hour';
                 startHourSelect.setAttribute('data-break-index', index);
-                startHourSelect.setAttribute('aria-label', '<?php p($l->t('Break start hour')); ?>');
+                startHourSelect.setAttribute('aria-label', <?php echo json_encode($l->t('Break start hour'), $__jsEnc); ?>);
 
                 const startMinuteSelect = document.createElement('select');
                 startMinuteSelect.className = 'form-input time-minute break-start-time-minute';
                 startMinuteSelect.setAttribute('data-break-index', index);
-                startMinuteSelect.setAttribute('aria-label', '<?php p($l->t('Break start minute')); ?>');
+                startMinuteSelect.setAttribute('aria-label', <?php echo json_encode($l->t('Break start minute'), $__jsEnc); ?>);
 
                 const startHidden = document.createElement('input');
                 startHidden.type = 'hidden';
@@ -1308,6 +1425,7 @@ $error = $_['error'] ?? null;
 
                 const startSeparator = document.createElement('span');
                 startSeparator.className = 'time-separator';
+                startSeparator.setAttribute('aria-hidden', 'true');
                 startSeparator.textContent = ':';
 
                 startTimeGroup.appendChild(startHourSelect);
@@ -1317,7 +1435,7 @@ $error = $_['error'] ?? null;
 
                 const startHelp = document.createElement('p');
                 startHelp.className = 'form-help';
-                startHelp.textContent = '<?php p($l->t('Optional: When did your break start?')); ?>';
+                startHelp.textContent = <?php echo json_encode($l->t('Optional: When did your break start?'), $__jsEnc); ?>;
 
                 startGroup.appendChild(startLabel);
                 startGroup.appendChild(startTimeGroup);
@@ -1329,24 +1447,28 @@ $error = $_['error'] ?? null;
 
                 const endLabel = document.createElement('label');
                 endLabel.className = 'form-label';
+                endLabel.id = 'break-' + index + '-end-label';
                 const endIcon = document.createElement('span');
                 endIcon.className = 'form-label-icon';
+                endIcon.setAttribute('aria-hidden', 'true');
                 endIcon.textContent = '☕';
                 endLabel.appendChild(endIcon);
-                endLabel.appendChild(document.createTextNode('<?php p($l->t('Break End Time')); ?>'));
+                endLabel.appendChild(document.createTextNode(<?php echo json_encode($l->t('Break End Time'), $__jsEnc); ?>));
 
                 const endTimeGroup = document.createElement('div');
                 endTimeGroup.className = 'time-input-group';
+                endTimeGroup.setAttribute('role', 'group');
+                endTimeGroup.setAttribute('aria-labelledby', endLabel.id);
 
                 const endHourSelect = document.createElement('select');
                 endHourSelect.className = 'form-input time-hour break-end-time-hour';
                 endHourSelect.setAttribute('data-break-index', index);
-                endHourSelect.setAttribute('aria-label', '<?php p($l->t('Break end hour')); ?>');
+                endHourSelect.setAttribute('aria-label', <?php echo json_encode($l->t('Break end hour'), $__jsEnc); ?>);
 
                 const endMinuteSelect = document.createElement('select');
                 endMinuteSelect.className = 'form-input time-minute break-end-time-minute';
                 endMinuteSelect.setAttribute('data-break-index', index);
-                endMinuteSelect.setAttribute('aria-label', '<?php p($l->t('Break end minute')); ?>');
+                endMinuteSelect.setAttribute('aria-label', <?php echo json_encode($l->t('Break end minute'), $__jsEnc); ?>);
 
                 const endHidden = document.createElement('input');
                 endHidden.type = 'hidden';
@@ -1360,36 +1482,38 @@ $error = $_['error'] ?? null;
 
                 const endSeparator = document.createElement('span');
                 endSeparator.className = 'time-separator';
+                endSeparator.setAttribute('aria-hidden', 'true');
                 endSeparator.textContent = ':';
-
-                const endInputGroup = document.createElement('div');
-                endInputGroup.className = 'form-input-group';
-
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.className = 'btn btn--sm btn--danger btn-remove-break';
-                removeBtn.setAttribute('data-break-index', index);
-                removeBtn.title = '<?php p($l->t('Remove break')); ?>';
-                removeBtn.textContent = '<?php p($l->t('Remove')); ?>';
 
                 endTimeGroup.appendChild(endHourSelect);
                 endTimeGroup.appendChild(endSeparator);
                 endTimeGroup.appendChild(endMinuteSelect);
                 endTimeGroup.appendChild(endHidden);
 
-                endInputGroup.appendChild(endTimeGroup);
-                endInputGroup.appendChild(removeBtn);
-
                 const endHelp = document.createElement('p');
                 endHelp.className = 'form-help';
-                endHelp.textContent = '<?php p($l->t('Optional: When did your break end?')); ?>';
+                endHelp.textContent = <?php echo json_encode($l->t('Optional: When did your break end?'), $__jsEnc); ?>;
 
                 endGroup.appendChild(endLabel);
-                endGroup.appendChild(endInputGroup);
+                endGroup.appendChild(endTimeGroup);
                 endGroup.appendChild(endHelp);
+
+                const actionCell = document.createElement('div');
+                actionCell.className = 'time-pair-matrix__action';
+                if (index > 0) {
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'btn btn--sm btn--danger btn-remove-break';
+                    removeBtn.setAttribute('data-break-index', index);
+                    removeBtn.title = <?php echo json_encode($l->t('Remove break'), $__jsEnc); ?>;
+                    removeBtn.setAttribute('aria-label', <?php echo json_encode($l->t('Remove this break'), $__jsEnc); ?>);
+                    removeBtn.textContent = <?php echo json_encode($l->t('Remove'), $__jsEnc); ?>;
+                    actionCell.appendChild(removeBtn);
+                }
 
                 formGrid.appendChild(startGroup);
                 formGrid.appendChild(endGroup);
+                formGrid.appendChild(actionCell);
                 breakEntry.appendChild(formGrid);
 
                 return breakEntry;
@@ -1473,13 +1597,13 @@ $error = $_['error'] ?? null;
                 }
 
                 if (!value) {
-                    this.showDateError('<?php echo addslashes($l->t('Date is required')); ?>');
+                    this.showDateError(<?php echo json_encode($l->t('Date is required'), $__jsEnc); ?>);
                     return false;
                 }
 
                 const result = this.parseDate(value);
                 if (!result.valid) {
-                    const errorMsg = result.errors[0] || '<?php echo addslashes($l->t('Invalid date')); ?>';
+                    const errorMsg = result.errors[0] || <?php echo json_encode($l->t('Invalid date'), $__jsEnc); ?>;
                     this.showDateError(errorMsg);
                     return false;
                 }
@@ -1491,7 +1615,7 @@ $error = $_['error'] ?? null;
                     tomorrow.setDate(tomorrow.getDate() + 1);
 
                     if (result.date > tomorrow) {
-                        this.showDateError('<?php echo addslashes($l->t('Date cannot be in the future')); ?>');
+                        this.showDateError(<?php echo json_encode($l->t('Date cannot be in the future'), $__jsEnc); ?>);
                         return false;
                     }
 
@@ -1500,7 +1624,7 @@ $error = $_['error'] ?? null;
                     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
                     if (result.date < oneYearAgo) {
-                        this.showDateError('<?php echo addslashes($l->t('Date cannot be more than 1 year in the past')); ?>');
+                        this.showDateError(<?php echo json_encode($l->t('Date cannot be more than 1 year in the past'), $__jsEnc); ?>);
                         return false;
                     }
 
@@ -1719,10 +1843,10 @@ $error = $_['error'] ?? null;
 
                 if (workingHours > this.maxWorkingHours) {
                     statusClass = 'violation';
-                    statusText = '<?php echo addslashes($l->t('Working hours exceed legal maximum (ArbZG §3)')); ?>';
+                    statusText = <?php echo json_encode($l->t('Working hours exceed legal maximum (ArbZG §3)'), $__jsEnc); ?>;
                 } else if (workingHours >= 8 && workingHours <= this.maxWorkingHours) {
                     statusClass = 'warning';
-                    statusText = '<?php echo addslashes($l->t('Approaching maximum working hours')); ?>';
+                    statusText = <?php echo json_encode($l->t('Approaching maximum working hours'), $__jsEnc); ?>;
                 } else if (!hasRequiredBreak && requiredBreakHours > 0) {
                     // Check if we have auto-generated breaks that should fulfill requirements
                     const hasAutoBreak = this.breaksContainer ?
@@ -1732,12 +1856,12 @@ $error = $_['error'] ?? null;
                         // Auto-break exists but calculation shows insufficient breaks
                         // This shouldn't happen, but handle gracefully
                         statusClass = 'warning';
-                        statusText = '<?php echo addslashes($l->t('Recalculating automatic break...')); ?>';
+                        statusText = <?php echo json_encode($l->t('Recalculating automatic break...'), $__jsEnc); ?>;
                         // Trigger recalculation
                         setTimeout(() => this.handleAutoBreakCalculation(), 100);
                     } else {
                         statusClass = 'warning';
-                        statusText = '<?php echo addslashes($l->t('Break requirement not met (ArbZG §4)')); ?>';
+                        statusText = <?php echo json_encode($l->t('Break requirement not met (ArbZG §4)'), $__jsEnc); ?>;
                     }
                 } else {
                     // Provide more specific compliance messages based on work duration
@@ -1745,17 +1869,17 @@ $error = $_['error'] ?? null;
                         this.breaksContainer.querySelector('.break-entry[data-auto-break]') : false;
 
                     if (workingHours < 6) {
-                        statusText = '<?php echo addslashes($l->t('Short shift - no breaks required')); ?>';
+                        statusText = <?php echo json_encode($l->t('Short shift - no breaks required'), $__jsEnc); ?>;
                     } else if (workingHours >= 6 && workingHours < 9) {
                         statusText = hasAutoBreak
-                            ? '<?php echo addslashes($l->t('Compliant - automatic 30 min break')); ?>'
-                            : '<?php echo addslashes($l->t('Compliant - 30 min break provided')); ?>';
+                            ? <?php echo json_encode($l->t('Compliant - automatic 30 min break'), $__jsEnc); ?>
+                            : <?php echo json_encode($l->t('Compliant - 30 min break provided'), $__jsEnc); ?>;
                     } else if (workingHours >= 9) {
                         statusText = hasAutoBreak
-                            ? '<?php echo addslashes($l->t('Compliant - automatic 45 min break')); ?>'
-                            : '<?php echo addslashes($l->t('Compliant - 45 min break provided')); ?>';
+                            ? <?php echo json_encode($l->t('Compliant - automatic 45 min break'), $__jsEnc); ?>
+                            : <?php echo json_encode($l->t('Compliant - 45 min break provided'), $__jsEnc); ?>;
                     } else {
-                        statusText = '<?php echo addslashes($l->t('Compliant with German labor law')); ?>';
+                        statusText = <?php echo json_encode($l->t('Compliant with German labor law'), $__jsEnc); ?>;
                     }
                 }
 
@@ -1881,7 +2005,7 @@ $error = $_['error'] ?? null;
                 if (!this.startTimeHour?.value || !this.startTimeMinute?.value ||
                     this.startTimeHour.value === '--' || this.startTimeMinute.value === '--') {
                     if (this.startTimeHour) {
-                        this.startTimeHour.setCustomValidity('<?php echo addslashes($l->t('Start time is required')); ?>');
+                        this.startTimeHour.setCustomValidity(<?php echo json_encode($l->t('Start time is required'), $__jsEnc); ?>);
                         this.startTimeHour.reportValidity();
                     }
                     isValid = false;
@@ -1891,7 +2015,7 @@ $error = $_['error'] ?? null;
                 if (!this.endTimeHour?.value || !this.endTimeMinute?.value ||
                     this.endTimeHour.value === '--' || this.endTimeMinute.value === '--') {
                     if (this.endTimeHour) {
-                        this.endTimeHour.setCustomValidity('<?php echo addslashes($l->t('End time is required')); ?>');
+                        this.endTimeHour.setCustomValidity(<?php echo json_encode($l->t('End time is required'), $__jsEnc); ?>);
                         this.endTimeHour.reportValidity();
                     }
                     isValid = false;
@@ -1925,8 +2049,8 @@ $error = $_['error'] ?? null;
                             } else {
                         // Show validation error
                         const errorMsg = type === 'start'
-                            ? '<?php echo addslashes($l->t('Start time is required')); ?>'
-                            : '<?php echo addslashes($l->t('End time is required')); ?>';
+                            ? <?php echo json_encode($l->t('Start time is required'), $__jsEnc); ?>
+                            : <?php echo json_encode($l->t('End time is required'), $__jsEnc); ?>;
 
                         if (hourSelect) {
                             hourSelect.setCustomValidity(errorMsg);
@@ -1976,7 +2100,7 @@ $error = $_['error'] ?? null;
 
                     if (workDurationMs <= 0) {
                         if (this.endTimeHour) {
-                            this.endTimeHour.setCustomValidity('<?php echo addslashes($l->t('End time must be after start time')); ?>');
+                            this.endTimeHour.setCustomValidity(<?php echo json_encode($l->t('End time must be after start time'), $__jsEnc); ?>);
                             this.endTimeHour.reportValidity();
                         }
                         return false;
@@ -1986,7 +2110,7 @@ $error = $_['error'] ?? null;
                     const minWorkDurationMs = 15 * 60 * 1000; // 15 minutes
                     if (workDurationMs < minWorkDurationMs) {
                         if (this.endTimeHour) {
-                            this.endTimeHour.setCustomValidity('<?php echo addslashes($l->t('Work period must be at least 15 minutes')); ?>');
+                            this.endTimeHour.setCustomValidity(<?php echo json_encode($l->t('Work period must be at least 15 minutes'), $__jsEnc); ?>);
                             this.endTimeHour.reportValidity();
                         }
                         return false;
@@ -1996,7 +2120,7 @@ $error = $_['error'] ?? null;
                     const maxWorkDurationMs = 16 * 60 * 60 * 1000; // 16 hours
                     if (workDurationMs > maxWorkDurationMs) {
                         if (this.endTimeHour) {
-                            this.endTimeHour.setCustomValidity('<?php echo addslashes($l->t('Work period cannot exceed 16 hours')); ?>');
+                            this.endTimeHour.setCustomValidity(<?php echo json_encode($l->t('Work period cannot exceed 16 hours'), $__jsEnc); ?>);
                             this.endTimeHour.reportValidity();
                         }
                         return false;
@@ -2024,7 +2148,7 @@ $error = $_['error'] ?? null;
 
                     if (totalBreakMs >= workDurationMs) {
                         if (this.startTimeHour) {
-                            this.startTimeHour.setCustomValidity('<?php echo addslashes($l->t('Total break time cannot exceed work time')); ?>');
+                            this.startTimeHour.setCustomValidity(<?php echo json_encode($l->t('Total break time cannot exceed work time'), $__jsEnc); ?>);
                             this.startTimeHour.reportValidity();
                         }
                         return false;
@@ -2053,11 +2177,11 @@ $error = $_['error'] ?? null;
 
                 let requirementText = '';
                 if (workingHours < 6) {
-                    requirementText = '<?php echo addslashes($l->t('No breaks required for shifts under 6 hours')); ?>';
+                    requirementText = <?php echo json_encode($l->t('No breaks required for shifts under 6 hours'), $__jsEnc); ?>;
                 } else if (workingHours >= 6 && workingHours < 9) {
-                    requirementText = '<?php echo addslashes($l->t('30 minutes break required (ArbZG §4)')); ?>';
+                    requirementText = <?php echo json_encode($l->t('30 minutes break required (ArbZG §4)'), $__jsEnc); ?>;
                 } else if (workingHours >= 9) {
-                    requirementText = '<?php echo addslashes($l->t('45 minutes break required (ArbZG §4)')); ?>';
+                    requirementText = <?php echo json_encode($l->t('45 minutes break required (ArbZG §4)'), $__jsEnc); ?>;
                 }
 
                 if (requirementText) {
@@ -2178,29 +2302,29 @@ $error = $_['error'] ?? null;
                     clearTimeout(timeoutId);
 
                     let result;
-                    if (!response.ok) {
-                        // Try to extract a structured error message from the API response
-                        try {
-                            result = await response.json();
-                        } catch (parseError) {
-                            // Fallback to generic HTTP error if body is not JSON
+                    try {
+                        result = await parseJsonFromTimeEntryResponse(response);
+                    } catch (parseError) {
+                        if (parseError && parseError.message === 'HTML_RESPONSE') {
+                            throw parseError;
+                        }
+                        if (parseError && (parseError.message === 'INVALID_JSON' || parseError.message === 'EMPTY_RESPONSE')) {
                             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                         }
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
 
+                    if (!response.ok) {
                         const apiErrorMessage = (result && (result.error || result.message)) || '';
                         if (apiErrorMessage) {
-                            // Mark as API-level error so we can distinguish it in the catch block
                             throw new Error(`API_ERROR:${apiErrorMessage}`);
                         }
-
                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    } else {
-                        result = await response.json();
                     }
 
                     if (result.success) {
                         // Success - show message then redirect
-                        const successMsg = result.message || '<?php echo addslashes($l->t('Time entry saved successfully')); ?>';
+                        const successMsg = result.message || <?php echo json_encode($l->t('Time entry saved successfully'), $__jsEnc); ?>;
                         if (window.OC && OC.Notification) {
                             OC.Notification.showTemporary(successMsg, {
                                         type: 'success',
@@ -2210,12 +2334,12 @@ $error = $_['error'] ?? null;
 
                         // Redirect after a short delay to show the success message
                         setTimeout(() => {
-                            window.location.href = '<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>';
+                            window.location.href = <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.page.timeEntries'), $__jsEnc); ?>;
                         }, 1000);
 
                     } else {
                         // Server returned success=false with a JSON body
-                        const errorMsg = (result.error || result.message) || '<?php echo addslashes($l->t('An error occurred while saving')); ?>';
+                        const errorMsg = (result.error || result.message) || <?php echo json_encode($l->t('An error occurred while saving'), $__jsEnc); ?>;
                         this.showErrorNotification(errorMsg);
                         this.resetSubmitButton(submitBtn, originalText);
                     }
@@ -2225,20 +2349,22 @@ $error = $_['error'] ?? null;
 
                     let errorMsg;
                     if (error.name === 'AbortError') {
-                        errorMsg = '<?php echo addslashes($l->t('Request timed out. Please try again.')); ?>';
+                        errorMsg = <?php echo json_encode($l->t('Request timed out. Please try again.'), $__jsEnc); ?>;
                     } else if (error.message.startsWith('API_ERROR:')) {
                         // Detailed API error coming from backend JSON (e.g. overlap, compliance violations)
                         errorMsg = error.message.substring('API_ERROR:'.length);
+                    } else if (error.message === 'HTML_RESPONSE') {
+                        errorMsg = <?php echo json_encode($l->t('The server returned a login or error page instead of data. Please reload the page or sign in again.'), $__jsEnc); ?>;
                     } else if (error.message.includes('HTTP')) {
-                        errorMsg = '<?php echo addslashes($l->t('Server error occurred. Please try again.')); ?>';
+                        errorMsg = <?php echo json_encode($l->t('Server error occurred. Please try again.'), $__jsEnc); ?>;
                     } else if (error.message.includes('required form fields')) {
-                        errorMsg = '<?php echo addslashes($l->t('Please fill in all required fields (date, start time, end time)')); ?>';
+                        errorMsg = <?php echo json_encode($l->t('Please fill in all required fields (date, start time, end time)'), $__jsEnc); ?>;
                     } else if (error.message.includes('date format')) {
-                        errorMsg = '<?php echo addslashes($l->t('Please enter a valid date')); ?>';
+                        errorMsg = <?php echo json_encode($l->t('Please enter a valid date'), $__jsEnc); ?>;
                     } else if (error.message.includes('time format')) {
-                        errorMsg = '<?php echo addslashes($l->t('Please enter valid start and end times')); ?>';
+                        errorMsg = <?php echo json_encode($l->t('Please enter valid start and end times'), $__jsEnc); ?>;
                     } else {
-                        errorMsg = '<?php echo addslashes($l->t('Network error occurred')); ?>';
+                        errorMsg = <?php echo json_encode($l->t('Network error occurred'), $__jsEnc); ?>;
                     }
 
                     this.showErrorNotification(errorMsg);
@@ -2403,11 +2529,11 @@ $error = $_['error'] ?? null;
 
                 if (loading) {
                     submitBtn.disabled = true;
-                    submitBtn.textContent = '<?php echo addslashes($l->t('Submitting...')); ?>';
+                    submitBtn.textContent = <?php echo json_encode($l->t('Submitting...'), $__jsEnc); ?>;
                     submitBtn.setAttribute('aria-busy', 'true');
                 } else {
                                 submitBtn.disabled = false;
-                    submitBtn.textContent = '<?php echo addslashes($l->t('Submit')); ?>';
+                    submitBtn.textContent = <?php echo json_encode($l->t('Submit'), $__jsEnc); ?>;
                                 submitBtn.removeAttribute('aria-busy');
                 }
             }
@@ -2444,7 +2570,9 @@ $error = $_['error'] ?? null;
                     if (form) {
                         const errorMsg = document.createElement('div');
                         errorMsg.className = 'form-error';
-                        errorMsg.innerHTML = '<strong><?php echo addslashes($l->t('Form initialization failed. Please refresh the page.')); ?></strong>';
+                        const errorStrong = document.createElement('strong');
+                        errorStrong.textContent = <?php echo json_encode($l->t('Form initialization failed. Please refresh the page.'), $__jsEnc); ?>;
+                        errorMsg.appendChild(errorStrong);
                         form.insertBefore(errorMsg, form.firstChild);
                     }
                 }

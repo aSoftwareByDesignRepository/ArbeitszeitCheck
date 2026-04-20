@@ -35,6 +35,7 @@ $overtime = $_['overtime'] ?? [];
 $recentEntries = $_['recentEntries'] ?? [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $dashStats = $_['stats'] ?? [];
+$appTimezone = \OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitcheck', 'app_timezone', 'Europe/Berlin');
 
 // Current session duration calculation for display
 $currentSessionDuration = $status['current_session_duration'] ?? 0;
@@ -172,6 +173,12 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                         <div class="dashboard-status-card__title">
                             <span class="dashboard-status-card__icon" aria-hidden="true"><?php p($statusIcon); ?></span>
                             <h3 id="dashboard-status-heading" class="card-title"><?php p($l->t('Current Status')); ?></h3>
+                            <div class="timezone-badge"
+                                 aria-label="<?php p($l->t('Configured timezone')); ?>"
+                                 title="<?php p($l->t('All times are shown and exported in this timezone.')); ?>">
+                                <span class="timezone-badge__icon" aria-hidden="true">🕐</span>
+                                <span class="timezone-badge__label"><?php p($appTimezone); ?> (MEZ/MESZ)</span>
+                            </div>
                         </div>
                         <div class="badge badge--<?php p($statusBadgeVariant); ?>">
                             <?php p($statusLabel); ?>

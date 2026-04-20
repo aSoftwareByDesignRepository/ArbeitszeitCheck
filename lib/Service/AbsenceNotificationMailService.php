@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Service;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\Absence;
 use OCP\IConfig;
 use OCP\IL10N;
@@ -26,6 +27,7 @@ class AbsenceNotificationMailService
 	private const CONFIG_SEND_SUBSTITUTION_REQUEST = 'send_email_substitution_request';
 	private const CONFIG_SEND_SUBSTITUTE_APPROVED_TO_EMPLOYEE = 'send_email_substitute_approved_to_employee';
 	private const CONFIG_SEND_SUBSTITUTE_APPROVED_TO_MANAGER = 'send_email_substitute_approved_to_manager';
+	private const MAX_HR_RECIPIENTS = 20;
 
 	public function __construct(
 		private IMailer $mailer,
@@ -36,6 +38,72 @@ class AbsenceNotificationMailService
 		private TeamResolverService $teamResolver,
 		private ?LoggerInterface $logger = null,
 	) {
+	}
+
+	public function sendHrOfficeNotification(Absence $absence, string $eventKey, ?string $actorUserId = null): void
+	{
+		$config = $this->getHrNotificationConfig();
+		if (!$config['enabled']) {
+			return;
+		}
+		if (!$this->shouldSendHrEvent($config['matrix'], $absence->getType(), $eventKey)) {
+			return;
+		}
+		$recipients = $config['recipients'];
+		if ($recipients === []) {
+			return;
+		}
+
+		$employee = $this->userManager->get($absence->getUserId());
+		$employeeName = $employee ? $employee->getDisplayName() : $absence->getUserId();
+		$actorName = $actorUserId ? ($this->userManager->get($actorUserId)?->getDisplayName() ?? $actorUserId) : null;
+		$typeLabel = $this->getTypeLabel($absence->getType());
+		$eventLabel = $this->getHrEventLabel($eventKey);
+		$startStr = $absence->getStartDate()?->format('Y-m-d') ?? '?';
+		$endStr = $absence->getEndDate()?->format('Y-m-d') ?? '?';
+		$days = (int)($absence->getDays() ?? 0);
+		$employeeLink = $this->urlGenerator->linkToRouteAbsolute('arbeitszeitcheck.page.absences');
+		$managerLink = $this->urlGenerator->linkToRouteAbsolute('arbeitszeitcheck.manager.dashboard');
+
+		$subject = $this->l10n->t('HR notification: %1$s (%2$s) - %3$s', [
+			$employeeName,
+			$typeLabel,
+			$eventLabel,
+		]);
+
+		$plainBody = $this->l10n->t(
+			'Absence event: %1$s',
+			[$eventLabel]
+		) . "\n" . $this->l10n->t(
+			'Employee: %1$s',
+			[$employeeName]
+		) . "\n" . $this->l10n->t(
+			'Type: %1$s',
+			[$typeLabel]
+		) . "\n" . $this->l10n->t(
+			'Period: %1$s to %2$s',
+			[$startStr, $endStr]
+		) . "\n" . $this->l10n->t(
+			'Days: %1$d',
+			[$days]
+		);
+
+		if ($actorName !== null) {
+			$plainBody .= "\n" . $this->l10n->t('Triggered by: %1$s', [$actorName]);
+		}
+		$plainBody .= "\n\n" . $this->l10n->t('Employee view: %s', [$employeeLink]);
+		$plainBody .= "\n" . $this->l10n->t('Manager view: %s', [$managerLink]);
+
+		foreach ($recipients as $email) {
+			$this->sendMail(
+				$email,
+				$email,
+				$subject,
+				$plainBody,
+				'sendHrOfficeNotification:' . $eventKey,
+				$absence->getUserId()
+			);
+		}
 	}
 
 	/**
@@ -258,5 +326,90 @@ class AbsenceNotificationMailService
 			'business_trip' => $this->l10n->t('Business Trip'),
 		];
 		return $map[$type] ?? $type;
+	}
+
+	/**
+	 * @return array{enabled: bool, recipients: list<string>, matrix: array<string, array<string, bool>>}
+	 */
+	private function getHrNotificationConfig(): array
+	{
+		$enabled = $this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_HR_NOTIFICATIONS_ENABLED, '0') === '1';
+		$recipients = $this->parseHrRecipients(
+			$this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, '')
+		);
+		$decoded = json_decode(
+			$this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1, '[]'),
+			true
+		);
+
+		return [
+			'enabled' => $enabled,
+			'recipients' => $recipients,
+			'matrix' => $this->normalizeHrMatrix(is_array($decoded) ? $decoded : []),
+		];
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function parseHrRecipients(string $raw): array
+	{
+		$parts = explode(',', $raw);
+		$unique = [];
+		foreach ($parts as $part) {
+			$email = strtolower(trim($part));
+			if ($email === '') {
+				continue;
+			}
+			if (!$this->mailer->validateMailAddress($email)) {
+				continue;
+			}
+			$unique[$email] = true;
+			if (count($unique) >= self::MAX_HR_RECIPIENTS) {
+				break;
+			}
+		}
+		return array_keys($unique);
+	}
+
+	/**
+	 * @param array<string, mixed> $input
+	 * @return array<string, array<string, bool>>
+	 */
+	private function normalizeHrMatrix(array $input): array
+	{
+		$out = [];
+		foreach (Constants::ABSENCE_TYPES as $absenceType) {
+			$out[$absenceType] = [];
+			$inType = (isset($input[$absenceType]) && is_array($input[$absenceType])) ? $input[$absenceType] : [];
+			foreach (Constants::HR_NOTIFICATION_EVENTS as $eventKey) {
+				$out[$absenceType][$eventKey] = $this->toBool($inType[$eventKey] ?? false);
+			}
+		}
+		return $out;
+	}
+
+	private function shouldSendHrEvent(array $matrix, string $absenceType, string $eventKey): bool
+	{
+		return isset($matrix[$absenceType], $matrix[$absenceType][$eventKey]) && $matrix[$absenceType][$eventKey] === true;
+	}
+
+	private function toBool(mixed $value): bool
+	{
+		return $value === true || $value === 1 || $value === '1' || $value === 'true';
+	}
+
+	private function getHrEventLabel(string $eventKey): string
+	{
+		$map = [
+			'request_created' => $this->l10n->t('Request created'),
+			'substitute_approved' => $this->l10n->t('Substitute approved'),
+			'substitute_declined' => $this->l10n->t('Substitute declined'),
+			'manager_approved' => $this->l10n->t('Manager approved'),
+			'manager_rejected' => $this->l10n->t('Manager rejected'),
+			'employee_cancelled' => $this->l10n->t('Employee cancelled'),
+			'employee_shortened' => $this->l10n->t('Employee shortened'),
+		];
+		return $map[$eventKey] ?? $eventKey;
 	}
 }

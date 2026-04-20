@@ -106,7 +106,9 @@
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    padding-top: calc(var(--space-4) + 44px + var(--space-2)); /* Space for mobile menu button */
+    /* Keep first section clear of mobile menu button and iPhone safe area. */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 52px + var(--space-3));
+    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
     box-sizing: border-box;
   }
 
@@ -114,7 +116,11 @@
   .arbeitszeitcheck-content {
     width: 100%;
     max-width: 100%;
-    padding: var(--space-4);
+    padding:
+      var(--space-4)
+      calc(var(--space-4) + env(safe-area-inset-right, 0px))
+      calc(var(--space-6) + env(safe-area-inset-bottom, 0px))
+      calc(var(--space-4) + env(safe-area-inset-left, 0px));
     box-sizing: border-box;
   }
 
@@ -229,7 +235,7 @@
   .table-responsive .arbeitszeitcheck-table,
   .table-container .table,
   .table-container .arbeitszeitcheck-table {
-    min-width: 600px;
+    min-width: 520px;
   }
 
   /* Ensure all tables are wrapped in responsive containers */
@@ -353,6 +359,7 @@
   .action-buttons a {
     min-height: 44px;
     min-width: 44px;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Checkbox/radio: touch target is the label; keep control size normal */

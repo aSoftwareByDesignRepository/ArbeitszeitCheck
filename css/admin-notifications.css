@@ -1,0 +1,46 @@
+.admin-notifications-form .admin-notifications-matrix th,
+.admin-notifications-form .admin-notifications-matrix td {
+	vertical-align: middle;
+}
+
+.admin-notifications-form .table-responsive {
+	inline-size: 100%;
+	max-inline-size: 100%;
+	overflow-x: auto;
+	overflow-y: visible;
+	-webkit-overflow-scrolling: touch;
+}
+
+.admin-notifications-form .admin-notifications-matrix {
+	inline-size: max-content;
+	min-inline-size: 100%;
+}
+
+.admin-notifications-form .admin-notifications-matrix th {
+	white-space: nowrap;
+}
+
+.admin-notifications-form .form-checkbox--center {
+	display: flex;
+	justify-content: center;
+}
+
+.admin-notifications-form .admin-notifications-matrix input[type='checkbox'] {
+	inline-size: 1.125rem;
+	block-size: 1.125rem;
+}
+
+.admin-notifications-form textarea.form-input {
+	min-block-size: 5rem;
+}
+
+@media (max-width: 768px) {
+	.admin-notifications-form .admin-notifications-matrix {
+		min-inline-size: 52rem;
+	}
+
+	.admin-notifications-form .admin-notifications-matrix th,
+	.admin-notifications-form .admin-notifications-matrix td {
+		padding: 0.5rem;
+	}
+}

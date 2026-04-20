@@ -27,8 +27,13 @@ use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModel;
 use OCA\ArbeitszeitCheck\Db\HolidayMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLog;
+use OCA\ArbeitszeitCheck\Db\TariffRuleModuleMapper;
+use OCA\ArbeitszeitCheck\Db\TariffRuleSet;
+use OCA\ArbeitszeitCheck\Db\TariffRuleSetMapper;
+use OCA\ArbeitszeitCheck\Db\UserVacationPolicyAssignmentMapper;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
+use OCA\ArbeitszeitCheck\Service\VacationEntitlementEngine;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataDownloadResponse;
@@ -73,6 +78,12 @@ class AdminControllerTest extends TestCase
 	/** @var IAppConfig|\PHPUnit\Framework\MockObject\MockObject */
 	private $appConfig;
 
+	/** @var TariffRuleSetMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $tariffRuleSetMapper;
+
+	/** @var VacationEntitlementEngine|\PHPUnit\Framework\MockObject\MockObject */
+	private $vacationEntitlementEngine;
+
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
 	/** @var IGroupManager|\PHPUnit\Framework\MockObject\MockObject */
@@ -111,6 +122,16 @@ class AdminControllerTest extends TestCase
 		$vacationYearBalanceMapper = $this->createMock(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class);
 		$vacationAllocationService = $this->createMock(\OCA\ArbeitszeitCheck\Service\VacationAllocationService::class);
 		$vacationAllocationService->method('applyCapToOpeningBalance')->willReturnCallback(fn (float $d) => $d);
+		$this->tariffRuleSetMapper = $this->createMock(TariffRuleSetMapper::class);
+		$tariffRuleModuleMapper = $this->createMock(TariffRuleModuleMapper::class);
+		$userVacationPolicyAssignmentMapper = $this->createMock(UserVacationPolicyAssignmentMapper::class);
+		$this->vacationEntitlementEngine = $this->createMock(VacationEntitlementEngine::class);
+		$this->vacationEntitlementEngine->method('computeForDate')->willReturn([
+			'days' => 25.0,
+			'source' => 'manual',
+			'ruleSetId' => null,
+			'trace' => [],
+		]);
 
 		$this->controller = new AdminController(
 			'arbeitszeitcheck',
@@ -135,7 +156,11 @@ class AdminControllerTest extends TestCase
 			$holidayMapper,
 			$holidayCalendarService,
 			$vacationYearBalanceMapper,
-			$vacationAllocationService
+			$vacationAllocationService,
+			$this->tariffRuleSetMapper,
+			$tariffRuleModuleMapper,
+			$userVacationPolicyAssignmentMapper,
+			$this->vacationEntitlementEngine
 		);
 	}
 
@@ -166,6 +191,14 @@ class AdminControllerTest extends TestCase
 	{
 		$response = $this->controller->settings();
 
+		$this->assertInstanceOf(TemplateResponse::class, $response);
+	}
+
+	public function testNotificationsReturnsTemplate(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(fn (string $key, string $default = '') => $default);
+		$response = $this->controller->notifications();
 		$this->assertInstanceOf(TemplateResponse::class, $response);
 	}
 
@@ -214,12 +247,135 @@ class AdminControllerTest extends TestCase
 		$response = $this->controller->getAdminSettings();
 		$data = $response->getData();
 
-		$this->assertTrue($data['success']);
+		if (!($data['success'] ?? false)) {
+			$this->fail('Response: ' . json_encode($data));
+		}
 		$this->assertArrayHasKey('settings', $data);
 		$this->assertTrue($data['settings']['autoComplianceCheck']);
 		$this->assertTrue($data['settings']['missingClockInRemindersEnabled']);
 		$this->assertEquals(10.0, $data['settings']['maxDailyHours']);
 		$this->assertArrayHasKey('accessAllowedGroups', $data['settings']);
+	}
+
+	public function testGetNotificationSettingsReturnsNormalizedPayload(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function (string $key, string $default = '') {
+				if ($key === Constants::CONFIG_HR_NOTIFICATIONS_ENABLED) {
+					return '1';
+				}
+				if ($key === Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS) {
+					return 'hr@example.com, HR@example.com,invalid';
+				}
+				if ($key === Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1) {
+					return '{"vacation":{"request_created":true}}';
+				}
+				return $default;
+			});
+
+		$response = $this->controller->getNotificationSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertTrue($data['settings']['enabled']);
+		$this->assertSame('hr@example.com', $data['settings']['recipients']);
+		$this->assertTrue($data['settings']['matrix']['vacation']['request_created']);
+		$this->assertFalse($data['settings']['matrix']['vacation']['manager_rejected']);
+	}
+
+	public function testUpdateNotificationSettingsRejectsInvalidRecipient(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'enabled' => true,
+			'recipients' => ['ok@example.com', 'bad_mail'],
+			'matrix' => ['vacation' => ['request_created' => true]],
+		]);
+
+		$response = $this->controller->updateNotificationSettings();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+	}
+
+	public function testUpdateNotificationSettingsRejectsEnabledWithoutRecipients(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'enabled' => true,
+			'recipients' => [],
+			'matrix' => ['vacation' => ['request_created' => true]],
+		]);
+
+		$response = $this->controller->updateNotificationSettings();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+	}
+
+	public function testUpdateNotificationSettingsAcceptsMatrixJsonString(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'enabled' => true,
+			'recipients' => ['hr@example.com'],
+			'matrix' => '{"vacation":{"request_created":true}}',
+		]);
+
+		$captured = [];
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$captured): bool {
+				unset($lazy, $sensitive);
+				$captured[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$captured): string {
+				$key = (string)$key;
+				return $captured[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$matrix = json_decode($captured[Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1], true);
+		$this->assertTrue($matrix['vacation']['request_created']);
+	}
+
+	public function testUpdateNotificationSettingsPersistsNormalizedValues(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'enabled' => 'true',
+			'recipients' => ['HR@example.com', 'hr@example.com', 'ops@example.com'],
+			'matrix' => [
+				'vacation' => ['request_created' => true, 'manager_approved' => '1'],
+				'invalid_type' => ['request_created' => true],
+			],
+		]);
+
+		$captured = [];
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$captured): bool {
+				unset($lazy, $sensitive);
+				$captured[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$captured): string {
+				$key = (string)$key;
+				return $captured[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertArrayHasKey(Constants::CONFIG_HR_NOTIFICATIONS_ENABLED, $captured);
+		$this->assertArrayHasKey(Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, $captured);
+		$this->assertArrayHasKey(Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1, $captured);
+		$this->assertSame('1', $captured[Constants::CONFIG_HR_NOTIFICATIONS_ENABLED]);
+		$this->assertSame('hr@example.com,ops@example.com', $captured[Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS]);
+		$matrix = json_decode($captured[Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1], true);
+		$this->assertTrue($matrix['vacation']['request_created']);
+		$this->assertTrue($matrix['vacation']['manager_approved']);
+		$this->assertArrayNotHasKey('invalid_type', $matrix);
 	}
 
 	public function testGetAdminSettingsReturnsConfiguredAppAdminsAndAvailableList(): void
@@ -650,6 +806,35 @@ class AdminControllerTest extends TestCase
 		$this->assertEquals('Part-time', $data['model']['name']);
 	}
 
+	public function testCreateWorkingTimeModelAcceptsCommaDecimals(): void
+	{
+		$this->request->method('getParams')
+			->willReturn([
+				'name' => 'Tarifmodell',
+				'type' => 'full_time',
+				'weeklyHours' => '38,7',
+				'dailyHours' => '7,74',
+				'isDefault' => false
+			]);
+
+		$this->workingTimeModelMapper->method('findDefault')->willReturn(null);
+		$this->workingTimeModelMapper->expects($this->once())
+			->method('insert')
+			->with($this->callback(function (WorkingTimeModel $model): bool {
+				return abs($model->getWeeklyHours() - 38.7) < 0.0001
+					&& abs($model->getDailyHours() - 7.74) < 0.0001;
+			}))
+			->willReturnCallback(function (WorkingTimeModel $model) {
+				$model->setId(99);
+				return $model;
+			});
+
+		$response = $this->controller->createWorkingTimeModel();
+		$this->assertSame(Http::STATUS_CREATED, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+	}
+
 	/**
 	 * Test createWorkingTimeModel unsets other defaults when setting as default
 	 */
@@ -861,6 +1046,110 @@ class AdminControllerTest extends TestCase
 
 		$this->assertTrue($data['success']);
 		$this->assertNull($data['userWorkingTimeModel']);
+	}
+
+	public function testAssignVacationPolicyRejectsTariffRuleSetStartingAfterPolicyDate(): void
+	{
+		$userId = 'user1';
+		$user = $this->createMock(IUser::class);
+		$this->userManager->method('get')->with($userId)->willReturn($user);
+
+		$this->request->method('getParams')->willReturn([
+			'vacationMode' => Constants::VACATION_MODE_TARIFF_RULE_BASED,
+			'tariffRuleSetId' => 11,
+			'effectiveFrom' => '2026-05-01',
+		]);
+
+		$ruleSet = new TariffRuleSet();
+		$ruleSet->setId(11);
+		$ruleSet->setValidFrom(new \DateTime('2026-06-01'));
+		$ruleSet->setValidTo(null);
+		$ruleSet->setStatus(Constants::TARIFF_RULE_SET_STATUS_ACTIVE);
+		$this->tariffRuleSetMapper->expects($this->once())
+			->method('find')
+			->with(11)
+			->willReturn($ruleSet);
+
+		$response = $this->controller->assignVacationPolicy($userId);
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('Tariff rule set starts after policy effective date', $data['error']);
+	}
+
+	public function testActivateTariffRuleSetWithNextMonthAdjustsValidityAndClosesOverlap(): void
+	{
+		$ruleSet = new TariffRuleSet();
+		$ruleSet->setId(22);
+		$ruleSet->setTariffCode('TVOD');
+		$ruleSet->setActivationMode('next_month');
+		$ruleSet->setValidFrom(new \DateTime('2026-01-01'));
+		$ruleSet->setStatus(Constants::TARIFF_RULE_SET_STATUS_DRAFT);
+		$ruleSet->setUpdatedAt(new \DateTime('2026-04-01'));
+
+		$existingActive = new TariffRuleSet();
+		$existingActive->setId(21);
+		$existingActive->setTariffCode('TVOD');
+		$existingActive->setValidFrom(new \DateTime('2025-01-01'));
+		$existingActive->setValidTo(null);
+		$existingActive->setStatus(Constants::TARIFF_RULE_SET_STATUS_ACTIVE);
+		$existingActive->setUpdatedAt(new \DateTime('2026-04-01'));
+
+		$this->tariffRuleSetMapper->expects($this->once())
+			->method('find')
+			->with(22)
+			->willReturn($ruleSet);
+		$this->tariffRuleSetMapper->expects($this->once())
+			->method('findActiveByTariffCode')
+			->with('TVOD')
+			->willReturn([$existingActive]);
+		$this->tariffRuleSetMapper->expects($this->exactly(2))
+			->method('update');
+
+		$response = $this->controller->activateTariffRuleSet(22);
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertSame(Constants::TARIFF_RULE_SET_STATUS_ACTIVE, $ruleSet->getStatus());
+		$this->assertSame((new \DateTimeImmutable('first day of next month'))->format('Y-m-d'), $ruleSet->getValidFrom()->format('Y-m-d'));
+		$this->assertSame((new \DateTimeImmutable('first day of next month'))->modify('-1 day')->format('Y-m-d'), $existingActive->getValidTo()->format('Y-m-d'));
+	}
+
+	public function testSimulateVacationPolicyAcceptsDraftPolicy(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'userId' => 'alice',
+			'asOfDate' => '2026-04-20',
+			'draftPolicy' => [
+				'vacationMode' => Constants::VACATION_MODE_MANUAL_FIXED,
+				'manualDays' => '28,5',
+			],
+		]);
+
+		$this->vacationEntitlementEngine->expects($this->once())
+			->method('computeForPolicy')
+			->with(
+				'alice',
+				$this->callback(function ($policy) {
+					return $policy->getVacationMode() === Constants::VACATION_MODE_MANUAL_FIXED
+						&& $policy->getManualDays() === 28.5
+						&& $policy->getUserId() === 'alice';
+				}),
+				$this->isInstanceOf(\DateTimeInterface::class)
+			)
+			->willReturn([
+				'days' => 28.5,
+				'source' => 'manual',
+				'ruleSetId' => null,
+				'trace' => ['formula' => 'manual'],
+			]);
+
+		$response = $this->controller->simulateVacationPolicy();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+		$this->assertSame(28.5, $data['effectiveEntitlementDays']);
+		$this->assertSame('manual', $data['source']);
 	}
 
 	/**

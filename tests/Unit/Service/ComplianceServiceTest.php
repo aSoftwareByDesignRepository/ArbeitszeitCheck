@@ -20,6 +20,7 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
 use OCA\ArbeitszeitCheck\Service\ComplianceService;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\IConfig;
 use OCP\IL10N;
 use OCP\IUserManager;
@@ -59,6 +60,8 @@ class ComplianceServiceTest extends TestCase
 
 	/** @var IConfig|\PHPUnit\Framework\MockObject\MockObject */
 	private $config;
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
 
 	protected function setUp(): void
 	{
@@ -73,6 +76,8 @@ class ComplianceServiceTest extends TestCase
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->holidayCalendarService = $this->createMock(HolidayService::class);
 		$this->config = $this->createMock(IConfig::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
+		$this->permissionService->method('isUserAllowedByAccessGroups')->willReturn(true);
 		$this->config->method('getAppValue')->willReturnCallback(static function (string $app, string $key, string $default = ''): string {
 			return $default;
 		});
@@ -92,7 +97,8 @@ class ComplianceServiceTest extends TestCase
 			$this->l10n,
 			$this->notificationService,
 			$this->holidayCalendarService,
-			$this->config
+			$this->config,
+			$this->permissionService
 		);
 	}
 

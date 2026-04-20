@@ -25,6 +25,10 @@ use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureFeature;
+use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
+use OCA\ArbeitszeitCheck\Service\MonthClosureService;
+use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCA\ArbeitszeitCheck\Constants;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -65,6 +69,8 @@ class ManagerController extends Controller
 	private TimeEntryMapper $timeEntryMapper;
 	private IURLGenerator $urlGenerator;
 	private IConfig $config;
+	private MonthClosureGuard $monthClosureGuard;
+	private MonthClosureService $monthClosureService;
 
 	public function __construct(
 		string $appName,
@@ -86,7 +92,9 @@ class ManagerController extends Controller
 		NotificationService $notificationService,
 		TimeEntryMapper $timeEntryMapper,
 		IURLGenerator $urlGenerator,
-		IConfig $config
+		IConfig $config,
+		MonthClosureGuard $monthClosureGuard,
+		MonthClosureService $monthClosureService
 	) {
 		parent::__construct($appName, $request);
 		$this->absenceService = $absenceService;
@@ -106,6 +114,8 @@ class ManagerController extends Controller
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->urlGenerator = $urlGenerator;
 		$this->config = $config;
+		$this->monthClosureGuard = $monthClosureGuard;
+		$this->monthClosureService = $monthClosureService;
 		$this->setCspService($cspService);
 	}
 
@@ -217,6 +227,11 @@ class ManagerController extends Controller
 	 *
 	 * @return JSONResponse|null Returns a 403 response when access is denied, otherwise null.
 	 */
+	private function monthClosureEnabledParam(): bool
+	{
+		return MonthClosureFeature::isEnabledFromIConfig($this->config);
+	}
+
 	private function ensureManagerReadAccess(string $actorUserId, string $action): ?JSONResponse
 	{
 		if ($this->permissionService->isAdmin($actorUserId) || $this->permissionService->canAccessManagerDashboard($actorUserId)) {
@@ -228,6 +243,19 @@ class ManagerController extends Controller
 			'success' => false,
 			'error' => $this->l10n->t('Access denied. This area is available to managers and administrators only.'),
 		], Http::STATUS_FORBIDDEN);
+	}
+
+	/**
+	 * Same eligibility rules as {@see MonthClosureController::resolveClosureTargetUserId} for a named target
+	 * (self or an employee the actor may manage).
+	 */
+	private function actorMayDownloadRevisionPdfFor(string $actor, string $targetUserId): bool
+	{
+		if ($actor === $targetUserId) {
+			return true;
+		}
+
+		return $this->permissionService->canManageEmployee($actor, $targetUserId);
 	}
 
 	private function normalizeLimit(?int $limit): int
@@ -371,6 +399,7 @@ class ManagerController extends Controller
 				'showSubstitutionLink' => $showSubstitutionLink,
 				'showReportsLink' => true,
 				'showAdminNav' => $isAdmin,
+				'monthClosureEnabled' => $this->monthClosureEnabledParam(),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 			]);
@@ -392,6 +421,7 @@ class ManagerController extends Controller
 				'showSubstitutionLink' => false,
 				'showReportsLink' => true,
 				'showAdminNav' => false,
+				'monthClosureEnabled' => $this->monthClosureEnabledParam(),
 				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.'),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
@@ -444,6 +474,7 @@ class ManagerController extends Controller
 				'showSubstitutionLink' => $showSubstitutionLink,
 				'showReportsLink' => true,
 				'showAdminNav' => $isAdmin,
+				'monthClosureEnabled' => $this->monthClosureEnabledParam(),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 			]);
@@ -458,6 +489,7 @@ class ManagerController extends Controller
 				'showSubstitutionLink' => false,
 				'showReportsLink' => true,
 				'showAdminNav' => false,
+				'monthClosureEnabled' => $this->monthClosureEnabledParam(),
 				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.'),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
@@ -510,6 +542,7 @@ class ManagerController extends Controller
 				'showSubstitutionLink' => $showSubstitutionLink,
 				'showReportsLink' => true,
 				'showAdminNav' => $isAdmin,
+				'monthClosureEnabled' => $this->monthClosureEnabledParam(),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 			]);
@@ -524,11 +557,305 @@ class ManagerController extends Controller
 				'showSubstitutionLink' => false,
 				'showReportsLink' => true,
 				'showAdminNav' => false,
+				'monthClosureEnabled' => $this->monthClosureEnabledParam(),
 				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.'),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function monthClosuresPage(): TemplateResponse|\OCP\AppFramework\Http\RedirectResponse
+	{
+		if (!MonthClosureFeature::isEnabledFromIConfig($this->config)) {
+			return new \OCP\AppFramework\Http\RedirectResponse($this->urlGenerator->linkToRoute('arbeitszeitcheck.page.index'));
+		}
+
+		Util::addTranslations('arbeitszeitcheck');
+
+		Util::addStyle('arbeitszeitcheck', 'common/colors');
+		Util::addStyle('arbeitszeitcheck', 'common/typography');
+		Util::addStyle('arbeitszeitcheck', 'common/base');
+		Util::addStyle('arbeitszeitcheck', 'common/components');
+		Util::addStyle('arbeitszeitcheck', 'common/layout');
+		Util::addStyle('arbeitszeitcheck', 'common/utilities');
+		Util::addStyle('arbeitszeitcheck', 'common/accessibility');
+		Util::addStyle('arbeitszeitcheck', 'common/app-layout');
+		Util::addStyle('arbeitszeitcheck', 'common/responsive');
+		Util::addStyle('arbeitszeitcheck', 'navigation');
+		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'manager-month-closures');
+
+		Util::addScript('arbeitszeitcheck', 'common/utils');
+		Util::addScript('arbeitszeitcheck', 'common/messaging');
+		Util::addScript('arbeitszeitcheck', 'manager-month-closures');
+
+		try {
+			$actorUserId = $this->getUserId();
+			if (!$this->permissionService->isAdmin($actorUserId) && !$this->permissionService->canAccessManagerDashboard($actorUserId)) {
+				return new \OCP\AppFramework\Http\RedirectResponse($this->urlGenerator->linkToRoute('arbeitszeitcheck.page.index'));
+			}
+
+			$showSubstitutionLink = false;
+			try {
+				$pending = $this->absenceMapper->findSubstitutePendingForUser($actorUserId, 1, 0);
+				$showSubstitutionLink = \is_array($pending) && \count($pending) > 0;
+			} catch (\Throwable $e) {
+				$showSubstitutionLink = false;
+			}
+
+			$isAdmin = $this->permissionService->isAdmin($actorUserId);
+
+			$response = new TemplateResponse('arbeitszeitcheck', 'manager-month-closures', [
+				'showManagerLink' => true,
+				'showSubstitutionLink' => $showSubstitutionLink,
+				'showReportsLink' => true,
+				'showAdminNav' => $isAdmin,
+				'monthClosureEnabled' => $this->monthClosureEnabledParam(),
+				'isAdmin' => $isAdmin,
+				'revisionPdfAvailableMonthsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.manager.revisionPdfAvailableMonths'),
+				'revisionPdfUsersForMonthUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.manager.revisionPdfUsersForMonth'),
+				'pdfUrlBase' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.month_closure.pdf'),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
+			]);
+
+			return $this->configureCSP($response);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::monthClosuresPage',
+				['exception' => $e]
+			);
+			$response = new TemplateResponse('arbeitszeitcheck', 'manager-month-closures', [
+				'showManagerLink' => true,
+				'showSubstitutionLink' => false,
+				'showReportsLink' => true,
+				'showAdminNav' => false,
+				'monthClosureEnabled' => $this->monthClosureEnabledParam(),
+				'isAdmin' => false,
+				'revisionPdfAvailableMonthsUrl' => '',
+				'revisionPdfUsersForMonthUrl' => '',
+				'pdfUrlBase' => '',
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.'),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
+			]);
+
+			return $this->configureCSP($response);
+		}
+	}
+
+	/**
+	 * Searchable list of accounts the current user may download a revision-secure month PDF for.
+	 * Enforces the same rules as month-closure PDF routes (admin: directory search, filtered; manager: team only).
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function revisionPdfUsers(?string $search = null, ?int $limit = null): JSONResponse
+	{
+		try {
+			$actor = $this->getUserId();
+		} catch (\Exception $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Authentication required')], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if (!MonthClosureFeature::isEnabledFromIConfig($this->config)) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Month closure is disabled by the administrator.')], Http::STATUS_FORBIDDEN);
+		}
+
+		$accessResponse = $this->ensureManagerReadAccess($actor, 'revision_pdf_users');
+		if ($accessResponse !== null) {
+			return $accessResponse;
+		}
+
+		// HTTP GET passes query params via IRequest; method args may be unset depending on routing.
+		$reqSearch = $this->request->getParam('search');
+		if ($search === null && is_string($reqSearch)) {
+			$search = $reqSearch;
+		}
+		$reqLimit = $this->request->getParam('limit');
+		if ($limit === null && $reqLimit !== null && $reqLimit !== '') {
+			$limit = (int)$reqLimit;
+		}
+
+		$limit = $this->normalizeLimit($limit);
+		$query = $search !== null ? trim($search) : '';
+
+		try {
+			if ($this->permissionService->isAdmin($actor)) {
+				$fetchCap = (int)min(max($limit * 4, $limit), Constants::MAX_LIST_LIMIT);
+				$candidates = $this->userManager->search($query, $fetchCap, 0);
+				$usersData = [];
+				foreach ($candidates as $user) {
+					$uid = $user->getUID();
+					if (!$this->actorMayDownloadRevisionPdfFor($actor, $uid)) {
+						continue;
+					}
+					$usersData[] = [
+						'userId' => $uid,
+						'displayName' => $user->getDisplayName(),
+						'email' => $user->getEMailAddress(),
+					];
+					if (\count($usersData) >= $limit) {
+						break;
+					}
+				}
+
+				return new JSONResponse(['success' => true, 'users' => $usersData]);
+			}
+
+			$teamIds = $this->getTeamMemberIds($actor);
+			$rows = [];
+			foreach ($teamIds as $uid) {
+				$user = $this->userManager->get($uid);
+				if ($user === null) {
+					continue;
+				}
+				if (!$this->actorMayDownloadRevisionPdfFor($actor, $uid)) {
+					continue;
+				}
+				$dn = $user->getDisplayName() ?: $uid;
+				$email = $user->getEMailAddress() ?? '';
+				if ($query !== '') {
+					$needle = mb_strtolower($query);
+					$haystack = mb_strtolower($uid . "\n" . $dn . "\n" . $email);
+					if (mb_strpos($haystack, $needle) === false) {
+						continue;
+					}
+				}
+				$rows[] = [
+					'user' => $user,
+					'sort' => $dn,
+				];
+			}
+
+			usort($rows, static function (array $a, array $b): int {
+				return strcasecmp($a['sort'], $b['sort']);
+			});
+
+			$rows = array_slice($rows, 0, $limit);
+			$usersData = [];
+			foreach ($rows as $row) {
+				$user = $row['user'];
+				$usersData[] = [
+					'userId' => $user->getUID(),
+					'displayName' => $user->getDisplayName(),
+					'email' => $user->getEMailAddress(),
+				];
+			}
+
+			return new JSONResponse(['success' => true, 'users' => $usersData]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('revisionPdfUsers failed', ['exception' => $e, 'app' => 'arbeitszeitcheck']);
+
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Calendar months where at least one account in the actor’s scope has a finalized closure (actionable revision PDFs exist).
+	 * Admins: any finalized month in the app; managers: months where a team member has a finalized closure.
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function revisionPdfAvailableMonths(): JSONResponse
+	{
+		try {
+			$actor = $this->getUserId();
+		} catch (\Exception $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Authentication required')], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if (!MonthClosureFeature::isEnabledFromIConfig($this->config)) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Month closure is disabled by the administrator.')], Http::STATUS_FORBIDDEN);
+		}
+
+		$accessResponse = $this->ensureManagerReadAccess($actor, 'revision_pdf_available_months');
+		if ($accessResponse !== null) {
+			return $accessResponse;
+		}
+
+		try {
+			if ($this->permissionService->isAdmin($actor)) {
+				$months = $this->monthClosureService->listDistinctFinalizedYearMonthsGlobally();
+			} else {
+				$months = $this->monthClosureService->listDistinctFinalizedYearMonthsForUserIds($this->getTeamMemberIds($actor));
+			}
+
+			return new JSONResponse(['success' => true, 'months' => $months]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('revisionPdfAvailableMonths failed', ['exception' => $e, 'app' => 'arbeitszeitcheck']);
+
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Error')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Accounts the actor may download a revision PDF for, for one finalized calendar month (must match sealed data in the database).
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function revisionPdfUsersForMonth(): JSONResponse
+	{
+		try {
+			$actor = $this->getUserId();
+		} catch (\Exception $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Authentication required')], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if (!MonthClosureFeature::isEnabledFromIConfig($this->config)) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Month closure is disabled by the administrator.')], Http::STATUS_FORBIDDEN);
+		}
+
+		$accessResponse = $this->ensureManagerReadAccess($actor, 'revision_pdf_users_for_month');
+		if ($accessResponse !== null) {
+			return $accessResponse;
+		}
+
+		$year = (int)$this->request->getParam('year', 0);
+		$month = (int)$this->request->getParam('month', 0);
+		if ($year < 1970 || $year > 2100 || $month < 1 || $month > 12) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Invalid month')], Http::STATUS_BAD_REQUEST);
+		}
+
+		try {
+			$admin = $this->permissionService->isAdmin($actor);
+			$restrict = $admin ? null : $this->getTeamMemberIds($actor);
+			$candidateUids = $this->monthClosureService->listUserIdsWithFinalizedMonth($year, $month, $restrict);
+			$usersData = [];
+			foreach ($candidateUids as $uid) {
+				if (!$this->actorMayDownloadRevisionPdfFor($actor, $uid)) {
+					continue;
+				}
+				$user = $this->userManager->get($uid);
+				if ($user === null) {
+					continue;
+				}
+				$usersData[] = [
+					'userId' => $uid,
+					'displayName' => $user->getDisplayName() ?: $uid,
+					'email' => $user->getEMailAddress() ?? '',
+				];
+			}
+
+			usort($usersData, static function (array $a, array $b): int {
+				return strcasecmp($a['displayName'], $b['displayName']);
+			});
+
+			return new JSONResponse(['success' => true, 'users' => $usersData]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('revisionPdfUsersForMonth failed', ['exception' => $e, 'app' => 'arbeitszeitcheck']);
+
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
@@ -1394,6 +1721,15 @@ class ManagerController extends Controller
 				], Http::STATUS_FORBIDDEN);
 			}
 
+			try {
+				$this->monthClosureGuard->assertTimeEntryMutable($entry);
+			} catch (MonthFinalizedException $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+				], Http::STATUS_CONFLICT);
+			}
+
 			$oldValues = $entry->getSummary();
 
 			// Approve the correction - finalize the proposed changes
@@ -1556,6 +1892,15 @@ class ManagerController extends Controller
 				$justificationData['rejected_at'] = date('c');
 				$justificationData['rejected_by'] = $managerId;
 				$entry->setJustification(json_encode($justificationData));
+			}
+
+			try {
+				$this->monthClosureGuard->assertTimeEntryMutable($entry);
+			} catch (MonthFinalizedException $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+				], Http::STATUS_CONFLICT);
 			}
 
 			$updatedEntry = $this->timeEntryMapper->update($entry);

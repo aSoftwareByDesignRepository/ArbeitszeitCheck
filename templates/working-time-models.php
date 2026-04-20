@@ -46,6 +46,7 @@ $models = $_['models'] ?? [];
                         <th scope="col"><?php p($l->t('Typ')); ?></th>
                         <th scope="col"><?php p($l->t('Wochenstunden')); ?></th>
                         <th scope="col"><?php p($l->t('Tagesstunden')); ?></th>
+                        <th scope="col"><?php p($l->t('Arbeitstage/Woche')); ?></th>
                         <th scope="col"><?php p($l->t('Standard')); ?></th>
                         <th scope="col"><?php p($l->t('Aktionen')); ?></th>
                     </tr>
@@ -53,7 +54,7 @@ $models = $_['models'] ?? [];
                 <tbody id="models-tbody">
                     <?php if (empty($models)): ?>
                         <tr>
-                            <td colspan="6" class="text-center">
+                            <td colspan="7" class="text-center">
                                 <?php p($l->t('Keine Arbeitszeitmodelle vorhanden')); ?>
                             </td>
                         </tr>
@@ -77,6 +78,7 @@ $models = $_['models'] ?? [];
                                 </td>
                                 <td><?php p($model['weeklyHours']); ?>h</td>
                                 <td><?php p($model['dailyHours']); ?>h</td>
+                                <td><?php p((string)($model['workDaysPerWeek'] ?? 5)); ?></td>
                                 <td>
                                     <?php if ($model['isDefault']): ?>
                                         <span class="badge badge--success"><?php p($l->t('Ja')); ?></span>
@@ -138,6 +140,7 @@ $models = $_['models'] ?? [];
     window.ArbeitszeitCheck.l10n.type = <?php echo json_encode($l->t('Type'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.weeklyHours = <?php echo json_encode($l->t('Weekly Hours'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.dailyHours = <?php echo json_encode($l->t('Daily Hours'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.workDaysPerWeek = <?php echo json_encode($l->t('Work days per week'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.isDefault = <?php echo json_encode($l->t('Set as Default'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.fullTime = <?php echo json_encode($l->t('Full-Time'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.partTime = <?php echo json_encode($l->t('Part-Time'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -147,6 +150,7 @@ $models = $_['models'] ?? [];
     window.ArbeitszeitCheck.l10n.modelNameHelp = <?php echo json_encode($l->t('Enter a name for this work schedule (e.g., "Full-Time", "Part-Time")'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.weeklyHoursHelp = <?php echo json_encode($l->t('Decimal hours are allowed (e.g. 38.7 h/week under a collective agreement). Overtime targets use this weekly total spread across your working days.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.dailyHoursHelp = <?php echo json_encode($l->t('Usual hours per workday (e.g. 7.74 if 38.7 h/week over five days). Overtime compares worked time to the weekly contract hours × (working days ÷ 5).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.workDaysPerWeekHelp = <?php echo json_encode($l->t('Typical number of work days each week for this model (e.g. 4 for a four-day week). Used for model-based vacation entitlement calculations.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.modelCreated = <?php echo json_encode($l->t('Model created successfully'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.modelUpdated = <?php echo json_encode($l->t('Model updated successfully'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.failedToLoadModel = <?php echo json_encode($l->t('Failed to load model'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

@@ -13,10 +13,12 @@ Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instan
   - Ruhezeiten (11h) mit Blockierung von Clock‑In und manuellen Einträgen
   - Erkennung von Nacht‑, Sonn‑ und Feiertagsarbeit inkl. Dokumentation
 - **Abwesenheitsmanagement**: Urlaub, Krankheit, Sonderurlaub, unbezahlter Urlaub mit Genehmigungsworkflow; **Resturlaub / Vorjahres‑Tage** mit konfigurierbarem Ablaufdatum (z. B. 31.03.), FIFO‑Verbrauch, Admin‑Pflege und optional CSV‑Import (`occ arbeitszeitcheck:import-vacation-balance`)
+- **Urlaubsanspruch-Engine (neu erweitert)**: Pro Mitarbeitenden konfigurierbarer Modus (manuell, modellbasiert oder tarif-/regelbasiert), zeitlich gültige Policy-Zuordnungen, aktive Regelwerk-Versionierung und nachvollziehbare Berechnungs-Trace-Daten inkl. Snapshot-Ablage für Auswertungen
 - **Team‑ und Manager‑Ansicht**: Genehmigungen, Team‑Übersichten, Compliance‑Status
 - **Berichte & Exporte**: Tages/Wochen/Monats‑Reports, Overtime‑Reports, Absenzberichte, DATEV‑Export
 - **Audit‑Logs**: Lückenlose Nachvollziehbarkeit von Änderungen an Zeiten, Abwesenheiten und Einstellungen
 - **Revisionssichere Monatsfinalisierung** (optional, Admin‑Schalter): Kalendermonat mit Snapshot, Hash und PDF‑Nachweis abschließen; finalisierte Monate bleiben gesperrt, bis eine Administratorin/ein Administrator mit Begründung wieder öffnet
+- **Admin-Benachrichtigungen (neu erweitert)**: Eigene Admin-Seite für HR-E-Mail-Matrix (pro Abwesenheitstyp und Ereignis), Empfänger-Validierung/Deduplizierung sowie zentrale Steuerung von Carryover-/Rollover- und Substitutions-Mail-Einstellungen
 - **DSGVO‑Support**: Exporte, Löschkonzepte (unter Beachtung der gesetzlichen Aufbewahrung), DPIA‑/Verarbeitungsverzeichnis‑Vorlagen
 
 > **Rechtlicher Hinweis (DE):**  

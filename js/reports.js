@@ -36,11 +36,25 @@
 
 		// Helper: get request token safely
 		function getRequestToken() {
+			if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.getRequestToken === 'function') {
+				return window.ArbeitszeitCheckUtils.getRequestToken();
+			}
 			if (typeof OC !== 'undefined' && OC.requestToken) {
 				return OC.requestToken;
 			}
 			const head = document.querySelector('head');
 			return head ? head.getAttribute('data-requesttoken') || '' : '';
+		}
+
+		/** Build app URL when OC is not yet loaded (same pattern as arbeitszeitcheck-main.js). */
+		function generateAppUrl(path) {
+			if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.resolveUrl === 'function') {
+				return window.ArbeitszeitCheckUtils.resolveUrl(path);
+			}
+			if (typeof OC !== 'undefined' && typeof OC.generateUrl === 'function') {
+				return OC.generateUrl(path);
+			}
+			return path.startsWith('/') ? path : '/' + path;
 		}
 
 		// Helper: announce status to screen reader
@@ -105,7 +119,7 @@
 				return;
 			}
 
-			const url = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/teams');
+			const url = generateAppUrl('/apps/arbeitszeitcheck/api/admin/teams');
 			fetch(url, {
 				method: 'GET',
 				headers: { requesttoken: getRequestToken() },
@@ -140,7 +154,7 @@
 				return;
 			}
 
-			const url = OC.generateUrl('/apps/arbeitszeitcheck/api/manager/teams');
+			const url = generateAppUrl('/apps/arbeitszeitcheck/api/manager/teams');
 			fetch(url, {
 				method: 'GET',
 				headers: { requesttoken: getRequestToken() },

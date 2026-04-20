@@ -7,6 +7,27 @@
 
 const t = (s, opts) => (typeof window !== 'undefined' && window.t ? window.t('arbeitszeitcheck', s, opts || {}) : s);
 
+function validationResolveUrl(path) {
+  if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.resolveUrl === 'function') {
+    return window.ArbeitszeitCheckUtils.resolveUrl(path);
+  }
+  if (typeof window !== 'undefined' && window.OC && typeof window.OC.generateUrl === 'function') {
+    return window.OC.generateUrl(path);
+  }
+  return path;
+}
+
+function validationRequestToken() {
+  if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.getRequestToken === 'function') {
+    return window.ArbeitszeitCheckUtils.getRequestToken();
+  }
+  if (typeof window !== 'undefined' && window.OC && window.OC.requestToken) {
+    return window.OC.requestToken;
+  }
+  const head = document.querySelector('head');
+  return head ? (head.getAttribute('data-requesttoken') || '') : '';
+}
+
 const ArbeitszeitCheckValidation = {
   /**
    * Validate form field
@@ -484,15 +505,18 @@ const ArbeitszeitCheckValidation = {
     try {
       // Call backend API to check rest period
       const response = await fetch(
-        `/apps/arbeitszeitcheck/api/compliance/check-rest-period?` +
-        `userId=${encodeURIComponent(userId)}&` +
-        `startTime=${encodeURIComponent(startDateTime.toISOString())}` +
-        (excludeEntryId ? `&excludeEntryId=${excludeEntryId}` : ''),
+        validationResolveUrl(
+          `/apps/arbeitszeitcheck/api/compliance/check-rest-period?` +
+          `userId=${encodeURIComponent(userId)}&` +
+          `startTime=${encodeURIComponent(startDateTime.toISOString())}` +
+          (excludeEntryId ? `&excludeEntryId=${encodeURIComponent(String(excludeEntryId))}` : '')
+        ),
         {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json'
-          }
+            'requesttoken': validationRequestToken()
+          },
+          credentials: 'same-origin'
         }
       );
 
@@ -522,16 +546,19 @@ const ArbeitszeitCheckValidation = {
     
     try {
       const response = await fetch(
-        `/apps/arbeitszeitcheck/api/time-entries/check-overlap?` +
-        `userId=${encodeURIComponent(userId)}&` +
-        `startTime=${encodeURIComponent(startDateTime.toISOString())}&` +
-        `endTime=${encodeURIComponent(endDateTime.toISOString())}` +
-        (excludeEntryId ? `&excludeEntryId=${excludeEntryId}` : ''),
+        validationResolveUrl(
+          `/apps/arbeitszeitcheck/api/time-entries/check-overlap?` +
+          `userId=${encodeURIComponent(userId)}&` +
+          `startTime=${encodeURIComponent(startDateTime.toISOString())}&` +
+          `endTime=${encodeURIComponent(endDateTime.toISOString())}` +
+          (excludeEntryId ? `&excludeEntryId=${encodeURIComponent(String(excludeEntryId))}` : '')
+        ),
         {
           method: 'GET',
           headers: {
-            'Content-Type': 'application/json'
-          }
+            'requesttoken': validationRequestToken()
+          },
+          credentials: 'same-origin'
         }
       );
 

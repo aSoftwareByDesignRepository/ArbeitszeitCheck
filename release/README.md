@@ -4,7 +4,7 @@ This directory holds **release documentation** and optional **checksum list file
 
 ## Full workflow (Nextcloud App Store)
 
-See **[APPSTORE-RELEASE.md](./APPSTORE-RELEASE.md)** — build tarball, SHA-256/512, OpenSSL signature, what to paste in the store, **GitHub Release on the public app repo** (`aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`, not the private monorepo — see `ready2publish/REPOSITORY-LAYOUT.md`), and a **gitignore checklist** (what must not be committed).
+See **[APPSTORE-RELEASE.md](./APPSTORE-RELEASE.md)** — build tarball, SHA-256/512, OpenSSL signature, **required GitHub Release** on the public app repo (`aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`, not the private monorepo — see `ready2publish/REPOSITORY-LAYOUT.md`), App Store upload (same `.tar.gz` bytes), and a **gitignore checklist** (what must not be committed).
 
 ## Files in this folder
 
@@ -20,18 +20,32 @@ See **[APPSTORE-RELEASE.md](./APPSTORE-RELEASE.md)** — build tarball, SHA-256/
 - `arbeitszeitcheck-X.Y.Z.tar.gz.asc` (optional GPG)
 - `SIGNATURE-*.txt` / `APPSTORE-SIGNATURE*.txt` / `*.b64` if you save signature output locally
 
-## One-liner: build tarball (example version `1.1.6`)
+## One-liner: build signed tarball
 
 ```bash
-cd apps
-VERSION=1.1.6
-tar --exclude='arbeitszeitcheck/node_modules' \
-    --exclude='arbeitszeitcheck/node_modules.broken-*' \
-    --exclude='arbeitszeitcheck/test-results' \
-    --exclude='arbeitszeitcheck/.git' \
-    --exclude='arbeitszeitcheck/scripts' \
-    --exclude='arbeitszeitcheck/release/arbeitszeitcheck-*.tar.gz' \
-    -czf "arbeitszeitcheck/release/arbeitszeitcheck-${VERSION}.tar.gz" arbeitszeitcheck
+cd apps/arbeitszeitcheck
+make release-signed
 ```
+
+Output archive: `build/release/arbeitszeitcheck-X.Y.Z.tar.gz`.
+
+If `make release-signed` fails because host `occ` cannot run, use the Docker signing fallback in `APPSTORE-RELEASE.md` and continue with `release/arbeitszeitcheck-X.Y.Z.tar.gz`.
+
+Deploy from this signed tarball only. Do not rsync/copy a development checkout into production.
+`appinfo/signature.json` is generated during signing and is not source-controlled.
+
+## Production deploy helper
+
+Use `deploy-from-release.sh` to deploy the signed tarball safely:
+
+```bash
+cd apps/arbeitszeitcheck/release
+./deploy-from-release.sh \
+  --archive ../build/release/arbeitszeitcheck-X.Y.Z.tar.gz \
+  --target-apps-dir /var/www/html/custom_apps \
+  --occ /var/www/html/occ
+```
+
+The script validates archive layout, checks for forbidden development paths, requires `appinfo/signature.json`, deploys to `custom_apps/arbeitszeitcheck`, and runs `occ integrity:check-app`.
 
 Details and signing commands: **`APPSTORE-RELEASE.md`**.

@@ -12,6 +12,34 @@
     const Components = window.ArbeitszeitCheckComponents || {};
     const Messaging = window.ArbeitszeitCheckMessaging || {};
 
+    function parseLocalizedDecimal(value) {
+        if (value === null || value === undefined || value === '') {
+            return undefined;
+        }
+        const normalized = String(value).trim().replace(/\s+/g, '').replace(',', '.');
+        if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
+            return undefined;
+        }
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    function localizedEntitlementSourceLabel(source, t) {
+        if (source === 'manual') return t('sourceManual', 'Manual');
+        if (source === 'manual_exception') return t('sourceManualException', 'Manual exception');
+        if (source === 'simple_model') return t('sourceSimpleModel', 'Model based');
+        if (source === 'tariff') return t('sourceTariff', 'Tariff');
+        return source || t('notAvailable', 'Not available');
+    }
+
+    function formatPreviewDays(days) {
+        const parsed = Number(days);
+        if (!Number.isFinite(parsed)) {
+            return '0';
+        }
+        return Number.isInteger(parsed) ? String(parsed) : String(Math.round(parsed * 100) / 100);
+    }
+
     /** Prefer server-injected l10n; window.t may be unavailable. */
     function auMsg(key, englishFallback) {
         const v = window.ArbeitszeitCheck?.l10n?.[key];
@@ -25,6 +53,35 @@
     }
 
     let searchTimeout = null;
+
+    function buildApiUrl(path) {
+        if (Utils && typeof Utils.resolveUrl === 'function') {
+            return Utils.resolveUrl(path);
+        }
+        const oc = (typeof window !== 'undefined' && window.OC) || (typeof OC !== 'undefined' ? OC : null);
+        if (oc && typeof oc.generateUrl === 'function') {
+            return oc.generateUrl(path);
+        }
+        return path;
+    }
+
+    function fetchTariffRuleSets() {
+        return new Promise((resolve) => {
+            Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/tariff-rule-sets'), {
+                method: 'GET',
+                onSuccess: function(data) {
+                    if (data && data.success && Array.isArray(data.ruleSets)) {
+                        resolve(data.ruleSets);
+                        return;
+                    }
+                    resolve([]);
+                },
+                onError: function() {
+                    resolve([]);
+                }
+            });
+        });
+    }
 
     /**
      * Initialize users page
@@ -44,7 +101,7 @@
 
         const refreshBtn = Utils.$('#refresh-users');
         if (refreshBtn) {
-            Utils.on(refreshBtn, 'click', loadUsers);
+            Utils.on(refreshBtn, 'click', function() { loadUsers(''); });
         }
 
         const editButtons = Utils.$$('[data-action="edit-user"]');
@@ -73,10 +130,18 @@
         const tbody = Utils.$('#users-tbody');
         if (!tbody) return;
 
+        if (search && typeof search === 'object' && typeof search.preventDefault === 'function') {
+            search = '';
+        }
+        if (typeof search !== 'string') {
+            search = String(search || '');
+        }
+        search = search.trim();
+
         // Show loading
         tbody.innerHTML = '<tr><td colspan="7" class="text-center">' + auMsg('loadingEllipsis', 'Loading…') + '</td></tr>';
 
-        const url = '/apps/arbeitszeitcheck/api/admin/users' + (search ? '?search=' + encodeURIComponent(search) : '');
+        const url = buildApiUrl('/apps/arbeitszeitcheck/api/admin/users' + (search ? '?search=' + encodeURIComponent(search) : ''));
         
         Utils.ajax(url, {
             method: 'GET',
@@ -183,7 +248,7 @@
         if (!userId) return;
 
         // Load user details and show modal
-        Utils.ajax('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId), {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId)), {
             method: 'GET',
             onSuccess: function(data) {
                 if (data.success && data.user) {
@@ -209,7 +274,9 @@
             return;
         }
         const models = Array.isArray(user.availableWorkingTimeModels) ? user.availableWorkingTimeModels : [];
-        showEditUserModalWithModels(user, models);
+        fetchTariffRuleSets().then((ruleSets) => {
+            showEditUserModalWithModels(user, models, ruleSets);
+        });
     }
 
     /**
@@ -245,7 +312,7 @@
             modal.querySelector('.modal-close').setAttribute('aria-label', closeLabel);
         }
 
-        Utils.ajax('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model/history', {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model/history'), {
             method: 'GET',
             onSuccess: function(data) {
                 const loadingEl = document.getElementById('history-modal-loading');
@@ -304,13 +371,14 @@
     /**
      * Show edit user modal with working time models loaded
      */
-    function showEditUserModalWithModels(user, models) {
+    function showEditUserModalWithModels(user, models, ruleSets) {
         const t = (key, english) => auMsg(key, english);
         const title = t('editUser', 'Edit User') + ': ' + (user.displayName || user.userId);
         const saveLabel = t('save', 'Save');
         const cancelLabel = t('cancel', 'Cancel');
         const modelLabel = t('workingTimeModel', 'Working Time Model');
         const vacationDaysLabel = t('vacationDaysPerYear', 'Vacation Days Per Year');
+        const policyModeLabel = t('vacationModeSimpleLabel', 'How should annual vacation be calculated?');
         const carryoverLabel = t('vacationCarryoverLabel', 'Vacation carryover (opening balance)');
         const carryoverYearLabel = t('vacationCarryoverYearLabel', 'Year for carryover balance');
         const startDateLabel = t('startDate', 'Start Date');
@@ -330,6 +398,12 @@
         const startVal = (startIso && convertISOToEuropean(startIso)) || '';
         const endVal = (endIso && convertISOToEuropean(endIso)) || '';
         const currentState = user.germanState || '';
+        const policy = user.vacationPolicy || {};
+        const currentMode = policy.vacationMode || 'manual_fixed';
+        const manualDays = policy.manualDays != null ? String(policy.manualDays) : '';
+        const ruleSetId = policy.tariffRuleSetId != null ? String(policy.tariffRuleSetId) : '';
+        const overrideReason = policy.overrideReason || '';
+        const entitlementPreview = user.entitlementPreview || null;
 
         let modelOptions = `<option value="">${noModelLabel}</option>`;
         models.forEach(model => {
@@ -344,9 +418,31 @@
             stateOptions += `<option value="${Utils.escapeHtml(state.code)}" ${selected}>${Utils.escapeHtml(state.label)}</option>`;
         });
 
+        let tariffRuleSetOptions = `<option value="">${Utils.escapeHtml(t('notAvailable', 'Not available'))}</option>`;
+        (Array.isArray(ruleSets) ? ruleSets : []).forEach(ruleSet => {
+            const id = String(ruleSet.id || '');
+            if (!id) {
+                return;
+            }
+            const selected = ruleSetId === id ? 'selected' : '';
+            const status = ruleSet.status ? ` (${String(ruleSet.status)})` : '';
+            const label = String(ruleSet.displayName || `${ruleSet.tariffCode || ''} ${ruleSet.version || ''}`) + status;
+            tariffRuleSetOptions += `<option value="${Utils.escapeHtml(id)}" ${selected}>${Utils.escapeHtml(label)}</option>`;
+        });
+
         const formContent = `
             <form id="edit-user-form" class="form">
                 <input type="hidden" id="user-id" name="userId" value="${Utils.escapeHtml(user.userId)}">
+                <div class="user-edit-steps" role="note">
+                    <p class="user-edit-steps__title">${Utils.escapeHtml(t('quickSetupTitle', 'Quick setup in 3 steps'))}</p>
+                    <ol class="user-edit-steps__list">
+                        <li>${Utils.escapeHtml(t('quickSetupStepWorkSchedule', 'Choose work schedule and state for holidays'))}</li>
+                        <li>${Utils.escapeHtml(t('quickSetupStepMode', 'Choose vacation calculation mode'))}</li>
+                        <li>${Utils.escapeHtml(t('quickSetupStepPreview', 'Check preview, then save'))}</li>
+                    </ol>
+                </div>
+                <section class="user-edit-section" aria-labelledby="user-edit-assignment-heading">
+                    <h3 id="user-edit-assignment-heading" class="user-edit-section__heading">${Utils.escapeHtml(t('workSchedule', 'Work schedule'))}</h3>
                 <div class="form-group">
                     <label for="user-model" class="form-label">${modelLabel}</label>
                     <select id="user-model" name="workingTimeModelId" class="form-select" aria-describedby="user-model-help">
@@ -361,10 +457,47 @@
                     </select>
                     <p id="user-german-state-help" class="form-help">${germanStateHelp}</p>
                 </div>
+                </section>
+                <section class="user-edit-section" aria-labelledby="user-edit-vacation-heading">
+                    <h3 id="user-edit-vacation-heading" class="user-edit-section__heading">${Utils.escapeHtml(t('vacationDays', 'Vacation days'))}</h3>
                 <div class="form-group">
                     <label for="user-vacation-days" class="form-label">${vacationDaysLabel}</label>
                     <input type="number" id="user-vacation-days" name="vacationDaysPerYear" class="form-input" min="0" max="365" value="${vacation}" aria-describedby="user-vacation-help">
                     <p id="user-vacation-help" class="form-help">${t('vacationDaysHelp', 'Number of vacation days per year (standard in Germany: 25 days)')}</p>
+                </div>
+                <div class="form-group">
+                    <label for="user-vacation-mode" class="form-label">${policyModeLabel}</label>
+                    <select id="user-vacation-mode" name="vacationMode" class="form-select" aria-describedby="user-vacation-mode-help">
+                        <option value="manual_fixed" ${currentMode === 'manual_fixed' ? 'selected' : ''}>${t('manualFixedSimple', 'Fixed value per person')}</option>
+                        <option value="model_based_simple" ${currentMode === 'model_based_simple' ? 'selected' : ''}>${t('modelBasedSimple', 'Automatic from work schedule')}</option>
+                        <option value="tariff_rule_based" ${currentMode === 'tariff_rule_based' ? 'selected' : ''}>${t('tariffRuleBased', 'Tariff rule')}</option>
+                        <option value="manual_exception" ${currentMode === 'manual_exception' ? 'selected' : ''}>${t('manualExceptionSimple', 'Manual exception (with reason)')}</option>
+                    </select>
+                    <p id="user-vacation-mode-help" class="form-help">${t('vacationModeHelpSimple', 'Use fixed value, automatic from schedule, or tariff rule. Exception mode requires a reason.')}</p>
+                </div>
+                <div class="form-group">
+                    <label for="user-manual-days" class="form-label">${t('manualDays', 'Manual annual days')}</label>
+                    <input type="text" id="user-manual-days" name="manualDays" class="form-input" inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" value="${Utils.escapeHtml(manualDays)}">
+                    <p class="form-help">${t('manualDaysHelp', 'Example: 30 or 24.5 days per year')}</p>
+                </div>
+                <div class="form-group">
+                    <label for="user-tariff-rule-set-id" class="form-label">${t('tariffRuleSetLabel', 'Tariff rule set')}</label>
+                    <select id="user-tariff-rule-set-id" name="tariffRuleSetId" class="form-select">
+                        ${tariffRuleSetOptions}
+                    </select>
+                    <p class="form-help">${t('tariffRuleSetHelp', 'Choose the active tariff rule set that should apply to this person.')}</p>
+                </div>
+                <div class="form-group">
+                    <label for="user-override-reason" class="form-label">${t('overrideReason', 'Override reason')}</label>
+                    <textarea id="user-override-reason" name="overrideReason" class="form-textarea" rows="2">${Utils.escapeHtml(overrideReason)}</textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">${t('effectiveEntitlement', 'Effective entitlement preview')}</label>
+                    <div id="user-entitlement-preview" class="entitlement-preview" aria-live="polite">
+                        <p class="entitlement-preview__value">${entitlementPreview ? Utils.escapeHtml(formatPreviewDays(entitlementPreview.days) + ' ' + t('vacationDays', 'vacation days')) : Utils.escapeHtml(t('notAvailable', 'Not available'))}</p>
+                        <p class="entitlement-preview__meta">${entitlementPreview ? Utils.escapeHtml(localizedEntitlementSourceLabel(entitlementPreview.source, t)) : ''}</p>
+                        <p class="entitlement-preview__trace">${entitlementPreview?.calculationTrace ? Utils.escapeHtml(JSON.stringify(entitlementPreview.calculationTrace)) : ''}</p>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="user-vacation-carryover" class="form-label">${carryoverLabel}</label>
@@ -376,6 +509,9 @@
                     <input type="number" id="user-vacation-carryover-year" name="vacationCarryoverYear" class="form-input" min="2000" max="2100" step="1" value="${carryYear}" aria-describedby="user-carryover-year-help">
                     <p id="user-carryover-year-help" class="form-help">${t('vacationCarryoverYearHelp', 'The calendar year this opening balance applies to (same year as in employees’ vacation statistics—usually the current year). When a new year starts or after migrating from another system, set the Resturlaub opening balance for that year here or use the CSV import command; the app does not roll balances forward automatically.')}</p>
                 </div>
+                </section>
+                <section class="user-edit-section" aria-labelledby="user-edit-validity-heading">
+                    <h3 id="user-edit-validity-heading" class="user-edit-section__heading">${Utils.escapeHtml(t('validFrom', 'Valid from'))}</h3>
                 <div class="form-group">
                     <label for="user-start-date" class="form-label">${startDateLabel}</label>
                     <input type="text" id="user-start-date" name="startDate" class="form-input datepicker-input" placeholder="${datePlaceholder}" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${startVal}" autocomplete="off">
@@ -385,6 +521,7 @@
                     <input type="text" id="user-end-date" name="endDate" class="form-input datepicker-input" placeholder="${datePlaceholder}" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${endVal}" autocomplete="off">
                     <p class="form-help">${t('endDateHelp', 'Leave empty if the assignment has no end date')}</p>
                 </div>
+                </section>
                 <div class="form-actions">
                     <button type="button" class="btn btn--secondary" data-action="close-modal">${cancelLabel}</button>
                     <button type="submit" class="btn btn--primary">${saveLabel}</button>
@@ -422,6 +559,143 @@
             });
         }
 
+        const vacationModeEl = document.getElementById('user-vacation-mode');
+        const manualDaysEl = document.getElementById('user-manual-days');
+        const tariffRuleSetEl = document.getElementById('user-tariff-rule-set-id');
+        const overrideReasonEl = document.getElementById('user-override-reason');
+        const modelEl = document.getElementById('user-model');
+        const previewEl = document.getElementById('user-entitlement-preview');
+        const startDateEl = document.getElementById('user-start-date');
+        let previewTimer = null;
+        const dpForPreview = window.ArbeitszeitCheckDatepicker;
+        const previewToISO = dpForPreview ? dpForPreview.convertEuropeanToISO : function(s) { return s; };
+
+        const renderEntitlementPreview = function(days, sourceLabel, traceText) {
+            if (!previewEl) {
+                return;
+            }
+            const value = previewEl.querySelector('.entitlement-preview__value');
+            const meta = previewEl.querySelector('.entitlement-preview__meta');
+            const trace = previewEl.querySelector('.entitlement-preview__trace');
+            if (value) {
+                value.textContent = `${formatPreviewDays(days)} ${t('vacationDays', 'vacation days')}`;
+            }
+            if (meta) {
+                meta.textContent = sourceLabel || '';
+            }
+            if (trace) {
+                trace.textContent = traceText || '';
+            }
+        };
+
+        const getSelectedModel = function() {
+            const selectedId = parseInt(String(modelEl?.value || ''), 10);
+            if (!Number.isFinite(selectedId)) {
+                return null;
+            }
+            return (Array.isArray(models) ? models : []).find((m) => Number(m.id) === selectedId) || null;
+        };
+
+        const computeLocalPreview = function() {
+            const mode = String(vacationModeEl?.value || 'manual_fixed');
+            const manualDaysVal = parseLocalizedDecimal(manualDaysEl?.value);
+            if (mode === 'manual_fixed' || mode === 'manual_exception') {
+                const days = Number.isFinite(manualDaysVal) ? manualDaysVal : 0;
+                renderEntitlementPreview(days, localizedEntitlementSourceLabel(mode === 'manual_exception' ? 'manual_exception' : 'manual', t), t('previewTraceManual', 'Uses manually entered annual days.'));
+                return;
+            }
+            if (mode === 'model_based_simple') {
+                const selectedModel = getSelectedModel();
+                const workDaysPerWeek = Number(selectedModel?.workDaysPerWeek || 5);
+                const days = 30 * (workDaysPerWeek / 5);
+                renderEntitlementPreview(days, localizedEntitlementSourceLabel('simple_model', t), t('previewTraceModel', 'Formula: 30 × (work days per week ÷ 5).'));
+                return;
+            }
+            if (mode === 'tariff_rule_based' && !(tariffRuleSetEl?.value)) {
+                renderEntitlementPreview(0, t('sourceTariff', 'Tariff'), t('previewSelectTariffRuleSet', 'Select a tariff rule set to see the preview.'));
+                return;
+            }
+
+            const payload = {
+                userId: user.userId,
+                asOfDate: (startDateEl?.value && previewToISO(startDateEl.value)) || new Date().toISOString().slice(0, 10),
+                draftPolicy: {
+                    vacationMode: mode,
+                    manualDays: parseLocalizedDecimal(manualDaysEl?.value),
+                    tariffRuleSetId: tariffRuleSetEl?.value ? parseInt(String(tariffRuleSetEl.value), 10) : null,
+                    overrideReason: (overrideReasonEl?.value || '').toString()
+                }
+            };
+
+            Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/vacation-policy/simulate'), {
+                method: 'POST',
+                data: payload,
+                onSuccess: function(resp) {
+                    if (!resp || !resp.success) {
+                        renderEntitlementPreview(0, t('notAvailable', 'Not available'), resp?.error || t('previewTraceError', 'Preview unavailable.'));
+                        return;
+                    }
+                    const src = localizedEntitlementSourceLabel(resp.source, t);
+                    let traceText = '';
+                    const trace = resp.calculationTrace || {};
+                    if (trace?.formula && trace?.inputs) {
+                        const workDays = trace.inputs.work_days_per_week;
+                        const referenceDays = trace.inputs.reference_days;
+                        const referenceWeekDays = trace.inputs.reference_week_days;
+                        if (workDays && referenceDays && referenceWeekDays) {
+                            traceText = `${trace.formula} (${referenceDays}, ${workDays}/${referenceWeekDays})`;
+                        } else {
+                            traceText = String(trace.formula);
+                        }
+                    }
+                    renderEntitlementPreview(resp.effectiveEntitlementDays || 0, src, traceText);
+                },
+                onError: function() {
+                    renderEntitlementPreview(0, t('notAvailable', 'Not available'), t('previewTraceError', 'Preview unavailable.'));
+                }
+            });
+        };
+
+        const triggerPreview = function() {
+            if (previewTimer) {
+                clearTimeout(previewTimer);
+            }
+            previewTimer = setTimeout(computeLocalPreview, 220);
+        };
+
+        const toggleVacationModeFields = function() {
+            const mode = String(vacationModeEl?.value || 'manual_fixed');
+            const isManual = mode === 'manual_fixed' || mode === 'manual_exception';
+            const isTariff = mode === 'tariff_rule_based';
+            if (manualDaysEl) {
+                manualDaysEl.disabled = !isManual;
+                manualDaysEl.closest('.form-group')?.classList.toggle('is-disabled', !isManual);
+            }
+            if (tariffRuleSetEl) {
+                tariffRuleSetEl.disabled = !isTariff;
+                tariffRuleSetEl.closest('.form-group')?.classList.toggle('is-disabled', !isTariff);
+            }
+            if (overrideReasonEl) {
+                const needsReason = mode === 'manual_exception';
+                overrideReasonEl.disabled = !needsReason;
+                overrideReasonEl.required = needsReason;
+                overrideReasonEl.closest('.form-group')?.classList.toggle('is-disabled', !needsReason);
+            }
+            triggerPreview();
+        };
+        if (vacationModeEl) {
+            vacationModeEl.addEventListener('change', toggleVacationModeFields);
+            toggleVacationModeFields();
+        }
+        [manualDaysEl, tariffRuleSetEl, overrideReasonEl, modelEl, startDateEl].forEach((el) => {
+            if (!el) {
+                return;
+            }
+            el.addEventListener('input', triggerPreview);
+            el.addEventListener('change', triggerPreview);
+        });
+        triggerPreview();
+
         const cancelBtn = modal.querySelector('[data-action="close-modal"]');
         if (cancelBtn) {
             cancelBtn.addEventListener('click', function() { Components.closeModal(modal); });
@@ -445,24 +719,53 @@
             workingTimeModelId: formData.get('workingTimeModelId') ? parseInt(formData.get('workingTimeModelId')) : null,
             vacationDaysPerYear: formData.get('vacationDaysPerYear') ? parseInt(formData.get('vacationDaysPerYear')) : null,
             vacationCarryoverDays: formData.get('vacationCarryoverDays') !== null && formData.get('vacationCarryoverDays') !== ''
-                ? parseFloat(String(formData.get('vacationCarryoverDays')))
+                ? parseLocalizedDecimal(formData.get('vacationCarryoverDays'))
                 : undefined,
             vacationCarryoverYear: formData.get('vacationCarryoverYear') ? parseInt(String(formData.get('vacationCarryoverYear')), 10) : undefined,
             startDate: toISO(formData.get('startDate') || '') || null,
             endDate: toISO(formData.get('endDate') || '') || null,
             germanState: (formData.get('germanState') || '').toString()
         };
+        const vacationPolicyPayload = {
+            vacationMode: (formData.get('vacationMode') || 'manual_fixed').toString(),
+            manualDays: parseLocalizedDecimal(formData.get('manualDays')),
+            tariffRuleSetId: formData.get('tariffRuleSetId') ? parseInt(String(formData.get('tariffRuleSetId')), 10) : null,
+            overrideReason: (formData.get('overrideReason') || '').toString(),
+            effectiveFrom: data.startDate || new Date().toISOString().slice(0, 10),
+            effectiveTo: data.endDate || null
+        };
+        if (vacationPolicyPayload.vacationMode !== 'manual_fixed' && vacationPolicyPayload.vacationMode !== 'manual_exception') {
+            vacationPolicyPayload.manualDays = null;
+        }
+        if (vacationPolicyPayload.vacationMode !== 'tariff_rule_based') {
+            vacationPolicyPayload.tariffRuleSetId = null;
+        }
+        if (vacationPolicyPayload.vacationMode !== 'manual_exception') {
+            vacationPolicyPayload.overrideReason = '';
+        }
 
-        Utils.ajax('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model', {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/working-time-model'), {
             method: 'PUT',
             data: data,
             onSuccess: function(response) {
                 if (response.success) {
-                    const successMsg = auMsg('userUpdated', 'User updated successfully');
-                    Messaging.showSuccess(successMsg);
-                    Components.closeModal(document.getElementById('edit-user-modal'));
-                    // Reload users list
-                    loadUsers();
+                    Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/vacation-policy'), {
+                        method: 'PUT',
+                        data: vacationPolicyPayload,
+                        onSuccess: function(policyResponse) {
+                            if (!policyResponse.success) {
+                                Messaging.showError(policyResponse.error || auMsg('failedToUpdateUser', 'Failed to update user'));
+                                return;
+                            }
+                            const successMsg = auMsg('userUpdated', 'User updated successfully');
+                            Messaging.showSuccess(successMsg);
+                            Components.closeModal(document.getElementById('edit-user-modal'));
+                            loadUsers();
+                        },
+                        onError: function(_error) {
+                            Messaging.showError(auMsg('failedToUpdateUser', 'Failed to update user'));
+                        }
+                    });
                 } else {
                     const errorMsg = response.error || auMsg('failedToUpdateUser', 'Failed to update user');
                     Messaging.showError(errorMsg);

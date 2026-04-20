@@ -30,6 +30,7 @@ class ReportingService
 	private IUserManager $userManager;
 	private IL10N $l10n;
 	private HolidayService $holidayCalendarService;
+	private PermissionService $permissionService;
 
 	public function __construct(
 		TimeEntryMapper $timeEntryMapper,
@@ -38,7 +39,8 @@ class ReportingService
 		OvertimeService $overtimeService,
 		IUserManager $userManager,
 		IL10N $l10n,
-		HolidayService $holidayCalendarService
+		HolidayService $holidayCalendarService,
+		PermissionService $permissionService
 	) {
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->absenceMapper = $absenceMapper;
@@ -47,6 +49,7 @@ class ReportingService
 		$this->userManager = $userManager;
 		$this->l10n = $l10n;
 		$this->holidayCalendarService = $holidayCalendarService;
+		$this->permissionService = $permissionService;
 	}
 
 	/**
@@ -98,6 +101,9 @@ class ReportingService
 			$userIds = [];
 			$this->userManager->callForAllUsers(function ($user) use (&$userIds) {
 				if ($user->isEnabled()) {
+					if (!$this->permissionService->isUserAllowedByAccessGroups($user->getUID())) {
+						return;
+					}
 					$userIds[] = $user->getUID();
 				}
 			});
@@ -211,6 +217,9 @@ class ReportingService
 			$userIds = [];
 			$this->userManager->callForAllUsers(function ($user) use (&$userIds) {
 				if ($user->isEnabled()) {
+					if (!$this->permissionService->isUserAllowedByAccessGroups($user->getUID())) {
+						return;
+					}
 					$userIds[] = $user->getUID();
 				}
 			});
@@ -324,6 +333,9 @@ class ReportingService
 			$userIds = [];
 			$this->userManager->callForAllUsers(function ($user) use (&$userIds) {
 				if ($user->isEnabled()) {
+					if (!$this->permissionService->isUserAllowedByAccessGroups($user->getUID())) {
+						return;
+					}
 					$userIds[] = $user->getUID();
 				}
 			});
@@ -435,6 +447,9 @@ class ReportingService
 			$userIds = [];
 			$this->userManager->callForAllUsers(function ($user) use (&$userIds) {
 				if ($user->isEnabled()) {
+					if (!$this->permissionService->isUserAllowedByAccessGroups($user->getUID())) {
+						return;
+					}
 					$userIds[] = $user->getUID();
 				}
 			});

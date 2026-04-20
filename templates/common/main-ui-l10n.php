@@ -37,6 +37,8 @@ $mainUiStringIds = [
 	'Home Office',
 	'Business Trip',
 	'Absence',
+	'Clock out and end your working day?',
+	'Your time entry will be finalized. To pause and continue working, use "Start Break" instead.',
 ];
 
 $mainUiStrings = [];

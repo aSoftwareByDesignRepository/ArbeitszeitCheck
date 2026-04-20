@@ -11,7 +11,7 @@ This folder contains the documentation included with ArbeitszeitCheck for admini
 | [GDPR-Compliance-Guide.en.md](GDPR-Compliance-Guide.en.md) | How to operate ArbeitszeitCheck in a GDPR-compliant way (legal basis, data minimization, employee rights, retention) |
 | [Compliance-Implementation.en.md](Compliance-Implementation.en.md) | Technical implementation of ArbZG compliance checks (breaks, rest periods, real-time vs batch) |
 | [Compliance-Implementation.de.md](Compliance-Implementation.de.md) | Same content in German |
-| [Developer-Documentation.en.md](Developer-Documentation.en.md) | Architecture, development setup, contribution guidelines, and technical notes (including vacation carryover / Resturlaub, assignable-manager / auto-approval semantics, centralized frontend URL/security guardrails, and mobile/iPhone UX implementation notes) |
+| [Developer-Documentation.en.md](Developer-Documentation.en.md) | Architecture, development setup, contribution guidelines, and technical notes (including vacation carryover / Resturlaub, assignable-manager / auto-approval semantics, HR notification matrix, vacation entitlement policy engine with tariff rule sets/snapshots, centralized frontend URL/security guardrails, and mobile/iPhone UX implementation notes) |
 
 ## Legal Notice
 

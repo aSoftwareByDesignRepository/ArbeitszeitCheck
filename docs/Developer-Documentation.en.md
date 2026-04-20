@@ -1,7 +1,7 @@
 # Developer Documentation – ArbeitszeitCheck
 
-**Version:** 1.1.14  
-**Last Updated:** 2026-04-14
+**Version:** 1.1.15-dev  
+**Last Updated:** 2026-04-20
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.
 
@@ -20,7 +20,9 @@ This guide is for developers who want to contribute to ArbeitszeitCheck or integ
 9. [Code Standards](#code-standards)
 10. [Security Guidelines](#security-guidelines)
 11. [Vacation carryover (Resturlaub)](#vacation-carryover-resturlaub)
-12. [Revision-safe month closure](#revision-safe-month-closure)
+12. [HR notification matrix and admin notifications](#hr-notification-matrix-and-admin-notifications)
+13. [Vacation entitlement policy engine (tariff rules)](#vacation-entitlement-policy-engine-tariff-rules)
+14. [Revision-safe month closure](#revision-safe-month-closure)
 
 ---
 
@@ -382,6 +384,10 @@ All tables use the `at_` prefix (short for arbeitszeitcheck):
 - `oc_at_audit` - Audit logs
 - `oc_at_month_closure` - Per user and calendar month: revision-safe finalization (status, canonical snapshot JSON, SHA-256 hash chain fields, version)
 - `oc_at_month_closure_revision` - Append-only sealed rows per closure version (immutable copy for audit trail)
+- `oc_at_tariff_rule_sets` - Versioned tariff rule set metadata (code, validity window, activation mode, status)
+- `oc_at_tariff_rule_modules` - Ordered module blocks per rule set (`base_formula`, `additional_entitlements`, `deductions`, `rounding_rule`, `pro_rata_rule`)
+- `oc_at_user_vacation_policies` - Per-user vacation policy assignments with effective date range and selected mode (`manual_fixed`, `model_based_simple`, `tariff_rule_based`, `manual_exception`)
+- `oc_at_entitlement_snapshots` - Stored entitlement computation snapshots (as-of date, source, rule-set reference, calculation trace, policy fingerprint)
 
 There is **no** `at_absence_calendar` table in current releases: migration `Version1012Date20260406120000` drops it. ArbeitszeitCheck does **not** integrate with the Nextcloud **Calendar** app (no CalDAV, no `OCA\Calendar` API). The in-app month view and optional email `.ics` attachments are separate from Calendar-app sync.
 
@@ -457,6 +463,114 @@ php occ arbeitszeitcheck:vacation-rollover --dry-run
 **Privacy:** `UserDeletedListener` deletes all `at_vacation_year_balance` and `at_vacation_rollover_log` rows for the removed user id.
 
 **Known limitations (product):** Entitlement per historical year uses the **current** working time model assignment unless extended later; concurrent pending vacation requests are not “soft reserved” in the DB—approval-time validation prevents overdraw on commit under normal use. Rollover uses the **server date**; align organisation policy with the instance timezone.
+
+---
+
+## HR notification matrix and admin notifications
+
+Today’s admin-notification update introduces a dedicated admin page and an explicit matrix-driven configuration model.
+
+**UI and routes**
+
+- Page route: `GET /admin/notifications` (`AdminController::notifications`)
+- API routes:
+  - `GET /api/admin/notifications/settings`
+  - `POST /api/admin/notifications/settings`
+- Frontend implementation:
+  - template: `templates/admin-notifications.php`
+  - script: `js/admin-notifications.js`
+  - styles: `css/admin-notifications.css`
+
+**Stored settings**
+
+- `hr_notifications_enabled` (`Constants::CONFIG_HR_NOTIFICATIONS_ENABLED`)
+- `hr_notification_recipients` (`Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS`) - comma-separated, normalized and deduplicated
+- `hr_notification_matrix_v1` (`Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1`) - JSON matrix `absence_type => event => bool`
+
+**Supported matrix dimensions**
+
+- Absence types come from `Constants::ABSENCE_TYPES` (vacation, sick leave, personal leave, parental leave, special leave, unpaid leave, home office, business trip).
+- Event keys come from `Constants::HR_NOTIFICATION_EVENTS`:
+  - `request_created`
+  - `substitute_approved`
+  - `substitute_declined`
+  - `manager_approved`
+  - `manager_rejected`
+  - `employee_cancelled`
+  - `employee_shortened`
+
+**Validation and constraints**
+
+- Recipient input length is bounded.
+- Maximum recipients: **20**.
+- Invalid e-mail addresses are rejected with a 400 response.
+- If HR notifications are enabled, at least one valid recipient is required.
+- Matrix payload is normalized server-side so missing keys never result in undefined behavior.
+
+`AbsenceNotificationMailService::sendHrOfficeNotification(...)` reads this config and sends HR updates only when:
+
+1. feature is enabled,
+2. matrix says the absence-type/event combination is allowed, and
+3. at least one valid recipient exists.
+
+The same admin page now centralizes related absence notification settings (carryover expiry/cap, rollover toggles, substitute requirements, iCal mail switches, substitution workflow mail toggles), so operators can maintain all absence-notification behavior in one place.
+
+---
+
+## Vacation entitlement policy engine (tariff rules)
+
+Today’s entitlement work introduces a policy-driven engine that separates entitlement calculation from static model values.
+
+**Core services**
+
+- `VacationEntitlementEngine`
+  - resolves active user policy for an `asOfDate`
+  - supports four modes:
+    - `manual_fixed`
+    - `model_based_simple`
+    - `tariff_rule_based`
+    - `manual_exception`
+  - returns structured output: `days`, `source`, `ruleSetId`, `trace`
+- `EntitlementSnapshotService`
+  - persists `at_entitlement_snapshots` records via upsert semantics for the same user/period/as-of date
+
+**Tariff rule model**
+
+- Rule set entity: `TariffRuleSet` (`draft`, `active`, `retired`)
+- Rule modules: `TariffRuleModule` with ordered module execution
+- Activation endpoint logic enforces date windows and retires/truncates overlapping active versions with same `tariff_code`.
+- Active rule sets are immutable via update API; create a new version instead.
+
+**Admin API surface**
+
+- Rule sets:
+  - `GET /api/admin/tariff-rule-sets`
+  - `POST /api/admin/tariff-rule-sets`
+  - `PUT /api/admin/tariff-rule-sets/{id}`
+  - `POST /api/admin/tariff-rule-sets/{id}/activate`
+  - `POST /api/admin/tariff-rule-sets/{id}/retire`
+- User policies:
+  - `PUT /api/admin/users/{userId}/vacation-policy`
+  - `POST /api/admin/vacation-policy/simulate`
+
+**Allocation and traceability integration**
+
+- `VacationAllocationService::computeYearAllocation(...)` now resolves entitlement via `VacationEntitlementEngine`, not only legacy settings.
+- Returned allocation payload now includes:
+  - `entitlement_source`
+  - `entitlement_rule_set_id`
+  - `entitlement_trace`
+- Each compute call stores a snapshot in `at_entitlement_snapshots` for auditability and future diagnostics.
+
+**Migration and compatibility**
+
+- `Version1017Date20260420120000` creates tariff/policy/snapshot tables.
+- `Version1018Date20260420123000` backfills `at_user_vacation_policies` from existing model assignments (best-effort, idempotent) so legacy installations keep working with default `manual_fixed` policies.
+- If no policy exists at runtime, the engine falls back to legacy manual entitlement resolution (`at_user_models` / user setting default).
+
+**Data lifecycle**
+
+- `UserDeletedListener` now deletes vacation policy assignments and entitlement snapshots for the deleted user to avoid orphaned policy/computation artifacts.
 
 ---
 

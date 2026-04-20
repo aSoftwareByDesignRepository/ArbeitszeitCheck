@@ -23,11 +23,18 @@ use OCA\ArbeitszeitCheck\Db\Team;
 use OCA\ArbeitszeitCheck\Db\TeamMapper;
 use OCA\ArbeitszeitCheck\Db\TeamMemberMapper;
 use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
+use OCA\ArbeitszeitCheck\Db\TariffRuleModule;
+use OCA\ArbeitszeitCheck\Db\TariffRuleModuleMapper;
+use OCA\ArbeitszeitCheck\Db\TariffRuleSet;
+use OCA\ArbeitszeitCheck\Db\TariffRuleSetMapper;
+use OCA\ArbeitszeitCheck\Db\UserVacationPolicyAssignment;
+use OCA\ArbeitszeitCheck\Db\UserVacationPolicyAssignmentMapper;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Db\Holiday;
 use OCA\ArbeitszeitCheck\Db\HolidayMapper;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
+use OCA\ArbeitszeitCheck\Service\VacationEntitlementEngine;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
@@ -55,6 +62,9 @@ use OCP\Util;
 class AdminController extends Controller
 {
 	use CSPTrait;
+	private const MAX_NOTIFICATION_RECIPIENTS = 20;
+	private const MAX_NOTIFICATION_RECIPIENT_LENGTH = 254;
+	private const MAX_NOTIFICATION_RECIPIENTS_RAW_LENGTH = 4000;
 
 	/** Max date range for admin exports (prevents heavy queries / DoS) */
 	private TimeEntryMapper $timeEntryMapper;
@@ -77,6 +87,10 @@ class AdminController extends Controller
 	private HolidayService $holidayCalendarService;
 	private VacationYearBalanceMapper $vacationYearBalanceMapper;
 	private VacationAllocationService $vacationAllocationService;
+	private TariffRuleSetMapper $tariffRuleSetMapper;
+	private TariffRuleModuleMapper $tariffRuleModuleMapper;
+	private UserVacationPolicyAssignmentMapper $userVacationPolicyAssignmentMapper;
+	private VacationEntitlementEngine $vacationEntitlementEngine;
 
 	public function __construct(
 		string $appName,
@@ -101,7 +115,11 @@ class AdminController extends Controller
 		HolidayMapper $holidayMapper,
 		HolidayService $holidayCalendarService,
 		VacationYearBalanceMapper $vacationYearBalanceMapper,
-		VacationAllocationService $vacationAllocationService
+		VacationAllocationService $vacationAllocationService,
+		TariffRuleSetMapper $tariffRuleSetMapper,
+		TariffRuleModuleMapper $tariffRuleModuleMapper,
+		UserVacationPolicyAssignmentMapper $userVacationPolicyAssignmentMapper,
+		VacationEntitlementEngine $vacationEntitlementEngine
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -124,6 +142,10 @@ class AdminController extends Controller
 		$this->holidayCalendarService = $holidayCalendarService;
 		$this->vacationYearBalanceMapper = $vacationYearBalanceMapper;
 		$this->vacationAllocationService = $vacationAllocationService;
+		$this->tariffRuleSetMapper = $tariffRuleSetMapper;
+		$this->tariffRuleModuleMapper = $tariffRuleModuleMapper;
+		$this->userVacationPolicyAssignmentMapper = $userVacationPolicyAssignmentMapper;
+		$this->vacationEntitlementEngine = $vacationEntitlementEngine;
 		$this->setCspService($cspService);
 	}
 
@@ -168,6 +190,7 @@ class AdminController extends Controller
 			'type' => $model->getType(),
 			'weeklyHours' => $model->getWeeklyHours(),
 			'dailyHours' => $model->getDailyHours(),
+			'workDaysPerWeek' => $model->getWorkDaysPerWeek(),
 			'breakRules' => $model->getBreakRulesArray(),
 			'overtimeRules' => $model->getOvertimeRulesArray(),
 			'isDefault' => $model->getIsDefault(),
@@ -205,6 +228,31 @@ class AdminController extends Controller
 		}
 		$hyphenToUnderscore = ['full-time' => 'full_time', 'part-time' => 'part_time'];
 		return $hyphenToUnderscore[$type] ?? $type;
+	}
+
+	private function parseDecimalInput(mixed $value, float $default): float
+	{
+		if ($value === null || $value === '') {
+			return $default;
+		}
+		if (is_int($value) || is_float($value)) {
+			return (float)$value;
+		}
+		$normalized = str_replace(',', '.', trim((string)$value));
+		$normalized = preg_replace('/\s+/', '', $normalized ?? '');
+		if ($normalized === null || $normalized === '' || !is_numeric($normalized)) {
+			return $default;
+		}
+		return (float)$normalized;
+	}
+
+	private function resolveActivationStartDate(string $activationMode, \DateTimeImmutable $today): \DateTimeImmutable
+	{
+		return match ($activationMode) {
+			'next_month' => new \DateTimeImmutable($today->format('Y-m-01') . ' +1 month'),
+			'next_year' => new \DateTimeImmutable(((int)$today->format('Y') + 1) . '-01-01'),
+			default => $today,
+		};
 	}
 
 	/**
@@ -418,6 +466,10 @@ class AdminController extends Controller
 			'realtimeComplianceCheck' => $this->appConfig->getAppValueString('realtime_compliance_check', '1') === '1',
 			'complianceStrictMode' => $this->appConfig->getAppValueString('compliance_strict_mode', '0') === '1',
 			'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+			'breakAutoFallbackEnabled' => $this->appConfig->getAppValueString('break_auto_fallback_enabled', '1') === '1',
+			'breakAutoFallbackMinutes' => max(15, min(720, (int)$this->appConfig->getAppValueString('break_auto_fallback_minutes', '180'))),
+			'breakAutoFallbackFlexWindowStart' => max(0, min(23, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_start', '11'))),
+			'breakAutoFallbackFlexWindowEnd' => max(1, min(24, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_end', '16'))),
 			'missingClockInRemindersEnabled' => $this->appConfig->getAppValueString('missing_clock_in_reminders_enabled', '1') === '1',
 			'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
 			'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
@@ -455,6 +507,29 @@ class AdminController extends Controller
 			'showReportsLink' => true,
 			'showAdminNav' => true,
 		]);
+		return $this->configureCSP($response, 'admin');
+	}
+
+	/**
+	 * Admin notifications page (HR office matrix settings).
+	 */
+	#[NoCSRFRequired]
+	public function notifications(): TemplateResponse
+	{
+		Util::addTranslations('arbeitszeitcheck');
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-notifications', [
+			'settings' => $this->buildNotificationSettingsPayload(),
+			'absenceTypes' => $this->getNotificationAbsenceTypes(),
+			'eventTypes' => $this->getNotificationEventTypes(),
+			'urlGenerator' => $this->urlGenerator,
+			'l' => $this->l10n,
+			'showSubstitutionLink' => false,
+			'showManagerLink' => true,
+			'showReportsLink' => true,
+			'showAdminNav' => true,
+		]);
+
 		return $this->configureCSP($response, 'admin');
 	}
 
@@ -1103,6 +1178,7 @@ class AdminController extends Controller
 				'type' => $model->getType(),
 				'weeklyHours' => $model->getWeeklyHours(),
 				'dailyHours' => $model->getDailyHours(),
+				'workDaysPerWeek' => $model->getWorkDaysPerWeek(),
 				'isDefault' => $model->getIsDefault()
 			];
 		}
@@ -1219,6 +1295,10 @@ class AdminController extends Controller
 			$settings = [
 				'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
 				'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+				'breakAutoFallbackEnabled' => $this->appConfig->getAppValueString('break_auto_fallback_enabled', '1') === '1',
+				'breakAutoFallbackMinutes' => max(15, min(720, (int)$this->appConfig->getAppValueString('break_auto_fallback_minutes', '180'))),
+				'breakAutoFallbackFlexWindowStart' => max(0, min(23, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_start', '11'))),
+				'breakAutoFallbackFlexWindowEnd' => max(1, min(24, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_end', '16'))),
 				'missingClockInRemindersEnabled' => $this->appConfig->getAppValueString('missing_clock_in_reminders_enabled', '1') === '1',
 				'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
 				'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
@@ -1259,6 +1339,24 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoCSRFRequired]
+	public function getNotificationSettings(): JSONResponse
+	{
+		try {
+			return new JSONResponse([
+				'success' => true,
+				'settings' => $this->buildNotificationSettingsPayload(),
+				'absenceTypes' => $this->getNotificationAbsenceTypes(),
+				'eventTypes' => $this->getNotificationEventTypes(),
+			]);
+		} catch (\Throwable) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	/**
 	 * Update admin settings (admin-only by default)
 	 *
@@ -1276,6 +1374,10 @@ class AdminController extends Controller
 				'realtimeComplianceCheck' => 'realtime_compliance_check',
 				'complianceStrictMode' => 'compliance_strict_mode',
 				'enableViolationNotifications' => 'enable_violation_notifications',
+				'breakAutoFallbackEnabled' => 'break_auto_fallback_enabled',
+				'breakAutoFallbackMinutes' => 'break_auto_fallback_minutes',
+				'breakAutoFallbackFlexWindowStart' => 'break_auto_fallback_flex_window_start',
+				'breakAutoFallbackFlexWindowEnd' => 'break_auto_fallback_flex_window_end',
 				'missingClockInRemindersEnabled' => 'missing_clock_in_reminders_enabled',
 				'exportMidnightSplitEnabled' => 'export_midnight_split_enabled',
 				'monthClosureEnabled' => Constants::CONFIG_MONTH_CLOSURE_ENABLED,
@@ -1310,6 +1412,7 @@ class AdminController extends Controller
 					// Validate and convert value based on type
 					if (in_array($paramKey, [
 						'autoComplianceCheck', 'realtimeComplianceCheck', 'complianceStrictMode', 'enableViolationNotifications',
+						'breakAutoFallbackEnabled',
 						'missingClockInRemindersEnabled',
 						'exportMidnightSplitEnabled', 'monthClosureEnabled',
 						'sendIcalApprovedAbsences', 'sendIcalToSubstitute', 'sendIcalToManagers',
@@ -1367,6 +1470,13 @@ class AdminController extends Controller
 					} elseif ($paramKey === 'monthClosureGraceDaysAfterEom') {
 						$g = max(0, min(90, (int)$value));
 						$value = (string)$g;
+					} elseif ($paramKey === 'breakAutoFallbackMinutes') {
+						$m = max(15, min(720, (int)$value));
+						$value = (string)$m;
+					} elseif ($paramKey === 'breakAutoFallbackFlexWindowStart') {
+						$value = (string)max(0, min(23, (int)$value));
+					} elseif ($paramKey === 'breakAutoFallbackFlexWindowEnd') {
+						$value = (string)max(1, min(24, (int)$value));
 					} elseif ($paramKey === 'requireSubstituteTypes') {
 						$validTypes = ['vacation', 'sick_leave', 'personal_leave', 'parental_leave', 'special_leave', 'unpaid_leave', 'home_office', 'business_trip'];
 						$arr = is_array($value) ? $value : (is_string($value) ? json_decode($value, true) : []);
@@ -1427,12 +1537,298 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoCSRFRequired]
+	public function updateNotificationSettings(): JSONResponse
+	{
+		try {
+			$params = $this->request->getParams();
+			$enabled = $this->toBool($params['enabled'] ?? false);
+			$rawRecipients = $params['recipients'] ?? '';
+			$rawMatrix = $params['matrix'] ?? [];
+			$rawRecipientsString = is_array($rawRecipients) ? implode(',', array_map(static fn (mixed $v): string => (string)$v, $rawRecipients)) : (string)$rawRecipients;
+			if (mb_strlen($rawRecipientsString) > self::MAX_NOTIFICATION_RECIPIENTS_RAW_LENGTH) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Recipient input is too long. Please reduce the number of addresses.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$recipients = $this->normalizeNotificationRecipients($rawRecipients);
+			$invalidRecipients = $this->collectInvalidNotificationRecipients($rawRecipients);
+			if ($invalidRecipients !== []) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid recipient email: %s', [implode(', ', $invalidRecipients)]),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			if (count($recipients) > self::MAX_NOTIFICATION_RECIPIENTS) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('A maximum of 20 HR recipients is allowed.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			if ($enabled && $recipients === []) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Please enter at least one valid recipient email address.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$matrix = $this->normalizeNotificationMatrix($rawMatrix);
+
+			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATIONS_ENABLED, $enabled ? '1' : '0');
+			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, implode(',', $recipients));
+			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1, (string)json_encode($matrix));
+
+			$allowedKeys = [
+				'missingClockInRemindersEnabled' => 'missing_clock_in_reminders_enabled',
+				'requireSubstituteTypes' => 'require_substitute_types',
+				'sendIcalApprovedAbsences' => 'send_ical_approved_absences',
+				'sendIcalToSubstitute' => 'send_ical_to_substitute',
+				'sendIcalToManagers' => 'send_ical_to_managers',
+				'sendEmailSubstitutionRequest' => 'send_email_substitution_request',
+				'sendEmailSubstituteApprovedToEmployee' => 'send_email_substitute_approved_to_employee',
+				'sendEmailSubstituteApprovedToManager' => 'send_email_substitute_approved_to_manager',
+				'vacationCarryoverExpiryMonth' => Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_MONTH,
+				'vacationCarryoverExpiryDay' => Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_DAY,
+				'vacationCarryoverMaxDays' => Constants::CONFIG_VACATION_CARRYOVER_MAX_DAYS,
+				'vacationRolloverEnabled' => Constants::CONFIG_VACATION_ROLLOVER_ENABLED,
+				'vacationRolloverIncludeUnusedAnnual' => Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL,
+			];
+
+			foreach ($allowedKeys as $paramKey => $configKey) {
+				if (!isset($params[$paramKey])) {
+					continue;
+				}
+
+				$value = $params[$paramKey];
+				if (in_array($paramKey, [
+					'missingClockInRemindersEnabled',
+					'sendIcalApprovedAbsences',
+					'sendIcalToSubstitute',
+					'sendIcalToManagers',
+					'sendEmailSubstitutionRequest',
+					'sendEmailSubstituteApprovedToEmployee',
+					'sendEmailSubstituteApprovedToManager',
+					'vacationRolloverEnabled',
+					'vacationRolloverIncludeUnusedAnnual',
+				], true)) {
+					$value = ($value === true || $value === 'true' || $value === '1') ? '1' : '0';
+				} elseif ($paramKey === 'vacationCarryoverExpiryMonth') {
+					$value = (string)max(1, min(12, (int)$value));
+				} elseif ($paramKey === 'vacationCarryoverExpiryDay') {
+					$value = (string)max(1, min(31, (int)$value));
+				} elseif ($paramKey === 'vacationCarryoverMaxDays') {
+					$s = trim((string)$value);
+					if ($s === '') {
+						$value = '';
+					} else {
+						$max = (float)str_replace(',', '.', $s);
+						if (!is_finite($max) || $max < 0 || $max > 366) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $this->l10n->t('Maximum carryover days must be empty (unlimited) or between 0 and 366')
+							], Http::STATUS_BAD_REQUEST);
+						}
+						$value = (string)$max;
+					}
+				} elseif ($paramKey === 'requireSubstituteTypes') {
+					$validTypes = ['vacation', 'sick_leave', 'personal_leave', 'parental_leave', 'special_leave', 'unpaid_leave', 'home_office', 'business_trip'];
+					$arr = is_array($value) ? $value : (is_string($value) ? json_decode($value, true) : []);
+					if (!is_array($arr)) {
+						$arr = [];
+					}
+					$arr = array_values(array_unique(array_filter($arr, function ($t) use ($validTypes) {
+						return in_array((string)$t, $validTypes, true);
+					})));
+					$value = json_encode($arr);
+				} else {
+					$value = (string)$value;
+				}
+
+				$this->appConfig->setAppValueString($configKey, $value);
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'message' => $this->l10n->t('Notification settings updated successfully'),
+				'settings' => $this->buildNotificationSettingsPayload(),
+			]);
+		} catch (\Throwable) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	/**
 	 * @return list<string>
 	 */
 	private function getAllowedAccessGroupsFromConfig(): array
 	{
 		return $this->normalizeExistingGroupIds($this->appManager->getAppRestriction('arbeitszeitcheck'));
+	}
+
+	private function toBool(mixed $value): bool
+	{
+		return $value === true || $value === 1 || $value === '1' || $value === 'true' || $value === 'on';
+	}
+
+	/**
+	 * @param mixed $raw
+	 * @return list<string>
+	 */
+	private function normalizeNotificationRecipients(mixed $raw): array
+	{
+		$source = [];
+		if (is_array($raw)) {
+			$source = $raw;
+		} elseif (is_string($raw)) {
+			$source = explode(',', $raw);
+		}
+
+		$unique = [];
+		foreach ($source as $entry) {
+			$email = strtolower(trim((string)$entry));
+			if ($email === '') {
+				continue;
+			}
+			if (mb_strlen($email) > self::MAX_NOTIFICATION_RECIPIENT_LENGTH) {
+				continue;
+			}
+			if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+				continue;
+			}
+			$unique[$email] = true;
+		}
+
+		return array_keys($unique);
+	}
+
+	/**
+	 * @param mixed $raw
+	 * @return list<string>
+	 */
+	private function collectInvalidNotificationRecipients(mixed $raw): array
+	{
+		$source = [];
+		if (is_array($raw)) {
+			$source = $raw;
+		} elseif (is_string($raw)) {
+			$source = explode(',', $raw);
+		}
+
+		$invalid = [];
+		foreach ($source as $entry) {
+			$email = trim((string)$entry);
+			if ($email === '') {
+				continue;
+			}
+			if (mb_strlen($email) > self::MAX_NOTIFICATION_RECIPIENT_LENGTH) {
+				$invalid[$email] = true;
+				continue;
+			}
+			if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+				$invalid[$email] = true;
+			}
+		}
+
+		return array_keys($invalid);
+	}
+
+	/**
+	 * @param mixed $rawMatrix
+	 * @return array<string, array<string, bool>>
+	 */
+	private function normalizeNotificationMatrix(mixed $rawMatrix): array
+	{
+		$matrix = [];
+		$input = is_array($rawMatrix) ? $rawMatrix : (is_string($rawMatrix) ? json_decode($rawMatrix, true) : []);
+		if (!is_array($input)) {
+			$input = [];
+		}
+		foreach (Constants::ABSENCE_TYPES as $absenceType) {
+			$matrix[$absenceType] = [];
+			$typeInput = (isset($input[$absenceType]) && is_array($input[$absenceType])) ? $input[$absenceType] : [];
+			foreach (Constants::HR_NOTIFICATION_EVENTS as $eventKey) {
+				$matrix[$absenceType][$eventKey] = $this->toBool($typeInput[$eventKey] ?? false);
+			}
+		}
+
+		return $matrix;
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function buildNotificationSettingsPayload(): array
+	{
+		$enabled = $this->appConfig->getAppValueString(Constants::CONFIG_HR_NOTIFICATIONS_ENABLED, '0') === '1';
+		$recipients = $this->normalizeNotificationRecipients(
+			$this->appConfig->getAppValueString(Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, '')
+		);
+		$requireSubstituteJson = $this->appConfig->getAppValueString('require_substitute_types', '[]');
+		$requireSubstituteTypes = json_decode($requireSubstituteJson, true);
+		if (!is_array($requireSubstituteTypes)) {
+			$requireSubstituteTypes = [];
+		}
+		$decoded = json_decode(
+			$this->appConfig->getAppValueString(Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1, '[]'),
+			true
+		);
+
+		return [
+			'enabled' => $enabled,
+			'recipients' => implode(', ', $recipients),
+			'matrix' => $this->normalizeNotificationMatrix($decoded),
+			'missingClockInRemindersEnabled' => $this->appConfig->getAppValueString('missing_clock_in_reminders_enabled', '1') === '1',
+			'vacationCarryoverExpiryMonth' => max(1, min(12, (int)$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_MONTH, '3'))),
+			'vacationCarryoverExpiryDay' => max(1, min(31, (int)$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_DAY, '31'))),
+			'vacationCarryoverMaxDays' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_CARRYOVER_MAX_DAYS, ''),
+			'vacationRolloverEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_ENABLED, '1') === '1',
+			'vacationRolloverIncludeUnusedAnnual' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL, '0') === '1',
+			'requireSubstituteTypes' => $requireSubstituteTypes,
+			'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
+			'sendIcalToSubstitute' => $this->appConfig->getAppValueString('send_ical_to_substitute', '0') === '1',
+			'sendIcalToManagers' => $this->appConfig->getAppValueString('send_ical_to_managers', '0') === '1',
+			'sendEmailSubstitutionRequest' => $this->appConfig->getAppValueString('send_email_substitution_request', '1') === '1',
+			'sendEmailSubstituteApprovedToEmployee' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_employee', '1') === '1',
+			'sendEmailSubstituteApprovedToManager' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_manager', '1') === '1',
+		];
+	}
+
+	/**
+	 * @return list<array{key: string, label: string}>
+	 */
+	private function getNotificationAbsenceTypes(): array
+	{
+		return [
+			['key' => 'vacation', 'label' => $this->l10n->t('Vacation')],
+			['key' => 'sick_leave', 'label' => $this->l10n->t('Sick Leave')],
+			['key' => 'personal_leave', 'label' => $this->l10n->t('Personal Leave')],
+			['key' => 'parental_leave', 'label' => $this->l10n->t('Parental Leave')],
+			['key' => 'special_leave', 'label' => $this->l10n->t('Special Leave')],
+			['key' => 'unpaid_leave', 'label' => $this->l10n->t('Unpaid Leave')],
+			['key' => 'home_office', 'label' => $this->l10n->t('Home Office')],
+			['key' => 'business_trip', 'label' => $this->l10n->t('Business Trip')],
+		];
+	}
+
+	/**
+	 * @return list<array{key: string, label: string}>
+	 */
+	private function getNotificationEventTypes(): array
+	{
+		return [
+			['key' => 'request_created', 'label' => $this->l10n->t('Request created')],
+			['key' => 'substitute_approved', 'label' => $this->l10n->t('Substitute approved')],
+			['key' => 'substitute_declined', 'label' => $this->l10n->t('Substitute declined')],
+			['key' => 'manager_approved', 'label' => $this->l10n->t('Manager approved')],
+			['key' => 'manager_rejected', 'label' => $this->l10n->t('Manager rejected')],
+			['key' => 'employee_cancelled', 'label' => $this->l10n->t('Employee cancelled')],
+			['key' => 'employee_shortened', 'label' => $this->l10n->t('Employee shortened')],
+		];
 	}
 
 	/**
@@ -1644,45 +2040,68 @@ class AdminController extends Controller
 			$usersData = [];
 			$currentYear = (int)date('Y');
 			foreach ($users as $user) {
-				$userId = $user->getUID();
+				try {
+					$userId = (string)$user->getUID();
+					$policy = $this->userVacationPolicyAssignmentMapper->findCurrentByUser($userId);
+					$entitlementPreview = $this->vacationEntitlementEngine->computeForDate($userId, new \DateTimeImmutable('today'));
 
-				// Get current working time model assignment
-				$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
+					// Get current working time model assignment
+					$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
 
-				// Get working time model details if assigned
-				$workingTimeModel = null;
-				if ($currentModel) {
-					try {
-						$workingTimeModel = $this->workingTimeModelMapper->find($currentModel->getWorkingTimeModelId());
-					} catch (\Throwable $e) {
-						// Model might have been deleted
+					// Get working time model details if assigned
+					$workingTimeModel = null;
+					if ($currentModel) {
+						try {
+							$workingTimeModel = $this->workingTimeModelMapper->find($currentModel->getWorkingTimeModelId());
+						} catch (\Throwable $e) {
+							// Model might have been deleted
+						}
 					}
+
+					// Get user statistics (per-user: does this user have entries today?)
+					$today = new \DateTime();
+					$today->setTime(0, 0, 0);
+					$hasTimeEntriesToday = $this->timeEntryMapper->hasEntriesOnDate($userId, $today);
+
+					$usersData[] = [
+						'userId' => $userId,
+						'displayName' => (string)$user->getDisplayName(),
+						'email' => $user->getEMailAddress(),
+						'enabled' => $user->isEnabled(),
+						'workingTimeModel' => $workingTimeModel ? [
+							'id' => $workingTimeModel->getId(),
+							'name' => $workingTimeModel->getName(),
+							'type' => $workingTimeModel->getType(),
+							'weeklyHours' => $workingTimeModel->getWeeklyHours(),
+							'dailyHours' => $workingTimeModel->getDailyHours(),
+							'workDaysPerWeek' => $workingTimeModel->getWorkDaysPerWeek(),
+						] : null,
+						'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
+						'workingTimeModelStartDate' => $currentModel && ($startDate = $currentModel->getStartDate()) ? $startDate->format('Y-m-d') : null,
+						'workingTimeModelEndDate' => $currentModel && ($endDate = $currentModel->getEndDate()) ? $endDate->format('Y-m-d') : null,
+						'hasTimeEntriesToday' => $hasTimeEntriesToday,
+						'vacationCarryoverDays' => $this->vacationYearBalanceMapper->getCarryoverDays($userId, $currentYear),
+						'vacationCarryoverYear' => $currentYear,
+						'vacationPolicy' => $policy ? [
+							'id' => $policy->getId(),
+							'vacationMode' => $policy->getVacationMode(),
+							'manualDays' => $policy->getManualDays(),
+							'tariffRuleSetId' => $policy->getTariffRuleSetId(),
+							'overrideReason' => $policy->getOverrideReason(),
+							'effectiveFrom' => $policy->getEffectiveFrom()?->format('Y-m-d'),
+							'effectiveTo' => $policy->getEffectiveTo()?->format('Y-m-d'),
+						] : null,
+						'entitlementPreview' => [
+							'days' => round((float)$entitlementPreview['days'], 2),
+							'source' => $entitlementPreview['source'],
+							'ruleSetId' => $entitlementPreview['ruleSetId'],
+						],
+					];
+				} catch (\Throwable $e) {
+					\OCP\Log\logger('arbeitszeitcheck')->error('Error building admin user payload: ' . $e->getMessage(), [
+						'exception' => $e,
+					]);
 				}
-
-				// Get user statistics (per-user: does this user have entries today?)
-				$today = new \DateTime();
-				$today->setTime(0, 0, 0);
-				$hasTimeEntriesToday = $this->timeEntryMapper->hasEntriesOnDate($userId, $today);
-
-				$usersData[] = [
-					'userId' => $userId,
-					'displayName' => $user->getDisplayName(),
-					'email' => $user->getEMailAddress(),
-					'enabled' => $user->isEnabled(),
-					'workingTimeModel' => $workingTimeModel ? [
-						'id' => $workingTimeModel->getId(),
-						'name' => $workingTimeModel->getName(),
-						'type' => $workingTimeModel->getType(),
-						'weeklyHours' => $workingTimeModel->getWeeklyHours(),
-						'dailyHours' => $workingTimeModel->getDailyHours()
-					] : null,
-					'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
-					'workingTimeModelStartDate' => $currentModel && ($startDate = $currentModel->getStartDate()) ? $startDate->format('Y-m-d') : null,
-					'workingTimeModelEndDate' => $currentModel && ($endDate = $currentModel->getEndDate()) ? $endDate->format('Y-m-d') : null,
-					'hasTimeEntriesToday' => $hasTimeEntriesToday,
-					'vacationCarryoverDays' => $this->vacationYearBalanceMapper->getCarryoverDays($userId, $currentYear),
-					'vacationCarryoverYear' => $currentYear,
-				];
 			}
 
 			// Get total count for pagination
@@ -1697,6 +2116,9 @@ class AdminController extends Controller
 				'total' => $totalCount
 			]);
 		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::getUsers: ' . $e->getMessage(), [
+				'exception' => $e,
+			]);
 			return new JSONResponse([
 				'success' => false,
 				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
@@ -1745,6 +2167,8 @@ class AdminController extends Controller
 			$startDate = $currentModel ? $currentModel->getStartDate() : null;
 			$endDate = $currentModel ? $currentModel->getEndDate() : null;
 			$currentYear = (int)date('Y');
+			$policy = $this->userVacationPolicyAssignmentMapper->findCurrentByUser($userId);
+			$entitlementPreview = $this->vacationEntitlementEngine->computeForDate($userId, new \DateTimeImmutable('today'));
 
 			return new JSONResponse([
 				'success' => true,
@@ -1760,20 +2184,37 @@ class AdminController extends Controller
 						'name' => $workingTimeModel->getName(),
 						'type' => $workingTimeModel->getType(),
 						'weeklyHours' => $workingTimeModel->getWeeklyHours(),
-						'dailyHours' => $workingTimeModel->getDailyHours()
+						'dailyHours' => $workingTimeModel->getDailyHours(),
+						'workDaysPerWeek' => $workingTimeModel->getWorkDaysPerWeek(),
 					] : null,
 					'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
 					'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
 					'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
 					'germanState' => $userGermanState,
 					'userWorkingTimeModel' => $currentModel ? $currentModel->getSummary() : null,
+					'vacationPolicy' => $policy ? [
+						'id' => $policy->getId(),
+						'vacationMode' => $policy->getVacationMode(),
+						'manualDays' => $policy->getManualDays(),
+						'tariffRuleSetId' => $policy->getTariffRuleSetId(),
+						'overrideReason' => $policy->getOverrideReason(),
+						'effectiveFrom' => $policy->getEffectiveFrom()?->format('Y-m-d'),
+						'effectiveTo' => $policy->getEffectiveTo()?->format('Y-m-d'),
+					] : null,
+					'entitlementPreview' => [
+						'days' => round((float)$entitlementPreview['days'], 2),
+						'source' => $entitlementPreview['source'],
+						'ruleSetId' => $entitlementPreview['ruleSetId'],
+						'calculationTrace' => $entitlementPreview['trace'],
+					],
 					'availableWorkingTimeModels' => array_map(function ($model) {
 						return [
 							'id' => $model->getId(),
 							'name' => $model->getName(),
 							'type' => $model->getType(),
 							'weeklyHours' => $model->getWeeklyHours(),
-							'dailyHours' => $model->getDailyHours()
+							'dailyHours' => $model->getDailyHours(),
+							'workDaysPerWeek' => $model->getWorkDaysPerWeek(),
 						];
 					}, $allModels)
 				]
@@ -1974,7 +2415,7 @@ class AdminController extends Controller
 						'error' => $this->l10n->t('Invalid year for vacation carryover')
 					], Http::STATUS_BAD_REQUEST);
 				}
-				$carryoverVal = (float)$params['vacationCarryoverDays'];
+				$carryoverVal = $this->parseDecimalInput($params['vacationCarryoverDays'], 0.0);
 				if ($carryoverVal < 0 || $carryoverVal > 366) {
 					return new JSONResponse([
 						'success' => false,
@@ -2071,6 +2512,7 @@ class AdminController extends Controller
 						'type' => $model->getType(),
 						'weeklyHours' => $model->getWeeklyHours(),
 						'dailyHours' => $model->getDailyHours(),
+						'workDaysPerWeek' => $model->getWorkDaysPerWeek(),
 						'isDefault' => $model->getIsDefault()
 					];
 				}, $models)
@@ -2104,6 +2546,7 @@ class AdminController extends Controller
 					'type' => $model->getType(),
 					'weeklyHours' => $model->getWeeklyHours(),
 					'dailyHours' => $model->getDailyHours(),
+					'workDaysPerWeek' => $model->getWorkDaysPerWeek(),
 					'breakRules' => $model->getBreakRulesArray(),
 					'overtimeRules' => $model->getOvertimeRulesArray(),
 					'isDefault' => $model->getIsDefault()
@@ -2138,8 +2581,9 @@ class AdminController extends Controller
 			$model->setDescription($params['description'] ?? null);
 			$defaultDaily = max(0.5, min(24.0, (float)$this->appConfig->getAppValueString('default_working_hours', '8')));
 			$model->setType($this->normalizeWorkingTimeModelType($params['type'] ?? ''));
-			$model->setWeeklyHours(isset($params['weeklyHours']) ? (float)$params['weeklyHours'] : 40.0);
-			$model->setDailyHours(isset($params['dailyHours']) ? (float)$params['dailyHours'] : $defaultDaily);
+			$model->setWeeklyHours($this->parseDecimalInput($params['weeklyHours'] ?? null, 40.0));
+			$model->setDailyHours($this->parseDecimalInput($params['dailyHours'] ?? null, $defaultDaily));
+			$model->setWorkDaysPerWeek($this->parseDecimalInput($params['workDaysPerWeek'] ?? null, 5.0));
 			$model->setIsDefault(isset($params['isDefault']) ? (bool)$params['isDefault'] : false);
 			$model->setCreatedAt(new \DateTime());
 			$model->setUpdatedAt(new \DateTime());
@@ -2198,6 +2642,7 @@ class AdminController extends Controller
 					'type' => $savedModel->getType(),
 					'weeklyHours' => $savedModel->getWeeklyHours(),
 					'dailyHours' => $savedModel->getDailyHours(),
+					'workDaysPerWeek' => $savedModel->getWorkDaysPerWeek(),
 					'isDefault' => $savedModel->getIsDefault()
 				]
 			], Http::STATUS_CREATED);
@@ -2233,10 +2678,13 @@ class AdminController extends Controller
 				$model->setType($this->normalizeWorkingTimeModelType($params['type']));
 			}
 			if (isset($params['weeklyHours'])) {
-				$model->setWeeklyHours((float)$params['weeklyHours']);
+				$model->setWeeklyHours($this->parseDecimalInput($params['weeklyHours'], $model->getWeeklyHours()));
 			}
 			if (isset($params['dailyHours'])) {
-				$model->setDailyHours((float)$params['dailyHours']);
+				$model->setDailyHours($this->parseDecimalInput($params['dailyHours'], $model->getDailyHours()));
+			}
+			if (isset($params['workDaysPerWeek'])) {
+				$model->setWorkDaysPerWeek($this->parseDecimalInput($params['workDaysPerWeek'], $model->getWorkDaysPerWeek()));
 			}
 			if (isset($params['isDefault'])) {
 				$newDefaultValue = (bool)$params['isDefault'];
@@ -2297,6 +2745,7 @@ class AdminController extends Controller
 					'type' => $updatedModel->getType(),
 					'weeklyHours' => $updatedModel->getWeeklyHours(),
 					'dailyHours' => $updatedModel->getDailyHours(),
+					'workDaysPerWeek' => $updatedModel->getWorkDaysPerWeek(),
 					'isDefault' => $updatedModel->getIsDefault()
 				]
 			]);
@@ -2361,6 +2810,358 @@ class AdminController extends Controller
 				'success' => false,
 				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoCSRFRequired]
+	public function getTariffRuleSets(): JSONResponse
+	{
+		try {
+			$allRuleSets = $this->tariffRuleSetMapper->findAllOrdered();
+			$all = [];
+			foreach ($allRuleSets as $ruleSet) {
+				$displayName = trim(sprintf(
+					'%s %s%s',
+					(string)$ruleSet->getTariffCode(),
+					(string)$ruleSet->getVersion(),
+					$ruleSet->getJurisdiction() ? ' - ' . (string)$ruleSet->getJurisdiction() : ''
+				));
+				$all[] = [
+					'id' => $ruleSet->getId(),
+					'tariffCode' => $ruleSet->getTariffCode(),
+					'version' => $ruleSet->getVersion(),
+					'jurisdiction' => $ruleSet->getJurisdiction(),
+					'displayName' => $displayName,
+					'validFrom' => $ruleSet->getValidFrom()?->format('Y-m-d'),
+					'validTo' => $ruleSet->getValidTo()?->format('Y-m-d'),
+					'status' => $ruleSet->getStatus(),
+					'activationMode' => $ruleSet->getActivationMode(),
+					'referenceModel' => $ruleSet->getReferenceModel(),
+				];
+			}
+			return new JSONResponse(['success' => true, 'ruleSets' => $all]);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Failed to load tariff rule sets')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoCSRFRequired]
+	public function createTariffRuleSet(): JSONResponse
+	{
+		try {
+			$params = $this->request->getParams();
+			$ruleSet = new TariffRuleSet();
+			$ruleSet->setTariffCode(trim((string)($params['tariffCode'] ?? '')));
+			$ruleSet->setVersion(trim((string)($params['version'] ?? '')));
+			$ruleSet->setJurisdiction(isset($params['jurisdiction']) ? trim((string)$params['jurisdiction']) : null);
+			$ruleSet->setValidFrom(new \DateTime((string)($params['validFrom'] ?? date('Y-01-01'))));
+			$ruleSet->setValidTo(!empty($params['validTo']) ? new \DateTime((string)$params['validTo']) : null);
+			$ruleSet->setActivationMode((string)($params['activationMode'] ?? 'immediate'));
+			$ruleSet->setStatus((string)($params['status'] ?? Constants::TARIFF_RULE_SET_STATUS_DRAFT));
+			$ruleSet->setReferenceModel(isset($params['referenceModel']) ? json_encode($params['referenceModel']) : null);
+			$ruleSet->setCreatedAt(new \DateTime());
+			$ruleSet->setUpdatedAt(new \DateTime());
+			$errors = $ruleSet->validate();
+			if (!empty($errors)) {
+				$translatedErrors = [];
+				foreach ($errors as $field => $message) {
+					$translatedErrors[$field] = $this->l10n->t($message);
+				}
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Validation failed'), 'errors' => $translatedErrors], Http::STATUS_BAD_REQUEST);
+			}
+			if ($this->tariffRuleSetMapper->findByCodeAndVersion($ruleSet->getTariffCode(), $ruleSet->getVersion()) !== null) {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('A tariff rule set with this code/version already exists')], Http::STATUS_CONFLICT);
+			}
+			$saved = $this->tariffRuleSetMapper->insert($ruleSet);
+
+			$modules = is_array($params['modules'] ?? null) ? $params['modules'] : [];
+			$sort = 0;
+			foreach ($modules as $module) {
+				if (!is_array($module) || empty($module['moduleType'])) {
+					continue;
+				}
+				$entity = new TariffRuleModule();
+				$entity->setRuleSetId($saved->getId());
+				$entity->setModuleType((string)$module['moduleType']);
+				$entity->setConfig(is_array($module['config'] ?? null) ? $module['config'] : []);
+				$entity->setSortOrder($sort++);
+				$entity->setCreatedAt(new \DateTime());
+				$entity->setUpdatedAt(new \DateTime());
+				$this->tariffRuleModuleMapper->insert($entity);
+			}
+
+			return new JSONResponse(['success' => true, 'ruleSetId' => $saved->getId()], Http::STATUS_CREATED);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Failed to create tariff rule set')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoCSRFRequired]
+	public function updateTariffRuleSet(int $id): JSONResponse
+	{
+		try {
+			$ruleSet = $this->tariffRuleSetMapper->find($id);
+			if ($ruleSet->getStatus() === Constants::TARIFF_RULE_SET_STATUS_ACTIVE) {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Active rule sets are immutable. Create a new version instead.')], Http::STATUS_BAD_REQUEST);
+			}
+			$params = $this->request->getParams();
+			if (isset($params['jurisdiction'])) {
+				$ruleSet->setJurisdiction(trim((string)$params['jurisdiction']));
+			}
+			if (isset($params['validFrom'])) {
+				$ruleSet->setValidFrom(new \DateTime((string)$params['validFrom']));
+			}
+			if (array_key_exists('validTo', $params)) {
+				$ruleSet->setValidTo(!empty($params['validTo']) ? new \DateTime((string)$params['validTo']) : null);
+			}
+			if (isset($params['activationMode'])) {
+				$ruleSet->setActivationMode((string)$params['activationMode']);
+			}
+			if (isset($params['status'])) {
+				$ruleSet->setStatus((string)$params['status']);
+			}
+			if (isset($params['referenceModel'])) {
+				$ruleSet->setReferenceModel(json_encode($params['referenceModel']));
+			}
+			$ruleSet->setUpdatedAt(new \DateTime());
+			$errors = $ruleSet->validate();
+			if (!empty($errors)) {
+				$translatedErrors = [];
+				foreach ($errors as $field => $message) {
+					$translatedErrors[$field] = $this->l10n->t($message);
+				}
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Validation failed'), 'errors' => $translatedErrors], Http::STATUS_BAD_REQUEST);
+			}
+			$this->tariffRuleSetMapper->update($ruleSet);
+			if (isset($params['modules']) && is_array($params['modules'])) {
+				$this->tariffRuleModuleMapper->deleteByRuleSetId($ruleSet->getId());
+				$sort = 0;
+				foreach ($params['modules'] as $module) {
+					if (!is_array($module) || empty($module['moduleType'])) {
+						continue;
+					}
+					$entity = new TariffRuleModule();
+					$entity->setRuleSetId($ruleSet->getId());
+					$entity->setModuleType((string)$module['moduleType']);
+					$entity->setConfig(is_array($module['config'] ?? null) ? $module['config'] : []);
+					$entity->setSortOrder($sort++);
+					$entity->setCreatedAt(new \DateTime());
+					$entity->setUpdatedAt(new \DateTime());
+					$this->tariffRuleModuleMapper->insert($entity);
+				}
+			}
+			return new JSONResponse(['success' => true]);
+		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Tariff rule set not found')], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Failed to update tariff rule set')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoCSRFRequired]
+	public function activateTariffRuleSet(int $id): JSONResponse
+	{
+		try {
+			$ruleSet = $this->tariffRuleSetMapper->find($id);
+			$now = new \DateTimeImmutable('today');
+			$activationStartDate = $this->resolveActivationStartDate($ruleSet->getActivationMode(), $now);
+			$validFrom = $ruleSet->getValidFrom();
+			if ($validFrom < new \DateTime($activationStartDate->format('Y-m-d'))) {
+				$ruleSet->setValidFrom(new \DateTime($activationStartDate->format('Y-m-d')));
+			}
+			$validTo = $ruleSet->getValidTo();
+			if ($validTo !== null && $validTo < $ruleSet->getValidFrom()) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Rule set validity window is invalid')
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$activeWithSameCode = $this->tariffRuleSetMapper->findActiveByTariffCode($ruleSet->getTariffCode());
+			foreach ($activeWithSameCode as $activeRuleSet) {
+				if ($activeRuleSet->getId() === $ruleSet->getId()) {
+					continue;
+				}
+				$endBeforeActivation = $activationStartDate->modify('-1 day');
+				if ($activeRuleSet->getValidTo() === null || $activeRuleSet->getValidTo() >= new \DateTime($activationStartDate->format('Y-m-d'))) {
+					if ($endBeforeActivation < new \DateTimeImmutable($activeRuleSet->getValidFrom()->format('Y-m-d'))) {
+						$activeRuleSet->setStatus(Constants::TARIFF_RULE_SET_STATUS_RETIRED);
+						$activeRuleSet->setValidTo(new \DateTime($activeRuleSet->getValidFrom()->format('Y-m-d')));
+					} else {
+						$activeRuleSet->setValidTo(new \DateTime($endBeforeActivation->format('Y-m-d')));
+					}
+					$activeRuleSet->setUpdatedAt(new \DateTime());
+					$this->tariffRuleSetMapper->update($activeRuleSet);
+				}
+			}
+
+			$ruleSet->setStatus(Constants::TARIFF_RULE_SET_STATUS_ACTIVE);
+			$ruleSet->setUpdatedAt(new \DateTime());
+			$this->tariffRuleSetMapper->update($ruleSet);
+			return new JSONResponse(['success' => true]);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Failed to activate tariff rule set')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoCSRFRequired]
+	public function retireTariffRuleSet(int $id): JSONResponse
+	{
+		try {
+			$ruleSet = $this->tariffRuleSetMapper->find($id);
+			$ruleSet->setStatus(Constants::TARIFF_RULE_SET_STATUS_RETIRED);
+			$ruleSet->setUpdatedAt(new \DateTime());
+			$this->tariffRuleSetMapper->update($ruleSet);
+			return new JSONResponse(['success' => true]);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Failed to retire tariff rule set')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoCSRFRequired]
+	public function assignVacationPolicy(string $userId): JSONResponse
+	{
+		try {
+			$params = $this->request->getParams();
+			$user = $this->userManager->get($userId);
+			if ($user === null) {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User not found')], Http::STATUS_NOT_FOUND);
+			}
+
+			$vacationMode = (string)($params['vacationMode'] ?? Constants::VACATION_MODE_MANUAL_FIXED);
+			$manualDays = isset($params['manualDays']) ? $this->parseDecimalInput($params['manualDays'], 0.0) : null;
+			$tariffRuleSetId = isset($params['tariffRuleSetId']) && $params['tariffRuleSetId'] !== null && $params['tariffRuleSetId'] !== ''
+				? (int)$params['tariffRuleSetId']
+				: null;
+			$overrideReason = isset($params['overrideReason']) ? trim((string)$params['overrideReason']) : null;
+			$effectiveFrom = new \DateTime((string)($params['effectiveFrom'] ?? date('Y-m-d')));
+			$effectiveTo = !empty($params['effectiveTo']) ? new \DateTime((string)$params['effectiveTo']) : null;
+
+			if ($vacationMode === Constants::VACATION_MODE_TARIFF_RULE_BASED && $tariffRuleSetId !== null) {
+				try {
+					$ruleSet = $this->tariffRuleSetMapper->find($tariffRuleSetId);
+					if ($ruleSet->getStatus() !== Constants::TARIFF_RULE_SET_STATUS_ACTIVE) {
+						return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Only active tariff rule sets can be assigned')], Http::STATUS_BAD_REQUEST);
+					}
+					if ($ruleSet->getValidFrom() > $effectiveFrom) {
+						return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Tariff rule set starts after policy effective date')], Http::STATUS_BAD_REQUEST);
+					}
+					$ruleValidTo = $ruleSet->getValidTo();
+					if ($ruleValidTo !== null && $ruleValidTo < $effectiveFrom) {
+						return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Tariff rule set is no longer valid for the selected policy date')], Http::STATUS_BAD_REQUEST);
+					}
+				} catch (DoesNotExistException $e) {
+					return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Tariff rule set not found')], Http::STATUS_NOT_FOUND);
+				}
+			}
+
+			// Prevent overlapping policy ranges for deterministic entitlement resolution.
+			$currentPolicy = $this->userVacationPolicyAssignmentMapper->findCurrentByUser($userId, $effectiveFrom);
+			if ($currentPolicy !== null && $currentPolicy->getId() !== null) {
+				if ($currentPolicy->getEffectiveFrom()->format('Y-m-d') === $effectiveFrom->format('Y-m-d')) {
+					$currentPolicy->setVacationMode($vacationMode);
+					$currentPolicy->setManualDays($manualDays);
+					$currentPolicy->setTariffRuleSetId($tariffRuleSetId);
+					$currentPolicy->setOverrideReason($overrideReason);
+					$currentPolicy->setEffectiveTo($effectiveTo);
+					$currentPolicy->setUpdatedAt(new \DateTime());
+					$errors = $currentPolicy->validate();
+					if (!empty($errors)) {
+						$translatedErrors = [];
+						foreach ($errors as $field => $message) {
+							$translatedErrors[$field] = $this->l10n->t($message);
+						}
+						return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Validation failed'), 'errors' => $translatedErrors], Http::STATUS_BAD_REQUEST);
+					}
+					$updated = $this->userVacationPolicyAssignmentMapper->update($currentPolicy);
+					return new JSONResponse(['success' => true, 'policyId' => $updated->getId()]);
+				}
+				$startOfNewPolicy = new \DateTimeImmutable($effectiveFrom->format('Y-m-d'));
+				$endOfCurrent = $startOfNewPolicy->modify('-1 day');
+				$currentStart = $currentPolicy->getEffectiveFrom();
+				if ($currentStart <= new \DateTime($endOfCurrent->format('Y-m-d'))) {
+					$currentPolicy->setEffectiveTo(new \DateTime($endOfCurrent->format('Y-m-d')));
+					$currentPolicy->setUpdatedAt(new \DateTime());
+					$this->userVacationPolicyAssignmentMapper->update($currentPolicy);
+				}
+			}
+
+			$assignment = new UserVacationPolicyAssignment();
+			$assignment->setUserId($userId);
+			$assignment->setVacationMode($vacationMode);
+			$assignment->setManualDays($manualDays);
+			$assignment->setTariffRuleSetId($tariffRuleSetId);
+			$assignment->setOverrideReason($overrideReason);
+			$assignment->setEffectiveFrom($effectiveFrom);
+			$assignment->setEffectiveTo($effectiveTo);
+			$assignment->setCreatedBy($this->getPerformedBy());
+			$assignment->setCreatedAt(new \DateTime());
+			$assignment->setUpdatedAt(new \DateTime());
+			$errors = $assignment->validate();
+			if (!empty($errors)) {
+				$translatedErrors = [];
+				foreach ($errors as $field => $message) {
+					$translatedErrors[$field] = $this->l10n->t($message);
+				}
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Validation failed'), 'errors' => $translatedErrors], Http::STATUS_BAD_REQUEST);
+			}
+			$saved = $this->userVacationPolicyAssignmentMapper->insert($assignment);
+			return new JSONResponse(['success' => true, 'policyId' => $saved->getId()], Http::STATUS_CREATED);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Failed to assign vacation policy')], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoCSRFRequired]
+	public function simulateVacationPolicy(): JSONResponse
+	{
+		try {
+			$params = $this->request->getParams();
+			$userId = (string)($params['userId'] ?? '');
+			if ($userId === '') {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User ID is required')], Http::STATUS_BAD_REQUEST);
+			}
+			$asOfDate = new \DateTime((string)($params['asOfDate'] ?? date('Y-m-d')));
+			$draftPolicy = $params['draftPolicy'] ?? null;
+			if (is_array($draftPolicy)) {
+				$policy = new UserVacationPolicyAssignment();
+				$policy->setUserId($userId);
+				$policy->setVacationMode((string)($draftPolicy['vacationMode'] ?? Constants::VACATION_MODE_MANUAL_FIXED));
+				$policy->setManualDays(isset($draftPolicy['manualDays']) ? $this->parseDecimalInput($draftPolicy['manualDays'], 0.0) : null);
+				$policy->setTariffRuleSetId(isset($draftPolicy['tariffRuleSetId']) && $draftPolicy['tariffRuleSetId'] !== '' ? (int)$draftPolicy['tariffRuleSetId'] : null);
+				$policy->setOverrideReason(isset($draftPolicy['overrideReason']) ? trim((string)$draftPolicy['overrideReason']) : null);
+				$policy->setEffectiveFrom($asOfDate);
+				$policy->setEffectiveTo(null);
+				$policy->setCreatedBy('simulation');
+				$policy->setCreatedAt(new \DateTime());
+				$policy->setUpdatedAt(new \DateTime());
+				$errors = $policy->validate();
+				if (!empty($errors)) {
+					$translatedErrors = [];
+					foreach ($errors as $field => $message) {
+						$translatedErrors[$field] = $this->l10n->t($message);
+					}
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Validation failed'),
+						'errors' => $translatedErrors,
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$result = $this->vacationEntitlementEngine->computeForPolicy($userId, $policy, $asOfDate);
+			} else {
+				$result = $this->vacationEntitlementEngine->computeForDate($userId, $asOfDate);
+			}
+			return new JSONResponse([
+				'success' => true,
+				'userId' => $userId,
+				'asOfDate' => $asOfDate->format('Y-m-d'),
+				'effectiveEntitlementDays' => round((float)$result['days'], 2),
+				'source' => $result['source'],
+				'ruleSetId' => $result['ruleSetId'],
+				'calculationTrace' => $result['trace'],
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Failed to simulate vacation policy')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 

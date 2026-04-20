@@ -161,6 +161,10 @@ class AbsenceService
 			if ($this->absenceIcalMailService) {
 				$this->absenceIcalMailService->sendIcalForApprovedAbsence($savedAbsence);
 			}
+			if ($this->absenceNotificationMailService) {
+				$this->absenceNotificationMailService->sendHrOfficeNotification($savedAbsence, 'request_created', $userId);
+				$this->absenceNotificationMailService->sendHrOfficeNotification($savedAbsence, 'manager_approved', $userId);
+			}
 		} elseif ($substituteUserId) {
 			if ($this->notificationService) {
 				$startDate = $savedAbsence->getStartDate();
@@ -179,7 +183,10 @@ class AbsenceService
 			}
 			if ($this->absenceNotificationMailService) {
 				$this->absenceNotificationMailService->sendSubstitutionRequestToSubstitute($savedAbsence);
+				$this->absenceNotificationMailService->sendHrOfficeNotification($savedAbsence, 'request_created', $userId);
 			}
+		} elseif ($this->absenceNotificationMailService) {
+			$this->absenceNotificationMailService->sendHrOfficeNotification($savedAbsence, 'request_created', $userId);
 		}
 
 		return $savedAbsence;
@@ -316,6 +323,11 @@ class AbsenceService
 		}
 		if ($wasDeclined && $newSubstituteId && $this->absenceNotificationMailService) {
 			$this->absenceNotificationMailService->sendSubstitutionRequestToSubstitute($updatedAbsence);
+			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'request_created', $userId);
+		}
+
+		if ($this->absenceNotificationMailService) {
+			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'employee_cancelled', $userId);
 		}
 
 		return $updatedAbsence;
@@ -425,6 +437,10 @@ class AbsenceService
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
 			throw $e;
+		}
+
+		if ($this->absenceNotificationMailService) {
+			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'employee_shortened', $userId);
 		}
 
 		return $updatedAbsence;
@@ -598,6 +614,9 @@ class AbsenceService
 		if ($this->absenceIcalMailService) {
 			$this->absenceIcalMailService->sendIcalForApprovedAbsence($updatedAbsence);
 		}
+		if ($this->absenceNotificationMailService) {
+			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'manager_approved', $approverId);
+		}
 
 		return $updatedAbsence;
 	}
@@ -665,6 +684,9 @@ class AbsenceService
 				'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
 				'days' => $updatedAbsence->getDays()
 			], $comment);
+		}
+		if ($this->absenceNotificationMailService) {
+			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'manager_rejected', $approverId);
 		}
 		return $updatedAbsence;
 	}
@@ -743,6 +765,10 @@ class AbsenceService
 			if ($this->absenceIcalMailService) {
 				$this->absenceIcalMailService->sendIcalForApprovedAbsence($updatedAbsence);
 			}
+			if ($this->absenceNotificationMailService) {
+				$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'substitute_approved', $substituteUserId);
+				$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'manager_approved', $substituteUserId);
+			}
 		} else {
 			// Employee has manager: notify about substitute approval and that manager approval is pending
 			if ($this->notificationService) {
@@ -764,6 +790,7 @@ class AbsenceService
 			if ($this->absenceNotificationMailService) {
 				$this->absenceNotificationMailService->sendSubstituteApprovedToEmployee($updatedAbsence);
 				$this->absenceNotificationMailService->sendSubstituteApprovedToManagers($updatedAbsence);
+				$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'substitute_approved', $substituteUserId);
 			}
 
 			if ($this->absenceIcalMailService) {
@@ -842,6 +869,9 @@ class AbsenceService
 				],
 				$comment
 			);
+		}
+		if ($this->absenceNotificationMailService) {
+			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'substitute_declined', $substituteUserId);
 		}
 		return $updatedAbsence;
 	}
@@ -926,6 +956,9 @@ class AbsenceService
 			return [
 				'year' => $year,
 				'entitlement' => (int)round($totalEntitlement),
+				'entitlement_source' => (string)($alloc['entitlement_source'] ?? 'manual'),
+				'entitlement_rule_set_id' => $alloc['entitlement_rule_set_id'] ?? null,
+				'entitlement_trace' => $alloc['entitlement_trace'] ?? null,
 				'carryover_days' => round($carryoverOpening, 2),
 				'carryover_usable' => round((float)$alloc['carryover_usable_for_new_requests'], 2),
 				'carryover_expires_on' => $alloc['carryover_expires_on'],
@@ -943,6 +976,9 @@ class AbsenceService
 			return [
 				'year' => $year,
 				'entitlement' => Constants::DEFAULT_VACATION_DAYS_PER_YEAR,
+				'entitlement_source' => 'manual',
+				'entitlement_rule_set_id' => null,
+				'entitlement_trace' => null,
 				'carryover_days' => 0.0,
 				'carryover_usable' => 0.0,
 				'carryover_expires_on' => null,

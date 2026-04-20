@@ -10,9 +10,12 @@ use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
+use OCA\ArbeitszeitCheck\Service\EntitlementSnapshotService;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
+use OCA\ArbeitszeitCheck\Service\VacationEntitlementEngine;
 use OCP\IConfig;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 class VacationAllocationServiceTest extends TestCase
@@ -24,14 +27,30 @@ class VacationAllocationServiceTest extends TestCase
 		UserSettingsMapper $userSettingsMapper,
 		VacationYearBalanceMapper $balanceMapper,
 		HolidayService $holiday,
+		?VacationEntitlementEngine $engine = null,
+		?EntitlementSnapshotService $snapshotService = null,
 	): VacationAllocationService {
+		if ($engine === null) {
+			$engine = $this->createMock(VacationEntitlementEngine::class);
+		}
+		if ($engine instanceof MockObject) {
+			$engine->method('computeForDate')->willReturn([
+				'days' => 25.0,
+				'source' => 'manual',
+				'ruleSetId' => null,
+				'trace' => [],
+			]);
+		}
+		$snapshotService = $snapshotService ?? $this->createMock(EntitlementSnapshotService::class);
 		return new VacationAllocationService(
 			$config,
 			$absenceMapper,
 			$userWtmMapper,
 			$userSettingsMapper,
 			$balanceMapper,
-			$holiday
+			$holiday,
+			$engine,
+			$snapshotService
 		);
 	}
 
@@ -139,7 +158,15 @@ class VacationAllocationServiceTest extends TestCase
 		$holiday = $this->createMock(HolidayService::class);
 		$holiday->method('computeWorkingDaysForUser')->willReturn(10.0);
 
-		$s = $this->makeService($config, $absenceMapper, $userWtm, $settings, $balance, $holiday);
+		$engine = $this->createMock(VacationEntitlementEngine::class);
+		$engine->method('computeForDate')->willReturn([
+			'days' => 5.0,
+			'source' => 'manual',
+			'ruleSetId' => null,
+			'trace' => [],
+		]);
+
+		$s = $this->makeService($config, $absenceMapper, $userWtm, $settings, $balance, $holiday, $engine);
 		$r = $s->computeYearAllocation(
 			'u1',
 			2026,
@@ -199,7 +226,15 @@ class VacationAllocationServiceTest extends TestCase
 		$holiday = $this->createMock(HolidayService::class);
 		$holiday->method('computeWorkingDaysForUser')->willReturn(4.0);
 
-		$s = $this->makeService($config, $absenceMapper, $userWtm, $settings, $balance, $holiday);
+		$engine = $this->createMock(VacationEntitlementEngine::class);
+		$engine->method('computeForDate')->willReturn([
+			'days' => 2.0,
+			'source' => 'manual',
+			'ruleSetId' => null,
+			'trace' => [],
+		]);
+
+		$s = $this->makeService($config, $absenceMapper, $userWtm, $settings, $balance, $holiday, $engine);
 		$r = $s->computeYearAllocation(
 			'u1',
 			2026,

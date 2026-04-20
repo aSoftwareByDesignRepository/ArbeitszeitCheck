@@ -48,6 +48,13 @@ Exact permissions depend on your Nextcloud groups and app configuration.
 
 Only users in Nextcloud's `admin` group are eligible in this picker.
 
+### For administrators: notifications and vacation policy model
+
+- Open **ArbeitszeitCheck → Admin notifications** to configure absence-related mail behavior in one place.
+- **HR office notifications** can be enabled with recipient list plus a matrix per absence type/event (for example: request created, substitute approved, manager approved/rejected, employee cancelled/shortened).
+- The same page contains practical controls for carryover expiry, optional carryover cap, rollover behavior, substitute-required absence types, and iCal/substitution e-mail toggles.
+- Vacation entitlement can now be assigned per user with policy modes (manual, model-based, tariff-rule based, manual exception). If your organization uses tariff rules, administrators can manage rule-set versions and activation windows via admin APIs/integration tooling.
+
 ---
 
 ## 4. Everyday tasks

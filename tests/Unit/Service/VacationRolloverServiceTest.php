@@ -8,6 +8,7 @@ use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\VacationRolloverLogMapper;
 use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
 use OCA\ArbeitszeitCheck\Service\VacationRolloverService;
 use OCP\IConfig;
@@ -44,6 +45,8 @@ class VacationRolloverServiceTest extends TestCase
 
 		$users = $this->createMock(IUserManager::class);
 		$audit = $this->createMock(AuditLogMapper::class);
+		$permissionService = $this->createMock(PermissionService::class);
+		$permissionService->method('isUserAllowedByAccessGroups')->willReturn(true);
 
 		$s = new VacationRolloverService(
 			$config,
@@ -51,7 +54,8 @@ class VacationRolloverServiceTest extends TestCase
 			$balance,
 			$log,
 			$users,
-			$audit
+			$audit,
+			$permissionService
 		);
 
 		$r = $s->processUserForFromYear('u1', 2026, false, false, true);

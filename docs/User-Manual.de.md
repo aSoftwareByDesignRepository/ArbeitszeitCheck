@@ -48,6 +48,13 @@ Die genauen Rechte hängen von Nextcloud-Gruppen und der App-Konfiguration ab.
 
 Im Auswahldialog erscheinen nur Konten aus der Nextcloud-`admin`-Gruppe.
 
+### Für Administrator:innen: Benachrichtigungen und Urlaubs-Policy-Modell
+
+- Öffnen Sie **ArbeitszeitCheck → Admin-Benachrichtigungen**, um abwesenheitsbezogene Mail-Regeln zentral zu pflegen.
+- **HR-Office-Benachrichtigungen** lassen sich mit Empfängerliste plus Matrix je Abwesenheitstyp/Ereignis steuern (z. B. Antrag erstellt, Vertretung genehmigt, Manager genehmigt/abgelehnt, Mitarbeitende storniert/gekürzt).
+- Auf derselben Seite liegen außerdem praxisrelevante Schalter für Resturlaubs-Ablaufdatum, optionales Carryover-Limit, Rollover-Verhalten, Vertretungspflicht je Abwesenheitstyp sowie iCal-/Workflow-Mailoptionen.
+- Der Urlaubsanspruch kann pro Nutzer:in über Policy-Modi zugewiesen werden (manuell, modellbasiert, tarifregelbasiert, manuelle Ausnahme). Bei tariflicher Abbildung können Regelwerk-Versionen und Aktivierungsfenster über die Admin-APIs/Integrationsprozesse verwaltet werden.
+
 ---
 
 ## 4. Alltägliche Aufgaben

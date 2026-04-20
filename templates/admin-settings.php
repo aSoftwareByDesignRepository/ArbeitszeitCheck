@@ -157,6 +157,13 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
                 <section class="admin-settings-section" aria-labelledby="section-compliance-heading">
                     <h3 id="section-compliance-heading" class="admin-settings-section__title"><?php p($l->t('Compliance and working time rules')); ?></h3>
                 <div class="form-group">
+                    <label class="form-label"><?php p($l->t('Configured timezone')); ?></label>
+                    <p class="form-help">
+                        <strong><?php p(\OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitcheck', 'app_timezone', 'Europe/Berlin')); ?></strong>
+                        — <?php p($l->t('All clock-in/out timestamps and exports use this timezone and should match the server PHP timezone setting.')); ?>
+                    </p>
+                </div>
+                <div class="form-group">
                     <div class="form-checkbox">
                         <input type="checkbox" id="autoComplianceCheck" name="autoComplianceCheck"
                             <?php echo ($settings['autoComplianceCheck'] ?? true) ? 'checked' : ''; ?>
@@ -210,6 +217,61 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
                         <?php p($l->t('When someone works too many hours or doesn\'t take required breaks, the system will send a notification to managers and the employee.')); ?>
                     </p>
                 </div>
+                <div class="form-group">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="breakAutoFallbackEnabled" name="breakAutoFallbackEnabled"
+                            <?php echo ($settings['breakAutoFallbackEnabled'] ?? true) ? 'checked' : ''; ?>
+                            aria-describedby="breakAutoFallbackEnabled-help breakAutoFallbackMinutes-help">
+                        <label for="breakAutoFallbackEnabled" class="form-label">
+                            <?php p($l->t('Automatic fallback for very long breaks')); ?>
+                        </label>
+                    </div>
+                    <p id="breakAutoFallbackEnabled-help" class="form-help">
+                        <?php p($l->t('If a break is left open for too long, the system automatically clocks out to prevent permanent pause status.')); ?>
+                    </p>
+                </div>
+                <div class="form-group">
+                    <label for="breakAutoFallbackMinutes" class="form-label"><?php p($l->t('Auto clock-out after break (minutes)')); ?></label>
+                    <input type="number"
+                        class="form-input"
+                        id="breakAutoFallbackMinutes"
+                        name="breakAutoFallbackMinutes"
+                        min="15"
+                        max="720"
+                        step="1"
+                        value="<?php p((string)($settings['breakAutoFallbackMinutes'] ?? 180)); ?>"
+                        aria-describedby="breakAutoFallbackMinutes-help">
+                    <p id="breakAutoFallbackMinutes-help" class="form-help">
+                        <?php p($l->t('Recommended: 120 to 240 minutes. After this threshold, an open break is automatically finalized by clocking out.')); ?>
+                    </p>
+                </div>
+                <div class="form-row form-row--inline" role="group" aria-labelledby="breakAutoFallbackEnabled">
+                    <div class="form-group">
+                        <label for="breakAutoFallbackFlexWindowStart" class="form-label"><?php p($l->t('Flex policy quiet window start hour')); ?></label>
+                        <input type="number"
+                            class="form-input"
+                            id="breakAutoFallbackFlexWindowStart"
+                            name="breakAutoFallbackFlexWindowStart"
+                            min="0"
+                            max="23"
+                            step="1"
+                            value="<?php p((string)($settings['breakAutoFallbackFlexWindowStart'] ?? 11)); ?>">
+                    </div>
+                    <div class="form-group">
+                        <label for="breakAutoFallbackFlexWindowEnd" class="form-label"><?php p($l->t('Flex policy quiet window end hour')); ?></label>
+                        <input type="number"
+                            class="form-input"
+                            id="breakAutoFallbackFlexWindowEnd"
+                            name="breakAutoFallbackFlexWindowEnd"
+                            min="1"
+                            max="24"
+                            step="1"
+                            value="<?php p((string)($settings['breakAutoFallbackFlexWindowEnd'] ?? 16)); ?>">
+                    </div>
+                </div>
+                <p class="form-help form-help--note">
+                    <?php p($l->t('For non-shift models (flex policy), automatic clock-out is suppressed inside this daytime window. Shift work remains strict.')); ?>
+                </p>
                 </section>
 
                 <section class="admin-settings-section" aria-labelledby="section-export-heading">
@@ -332,193 +394,6 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
                         </div>
                         <div id="monthClosureReopenLive" class="form-help" role="status" aria-live="polite" aria-atomic="true"></div>
                     </fieldset>
-                </section>
-
-                <section class="admin-settings-section" aria-labelledby="section-absences-heading">
-                    <h3 id="section-absences-heading" class="admin-settings-section__title"><?php p($l->t('Absences and notifications')); ?></h3>
-                <div class="form-group">
-                    <div class="form-checkbox">
-                        <input type="checkbox" id="missingClockInRemindersEnabled" name="missingClockInRemindersEnabled"
-                            <?php echo ($settings['missingClockInRemindersEnabled'] ?? true) ? 'checked' : ''; ?>
-                            aria-describedby="missingClockInRemindersEnabled-help">
-                        <label for="missingClockInRemindersEnabled" class="form-label">
-                            <?php p($l->t('Enable missing clock-in reminders globally')); ?>
-                        </label>
-                    </div>
-                    <p id="missingClockInRemindersEnabled-help" class="form-help">
-                        <?php p($l->t('If enabled, users can still turn this reminder off in their personal settings. Reminders are sent only for expected workdays (not weekends, holidays, or approved absences).')); ?>
-                    </p>
-                </div>
-                <fieldset class="form-fieldset" aria-labelledby="vacation-carryover-expiry-legend">
-                    <legend id="vacation-carryover-expiry-legend" class="form-legend"><?php p($l->t('Vacation carryover expiry')); ?></legend>
-                    <p class="form-help form-help--block" id="vacation-carryover-expiry-intro">
-                        <?php p($l->t('This is the last calendar day in each year when carryover from the opening balance (Resturlaub) may still be used for vacation. You enter each person\'s opening balance per calendar year under Users. After this date, new vacation requests can only use the annual vacation entitlement from the working time model—not carryover. This applies to everyone.')); ?>
-                    </p>
-                    <p class="form-help form-help--block form-help--note" id="vacation-carryover-expiry-how">
-                        <?php p($l->t('Only approved vacation counts. For working days on or before this date, carryover is used before annual entitlement. Approved absences are applied in chronological order (by start date, then id).')); ?>
-                    </p>
-                    <div class="form-row form-row--inline" role="group" aria-labelledby="vacation-carryover-expiry-legend" aria-describedby="vacation-carryover-expiry-intro vacation-carryover-expiry-how vacation-carryover-expiry-help">
-                        <div class="form-group">
-                            <label for="vacationCarryoverExpiryMonth" class="form-label"><?php p($l->t('Month (1–12)')); ?></label>
-                            <input type="number" class="form-input" id="vacationCarryoverExpiryMonth" name="vacationCarryoverExpiryMonth"
-                                min="1" max="12" step="1" required
-                                value="<?php p((string)($settings['vacationCarryoverExpiryMonth'] ?? 3)); ?>"
-                                aria-describedby="vacation-carryover-expiry-intro vacation-carryover-expiry-how vacation-carryover-expiry-help">
-                        </div>
-                        <div class="form-group">
-                            <label for="vacationCarryoverExpiryDay" class="form-label"><?php p($l->t('Day (1–31)')); ?></label>
-                            <input type="number" class="form-input" id="vacationCarryoverExpiryDay" name="vacationCarryoverExpiryDay"
-                                min="1" max="31" step="1" required
-                                value="<?php p((string)($settings['vacationCarryoverExpiryDay'] ?? 31)); ?>"
-                                aria-describedby="vacation-carryover-expiry-intro vacation-carryover-expiry-how vacation-carryover-expiry-help">
-                        </div>
-                    </div>
-                    <p id="vacation-carryover-expiry-help" class="form-help">
-                        <?php p($l->t('Typical value in Germany: 31 March (month 3, day 31). If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically.')); ?>
-                    </p>
-                    <div class="form-group">
-                        <label for="vacationCarryoverMaxDays" class="form-label"><?php p($l->t('Maximum carryover days (optional)')); ?></label>
-                        <input type="text" class="form-input" id="vacationCarryoverMaxDays" name="vacationCarryoverMaxDays" inputmode="decimal"
-                            placeholder="<?php p($l->t('Empty = no limit')); ?>"
-                            value="<?php p((string)($settings['vacationCarryoverMaxDays'] ?? '')); ?>"
-                            aria-describedby="vacation-carryover-max-help">
-                        <p id="vacation-carryover-max-help" class="form-help">
-                            <?php p($l->t('If set, opening carryover per user cannot exceed this many days (Tarifvertrag / company policy). Leave empty for no cap. Imports and admin edits are clamped to this value.')); ?>
-                        </p>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="vacationRolloverEnabled" name="vacationRolloverEnabled" value="1"
-                                <?php echo ($settings['vacationRolloverEnabled'] ?? true) ? 'checked' : ''; ?>
-                                aria-describedby="vacation-rollover-enabled-help">
-                            <label for="vacationRolloverEnabled" class="form-label"><?php p($l->t('Automatic vacation rollover job')); ?></label>
-                        </div>
-                        <p id="vacation-rollover-enabled-help" class="form-help">
-                            <?php p($l->t('When enabled, a daily task may copy unused carryover (and optionally unused annual days, see below) into the next calendar year’s opening balance after the carryover deadline, unless a balance already exists for that year. Use the occ command for manual runs.')); ?>
-                        </p>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="vacationRolloverIncludeUnusedAnnual" name="vacationRolloverIncludeUnusedAnnual" value="1"
-                                <?php echo ($settings['vacationRolloverIncludeUnusedAnnual'] ?? false) ? 'checked' : ''; ?>
-                                aria-describedby="vacation-rollover-annual-help">
-                            <label for="vacationRolloverIncludeUnusedAnnual" class="form-label"><?php p($l->t('Include unused annual entitlement in rollover (advanced)')); ?></label>
-                        </div>
-                        <p id="vacation-rollover-annual-help" class="form-help form-help--note">
-                            <?php p($l->t('Off by default. Only enable if your collective agreement allows transferring unused annual leave; consult HR / legal. When on, unused annual days for the year may be added to the next year’s carryover opening, subject to the maximum carryover cap above.')); ?>
-                        </p>
-                    </div>
-                </fieldset>
-                <fieldset class="form-fieldset" aria-labelledby="send-ical-legend">
-                    <legend id="send-ical-legend" class="form-legend"><?php p($l->t('Absences: Send iCal via email')); ?></legend>
-                    <p class="form-help form-help--block">
-                        <?php p($l->t('For approved absences, an email with an iCal attachment (.ics) can be sent automatically.')); ?>
-                    </p>
-                    <p class="form-help form-help--block form-help--note">
-                        <?php p($l->t('Important: This is best-effort email delivery, not a guaranteed real-time calendar sync. Delivery can be delayed or fail due to mail server/network issues. Source of truth remains ArbeitszeitCheck.')); ?>
-                    </p>
-                    <p class="form-help form-help--block form-help--note">
-                        <?php p($l->t('Privacy note: To reduce sensitive data exposure, iCal details for substitutes/managers intentionally avoid private absence reasons.')); ?>
-                    </p>
-                    <div class="form-group">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="sendIcalApprovedAbsences" name="sendIcalApprovedAbsences" value="1"
-                                <?php echo ($settings['sendIcalApprovedAbsences'] ?? true) ? 'checked' : ''; ?>
-                                aria-describedby="send-ical-legend">
-                            <label for="sendIcalApprovedAbsences" class="form-label">
-                                <?php p($l->t('Send iCal to the person with approved absence')); ?>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="sendIcalToSubstitute" name="sendIcalToSubstitute" value="1"
-                                <?php echo ($settings['sendIcalToSubstitute'] ?? false) ? 'checked' : ''; ?>
-                                aria-describedby="send-ical-legend">
-                            <label for="sendIcalToSubstitute" class="form-label">
-                                <?php p($l->t('Also send iCal to substitute (if selected)')); ?>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="sendIcalToManagers" name="sendIcalToManagers" value="1"
-                                <?php echo ($settings['sendIcalToManagers'] ?? false) ? 'checked' : ''; ?>
-                                aria-describedby="send-ical-legend">
-                            <label for="sendIcalToManagers" class="form-label">
-                                <?php p($l->t('Also send iCal to managers (team managers)')); ?>
-                            </label>
-                        </div>
-                    </div>
-                </fieldset>
-
-                <fieldset class="form-fieldset" aria-labelledby="email-notifications-legend">
-                    <legend id="email-notifications-legend" class="form-legend"><?php p($l->t('Absences: Email notifications for substitution workflow')); ?></legend>
-                    <p class="form-help form-help--block">
-                        <?php p($l->t('When a substitute is selected, emails can be sent at each step of the approval process.')); ?>
-                    </p>
-                    <div class="form-group">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="sendEmailSubstitutionRequest" name="sendEmailSubstitutionRequest" value="1"
-                                <?php echo ($settings['sendEmailSubstitutionRequest'] ?? true) ? 'checked' : ''; ?>
-                                aria-describedby="email-notifications-legend">
-                            <label for="sendEmailSubstitutionRequest" class="form-label">
-                                <?php p($l->t('Email substitute when a substitution request is created')); ?>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="sendEmailSubstituteApprovedToEmployee" name="sendEmailSubstituteApprovedToEmployee" value="1"
-                                <?php echo ($settings['sendEmailSubstituteApprovedToEmployee'] ?? true) ? 'checked' : ''; ?>
-                                aria-describedby="email-notifications-legend">
-                            <label for="sendEmailSubstituteApprovedToEmployee" class="form-label">
-                                <?php p($l->t('Email employee when substitute approves')); ?>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="sendEmailSubstituteApprovedToManager" name="sendEmailSubstituteApprovedToManager" value="1"
-                                <?php echo ($settings['sendEmailSubstituteApprovedToManager'] ?? true) ? 'checked' : ''; ?>
-                                aria-describedby="email-notifications-legend">
-                            <label for="sendEmailSubstituteApprovedToManager" class="form-label">
-                                <?php p($l->t('Email managers when substitute approves (requires app teams)')); ?>
-                            </label>
-                        </div>
-                    </div>
-                </fieldset>
-
-                <fieldset class="form-fieldset" aria-labelledby="require-substitute-legend">
-                    <legend id="require-substitute-legend" class="form-legend"><?php p($l->t('Absences: Substitute required')); ?></legend>
-                    <p class="form-help form-help--block">
-                        <?php p($l->t('For the selected absence types, a substitute must be designated.')); ?>
-                    </p>
-                    <?php
-                    $requireTypes = $settings['requireSubstituteTypes'] ?? [];
-                    $absenceTypes = [
-                        'vacation' => $l->t('Vacation'),
-                        'sick_leave' => $l->t('Sick leave'),
-                        'personal_leave' => $l->t('Personal reasons'),
-                        'parental_leave' => $l->t('Parental leave'),
-                        'special_leave' => $l->t('Special leave'),
-                        'unpaid_leave' => $l->t('Unpaid leave'),
-                        'home_office' => $l->t('Home office'),
-                        'business_trip' => $l->t('Business trip'),
-                    ];
-                    foreach ($absenceTypes as $typeKey => $typeLabel):
-                        $checked = in_array($typeKey, $requireTypes, true);
-                    ?>
-                    <div class="form-group form-group--inline">
-                        <div class="form-checkbox">
-                            <input type="checkbox" id="requireSubstitute_<?php p($typeKey); ?>" name="requireSubstituteTypes[]" value="<?php p($typeKey); ?>"
-                                <?php echo $checked ? 'checked' : ''; ?>
-                                aria-describedby="require-substitute-legend">
-                            <label for="requireSubstitute_<?php p($typeKey); ?>" class="form-label"><?php p($typeLabel); ?></label>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </fieldset>
                 </section>
 
                 <section class="admin-settings-section" aria-labelledby="section-hours-heading">

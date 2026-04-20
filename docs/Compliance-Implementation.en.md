@@ -229,6 +229,14 @@
 - No warranty for complete compliance
 - Companies are responsible for compliance with laws
 
+## Revision-safe month closure (product feature)
+
+ArbeitszeitCheck can optionally **finalize** a calendar month per employee: the app stores a **canonical snapshot** (JSON), a **SHA-256 hash chain**, append-only revision rows, and **audit log** entries. **Monthly reports** for that month read the snapshot when finalized.
+
+**What this is not:** It is **not** a qualified electronic signature (QES). **Retention:** Treat finalized snapshots like other time records—align with statutory retention and your `GDPR-Compliance-Guide` / organizational policy. **Direct database or backup restore** outside the app can alter data without going through these checks; the hash supports **detection** of inconsistency, not physical prevention on the server.
+
+---
+
 ## Further Information
 
 - [Working Time Act (ArbZG)](https://www.gesetze-im-internet.de/arbzg/)

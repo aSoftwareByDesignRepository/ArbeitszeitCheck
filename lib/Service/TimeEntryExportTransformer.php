@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Service;
 
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
+use OCP\IConfig;
 
 /**
  * Shared logic for CSV/JSON time exports (personal and team detailed).
@@ -19,11 +20,29 @@ use OCA\ArbeitszeitCheck\Db\TimeEntry;
 class TimeEntryExportTransformer
 {
 	private const HOUR_ROUND_PRECISION = 4;
+	private string $timezone;
 
 	/**
 	 * Max Von/Bis pairs per row in wide daily layout (overflow uses extra rows).
 	 */
 	public const WIDE_LAYOUT_MAX_PAIRS_PER_ROW = 6;
+
+	public function __construct(IConfig $config)
+	{
+		$configured = $config->getAppValue('arbeitszeitcheck', 'app_timezone', '');
+		if ($configured !== '' && timezone_open($configured) !== false) {
+			$this->timezone = $configured;
+			return;
+		}
+
+		$phpTimezone = date_default_timezone_get();
+		$this->timezone = ($phpTimezone !== '' && $phpTimezone !== 'UTC') ? $phpTimezone : 'Europe/Berlin';
+	}
+
+	public function getTimezone(): string
+	{
+		return $this->timezone;
+	}
 
 	/**
 	 * @param iterable<TimeEntry> $entries
@@ -138,33 +157,35 @@ class TimeEntryExportTransformer
 			return [];
 		}
 		$endTime = $entry->getEndTime();
+		$startForExport = (clone $startTime)->setTimezone(new \DateTimeZone($this->timezone));
+		$endForExport = $endTime ? (clone $endTime)->setTimezone(new \DateTimeZone($this->timezone)) : null;
 
-		if (!$enableMidnightSplit || $endTime === null) {
-			return [$this->singleRowFromEntry($entry, $startTime, $endTime)];
+		if (!$enableMidnightSplit || $endForExport === null) {
+			return [$this->singleRowFromEntry($entry, $startForExport, $endForExport)];
 		}
 
-		if ($startTime->format('Y-m-d') === $endTime->format('Y-m-d')) {
-			return [$this->singleRowFromEntry($entry, $startTime, $endTime)];
+		if ($startForExport->format('Y-m-d') === $endForExport->format('Y-m-d')) {
+			return [$this->singleRowFromEntry($entry, $startForExport, $endForExport)];
 		}
 
-		$startTs = $startTime->getTimestamp();
-		$endTs = $endTime->getTimestamp();
+		$startTs = $startForExport->getTimestamp();
+		$endTs = $endForExport->getTimestamp();
 		if ($endTs <= $startTs) {
-			return [$this->singleRowFromEntry($entry, $startTime, $endTime)];
+			return [$this->singleRowFromEntry($entry, $startForExport, $endForExport)];
 		}
 
-		$segments = $this->splitIntoCalendarDaySegments($startTime, $endTime);
+		$segments = $this->splitIntoCalendarDaySegments($startForExport, $endForExport);
 		if (count($segments) <= 1) {
-			return [$this->singleRowFromEntry($entry, $startTime, $endTime)];
+			return [$this->singleRowFromEntry($entry, $startForExport, $endForExport)];
 		}
 
 		$totalDurationSeconds = $endTs - $startTs;
-		$totalDurationHours = $entry->getDurationHours();
+		$totalDurationHours = $entry->getTotalDurationHours();
 		$totalWorkingHours = $entry->getWorkingDurationHours();
 		$totalBreakHours = $entry->getBreakDurationHours();
 
 		if ($totalDurationHours === null || $totalDurationHours <= 0) {
-			return [$this->singleRowFromEntry($entry, $startTime, $endTime)];
+			return [$this->singleRowFromEntry($entry, $startForExport, $endForExport)];
 		}
 
 		$rows = [];
@@ -185,17 +206,20 @@ class TimeEntryExportTransformer
 				'end_time' => $segEnd->format('H:i:s'),
 				'break_start' => '',
 				'break_end' => '',
+				'break_periods' => '',
 				'duration_hours' => round($durationHours, self::HOUR_ROUND_PRECISION),
 				'break_duration_hours' => $breakPart !== null ? round($breakPart, self::HOUR_ROUND_PRECISION) : null,
 				'working_hours' => $workingPart !== null ? round($workingPart, self::HOUR_ROUND_PRECISION) : null,
 				'description' => $entry->getDescription() ?? '',
 				'status' => $entry->getStatus(),
+				'ended_reason' => $entry->getEndedReason() ?? '',
+				'policy_applied' => $entry->getPolicyApplied() ?? '',
 				'is_manual_entry' => $entry->getIsManualEntry() ? 'Yes' : 'No',
 				'project_id' => $entry->getProjectCheckProjectId() ?? '',
 			];
 		}
 
-		return $rows !== [] ? $rows : [$this->singleRowFromEntry($entry, $startTime, $endTime)];
+		return $rows !== [] ? $rows : [$this->singleRowFromEntry($entry, $startForExport, $endForExport)];
 	}
 
 	/**
@@ -228,20 +252,61 @@ class TimeEntryExportTransformer
 
 	private function singleRowFromEntry(TimeEntry $entry, \DateTime $startTime, ?\DateTime $endTime): array
 	{
+		$breaks = $this->formatBreaksForExport($entry);
+		$breakPeriods = implode('; ', array_map(
+			static fn(array $period): string => $period['start'] . ' - ' . $period['end'],
+			$breaks
+		));
+
 		return [
 			'id' => $entry->getId(),
 			'date' => $startTime->format('Y-m-d'),
 			'start_time' => $startTime->format('H:i:s'),
 			'end_time' => $endTime ? $endTime->format('H:i:s') : '',
-			'break_start' => ($breakStart = $entry->getBreakStartTime()) ? $breakStart->format('H:i:s') : '',
-			'break_end' => ($breakEnd = $entry->getBreakEndTime()) ? $breakEnd->format('H:i:s') : '',
-			'duration_hours' => $entry->getDurationHours(),
+			'break_start' => $breaks[0]['start'] ?? '',
+			'break_end' => $breaks[0]['end'] ?? '',
+			'break_periods' => $breakPeriods,
+			'duration_hours' => $entry->getTotalDurationHours(),
 			'break_duration_hours' => $entry->getBreakDurationHours(),
 			'working_hours' => $entry->getWorkingDurationHours(),
 			'description' => $entry->getDescription() ?? '',
 			'status' => $entry->getStatus(),
+			'ended_reason' => $entry->getEndedReason() ?? '',
+			'policy_applied' => $entry->getPolicyApplied() ?? '',
 			'is_manual_entry' => $entry->getIsManualEntry() ? 'Yes' : 'No',
 			'project_id' => $entry->getProjectCheckProjectId() ?? '',
 		];
+	}
+
+	/**
+	 * @return list<array{start: string, end: string}>
+	 */
+	private function formatBreaksForExport(TimeEntry $entry): array
+	{
+		$tz = new \DateTimeZone($this->timezone);
+		$periods = [];
+		$breaksJson = $entry->getBreaks();
+		if ($breaksJson !== null && $breaksJson !== '') {
+			foreach (json_decode($breaksJson, true) ?? [] as $break) {
+				if (!isset($break['start'], $break['end'])) {
+					continue;
+				}
+				try {
+					$start = (new \DateTime((string)$break['start']))->setTimezone($tz);
+					$end = (new \DateTime((string)$break['end']))->setTimezone($tz);
+				} catch (\Throwable $e) {
+					continue;
+				}
+				$periods[] = ['start' => $start->format('H:i:s'), 'end' => $end->format('H:i:s')];
+			}
+		}
+
+		if ($entry->getBreakStartTime() !== null && $entry->getBreakEndTime() !== null) {
+			$start = (clone $entry->getBreakStartTime())->setTimezone($tz);
+			$end = (clone $entry->getBreakEndTime())->setTimezone($tz);
+			$periods[] = ['start' => $start->format('H:i:s'), 'end' => $end->format('H:i:s')];
+		}
+
+		return $periods;
 	}
 }

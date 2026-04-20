@@ -19,6 +19,7 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Service\DatevExportService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
@@ -61,6 +62,9 @@ class ExportControllerTest extends TestCase
 	/** @var IL10N|\PHPUnit\Framework\MockObject\MockObject */
 	private $l10n;
 
+	/** @var PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -73,6 +77,7 @@ class ExportControllerTest extends TestCase
 		$this->request = $this->createMock(IRequest::class);
 		$this->config = $this->createMock(IConfig::class);
 		$this->l10n = $this->createMock(IL10N::class);
+		$this->permissionService = $this->createMock(PermissionService::class);
 		$this->l10n->method('t')->willReturnCallback(static function (string $text, array $parameters = []): string {
 			// minimal formatter for tests (covers %s and %d)
 			return $parameters === [] ? $text : (string)vsprintf($text, $parameters);
@@ -99,10 +104,11 @@ class ExportControllerTest extends TestCase
 			$this->absenceMapper,
 			$this->violationMapper,
 			$this->datevExportService,
-			new TimeEntryExportTransformer(),
+			new TimeEntryExportTransformer($this->config),
 			$this->userSession,
 			$this->l10n,
-			$this->config
+			$this->config,
+			$this->permissionService
 		);
 	}
 
@@ -382,6 +388,16 @@ class ExportControllerTest extends TestCase
 	 */
 	public function testDatevConfigReturnsConfigurationStatus(): void
 	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin-user');
+		$this->userSession->expects($this->once())
+			->method('getUser')
+			->willReturn($user);
+		$this->permissionService->expects($this->once())
+			->method('isAdmin')
+			->with('admin-user')
+			->willReturn(true);
+
 		$status = [
 			'configured' => true,
 			'beraternummer' => '12345',
@@ -405,6 +421,16 @@ class ExportControllerTest extends TestCase
 	 */
 	public function testDatevConfigHandlesException(): void
 	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin-user');
+		$this->userSession->expects($this->once())
+			->method('getUser')
+			->willReturn($user);
+		$this->permissionService->expects($this->once())
+			->method('isAdmin')
+			->with('admin-user')
+			->willReturn(true);
+
 		$this->datevExportService->expects($this->once())
 			->method('getConfigurationStatus')
 			->willThrowException(new \Exception('Configuration error'));
@@ -415,6 +441,46 @@ class ExportControllerTest extends TestCase
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 		$this->assertStringContainsString('Configuration error', $data['error']);
+	}
+
+	public function testDatevConfigReturnsUnauthorizedWhenNotAuthenticated(): void
+	{
+		$this->userSession->expects($this->once())
+			->method('getUser')
+			->willReturn(null);
+		$this->permissionService->expects($this->never())->method('isAdmin');
+		$this->datevExportService->expects($this->never())->method('getConfigurationStatus');
+
+		$response = $this->controller->datevConfig();
+		$data = $response->getData();
+
+		$this->assertFalse($data['success']);
+		$this->assertEquals(\OCP\AppFramework\Http::STATUS_UNAUTHORIZED, $response->getStatus());
+		$this->assertStringContainsString('User not authenticated', $data['error']);
+	}
+
+	public function testDatevConfigReturnsForbiddenForNonAdmin(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('regular-user');
+		$this->userSession->expects($this->once())
+			->method('getUser')
+			->willReturn($user);
+		$this->permissionService->expects($this->once())
+			->method('isAdmin')
+			->with('regular-user')
+			->willReturn(false);
+		$this->permissionService->expects($this->once())
+			->method('logPermissionDenied')
+			->with('regular-user', 'read_datev_config', 'datev_config');
+		$this->datevExportService->expects($this->never())->method('getConfigurationStatus');
+
+		$response = $this->controller->datevConfig();
+		$data = $response->getData();
+
+		$this->assertFalse($data['success']);
+		$this->assertEquals(\OCP\AppFramework\Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertStringContainsString('Access denied', $data['error']);
 	}
 
 	/**
@@ -566,6 +632,14 @@ class ExportControllerTest extends TestCase
 
 		// Erste Zeile ist Header, danach sollten zwei Datenzeilen existieren
 		$lines = array_values(array_filter(explode("\n", trim($content))));
+		if (isset($lines[0]) && str_starts_with($lines[0], 'sep=')) {
+			array_shift($lines);
+		}
+		$lines = array_values(array_filter($lines, static function (string $line): bool {
+			$cols = str_getcsv($line);
+			$first = isset($cols[0]) ? trim((string)$cols[0]) : '';
+			return !str_starts_with($first, '#');
+		}));
 		$this->assertGreaterThanOrEqual(3, count($lines));
 
 		$header = str_getcsv($lines[0]);
@@ -590,15 +664,15 @@ class ExportControllerTest extends TestCase
 		$this->assertNotSame(-1, $durationIdx);
 		$this->assertNotSame(-1, $workingIdx);
 
-		// Erste Datenzeile: 15.01., 22:00:00–23:59:59
+		// Erste Datenzeile: 15.01., 23:00:00–23:59:59 (timezone-normalized)
 		$this->assertSame('2024-01-15', $row1[$dateIdx]);
-		$this->assertSame('22:00:00', $row1[$startIdx]);
+		$this->assertSame('23:00:00', $row1[$startIdx]);
 		$this->assertSame('23:59:59', $row1[$endIdx]);
 
-		// Zweite Datenzeile: 16.01., 00:00:00–06:00:00
+		// Zweite Datenzeile: 16.01., 00:00:00–07:00:00 (timezone-normalized)
 		$this->assertSame('2024-01-16', $row2[$dateIdx]);
 		$this->assertSame('00:00:00', $row2[$startIdx]);
-		$this->assertSame('06:00:00', $row2[$endIdx]);
+		$this->assertSame('07:00:00', $row2[$endIdx]);
 
 		// Die Summe der gesplitteten Arbeitsstunden sollte (näherungsweise) der Originaldauer entsprechen
 		$totalDuration = (float)$row1[$durationIdx] + (float)$row2[$durationIdx];
@@ -654,10 +728,11 @@ class ExportControllerTest extends TestCase
 			$this->absenceMapper,
 			$this->violationMapper,
 			$this->datevExportService,
-			new TimeEntryExportTransformer(),
+			new TimeEntryExportTransformer($this->config),
 			$this->userSession,
 			$this->l10n,
-			$config
+			$config,
+			$this->permissionService
 		);
 
 		$response = $controller->timeEntries('csv', '2024-01-15', '2024-01-16');
@@ -670,6 +745,11 @@ class ExportControllerTest extends TestCase
 		if (isset($lines[0]) && str_starts_with($lines[0], 'sep=')) {
 			array_shift($lines);
 		}
+		$lines = array_values(array_filter($lines, static function (string $line): bool {
+			$cols = str_getcsv($line);
+			$first = isset($cols[0]) ? trim((string)$cols[0]) : '';
+			return !str_starts_with($first, '#');
+		}));
 		$this->assertCount(2, $lines); // 1 header + 1 data line
 
 		$header = str_getcsv($lines[0]);
@@ -689,8 +769,8 @@ class ExportControllerTest extends TestCase
 		$this->assertNotSame(-1, $endIdx);
 
 		$this->assertSame('2024-01-15', $row[$dateIdx]);
-		$this->assertSame('22:00:00', $row[$startIdx]);
-		$this->assertSame('06:00:00', $row[$endIdx]);
+		$this->assertSame('23:00:00', $row[$startIdx]);
+		$this->assertSame('07:00:00', $row[$endIdx]);
 	}
 
 	/**

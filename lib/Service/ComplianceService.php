@@ -35,6 +35,7 @@ class ComplianceService
     private ?NotificationService $notificationService;
     private HolidayService $holidayCalendarService;
     private IConfig $config;
+    private PermissionService $permissionService;
 
     public function __construct(
         TimeEntryMapper $timeEntryMapper,
@@ -45,7 +46,8 @@ class ComplianceService
         IL10N $l10n,
         ?NotificationService $notificationService,
         HolidayService $holidayCalendarService,
-        IConfig $config
+        IConfig $config,
+        PermissionService $permissionService
     ) {
         $this->timeEntryMapper = $timeEntryMapper;
         $this->violationMapper = $violationMapper;
@@ -56,6 +58,7 @@ class ComplianceService
         $this->notificationService = $notificationService;
         $this->holidayCalendarService = $holidayCalendarService;
         $this->config = $config;
+        $this->permissionService = $permissionService;
     }
 
     private function getMaxDailyHours(): float
@@ -963,6 +966,9 @@ class ComplianceService
         // Iterate through all users
         $this->userManager->callForAllUsers(function ($user) use ($yesterday, $today, &$stats) {
             $userId = $user->getUID();
+            if (!$this->permissionService->isUserAllowedByAccessGroups($userId)) {
+                return;
+            }
             $stats['users_checked']++;
 
             // Count existing violations for this user from yesterday before checks

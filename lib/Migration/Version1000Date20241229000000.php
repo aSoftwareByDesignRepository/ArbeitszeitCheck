@@ -329,6 +329,12 @@ class Version1000Date20241229000000 extends SimpleMigrationStep {
 				'scale' => 2,
 				'default' => 8.0,
 			]);
+			$table->addColumn('work_days_per_week', Types::FLOAT, [
+				'notnull' => true,
+				'precision' => 4,
+				'scale' => 2,
+				'default' => 5.0,
+			]);
 			$table->addColumn('break_rules', Types::TEXT, [
 				'notnull' => false,
 			]);

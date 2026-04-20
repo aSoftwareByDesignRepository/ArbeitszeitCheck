@@ -27,6 +27,7 @@ class AccessibilityTest extends TestCase {
 			__DIR__ . '/../../templates/manager-dashboard.php',
 			__DIR__ . '/../../templates/personal-settings.php',
 			__DIR__ . '/../../templates/admin-settings.php',
+			__DIR__ . '/../../templates/admin-notifications.php',
 			__DIR__ . '/../../templates/reports.php',
 		];
 

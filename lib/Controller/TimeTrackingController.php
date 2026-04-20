@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
+use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -79,6 +80,11 @@ class TimeTrackingController extends Controller
 				'success' => true,
 				'timeEntry' => $summary
 			]);
+		} catch (MonthFinalizedException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
@@ -117,6 +123,11 @@ class TimeTrackingController extends Controller
 				'success' => true,
 				'timeEntry' => $summary
 			]);
+		} catch (MonthFinalizedException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
@@ -178,6 +189,11 @@ class TimeTrackingController extends Controller
 				'success' => true,
 				'timeEntry' => $summary
 			]);
+		} catch (MonthFinalizedException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error
@@ -216,6 +232,11 @@ class TimeTrackingController extends Controller
 				'success' => true,
 				'timeEntry' => $summary
 			]);
+		} catch (MonthFinalizedException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
+			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
 			// Check if it's an authentication error

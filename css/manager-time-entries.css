@@ -18,6 +18,11 @@
 	font-size: 1.5rem;
 }
 
+.manager-time-entries-page__header .section__desc {
+	max-width: 62ch;
+	line-height: 1.5;
+}
+
 .manager-time-entries-page__filters .form-grid {
 	align-items: end;
 }
@@ -45,6 +50,20 @@
 }
 
 @media (max-width: 768px) {
+	.manager-time-entries-page .section {
+		padding: 1rem;
+	}
+
+	.manager-time-entries-page__header h1 {
+		font-size: 1.25rem;
+		line-height: 1.35;
+	}
+
+	.manager-time-entries-page__filters .form-grid {
+		grid-template-columns: 1fr;
+		gap: var(--space-4, 1rem);
+	}
+
 	.manager-time-entries-page__results-header {
 		flex-direction: column;
 		align-items: flex-start;
@@ -52,9 +71,37 @@
 
 	.manager-time-entries-page__filter-actions {
 		width: 100%;
+		gap: var(--space-3, 0.75rem);
 	}
 
 	.manager-time-entries-page__filter-actions .btn {
 		flex: 1 1 auto;
+		min-height: 46px;
+	}
+
+	.manager-time-entries-page__pagination {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: var(--space-2, 0.5rem);
+	}
+
+	.manager-time-entries-page__pagination .btn {
+		width: 100%;
+		min-height: 46px;
+	}
+}
+
+@media (max-width: 576px) {
+	.manager-time-entries-page__header h1 {
+		font-size: 1.125rem;
+	}
+
+	.manager-time-entries-page__count {
+		font-size: 0.875rem;
+	}
+
+	.manager-time-entries-page .table th,
+	.manager-time-entries-page .table td {
+		padding: 0.625rem 0.75rem;
 	}
 }
