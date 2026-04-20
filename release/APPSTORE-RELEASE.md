@@ -9,7 +9,7 @@ Replace `X.Y.Z` with the real version (e.g. `1.1.6`).
 ## 0. Prerequisites
 
 - Registered app and **developer certificate** from Nextcloud (private key on your machine).
-- Default key path used below: `~/.nextcloud/certificates/arbeitszeitcheck.key` (same basename as app id).
+- Export local key/cert paths in your shell before signing (for example `APP_CERT_KEY_PATH` and `APP_CERT_CRT_PATH`).
 - This monorepo: build the tarball from **`apps/`** so the archive root is `arbeitszeitcheck/`.
 
 ---
@@ -45,8 +45,9 @@ APPID=arbeitszeitcheck
 CONTAINER=nextcloud-app
 
 # 1) Copy key material into container tmp
-docker cp "$HOME/.nextcloud/certificates/${APPID}.key" "${CONTAINER}:/tmp/${APPID}.key"
-docker cp "$HOME/.nextcloud/certificates/${APPID}.crt" "${CONTAINER}:/tmp/${APPID}.crt"
+#    Set APP_CERT_KEY_PATH and APP_CERT_CRT_PATH in your shell first.
+docker cp "${APP_CERT_KEY_PATH}" "${CONTAINER}:/tmp/${APPID}.key"
+docker cp "${APP_CERT_CRT_PATH}" "${CONTAINER}:/tmp/${APPID}.crt"
 docker exec "${CONTAINER}" sh -lc "chown www-data:www-data /tmp/${APPID}.key /tmp/${APPID}.crt && chmod 600 /tmp/${APPID}.key && chmod 644 /tmp/${APPID}.crt"
 
 # 2) Sign extracted archive payload with occ (as www-data), repack to /tmp
@@ -137,7 +138,7 @@ The store expects a **base64-encoded** RSA signature over the **exact** `.tar.gz
 **One line** (copy output into the store’s signature field):
 
 ```bash
-openssl dgst -sha512 -sign ~/.nextcloud/certificates/arbeitszeitcheck.key \
+openssl dgst -sha512 -sign "${APP_CERT_KEY_PATH}" \
   "arbeitszeitcheck-${VERSION}.tar.gz" | openssl base64 | tr -d '\n'
 ```
 

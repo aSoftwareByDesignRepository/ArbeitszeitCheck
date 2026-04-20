@@ -23,6 +23,15 @@ Thumbs.db
 *.log
 server.log
 
+# Local certificate/key material (never commit)
+*.key
+*.crt
+*.pem
+*.p12
+*.pfx
+*.cer
+.nextcloud/
+
 # Nextcloud specific
 data/
 config/config.php
