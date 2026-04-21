@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.2.0 - 2026-04-21
+
 ### Added
 
 - **Vacation entitlement policy engine**: New policy-driven calculation flow with support for `manual_fixed`, `model_based_simple`, `tariff_rule_based`, and `manual_exception`, plus admin simulation endpoint.

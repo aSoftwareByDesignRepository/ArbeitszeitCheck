@@ -111,4 +111,4 @@ Statutory and optional holidays depend on the **federal state (Bundesland)** and
 
 ---
 
-*Document version: aligned with app 1.1.x. For the exact shipped version, see `appinfo/info.xml`.*
+*Document version: aligned with the current app release. For the exact shipped version, see `appinfo/info.xml`.*

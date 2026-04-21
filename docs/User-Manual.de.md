@@ -108,4 +108,4 @@ Personenbezogene Daten werden für **Zeiterfassung und damit verbundene HR-Proze
 
 ---
 
-*Stand: zur App-Version 1.1.x passend; exakte Versionsnummer: `appinfo/info.xml`.*
+*Stand: passend zur aktuellen App-Version; exakte Versionsnummer: `appinfo/info.xml`.*

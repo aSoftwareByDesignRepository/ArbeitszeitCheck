@@ -1,0 +1,5 @@
+SHA-256  arbeitszeitcheck-1.2.0.tar.gz
+1c205ee422ecf738d7a18eaff793696cbbd6a113cd8970f1e1c770c41035caff  arbeitszeitcheck-1.2.0.tar.gz
+
+SHA-512  arbeitszeitcheck-1.2.0.tar.gz
+8c5d72c429149278a4dad7ad738616551c8e6d3082f0396171ef299b1223ed6eb9acb3f76d4defda638dd8dcf4f0b6b03af220b2d2f35cc60b17988c7bad4c38  arbeitszeitcheck-1.2.0.tar.gz

@@ -87,12 +87,19 @@ tar --exclude='arbeitszeitcheck/node_modules' \
     --exclude='arbeitszeitcheck/node_modules.broken-*' \
     --exclude='arbeitszeitcheck/test-results' \
     --exclude='arbeitszeitcheck/.git' \
+    --exclude='arbeitszeitcheck/.github' \
+    --exclude='arbeitszeitcheck/tests' \
     --exclude='arbeitszeitcheck/scripts' \
+    --exclude='arbeitszeitcheck/build' \
+    --exclude='arbeitszeitcheck/vendor/**/.github' \
+    --exclude='arbeitszeitcheck/vendor/**/.phpunit.result.cache' \
     --exclude='arbeitszeitcheck/release/arbeitszeitcheck-*.tar.gz' \
     -czf "arbeitszeitcheck/release/arbeitszeitcheck-${VERSION}.tar.gz" arbeitszeitcheck
 ```
 
-If you use the manual fallback, you **must** re-sign the extracted archive tree with `occ integrity:sign-app` and validate that `appinfo/signature.json` contains no `.git/`, `node_modules/`, `tests/`, `build/`, or `scripts/` entries before upload.
+If you use the manual fallback, you **must** re-sign the extracted archive tree with `occ integrity:sign-app` and validate that `appinfo/signature.json` contains no `.git/`, `node_modules/`, `.github/`, `tests/`, `build/`, or `scripts/` entries before upload.
+
+If `make release-signed` fails due to `build/` permission issues (for example root-owned from an older run), either fix ownership first or use this manual tarball + Docker signing path.
 
 **Do not commit** the tarball (see `.gitignore`).
 

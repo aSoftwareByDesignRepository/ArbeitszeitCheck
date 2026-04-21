@@ -1,7 +1,7 @@
 # Developer Documentation – ArbeitszeitCheck
 
-**Version:** 1.1.15-dev  
-**Last Updated:** 2026-04-20
+**Version:** aligned with the current app release (`appinfo/info.xml`)  
+**Last Updated:** 2026-04-21
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.
 
@@ -86,7 +86,7 @@ apps/arbeitszeitcheck/
 
 - Nextcloud 32+ installed and running
 - PHP 8.1+ with required extensions
-- Node.js 18+ and npm
+- Node.js 20 or 22 and npm 10+
 - Composer
 - Git
 
