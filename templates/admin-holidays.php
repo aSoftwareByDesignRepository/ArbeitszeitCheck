@@ -56,9 +56,9 @@ $holidaysUiStrings = [
     <div id="app-content-wrapper">
             <div class="section admin-holidays-section">
                 <header class="section-header admin-holidays-section__header">
-                    <h2><?php p($l->t('Holidays and calendar')); ?></h2>
+                    <h2><?php p($l->t('Feiertage und Kalender')); ?></h2>
                     <p class="section-intro">
-                        <?php p($l->t('Manage statutory and additional holidays per federal state. These calendars are used for vacation, working time calculations, and compliance checks.')); ?>
+                        <?php p($l->t('Gesetzliche und zusätzliche Feiertage pro Bundesland verwalten. Diese Kalender werden für Urlaub, Arbeitszeitberechnung und Compliance-Prüfungen genutzt.')); ?>
                     </p>
                 </header>
 
@@ -66,17 +66,17 @@ $holidaysUiStrings = [
                     <section class="admin-holidays-card" aria-labelledby="holiday-default-state-heading">
                         <header class="admin-holidays-card__header">
                             <h3 id="holiday-default-state-heading" class="admin-holidays-card__title">
-                                <?php p($l->t('Default federal state for holidays')); ?>
+                                <?php p($l->t('Standard-Bundesland für Feiertage')); ?>
                             </h3>
                             <p class="admin-holidays-card__subtitle">
-                                <?php p($l->t('This federal state is used automatically when no own state is configured for employees or teams.')); ?>
+                                <?php p($l->t('Dieses Bundesland wird automatisch verwendet, wenn für Mitarbeitende oder Teams kein eigenes Bundesland gesetzt ist.')); ?>
                             </p>
                         </header>
 
                         <div class="admin-holidays-card__body">
                             <div class="form-group">
                                 <label for="holiday-default-state" class="form-label">
-                                    <?php p($l->t('Select default federal state')); ?>
+                                    <?php p($l->t('Standard-Bundesland auswählen')); ?>
                                 </label>
                                 <select id="holiday-default-state"
                                         name="holidayDefaultState"
@@ -129,10 +129,10 @@ $holidaysUiStrings = [
                     <section class="admin-holidays-card" aria-labelledby="state-calendar-heading">
                         <header class="admin-holidays-card__header">
                             <h3 id="state-calendar-heading" class="admin-holidays-card__title">
-                                <?php p($l->t('Manage calendar per federal state')); ?>
+                                <?php p($l->t('Kalender je Bundesland verwalten')); ?>
                             </h3>
                             <p class="admin-holidays-card__subtitle">
-                                <?php p($l->t('Select a federal state and year to view and edit statutory holidays plus additional company or custom holidays.')); ?>
+                                <?php p($l->t('Bundesland und Jahr wählen, um gesetzliche Feiertage sowie zusätzliche Firmen- oder benutzerdefinierte Feiertage anzuzeigen und zu bearbeiten.')); ?>
                             </p>
                         </header>
 
@@ -175,8 +175,8 @@ $holidaysUiStrings = [
                                 <button type="button"
                                         id="holiday-add-entry"
                                         class="btn btn--primary"
-                                        aria-label="<?php p($l->t('Create new holiday')); ?>">
-                                    <?php p($l->t('Add new holiday')); ?>
+                                        aria-label="<?php p($l->t('Neuen Feiertag anlegen')); ?>">
+                                    <?php p($l->t('Neuen Feiertag hinzufügen')); ?>
                                 </button>
                             </div>
                         </div>

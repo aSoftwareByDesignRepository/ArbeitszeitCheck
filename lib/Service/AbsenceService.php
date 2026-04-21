@@ -326,10 +326,6 @@ class AbsenceService
 			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'request_created', $userId);
 		}
 
-		if ($this->absenceNotificationMailService) {
-			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'employee_cancelled', $userId);
-		}
-
 		return $updatedAbsence;
 	}
 
@@ -440,7 +436,7 @@ class AbsenceService
 		}
 
 		if ($this->absenceNotificationMailService) {
-			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'employee_shortened', $userId);
+			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'employee_cancelled', $userId);
 		}
 
 		return $updatedAbsence;

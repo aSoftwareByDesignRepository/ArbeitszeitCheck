@@ -158,16 +158,16 @@ class BreakReminderJob extends TimedJob
 
 				$totalHoursWorked = $totalHoursToday + $currentSessionHours;
 
-				// Check if break is required
+				// Check if break is required (ArbZG §4: 9h check must precede 6h check)
 				$breakDuration = $activeEntry->getBreakDurationHours();
 				$requiredBreak = 0;
 
-				if ($totalHoursWorked >= 6 && $breakDuration < 0.5) {
-					// 30 minutes break required after 6 hours
-					$requiredBreak = 30;
-				} elseif ($totalHoursWorked >= 9 && $breakDuration < 0.75) {
+				if ($totalHoursWorked >= 9 && $breakDuration < 0.75) {
 					// 45 minutes break required after 9 hours
 					$requiredBreak = 45;
+				} elseif ($totalHoursWorked >= 6 && $breakDuration < 0.5) {
+					// 30 minutes break required after 6 hours
+					$requiredBreak = 30;
 				}
 
 				if ($requiredBreak > 0) {

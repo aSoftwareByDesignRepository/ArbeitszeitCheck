@@ -32,6 +32,7 @@ Util::addScript('arbeitszeitcheck', 'arbeitszeitcheck-main');
 
 $status = $_['status'] ?? [];
 $overtime = $_['overtime'] ?? [];
+$overtimeTrafficLight = is_array($_['overtimeTrafficLight'] ?? null) ? $_['overtimeTrafficLight'] : ['enabled' => false, 'state' => 'green'];
 $recentEntries = $_['recentEntries'] ?? [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $dashStats = $_['stats'] ?? [];
@@ -283,6 +284,30 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                 <?php p(round($overtime['cumulative_balance'] ?? 0, 2)); ?> <?php p($l->t('hours')); ?>
                             </span>
                         </div>
+                        <?php if (($overtimeTrafficLight['enabled'] ?? false) === true): ?>
+                        <?php
+                            $lightState = (string)($overtimeTrafficLight['state'] ?? 'green');
+                            $lightBadge = 'success';
+                            $lightText = $l->t('Green - balance in target range');
+                            if ($lightState === 'yellow_over') {
+                                $lightBadge = 'warning';
+                                $lightText = $l->t('Yellow - overtime threshold reached');
+                            } elseif ($lightState === 'red_over') {
+                                $lightBadge = 'error';
+                                $lightText = $l->t('Red - high overtime');
+                            } elseif ($lightState === 'yellow_under') {
+                                $lightBadge = 'warning';
+                                $lightText = $l->t('Yellow - undertime threshold reached');
+                            } elseif ($lightState === 'red_under') {
+                                $lightBadge = 'error';
+                                $lightText = $l->t('Red - high undertime');
+                            }
+                        ?>
+                        <div class="stat-item" role="status" aria-live="polite" aria-label="<?php p($l->t('Overtime traffic light status')); ?>">
+                            <span class="stat-label"><?php p($l->t('Balance traffic light:')); ?></span>
+                            <span class="badge badge--<?php p($lightBadge); ?>"><?php p($lightText); ?></span>
+                        </div>
+                        <?php endif; ?>
                         <div class="stat-item">
                             <span class="stat-label"><?php p($l->t('This Week:')); ?></span>
                             <span class="stat-value"><?php p(round($overtime['total_hours_worked'] ?? 0, 2)); ?> <?php p($l->t('hours')); ?></span>

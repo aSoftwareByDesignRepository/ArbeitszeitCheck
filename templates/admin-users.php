@@ -24,29 +24,29 @@ $total = $_['total'] ?? 0;
     <div id="app-content-wrapper">
         <div class="section">
             <div class="section-header">
-                <h2><?php p($l->t('Manage Employees')); ?></h2>
-                <p><?php p($l->t('Add employees to time tracking and set their work schedules')); ?></p>
+                <h2><?php p($l->t('Mitarbeitende verwalten')); ?></h2>
+                <p><?php p($l->t('Mitarbeitende für die Zeiterfassung einrichten und Arbeitszeitmodelle zuweisen.')); ?></p>
             </div>
 
             <!-- Search and Filters -->
             <div class="section-content">
                 <div class="flex flex--between flex--gap mb-3">
-                    <label for="user-search" class="visually-hidden"><?php p($l->t('Search users')); ?></label>
+                    <label for="user-search" class="visually-hidden"><?php p($l->t('Mitarbeitende suchen')); ?></label>
                     <input type="text" id="user-search" class="form-input" 
-                        placeholder="<?php p($l->t('Search users...')); ?>">
+                        placeholder="<?php p($l->t('Mitarbeitende suchen...')); ?>">
                     <button type="button" id="refresh-users" class="btn btn--secondary">
-                        <?php p($l->t('Refresh')); ?>
+                        <?php p($l->t('Aktualisieren')); ?>
                     </button>
                 </div>
 
                 <!-- Users Table -->
-                <div class="table-responsive" role="region" aria-label="<?php p($l->t('Employees list')); ?>">
-                    <table class="table" id="users-table" role="table" aria-label="<?php p($l->t('Employees list')); ?>">
+                <div class="table-responsive" role="region" aria-label="<?php p($l->t('Mitarbeitendenliste')); ?>">
+                    <table class="table" id="users-table" role="table" aria-label="<?php p($l->t('Mitarbeitendenliste')); ?>">
                         <thead>
                             <tr>
-                                <th scope="col"><?php p($l->t('Employee Name')); ?></th>
-                                <th scope="col"><?php p($l->t('Email Address')); ?></th>
-                                <th scope="col"><?php p($l->t('Work Schedule')); ?></th>
+                                <th scope="col"><?php p($l->t('Name')); ?></th>
+                                <th scope="col"><?php p($l->t('E-Mail')); ?></th>
+                                <th scope="col"><?php p($l->t('Arbeitszeitmodell')); ?></th>
                                 <th scope="col"><?php p($l->t('Vacation days')); ?></th>
                                 <th scope="col"><?php p($l->t('Valid from / to')); ?></th>
                                 <th scope="col"><?php p($l->t('Status')); ?></th>
@@ -102,7 +102,7 @@ $total = $_['total'] ?? 0;
                                                         data-user-id="<?php p($user['userId']); ?>"
                                                         data-user-name="<?php p($user['displayName']); ?>"
                                                         aria-label="<?php p($l->t('View assignment history for %s', [$user['displayName']])); ?>"
-                                                        title="<?php p($l->t('View work schedule history')); ?>">
+                                                        title="<?php p($l->t('Verlauf der Modellzuweisungen ansehen')); ?>">
                                                     <?php p($l->t('History')); ?>
                                                 </button>
                                                 <button type="button" 
@@ -123,7 +123,7 @@ $total = $_['total'] ?? 0;
                 </div>
 
                 <div class="pagination-info">
-                    <p><?php p($l->t('Showing %d of %d users', [count($users), $total])); ?></p>
+                    <p><?php p($l->t('Zeige %d von %d Mitarbeitenden', [count($users), $total])); ?></p>
                 </div>
             </div>
         </div>

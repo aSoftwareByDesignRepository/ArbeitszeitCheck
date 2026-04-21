@@ -29,6 +29,38 @@
   line-height: 1.5;
 }
 
+/* ===== JUMP NAV ===== */
+.settings-jump-nav {
+  margin-bottom: var(--space-6, 1.5rem);
+  padding: var(--space-4, 1rem);
+  border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+  border-radius: var(--border-radius, 8px);
+  background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background));
+}
+
+.settings-jump-nav__title {
+  margin: 0 0 var(--space-2, 0.5rem);
+  font-weight: 600;
+  color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+}
+
+.settings-jump-nav__list {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: var(--space-1, 0.25rem);
+}
+
+.settings-jump-nav__list a {
+  color: var(--arbeitszeitcheck-color-primary, var(--color-primary));
+  text-decoration: none;
+}
+
+.settings-jump-nav__list a:hover,
+.settings-jump-nav__list a:focus {
+  text-decoration: underline;
+}
+
 /* ===== SECTION CARDS ===== */
 /* Clear visual separation, easy to identify sections, WCAG 2.1 AA */
 .admin-settings-section {

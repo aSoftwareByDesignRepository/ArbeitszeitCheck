@@ -52,6 +52,7 @@ Only users in Nextcloud's `admin` group are eligible in this picker.
 
 - Open **ArbeitszeitCheck → Admin notifications** to configure absence-related mail behavior in one place.
 - **HR office notifications** can be enabled with recipient list plus a matrix per absence type/event (for example: request created, substitute approved, manager approved/rejected, employee cancelled/shortened).
+- **Overtime/undertime traffic light notifications** can be enabled with separate yellow/red thresholds for both directions, a dedicated recipient list, and a direction-level matrix (`over|under` x `yellow|red`).
 - The same page contains practical controls for carryover expiry, optional carryover cap, rollover behavior, substitute-required absence types, and iCal/substitution e-mail toggles.
 - Vacation entitlement can now be assigned per user with policy modes (manual, model-based, tariff-rule based, manual exception). If your organization uses tariff rules, administrators can manage rule-set versions and activation windows via admin APIs/integration tooling.
 
@@ -64,6 +65,7 @@ Only users in Nextcloud's `admin` group are eligible in this picker.
   - **App teams (recommended setup):** If your organization uses **app-managed teams** and **no manager is assigned** to your team in the app, requests you submit **without** a substitute are **approved automatically** when you send them—there is nobody who could approve them in the manager workflow. If you **do** pick a substitute, the substitute step still runs first. The UI may show a short explanation when this applies.
   - **Legacy group-based setup:** Behavior follows the older “same group” model; your admin should ensure approvals remain workable for your organization.
 - **Manager dashboard** (if you are a team lead): Under **Pending approvals**, absence requests list each person with the **absence type in your language** (e.g. vacation vs sick leave), not raw internal codes. Where enabled, **Employee absences** provides a dedicated list/filter view of team absences.
+- **Overtime balance traffic light**: On the dashboard, your balance can appear as green/yellow/red and distinguishes overtime vs undertime warnings. This is an orientation signal; your organization defines policy actions.
 - **Mobile use (phones/tablets):** The UI is optimized for responsive use with clearer section spacing, larger touch targets, and iPhone safe-area aware layout. If you use a very small screen, prefer portrait mode for forms and landscape for wide tables/reports.
 - **Reports**: Generate period reports or exports your admin allows (CSV, DATEV, etc.).
 - **Compliance**: The app may flag violations (e.g. missing breaks); your employer defines how those are handled.

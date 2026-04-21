@@ -109,11 +109,12 @@ class ComplianceServiceTest extends TestCase
 	{
 		$userId = 'testuser';
 
-		// Mock no previous entry (first clock-in) - getLastCompletedEntry uses findByUser
-		$this->timeEntryMapper->expects($this->atLeastOnce())
-			->method('findByUser')
+		// No previous entry (first clock-in): targeted queries return null.
+		$this->timeEntryMapper->method('findLastCompletedByUser')
 			->with($userId)
-			->willReturn([]);
+			->willReturn(null);
+		$this->timeEntryMapper->method('findLastPausedWithinHours')
+			->willReturn(null);
 
 		// Mock today's hours (under 10 hours) - called twice (once for daily, once for weekly check)
 		$this->timeEntryMapper->expects($this->exactly(2))
@@ -133,7 +134,7 @@ class ComplianceServiceTest extends TestCase
 	{
 		$userId = 'testuser';
 
-		// Mock previous entry that ended less than 11 hours ago
+		// Previous entry ended less than 11 hours ago.
 		$endTime = new \DateTime();
 		$endTime->modify('-10 hours'); // Only 10 hours ago
 		$lastEntry = new TimeEntry();
@@ -146,11 +147,10 @@ class ComplianceServiceTest extends TestCase
 		$lastEntry->setCreatedAt(new \DateTime());
 		$lastEntry->setUpdatedAt(new \DateTime());
 
-		// getLastCompletedEntry uses findByUser and filters for completed entries
-		$this->timeEntryMapper->expects($this->atLeastOnce())
-			->method('findByUser')
+		// checkRestPeriod now calls findLastCompletedByUser (targeted query).
+		$this->timeEntryMapper->method('findLastCompletedByUser')
 			->with($userId)
-			->willReturn([$lastEntry]);
+			->willReturn($lastEntry);
 
 		// Mock today's hours (under 10 hours) - called twice (once for daily, once for weekly check)
 		$this->timeEntryMapper->expects($this->exactly(2))
@@ -172,11 +172,12 @@ class ComplianceServiceTest extends TestCase
 	{
 		$userId = 'testuser';
 
-		// Mock no previous entry
-		$this->timeEntryMapper->expects($this->atLeastOnce())
-			->method('findByUser')
+		// No previous completed or paused entry.
+		$this->timeEntryMapper->method('findLastCompletedByUser')
 			->with($userId)
-			->willReturn([]);
+			->willReturn(null);
+		$this->timeEntryMapper->method('findLastPausedWithinHours')
+			->willReturn(null);
 
 		// Mock today's hours (10 hours already worked) - called twice (once for daily, once for weekly check)
 		$this->timeEntryMapper->expects($this->exactly(2))

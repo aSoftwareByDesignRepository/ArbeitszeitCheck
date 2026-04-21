@@ -276,6 +276,7 @@ class AdminController extends Controller
 		Util::addStyle('arbeitszeitcheck', 'common/responsive');
 		Util::addStyle('arbeitszeitcheck', 'navigation');
 		Util::addStyle('arbeitszeitcheck', 'arbeitszeitcheck-main');
+		Util::addStyle('arbeitszeitcheck', 'admin-dashboard');
 
 		// Add common JavaScript files
 		Util::addScript('arbeitszeitcheck', 'common/utils');
@@ -1576,13 +1577,53 @@ class AdminController extends Controller
 
 			$matrix = $this->normalizeNotificationMatrix($rawMatrix);
 
+			$trafficEnabled = $this->toBool($params['overtimeTrafficLightEnabled'] ?? false);
+			$overtimeRecipientsRaw = $params['overtimeRecipients'] ?? '';
+			$overtimeRecipients = $this->normalizeNotificationRecipients($overtimeRecipientsRaw);
+			$overtimeInvalidRecipients = $this->collectInvalidNotificationRecipients($overtimeRecipientsRaw);
+			if ($overtimeInvalidRecipients !== []) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid recipient email: %s', [implode(', ', $overtimeInvalidRecipients)]),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			if (count($overtimeRecipients) > self::MAX_NOTIFICATION_RECIPIENTS) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('A maximum of 20 balance traffic light recipients is allowed.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			if ($trafficEnabled && $overtimeRecipients === []) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Please enter at least one valid balance traffic light recipient email address (overtime/undertime).'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			$overtimeMatrix = $this->normalizeOvertimeNotificationMatrix($params['overtimeMatrix'] ?? []);
+			$yellowOver = max(0.0, min(500.0, (float)($params['overtimeYellowOver'] ?? 5)));
+			$redOver = max(0.0, min(500.0, (float)($params['overtimeRedOver'] ?? 15)));
+			$yellowUnder = max(0.0, min(500.0, (float)($params['overtimeYellowUnder'] ?? 5)));
+			$redUnder = max(0.0, min(500.0, (float)($params['overtimeRedUnder'] ?? 15)));
+			if ($yellowOver > $redOver || $yellowUnder > $redUnder) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Yellow thresholds must be less than or equal to red thresholds.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
 			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATIONS_ENABLED, $enabled ? '1' : '0');
 			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, implode(',', $recipients));
 			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1, (string)json_encode($matrix));
+			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_TRAFFIC_LIGHT_ENABLED, $trafficEnabled ? '1' : '0');
+			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_NOTIFICATION_RECIPIENTS, implode(',', $overtimeRecipients));
+			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_NOTIFICATION_MATRIX_V1, (string)json_encode($overtimeMatrix));
+			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_YELLOW_OVER, (string)$yellowOver);
+			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_RED_OVER, (string)$redOver);
+			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_YELLOW_UNDER, (string)$yellowUnder);
+			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_RED_UNDER, (string)$redUnder);
 
 			$allowedKeys = [
 				'missingClockInRemindersEnabled' => 'missing_clock_in_reminders_enabled',
-				'requireSubstituteTypes' => 'require_substitute_types',
 				'sendIcalApprovedAbsences' => 'send_ical_approved_absences',
 				'sendIcalToSubstitute' => 'send_ical_to_substitute',
 				'sendIcalToManagers' => 'send_ical_to_managers',
@@ -1632,16 +1673,6 @@ class AdminController extends Controller
 						}
 						$value = (string)$max;
 					}
-				} elseif ($paramKey === 'requireSubstituteTypes') {
-					$validTypes = ['vacation', 'sick_leave', 'personal_leave', 'parental_leave', 'special_leave', 'unpaid_leave', 'home_office', 'business_trip'];
-					$arr = is_array($value) ? $value : (is_string($value) ? json_decode($value, true) : []);
-					if (!is_array($arr)) {
-						$arr = [];
-					}
-					$arr = array_values(array_unique(array_filter($arr, function ($t) use ($validTypes) {
-						return in_array((string)$t, $validTypes, true);
-					})));
-					$value = json_encode($arr);
 				} else {
 					$value = (string)$value;
 				}
@@ -1760,6 +1791,28 @@ class AdminController extends Controller
 	}
 
 	/**
+	 * @param mixed $rawMatrix
+	 * @return array<string, array<string, bool>>
+	 */
+	private function normalizeOvertimeNotificationMatrix(mixed $rawMatrix): array
+	{
+		$matrix = [];
+		$input = is_array($rawMatrix) ? $rawMatrix : (is_string($rawMatrix) ? json_decode($rawMatrix, true) : []);
+		if (!is_array($input)) {
+			$input = [];
+		}
+		foreach (Constants::OVERTIME_DIRECTIONS as $direction) {
+			$matrix[$direction] = [];
+			$typeInput = (isset($input[$direction]) && is_array($input[$direction])) ? $input[$direction] : [];
+			foreach (Constants::OVERTIME_LEVELS as $level) {
+				$matrix[$direction][$level] = $this->toBool($typeInput[$level] ?? false);
+			}
+		}
+
+		return $matrix;
+	}
+
+	/**
 	 * @return array<string, mixed>
 	 */
 	private function buildNotificationSettingsPayload(): array
@@ -1776,6 +1829,13 @@ class AdminController extends Controller
 		$decoded = json_decode(
 			$this->appConfig->getAppValueString(Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1, '[]'),
 			true
+		);
+		$overtimeDecoded = json_decode(
+			$this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_NOTIFICATION_MATRIX_V1, '[]'),
+			true
+		);
+		$overtimeRecipients = $this->normalizeNotificationRecipients(
+			$this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_NOTIFICATION_RECIPIENTS, '')
 		);
 
 		return [
@@ -1795,6 +1855,13 @@ class AdminController extends Controller
 			'sendEmailSubstitutionRequest' => $this->appConfig->getAppValueString('send_email_substitution_request', '1') === '1',
 			'sendEmailSubstituteApprovedToEmployee' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_employee', '1') === '1',
 			'sendEmailSubstituteApprovedToManager' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_manager', '1') === '1',
+			'overtimeTrafficLightEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_TRAFFIC_LIGHT_ENABLED, '0') === '1',
+			'overtimeRecipients' => implode(', ', $overtimeRecipients),
+			'overtimeMatrix' => $this->normalizeOvertimeNotificationMatrix($overtimeDecoded),
+			'overtimeYellowOver' => (float)$this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_YELLOW_OVER, '5'),
+			'overtimeRedOver' => (float)$this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_RED_OVER, '15'),
+			'overtimeYellowUnder' => (float)$this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_YELLOW_UNDER, '5'),
+			'overtimeRedUnder' => (float)$this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_RED_UNDER, '15'),
 		];
 	}
 

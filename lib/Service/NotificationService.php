@@ -374,6 +374,32 @@ class NotificationService
 	}
 
 	/**
+	 * Send traffic-light overtime or undertime notification.
+	 *
+	 * @param array{state: string, direction: string, level: string, balance: float} $trafficData
+	 */
+	public function notifyOvertimeTrafficLight(string $userId, array $trafficData): void
+	{
+		$notification = $this->notificationManager->createNotification();
+		$notification->setApp('arbeitszeitcheck')
+			->setUser($userId)
+			->setDateTime(new \DateTime())
+			->setObject('overtime_traffic_light', (string)date('Y-m-d'))
+			->setSubject('overtime_traffic_light', [
+				'state' => $trafficData['state'] ?? 'green',
+				'direction' => $trafficData['direction'] ?? 'over',
+				'level' => $trafficData['level'] ?? 'yellow',
+				'balance' => (float)($trafficData['balance'] ?? 0.0),
+			])
+			->setMessage('overtime_traffic_light', [
+				'state' => $trafficData['state'] ?? 'green',
+				'balance' => (float)($trafficData['balance'] ?? 0.0),
+			]);
+
+		$this->notificationManager->notify($notification);
+	}
+
+	/**
 	 * Send a notification about time entry correction request
 	 * Notifies the user's manager about the correction request
 	 *

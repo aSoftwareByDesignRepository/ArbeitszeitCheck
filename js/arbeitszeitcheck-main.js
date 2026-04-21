@@ -1486,10 +1486,10 @@
                 return;
             }
 
-            // Group items by date
+            // Group items by date using local calendar date (not UTC) to avoid timezone drift
             const grouped = {};
             items.forEach(item => {
-                const dateKey = item.date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateYmd(item.date);
                 if (!grouped[dateKey]) {
                     grouped[dateKey] = [];
                 }
@@ -1501,7 +1501,8 @@
             const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a));
             
             sortedDates.forEach(dateKey => {
-                const date = new Date(dateKey);
+                // Append T00:00:00 so the date string is parsed as local midnight, not UTC midnight.
+                const date = new Date(dateKey + 'T00:00:00');
                 // Format date using translated month and weekday names
                 const months = this.config.l10n?.months || [
                 mainT('January'),
@@ -1797,7 +1798,9 @@
          * Initialize calendar page
          */
         initCalendar: function() {
-            const monthStr = this.config.currentMonth || new Date().toISOString().slice(0, 7);
+            const _now = new Date();
+            const monthStr = this.config.currentMonth ||
+                (_now.getFullYear() + '-' + String(_now.getMonth() + 1).padStart(2, '0'));
             this.calendarData = {
                 timeEntries: [],
                 absences: [],
@@ -2218,15 +2221,17 @@
          * Get data for a specific day
          */
         getDayData: function(dateKey) {
-            const today = new Date().toISOString().split('T')[0];
-            const date = new Date(dateKey);
+            // Use local-date helpers so "today" and entry dates are never shifted by UTC conversion.
+            const today = formatLocalDateYmd(new Date());
+            // Parse dateKey as local midnight for day-of-week check
+            const date = new Date(dateKey + 'T00:00:00');
             const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
             // Find time entries for this day
             const dayEntries = this.calendarData.timeEntries.filter(entry => {
                 const startTime = entry.start_time || entry.startTime;
                 if (!startTime) return false;
-                const entryDate = new Date(startTime).toISOString().split('T')[0];
+                const entryDate = formatLocalDateYmd(new Date(startTime));
                 return entryDate === dateKey;
             });
 
@@ -2235,9 +2240,9 @@
                 const startDate = absence.start_date || absence.startDate;
                 const endDate = absence.end_date || absence.endDate;
                 if (!startDate) return false;
-                
-                const start = new Date(startDate).toISOString().split('T')[0];
-                const end = endDate ? new Date(endDate).toISOString().split('T')[0] : start;
+                // Absence dates are calendar dates; parse as local midnight to avoid UTC shift.
+                const start = formatLocalDateYmd(new Date(startDate + 'T00:00:00'));
+                const end = endDate ? formatLocalDateYmd(new Date(endDate + 'T00:00:00')) : start;
                 
                 return dateKey >= start && dateKey <= end;
             });

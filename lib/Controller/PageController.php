@@ -20,6 +20,7 @@ use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCA\ArbeitszeitCheck\Service\OvertimeTrafficLightService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -51,6 +52,7 @@ class PageController extends Controller
 	private IURLGenerator $urlGenerator;
 	private IConfig $config;
 	private PermissionService $permissionService;
+	private OvertimeTrafficLightService $overtimeTrafficLightService;
 	private IL10N $l10n;
 
 	/**
@@ -81,6 +83,7 @@ class PageController extends Controller
 		IURLGenerator $urlGenerator,
 		IConfig $config,
 		PermissionService $permissionService,
+		OvertimeTrafficLightService $overtimeTrafficLightService,
 		CSPService $cspService,
 		IL10N $l10n
 	) {
@@ -96,6 +99,7 @@ class PageController extends Controller
 		$this->urlGenerator = $urlGenerator;
 		$this->config = $config;
 		$this->permissionService = $permissionService;
+		$this->overtimeTrafficLightService = $overtimeTrafficLightService;
 		$this->l10n = $l10n;
 		$this->setCspService($cspService);
 	}
@@ -187,6 +191,10 @@ class PageController extends Controller
 			$start = (new \DateTime())->modify('-30 days');
 			$end = new \DateTime();
 			$overtimeData = $this->overtimeService->calculateOvertime($userId, $start, $end);
+			$thresholds = $this->overtimeTrafficLightService->getThresholds();
+			$trafficLight = $this->overtimeTrafficLightService->classify((float)($overtimeData['cumulative_balance'] ?? 0.0), $thresholds);
+			$trafficLight['enabled'] = $this->overtimeTrafficLightService->isEnabled();
+			$trafficLight['balance'] = (float)($overtimeData['cumulative_balance'] ?? 0.0);
 
 			// Get stats for sidebar
 			$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
@@ -203,6 +211,7 @@ class PageController extends Controller
 			$params = [
 				'status' => $status,
 				'overtime' => $overtimeData,
+				'overtimeTrafficLight' => $trafficLight,
 				'recentEntries' => $recentEntries,
 				'isFirstTimeUser' => $isFirstTimeUser,
 				'stats' => [
@@ -235,6 +244,7 @@ class PageController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'dashboard', [
 				'status' => [],
 				'overtime' => [],
+				'overtimeTrafficLight' => ['enabled' => false, 'state' => 'green', 'direction' => null, 'level' => null, 'balance' => 0.0],
 				'recentEntries' => [],
 				'isFirstTimeUser' => true,
 				'stats' => [

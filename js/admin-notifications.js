@@ -51,12 +51,13 @@
 		const form = Utils.$('#admin-notifications-form');
 		const saveButton = Utils.$('#admin-notifications-save');
 		const recipientsField = Utils.$('#hrRecipients');
+		const overtimeRecipientsField = Utils.$('#overtimeRecipients');
 		const liveRegion = Utils.$('#admin-notifications-live');
 		const apiUrl = window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminNotificationsApiUrl;
 		const l10n = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n) || {};
 		const matrixMeta = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.notificationMatrixMeta) || { absenceTypes: [], eventTypes: [] };
 
-		if (!form || !apiUrl || !recipientsField) {
+		if (!form || !apiUrl || !recipientsField || !overtimeRecipientsField) {
 			return;
 		}
 		form.addEventListener('submit', function (event) {
@@ -64,16 +65,28 @@
 			const enabledField = Utils.$('#hrNotificationsEnabled');
 			const enabled = !!(enabledField && enabledField.checked);
 			const recipients = normalizeRecipients(recipientsField.value);
+			const overtimeRecipients = normalizeRecipients(overtimeRecipientsField.value);
 			const matrix = collectMatrix(form, matrixMeta);
+			const overtimeMatrix = {
+				over: {
+					yellow: !!form.querySelector('input[name="overtimeMatrix[over][yellow]"]')?.checked,
+					red: !!form.querySelector('input[name="overtimeMatrix[over][red]"]')?.checked,
+				},
+				under: {
+					yellow: !!form.querySelector('input[name="overtimeMatrix[under][yellow]"]')?.checked,
+					red: !!form.querySelector('input[name="overtimeMatrix[under][red]"]')?.checked,
+				},
+			};
 			const isChecked = function (value) {
 				return value === 'on' || value === '1' || value === 1 || value === true;
 			};
 			const formData = new FormData(form);
-			const requireSubstituteTypes = formData
-				.getAll('requireSubstituteTypes[]')
-				.map((value) => String(value || '').trim())
-				.filter((value, index, arr) => value !== '' && arr.indexOf(value) === index);
 			const vacationCarryoverMaxDays = String(formData.get('vacationCarryoverMaxDays') || '').trim();
+			const overtimeTrafficLightEnabled = isChecked(formData.get('overtimeTrafficLightEnabled'));
+			const overtimeYellowOver = Number(String(formData.get('overtimeYellowOver') || '5').replace(',', '.'));
+			const overtimeRedOver = Number(String(formData.get('overtimeRedOver') || '15').replace(',', '.'));
+			const overtimeYellowUnder = Number(String(formData.get('overtimeYellowUnder') || '5').replace(',', '.'));
+			const overtimeRedUnder = Number(String(formData.get('overtimeRedUnder') || '15').replace(',', '.'));
 
 			if (enabled && recipients.length === 0) {
 				Messaging.showError(l10n.invalidRecipients || 'Please enter at least one valid recipient email address.');
@@ -83,10 +96,35 @@
 				recipientsField.focus();
 				return;
 			}
+			if (overtimeTrafficLightEnabled && overtimeRecipients.length === 0) {
+				const errorMessage = l10n.invalidBalanceTrafficLightRecipients || 'Please enter at least one valid balance traffic light recipient email address (overtime/undertime).';
+				Messaging.showError(errorMessage);
+				if (liveRegion) {
+					liveRegion.textContent = errorMessage;
+				}
+				overtimeRecipientsField.focus();
+				return;
+			}
+			if (!Number.isFinite(overtimeYellowOver) || !Number.isFinite(overtimeRedOver) || !Number.isFinite(overtimeYellowUnder) || !Number.isFinite(overtimeRedUnder)) {
+				const errorMessage = l10n.invalidThresholdValues || 'Threshold values must be valid numbers.';
+				Messaging.showError(errorMessage);
+				if (liveRegion) {
+					liveRegion.textContent = errorMessage;
+				}
+				return;
+			}
+			if (overtimeYellowOver > overtimeRedOver || overtimeYellowUnder > overtimeRedUnder) {
+				const errorMessage = l10n.invalidThresholdOrder || 'Yellow thresholds must be less than or equal to red thresholds.';
+				Messaging.showError(errorMessage);
+				if (liveRegion) {
+					liveRegion.textContent = errorMessage;
+				}
+				return;
+			}
 			if (vacationCarryoverMaxDays !== '') {
 				const parsedMax = Number(vacationCarryoverMaxDays.replace(',', '.'));
 				if (!Number.isFinite(parsedMax) || parsedMax < 0 || parsedMax > 366) {
-					const errorMessage = 'Maximum carryover days must be empty (unlimited) or between 0 and 366';
+					const errorMessage = l10n.invalidCarryoverMaxDays || 'Maximum carryover days must be empty (unlimited) or between 0 and 366';
 					Messaging.showError(errorMessage);
 					if (liveRegion) {
 						liveRegion.textContent = errorMessage;
@@ -108,13 +146,19 @@
 					enabled: enabled,
 					recipients: recipients,
 					matrix: matrix,
+					overtimeTrafficLightEnabled: overtimeTrafficLightEnabled,
+					overtimeRecipients: overtimeRecipients,
+					overtimeMatrix: overtimeMatrix,
+					overtimeYellowOver: overtimeYellowOver,
+					overtimeRedOver: overtimeRedOver,
+					overtimeYellowUnder: overtimeYellowUnder,
+					overtimeRedUnder: overtimeRedUnder,
 					missingClockInRemindersEnabled: isChecked(formData.get('missingClockInRemindersEnabled')),
 					vacationCarryoverExpiryMonth: parseInt(String(formData.get('vacationCarryoverExpiryMonth') || ''), 10),
 					vacationCarryoverExpiryDay: parseInt(String(formData.get('vacationCarryoverExpiryDay') || ''), 10),
 					vacationCarryoverMaxDays: vacationCarryoverMaxDays,
 					vacationRolloverEnabled: isChecked(formData.get('vacationRolloverEnabled')),
 					vacationRolloverIncludeUnusedAnnual: isChecked(formData.get('vacationRolloverIncludeUnusedAnnual')),
-					requireSubstituteTypes: requireSubstituteTypes,
 					sendIcalApprovedAbsences: isChecked(formData.get('sendIcalApprovedAbsences')),
 					sendIcalToSubstitute: isChecked(formData.get('sendIcalToSubstitute')),
 					sendIcalToManagers: isChecked(formData.get('sendIcalToManagers')),
@@ -129,6 +173,7 @@
 					if (response && response.success) {
 						Messaging.showSuccess(response.message || l10n.notificationsSaved || 'Notification settings updated successfully');
 						recipientsField.value = recipients.join(', ');
+						overtimeRecipientsField.value = overtimeRecipients.join(', ');
 						if (liveRegion) {
 							liveRegion.textContent = response.message || l10n.notificationsSaved || 'Notification settings updated successfully';
 						}

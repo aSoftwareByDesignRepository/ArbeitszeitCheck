@@ -313,10 +313,13 @@ class TimeEntryController extends Controller
 							'error' => $this->l10n->t('Invalid start date format')
 						], Http::STATUS_BAD_REQUEST);
 					}
-					try {
-						$endDateTime = $end_date ? new \DateTime($end_date) : new \DateTime('2099-12-31');
-						$endDateTime->setTime(23, 59, 59);
-					} catch (\Throwable $e) {
+				try {
+					$endDateTime = $end_date ? new \DateTime($end_date) : new \DateTime('2099-12-31');
+					// Exclusive upper bound: start of the next calendar day so that entries at
+					// any time on $end_date are included (findByUserAndDateRange uses strict <).
+					$endDateTime->setTime(0, 0, 0);
+					$endDateTime->modify('+1 day');
+				} catch (\Throwable $e) {
 						\OCP\Log\logger('arbeitszeitcheck')->error('Invalid end_date format: ' . $end_date, ['exception' => $e]);
 						return new JSONResponse([
 							'success' => false,
@@ -1656,23 +1659,27 @@ class TimeEntryController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 			$start->setTime(0, 0, 0);
-			$end->setTime(23, 59, 59);
+			// Normalise end to midnight of the requested end date.
+			$end->setTime(0, 0, 0);
 			if ($start > $end) {
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Start date cannot be after end date')
 				], Http::STATUS_BAD_REQUEST);
 			}
+			// Exclusive upper bound for DB queries (strict < comparison in findByUserAndDateRange).
+			$endExclusive = (clone $end)->modify('+1 day');
 
-			$totalHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $start, $end);
-			$totalBreakHours = $this->timeEntryMapper->getTotalBreakHoursByUserAndDateRange($userId, $start, $end);
+			$totalHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $start, $endExclusive);
+			$totalBreakHours = $this->timeEntryMapper->getTotalBreakHoursByUserAndDateRange($userId, $start, $endExclusive);
 			$totalEntries = $this->timeEntryMapper->countByUser($userId);
 
+			// calculateWorkingDays uses inclusive comparison ($current <= $end), so keep $end at midnight.
 			$workingDays = $this->calculateWorkingDays($start, $end);
 			$averageHoursPerDay = $workingDays > 0 ? $totalHours / $workingDays : 0;
 
 			// Calculate overtime using injected OvertimeService
-			$overtimeData = $this->overtimeService->calculateOvertime($userId, $start, $end);
+			$overtimeData = $this->overtimeService->calculateOvertime($userId, $start, $endExclusive);
 
 			return new JSONResponse([
 				'success' => true,
@@ -2294,11 +2301,12 @@ class TimeEntryController extends Controller
 			throw new \Exception($this->l10n->t('Invalid date format. Expected yyyy-mm-dd'));
 		}
 		$start->setTime(0, 0, 0);
-		$end->setTime(23, 59, 59);
+		$end->setTime(0, 0, 0);
 		if ($start > $end) {
 			throw new \Exception($this->l10n->t('Start date cannot be after end date'));
 		}
-		return $overtimeService->calculateOvertime($userId, $start, $end);
+		$endExclusive = (clone $end)->modify('+1 day');
+		return $overtimeService->calculateOvertime($userId, $start, $endExclusive);
 	}
 
 	/**

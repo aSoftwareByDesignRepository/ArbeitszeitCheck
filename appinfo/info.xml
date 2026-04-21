@@ -150,6 +150,7 @@ gehosteten Nextcloud.
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\ClockOutReminderJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\MissingTimeEntryJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\BreakReminderJob</job>
+		<job>OCA\ArbeitszeitCheck\BackgroundJob\OvertimeTrafficLightJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\VacationRolloverJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\MonthClosureAutoFinalizeJob</job>
 	</background-jobs>

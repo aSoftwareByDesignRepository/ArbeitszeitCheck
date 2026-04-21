@@ -6,12 +6,12 @@ This folder contains the documentation included with ArbeitszeitCheck for admini
 
 | Document | Description |
 |----------|-------------|
-| [User-Manual.en.md](User-Manual.en.md) | Short end-user/admin guide (calendar vs Nextcloud Calendar, absences, roles, app-admin allowlist usage, revision-safe month closure including optional grace period and auto-finalization) |
+| [User-Manual.en.md](User-Manual.en.md) | Short end-user/admin guide (calendar vs Nextcloud Calendar, absences, roles, app-admin allowlist usage, overtime/undertime traffic light notifications, revision-safe month closure including optional grace period and auto-finalization) |
 | [User-Manual.de.md](User-Manual.de.md) | Kurzanleitung für Endnutzer/Admins (Deutsch), inkl. App-Admin-Whitelist sowie Monatsnachweis mit Karenz und Auto-Finalisierung |
 | [GDPR-Compliance-Guide.en.md](GDPR-Compliance-Guide.en.md) | How to operate ArbeitszeitCheck in a GDPR-compliant way (legal basis, data minimization, employee rights, retention) |
 | [Compliance-Implementation.en.md](Compliance-Implementation.en.md) | Technical implementation of ArbZG compliance checks (breaks, rest periods, real-time vs batch) |
 | [Compliance-Implementation.de.md](Compliance-Implementation.de.md) | Same content in German |
-| [Developer-Documentation.en.md](Developer-Documentation.en.md) | Architecture, development setup, contribution guidelines, and technical notes (including vacation carryover / Resturlaub, assignable-manager / auto-approval semantics, HR notification matrix, vacation entitlement policy engine with tariff rule sets/snapshots, centralized frontend URL/security guardrails, and mobile/iPhone UX implementation notes) |
+| [Developer-Documentation.en.md](Developer-Documentation.en.md) | Architecture, development setup, contribution guidelines, and technical notes (including vacation carryover / Resturlaub, assignable-manager / auto-approval semantics, HR notification matrix, overtime/undertime traffic light design, vacation entitlement policy engine with tariff rule sets/snapshots, centralized frontend URL/security guardrails, and mobile/iPhone UX implementation notes) |
 
 ## Legal Notice
 

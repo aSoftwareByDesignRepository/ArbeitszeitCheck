@@ -20,6 +20,7 @@ use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
+use OCA\ArbeitszeitCheck\Service\OvertimeTrafficLightService;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IConfig;
@@ -61,6 +62,19 @@ class PageControllerTest extends TestCase
 		$permissionService = $this->createMock(PermissionService::class);
 		$permissionService->method('canAccessManagerDashboard')->willReturn(false);
 		$permissionService->method('isAdmin')->willReturn(false);
+		$overtimeTrafficLightService = $this->createMock(OvertimeTrafficLightService::class);
+		$overtimeTrafficLightService->method('isEnabled')->willReturn(false);
+		$overtimeTrafficLightService->method('getThresholds')->willReturn([
+			'yellow_over' => 5.0,
+			'red_over' => 15.0,
+			'yellow_under' => 5.0,
+			'red_under' => 15.0,
+		]);
+		$overtimeTrafficLightService->method('classify')->willReturn([
+			'state' => 'green',
+			'direction' => null,
+			'level' => null,
+		]);
 		$cspService = $this->createMock(CSPService::class);
 		$cspService->method('applyPolicyWithNonce')->willReturnCallback(fn ($r) => $r);
 		$l10n = $this->createMock(IL10N::class);
@@ -79,6 +93,7 @@ class PageControllerTest extends TestCase
 			$urlGenerator,
 			$config,
 			$permissionService,
+			$overtimeTrafficLightService,
 			$cspService,
 			$l10n
 		);

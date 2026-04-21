@@ -129,6 +129,26 @@ final class Constants
 		'business_trip',
 	];
 
+	/** App config: overtime/undertime traffic light enabled globally. */
+	public const CONFIG_OVERTIME_TRAFFIC_LIGHT_ENABLED = 'overtime_traffic_light_enabled';
+	/** App config: yellow overtime threshold in hours (positive). */
+	public const CONFIG_OVERTIME_THRESHOLD_YELLOW_OVER = 'overtime_threshold_yellow_over';
+	/** App config: red overtime threshold in hours (positive). */
+	public const CONFIG_OVERTIME_THRESHOLD_RED_OVER = 'overtime_threshold_red_over';
+	/** App config: yellow undertime threshold in hours (positive absolute value). */
+	public const CONFIG_OVERTIME_THRESHOLD_YELLOW_UNDER = 'overtime_threshold_yellow_under';
+	/** App config: red undertime threshold in hours (positive absolute value). */
+	public const CONFIG_OVERTIME_THRESHOLD_RED_UNDER = 'overtime_threshold_red_under';
+	/** App config: comma-separated overtime notification recipients. */
+	public const CONFIG_OVERTIME_NOTIFICATION_RECIPIENTS = 'overtime_notification_recipients';
+	/** App config: versioned JSON matrix of direction => level => bool. */
+	public const CONFIG_OVERTIME_NOTIFICATION_MATRIX_V1 = 'overtime_notification_matrix_v1';
+
+	/** @var list<string> */
+	public const OVERTIME_DIRECTIONS = ['over', 'under'];
+	/** @var list<string> */
+	public const OVERTIME_LEVELS = ['yellow', 'red'];
+
 	/**
 	 * Compliance score weights (critical, warning, info).
 	 */

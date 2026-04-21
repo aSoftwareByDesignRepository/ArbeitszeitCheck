@@ -55,6 +55,18 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
 
             <form id="admin-settings-form" class="form admin-settings-form" method="post" action="#" novalidate>
                 <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
+                <nav class="settings-jump-nav" aria-label="<?php p($l->t('Jump to settings sections')); ?>">
+                    <p class="settings-jump-nav__title"><?php p($l->t('Quick navigation')); ?></p>
+                    <ul class="settings-jump-nav__list">
+                        <li><a href="#section-access-heading"><?php p($l->t('Access control')); ?></a></li>
+                        <li><a href="#section-compliance-heading"><?php p($l->t('Compliance and working time rules')); ?></a></li>
+                        <li><a href="#section-export-heading"><?php p($l->t('Exports and reporting')); ?></a></li>
+                        <li><a href="#section-month-closure-heading"><?php p($l->t('Month closure (revision-safe)')); ?></a></li>
+                        <li><a href="#section-hours-heading"><?php p($l->t('Daily hours and rest periods')); ?></a></li>
+                        <li><a href="#section-regional-heading"><?php p($l->t('Region and holidays')); ?></a></li>
+                        <li><a href="#section-retention-heading"><?php p($l->t('Data retention')); ?></a></li>
+                    </ul>
+                </nav>
                 <section class="admin-settings-section" aria-labelledby="section-access-heading">
                     <h3 id="section-access-heading" class="admin-settings-section__title"><?php p($l->t('Access control')); ?></h3>
                     <div class="form-group">
@@ -156,6 +168,10 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
                 </section>
                 <section class="admin-settings-section" aria-labelledby="section-compliance-heading">
                     <h3 id="section-compliance-heading" class="admin-settings-section__title"><?php p($l->t('Compliance and working time rules')); ?></h3>
+                    <p class="form-help form-help--block">
+                        <?php p($l->t('Define how ArbeitszeitCheck validates bookings, handles break edge cases, and enforces legal limits.')); ?>
+                    </p>
+                    <h4 class="admin-settings-section__title"><?php p($l->t('Compliance checks')); ?></h4>
                 <div class="form-group">
                     <label class="form-label"><?php p($l->t('Configured timezone')); ?></label>
                     <p class="form-help">
@@ -217,6 +233,44 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
                         <?php p($l->t('When someone works too many hours or doesn\'t take required breaks, the system will send a notification to managers and the employee.')); ?>
                     </p>
                 </div>
+                <h4 class="admin-settings-section__title"><?php p($l->t('Absence workflow rules')); ?></h4>
+                <p class="form-help form-help--block">
+                    <?php p($l->t('Define for which absence types a substitute must be chosen before a request can be submitted.')); ?>
+                </p>
+                <fieldset class="form-fieldset" aria-labelledby="require-substitute-legend">
+                    <legend id="require-substitute-legend" class="form-legend"><?php p($l->t('Absences: Substitute required')); ?></legend>
+                    <p class="form-help form-help--block">
+                        <?php p($l->t('For the selected absence types, a substitute must be designated.')); ?>
+                    </p>
+                    <?php
+                    $requireTypes = $settings['requireSubstituteTypes'] ?? [];
+                    $absenceTypesForSubstitute = [
+                        'vacation' => $l->t('Vacation'),
+                        'sick_leave' => $l->t('Sick leave'),
+                        'personal_leave' => $l->t('Personal reasons'),
+                        'parental_leave' => $l->t('Parental leave'),
+                        'special_leave' => $l->t('Special leave'),
+                        'unpaid_leave' => $l->t('Unpaid leave'),
+                        'home_office' => $l->t('Home office'),
+                        'business_trip' => $l->t('Business trip'),
+                    ];
+                    foreach ($absenceTypesForSubstitute as $typeKey => $typeLabel):
+                        $checked = in_array($typeKey, $requireTypes, true);
+                    ?>
+                        <div class="form-group form-group--inline">
+                            <div class="form-checkbox">
+                                <input type="checkbox" id="requireSubstitute_<?php p($typeKey); ?>" name="requireSubstituteTypes[]" value="<?php p($typeKey); ?>"
+                                    <?php echo $checked ? 'checked' : ''; ?>
+                                    aria-describedby="require-substitute-legend">
+                                <label for="requireSubstitute_<?php p($typeKey); ?>" class="form-label"><?php p($typeLabel); ?></label>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </fieldset>
+                <h4 class="admin-settings-section__title"><?php p($l->t('Break fallback behavior')); ?></h4>
+                <p class="form-help form-help--block">
+                    <?php p($l->t('Use these settings to prevent users from staying in an open break state for many hours by accident.')); ?>
+                </p>
                 <div class="form-group">
                     <div class="form-checkbox">
                         <input type="checkbox" id="breakAutoFallbackEnabled" name="breakAutoFallbackEnabled"
@@ -398,6 +452,9 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
 
                 <section class="admin-settings-section" aria-labelledby="section-hours-heading">
                     <h3 id="section-hours-heading" class="admin-settings-section__title"><?php p($l->t('Daily hours and rest periods')); ?></h3>
+                <p class="form-help form-help--block">
+                    <?php p($l->t('Set baseline working-time limits used for legal checks and default employee setup.')); ?>
+                </p>
                 <div class="form-group">
                     <label for="maxDailyHours" class="form-label">
                         <?php p($l->t('Maximum working hours per day (in hours)')); ?>
@@ -469,6 +526,9 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
 
                 <section class="admin-settings-section" aria-labelledby="section-regional-heading">
                     <h3 id="section-regional-heading" class="admin-settings-section__title"><?php p($l->t('Region and holidays')); ?></h3>
+                <p class="form-help form-help--block">
+                    <?php p($l->t('Configure the default holiday region and how statutory holidays are repopulated.')); ?>
+                </p>
                 <div class="form-group">
                     <label for="germanState" class="form-label">
                         <?php p($l->t('Default federal state for holidays')); ?>
@@ -533,6 +593,9 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
 
                 <section class="admin-settings-section" aria-labelledby="section-retention-heading">
                     <h3 id="section-retention-heading" class="admin-settings-section__title"><?php p($l->t('Data retention')); ?></h3>
+                <p class="form-help form-help--block">
+                    <?php p($l->t('Control how long time-tracking records are kept before automated cleanup.')); ?>
+                </p>
                 <div class="form-group">
                     <label for="retentionPeriod" class="form-label">
                         <?php p($l->t('Data retention period for time records (in years)')); ?>

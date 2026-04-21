@@ -452,8 +452,10 @@ class ReportControllerTest extends TestCase
 				$this->callback(function ($date) {
 					return $date instanceof \DateTime && $date->format('Y-m-d') === '2024-06-01';
 				}),
+				// Controller passes an exclusive upper bound: midnight of the day after the
+				// requested end date, so that DB queries using strict < include all of June 30.
 				$this->callback(function ($date) {
-					return $date instanceof \DateTime && $date->format('Y-m-d') === '2024-06-30';
+					return $date instanceof \DateTime && $date->format('Y-m-d') === '2024-07-01';
 				}),
 				$userId
 			)
@@ -523,8 +525,10 @@ class ReportControllerTest extends TestCase
 				$this->callback(function ($date) {
 					return $date instanceof \DateTime && $date->format('Y-m-d') === '2024-06-01';
 				}),
+				// Controller passes an exclusive upper bound: midnight of the day after the
+				// requested end date, so that DB queries using strict < include all of June 30.
 				$this->callback(function ($date) {
-					return $date instanceof \DateTime && $date->format('Y-m-d') === '2024-06-30';
+					return $date instanceof \DateTime && $date->format('Y-m-d') === '2024-07-01';
 				}),
 				$userId
 			)

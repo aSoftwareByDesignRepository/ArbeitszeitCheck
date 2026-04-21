@@ -82,29 +82,16 @@ class ComplianceService
         $issues = [];
 
         // Check rest period (11 hours between shifts) - CRITICAL: Always enforce (ArbZG §5)
-        // This checks both completed entries (with endTime) and paused entries (with updatedAt as "end time")
         if (!$this->checkRestPeriod($userId)) {
-            // Get last completed entry (with endTime)
-            $lastCompletedEntry = $this->getLastCompletedEntry($userId);
-            $lastEndTime = $lastCompletedEntry && $lastCompletedEntry->getEndTime() 
-                ? $lastCompletedEntry->getEndTime() 
-                : null;
-            
-            // Also check for paused entries (clocked out but not completed)
-            // Use updatedAt as the "end time" for rest period calculation
-            if (!$lastEndTime) {
-                $allEntries = $this->timeEntryMapper->findByUser($userId);
-                $lastPausedEntry = null;
-                foreach ($allEntries as $entry) {
-                    if ($entry->getStatus() === TimeEntry::STATUS_PAUSED && $entry->getUpdatedAt() !== null) {
-                        if ($lastPausedEntry === null || $entry->getUpdatedAt() > $lastPausedEntry->getUpdatedAt()) {
-                            $lastPausedEntry = $entry;
-                        }
-                    }
-                }
-                if ($lastPausedEntry && $lastPausedEntry->getUpdatedAt()) {
-                    $lastEndTime = $lastPausedEntry->getUpdatedAt();
-                }
+            // Resolve last effective end time for the error message (same targeted lookups as checkRestPeriod).
+            $minRest = $this->getMinRestPeriod();
+            $lastCompleted = $this->timeEntryMapper->findLastCompletedByUser($userId);
+            $lastEndTime = $lastCompleted?->getEndTime();
+
+            if ($lastEndTime === null) {
+                $lookbackHours = max(48, (int)ceil($minRest * 2));
+                $lastPaused = $this->timeEntryMapper->findLastPausedWithinHours($userId, $lookbackHours);
+                $lastEndTime = $lastPaused?->getUpdatedAt();
             }
             
             if ($lastEndTime) {
@@ -404,45 +391,35 @@ class ComplianceService
     }
 
     /**
-     * Check if minimum rest period is met (11 hours between shifts)
-     * 
-     * Checks both completed entries (with endTime) and paused entries (with updatedAt as "end time")
+     * Check if minimum rest period is met (11 hours between shifts, ArbZG §5).
+     *
+     * Uses targeted DB queries instead of a full user-entry scan to keep clock-in fast.
      *
      * @param string $userId
      * @return bool
      */
     private function checkRestPeriod(string $userId): bool
     {
-        // First check completed entries
-        $lastCompletedEntry = $this->getLastCompletedEntry($userId);
-        $lastEndTime = $lastCompletedEntry && $lastCompletedEntry->getEndTime() 
-            ? $lastCompletedEntry->getEndTime() 
-            : null;
-        
-        // Also check for paused entries (clocked out but not completed)
-        // Use updatedAt as the "end time" for rest period calculation
-        if (!$lastEndTime) {
-            $allEntries = $this->timeEntryMapper->findByUser($userId);
-            $lastPausedEntry = null;
-            foreach ($allEntries as $entry) {
-                if ($entry->getStatus() === TimeEntry::STATUS_PAUSED && $entry->getUpdatedAt() !== null) {
-                    if ($lastPausedEntry === null || $entry->getUpdatedAt() > $lastPausedEntry->getUpdatedAt()) {
-                        $lastPausedEntry = $entry;
-                    }
-                }
-            }
-            if ($lastPausedEntry && $lastPausedEntry->getUpdatedAt()) {
-                $lastEndTime = $lastPausedEntry->getUpdatedAt();
-            }
+        $minRest = $this->getMinRestPeriod();
+
+        // Most-recent completed entry — single indexed query, O(1).
+        $lastCompleted = $this->timeEntryMapper->findLastCompletedByUser($userId);
+        $lastEndTime = $lastCompleted?->getEndTime();
+
+        // If no completed entry, fall back to the most-recent paused entry within the
+        // last 2× rest-period window (no need to scan further back).
+        if ($lastEndTime === null) {
+            $lookbackHours = max(48, (int)ceil($minRest * 2));
+            $lastPaused = $this->timeEntryMapper->findLastPausedWithinHours($userId, $lookbackHours);
+            $lastEndTime = $lastPaused?->getUpdatedAt();
         }
-        
-        if (!$lastEndTime) {
-            return true; // No previous entry to check against
+
+        if ($lastEndTime === null) {
+            return true; // No previous entry to check against.
         }
 
         $now = new \DateTime();
         $hoursSinceLastEntry = ($now->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
-        $minRest = $this->getMinRestPeriod();
 
         return $hoursSinceLastEntry >= $minRest;
     }
@@ -461,35 +438,11 @@ class ComplianceService
      */
     public function checkRestPeriodForStartTime(string $userId, \DateTime $startTime, ?int $excludeEntryId = null): array
     {
-        // Get all completed entries and find the one with the latest end time that is BEFORE the start time
-        $allEntries = $this->timeEntryMapper->findByUser($userId);
-        
-        // Find the most recent completed entry that ended BEFORE the start time
-        $lastCompletedEntry = null;
-        foreach ($allEntries as $entry) {
-            // Skip the entry being updated
-            if ($excludeEntryId !== null && $entry->getId() === $excludeEntryId) {
-                continue;
-            }
-            
-            // Only consider completed entries with end time
-            if ($entry->getStatus() !== TimeEntry::STATUS_COMPLETED || !$entry->getEndTime()) {
-                continue;
-            }
-            
-            // Only consider entries that ended BEFORE the new start time
-            if ($entry->getEndTime() >= $startTime) {
-                continue;
-            }
-            
-            // Find the entry with the latest end time
-            if ($lastCompletedEntry === null || $entry->getEndTime() > $lastCompletedEntry->getEndTime()) {
-                $lastCompletedEntry = $entry;
-            }
-        }
-        
-        // If no previous entry found, rest period check is not applicable
-        if (!$lastCompletedEntry || !$lastCompletedEntry->getEndTime()) {
+        // Single indexed query: most-recent completed entry ending before $startTime.
+        $lastCompletedEntry = $this->timeEntryMapper->findLastCompletedBeforeTime($userId, $startTime, $excludeEntryId);
+
+        // If no previous completed entry found, rest period check is not applicable.
+        if ($lastCompletedEntry === null || $lastCompletedEntry->getEndTime() === null) {
             return ['valid' => true, 'message' => null];
         }
 
@@ -510,19 +463,23 @@ class ComplianceService
         $startDateObj = new \DateTime($startDate);
         $startDateObj->setTime(0, 0, 0);
         
-        // Calculate difference in days
-        $diff = $startDateObj->diff($lastEndDateObj);
-        $daysDifference = (int)$diff->format('%r%a'); // %r for sign, %a for absolute days
-        
-        // If there's at least one full calendar day in between (difference >= 2), rest period is automatically met
-        if ($daysDifference >= 2) {
-            return ['valid' => true, 'message' => null];
-        }
-        
-        // If difference is negative (shouldn't happen since we filtered entries above)
-        if ($daysDifference < 0) {
-            return ['valid' => true, 'message' => null];
-        }
+		// Calculate calendar day distance between the two dates (normalised to midnight).
+		// $startDateObj->diff($lastEndDateObj) goes FROM startDate TO lastEndDate.
+		// Because startDate > lastEndDate (we only consider entries ending before startTime)
+		// the diff is always negative: -1 means "exactly the next calendar day", -2 means
+		// "two calendar days apart", etc.
+		$diff = $startDateObj->diff($lastEndDateObj);
+		$daysDifference = (int)$diff->format('%r%a'); // negative when startDate > lastEndDate
+
+		// Two or more full calendar days apart: 11 h rest is guaranteed regardless of clock time.
+		// Example: last end = Jan 15, new start = Jan 17 → daysDifference = -2 → always valid.
+		if ($daysDifference <= -2) {
+			return ['valid' => true, 'message' => null];
+		}
+
+		// Exactly one calendar day apart (daysDifference == -1) or any unexpected positive value:
+		// fall through to the exact timestamp check below.
+		// Example: last end = Jan 15 23:30, new start = Jan 16 00:30 → only 1 h rest → must fail.
 
         $minRest = $this->getMinRestPeriod();
         $hoursSinceLastEntry = ($startTime->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
@@ -919,26 +876,15 @@ class ComplianceService
     }
 
     /**
-     * Get last completed time entry for a user
+     * Get the most-recent completed time entry for a user.
+     * Delegates to the mapper's targeted query instead of scanning all entries.
      *
      * @param string $userId
      * @return TimeEntry|null
      */
     private function getLastCompletedEntry(string $userId): ?TimeEntry
     {
-        $allEntries = $this->timeEntryMapper->findByUser($userId);
-        
-        // Find the most recent completed entry (by end time)
-        $lastCompletedEntry = null;
-        foreach ($allEntries as $entry) {
-            if ($entry->getStatus() === TimeEntry::STATUS_COMPLETED && $entry->getEndTime() !== null) {
-                if ($lastCompletedEntry === null || $entry->getEndTime() > $lastCompletedEntry->getEndTime()) {
-                    $lastCompletedEntry = $entry;
-                }
-            }
-        }
-        
-        return $lastCompletedEntry;
+        return $this->timeEntryMapper->findLastCompletedByUser($userId);
     }
 
     /**

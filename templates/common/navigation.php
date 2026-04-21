@@ -180,9 +180,9 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                     <ul id="admin-subnav" class="nav-submenu" <?php p($isAdmin ? '' : 'hidden'); ?>>
                         <li class="<?php p($isAdminDashboard ? 'active' : ''); ?>" <?php p($isAdminDashboard ? 'aria-current="page"' : ''); ?>>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.dashboard')); ?>"
-                                title="<?php p($l->t('Übersicht mit Kennzahlen und aktuellen Hinweisen')); ?>"
-                                aria-label="<?php p($l->t('Administrationsübersicht öffnen')); ?>">
-                                <span><?php p($l->t('Übersicht')); ?></span>
+                                title="<?php p($l->t('Status mit Kennzahlen und aktuellen Hinweisen')); ?>"
+                                aria-label="<?php p($l->t('Administrationsstatus öffnen')); ?>">
+                                <span><?php p($l->t('Status')); ?></span>
                             </a>
                         </li>
                         <li class="<?php p($isAdminNotificationsPage ? 'active' : ''); ?>" <?php p($isAdminNotificationsPage ? 'aria-current="page"' : ''); ?>>
@@ -222,9 +222,9 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                         </li>
                         <li class="<?php p($isAdminAuditLog ? 'active' : ''); ?>" <?php p($isAdminAuditLog ? 'aria-current="page"' : ''); ?>>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.auditLog')); ?>"
-                                title="<?php p($l->t('View audit log')); ?>"
-                                aria-label="<?php p($l->t('Open audit log')); ?>">
-                                <span><?php p($l->t('Audit log')); ?></span>
+                                title="<?php p($l->t('Audit-Protokoll anzeigen')); ?>"
+                                aria-label="<?php p($l->t('Audit-Protokoll öffnen')); ?>">
+                                <span><?php p($l->t('Audit-Protokoll')); ?></span>
                             </a>
                         </li>
                         <li class="<?php p($isAdminSettingsPage ? 'active' : ''); ?>" <?php p($isAdminSettingsPage ? 'aria-current="page"' : ''); ?>>
@@ -257,23 +257,23 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                         </li>
                         <li class="<?php p($isManagerTimeEntries ? 'active' : ''); ?>" <?php p($isManagerTimeEntries ? 'aria-current="page"' : ''); ?>>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.manager.employeeTimeEntriesPage')); ?>"
-                                title="<?php p($l->t('View employee time entries directly in the app (for managers and administrators)')); ?>"
-                                aria-label="<?php p($l->t('Open employee time entries')); ?>">
-                                <span><?php p($l->t('Employee time entries')); ?></span>
+                                title="<?php p($l->t('Zeiteinträge von Mitarbeitenden direkt in der App ansehen (für Leitungen und Administratoren)')); ?>"
+                                aria-label="<?php p($l->t('Zeiteinträge von Mitarbeitenden öffnen')); ?>">
+                                <span><?php p($l->t('Zeiteinträge Mitarbeitende')); ?></span>
                             </a>
                         </li>
                         <li class="<?php p($isManagerAbsences ? 'active' : ''); ?>" <?php p($isManagerAbsences ? 'aria-current="page"' : ''); ?>>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.manager.employeeAbsencesPage')); ?>"
-                                title="<?php p($l->t('View employee absences directly in the app (for managers and administrators)')); ?>"
-                                aria-label="<?php p($l->t('Open employee absences')); ?>">
-                                <span><?php p($l->t('Employee absences')); ?></span>
+                                title="<?php p($l->t('Abwesenheiten von Mitarbeitenden direkt in der App ansehen (für Leitungen und Administratoren)')); ?>"
+                                aria-label="<?php p($l->t('Abwesenheiten von Mitarbeitenden öffnen')); ?>">
+                                <span><?php p($l->t('Abwesenheiten Mitarbeitende')); ?></span>
                             </a>
                         </li>
                         <?php if ($monthClosureEnabledNav): ?>
                         <li class="<?php p($isManagerMonthClosures ? 'active' : ''); ?>" <?php p($isManagerMonthClosures ? 'aria-current="page"' : ''); ?>>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.manager.monthClosuresPage')); ?>"
-                                title="<?php p($l->t('Download revision-secure month PDFs for team members (same document as the employee).')); ?>"
-                                aria-label="<?php p($l->t('Open revision PDFs for employees')); ?>">
+                                title="<?php p($l->t('Revisionssichere Monats-PDFs für Teammitglieder herunterladen (gleiches Dokument wie für Mitarbeitende).')); ?>"
+                                aria-label="<?php p($l->t('Revisions-PDFs für Mitarbeitende öffnen')); ?>">
                                 <span><?php p($l->t('Revision PDFs')); ?></span>
                             </a>
                         </li>

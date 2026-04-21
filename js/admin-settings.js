@@ -179,6 +179,11 @@
             ? []
             : (Array.isArray(appAdminRaw) ? appAdminRaw : [appAdminRaw]);
         delete formData['appAdminUserIds[]'];
+        const requireSubstituteRaw = formData['requireSubstituteTypes[]'];
+        formData.requireSubstituteTypes = requireSubstituteRaw === undefined
+            ? []
+            : (Array.isArray(requireSubstituteRaw) ? requireSubstituteRaw : [requireSubstituteRaw]);
+        delete formData['requireSubstituteTypes[]'];
 
         // Convert numbers (use defaults on invalid/empty)
         const num = (v, def) => { const n = parseFloat(v); return (Number.isFinite(n) ? n : def); };

@@ -48,9 +48,22 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 
 			<form id="admin-notifications-form" class="form admin-notifications-form" novalidate>
 				<input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
+				<nav class="settings-jump-nav" aria-label="<?php p($l->t('Jump to notification sections')); ?>">
+					<p class="settings-jump-nav__title"><?php p($l->t('Quick navigation')); ?></p>
+					<ul class="settings-jump-nav__list">
+						<li><a href="#section-absences-heading"><?php p($l->t('Absences and notifications')); ?></a></li>
+						<li><a href="#overtime-trafficlight-heading"><?php p($l->t('Overtime and undertime traffic light')); ?></a></li>
+						<li><a href="#hr-notifications-heading"><?php p($l->t('HR office notifications')); ?></a></li>
+						<li><a href="#notification-matrix-heading"><?php p($l->t('Rules by absence type and event')); ?></a></li>
+					</ul>
+				</nav>
 
 				<section class="admin-settings-section" aria-labelledby="section-absences-heading">
 					<h3 id="section-absences-heading" class="admin-settings-section__title"><?php p($l->t('Absences and notifications')); ?></h3>
+					<p class="form-help form-help--block">
+						<?php p($l->t('Configure reminder behavior, vacation carryover rules, and substitution-related communication for absence workflows.')); ?>
+					</p>
+					<h4 id="block-clock-reminders-heading" class="admin-settings-section__title"><?php p($l->t('Clock-in reminders')); ?></h4>
 					<div class="form-group">
 						<div class="form-checkbox">
 							<input type="checkbox" id="missingClockInRemindersEnabled" name="missingClockInRemindersEnabled"
@@ -124,6 +137,7 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 							</p>
 						</div>
 					</fieldset>
+					<h4 id="block-calendar-workflow-heading" class="admin-settings-section__title"><?php p($l->t('Calendar invites and workflow emails')); ?></h4>
 					<fieldset class="form-fieldset" aria-labelledby="send-ical-legend">
 						<legend id="send-ical-legend" class="form-legend"><?php p($l->t('Absences: Send iCal via email')); ?></legend>
 						<p class="form-help form-help--block">
@@ -204,36 +218,119 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 						</div>
 					</fieldset>
 
-					<fieldset class="form-fieldset" aria-labelledby="require-substitute-legend">
-						<legend id="require-substitute-legend" class="form-legend"><?php p($l->t('Absences: Substitute required')); ?></legend>
-						<p class="form-help form-help--block">
-							<?php p($l->t('For the selected absence types, a substitute must be designated.')); ?>
+				</section>
+
+				<section class="admin-settings-section" aria-labelledby="overtime-trafficlight-heading">
+					<h3 id="overtime-trafficlight-heading" class="admin-settings-section__title"><?php p($l->t('Overtime and undertime traffic light')); ?></h3>
+					<p class="form-help form-help--block">
+						<?php p($l->t('Configure thresholds and recipients for bidirectional balance alerts (overtime and undertime).')); ?>
+					</p>
+					<h4 id="block-trafficlight-recipients-heading" class="admin-settings-section__title"><?php p($l->t('Activation and recipients')); ?></h4>
+					<div class="form-group">
+						<div class="form-checkbox">
+							<input type="checkbox"
+								id="overtimeTrafficLightEnabled"
+								name="overtimeTrafficLightEnabled"
+								<?php echo ($settings['overtimeTrafficLightEnabled'] ?? false) ? 'checked' : ''; ?>
+								aria-describedby="overtimeTrafficLightEnabled-help">
+							<label for="overtimeTrafficLightEnabled" class="form-label">
+								<?php p($l->t('Enable overtime traffic light notifications')); ?>
+							</label>
+						</div>
+						<p id="overtimeTrafficLightEnabled-help" class="form-help">
+							<?php p($l->t('When enabled, transitions to yellow or red levels can trigger in-app and email notifications.')); ?>
 						</p>
-						<?php
-						$requireTypes = $settings['requireSubstituteTypes'] ?? [];
-						$absenceTypesForSubstitute = [
-							'vacation' => $l->t('Vacation'),
-							'sick_leave' => $l->t('Sick leave'),
-							'personal_leave' => $l->t('Personal reasons'),
-							'parental_leave' => $l->t('Parental leave'),
-							'special_leave' => $l->t('Special leave'),
-							'unpaid_leave' => $l->t('Unpaid leave'),
-							'home_office' => $l->t('Home office'),
-							'business_trip' => $l->t('Business trip'),
-						];
-						foreach ($absenceTypesForSubstitute as $typeKey => $typeLabel):
-							$checked = in_array($typeKey, $requireTypes, true);
-						?>
-							<div class="form-group form-group--inline">
-								<div class="form-checkbox">
-									<input type="checkbox" id="requireSubstitute_<?php p($typeKey); ?>" name="requireSubstituteTypes[]" value="<?php p($typeKey); ?>"
-										<?php echo $checked ? 'checked' : ''; ?>
-										aria-describedby="require-substitute-legend">
-									<label for="requireSubstitute_<?php p($typeKey); ?>" class="form-label"><?php p($typeLabel); ?></label>
-								</div>
-							</div>
-						<?php endforeach; ?>
-					</fieldset>
+					</div>
+
+					<div class="form-row form-row--inline">
+						<div class="form-group">
+							<p class="form-help form-help--note"><?php p($l->t('Define when overtime changes from green to yellow and yellow to red.')); ?></p>
+						</div>
+					</div>
+					<div class="form-row form-row--inline">
+						<div class="form-group">
+							<label for="overtimeYellowOver" class="form-label"><?php p($l->t('Overtime yellow threshold (hours)')); ?></label>
+							<input type="number" class="form-input" id="overtimeYellowOver" name="overtimeYellowOver" min="0" max="500" step="0.25" value="<?php p((string)($settings['overtimeYellowOver'] ?? 5)); ?>">
+						</div>
+						<div class="form-group">
+							<label for="overtimeRedOver" class="form-label"><?php p($l->t('Overtime red threshold (hours)')); ?></label>
+							<input type="number" class="form-input" id="overtimeRedOver" name="overtimeRedOver" min="0" max="500" step="0.25" value="<?php p((string)($settings['overtimeRedOver'] ?? 15)); ?>">
+						</div>
+					</div>
+
+					<div class="form-row form-row--inline">
+						<div class="form-group">
+							<p class="form-help form-help--note"><?php p($l->t('Define equivalent thresholds for undertime (negative balance).')); ?></p>
+						</div>
+					</div>
+					<div class="form-row form-row--inline">
+						<div class="form-group">
+							<label for="overtimeYellowUnder" class="form-label"><?php p($l->t('Undertime yellow threshold (hours)')); ?></label>
+							<input type="number" class="form-input" id="overtimeYellowUnder" name="overtimeYellowUnder" min="0" max="500" step="0.25" value="<?php p((string)($settings['overtimeYellowUnder'] ?? 5)); ?>">
+						</div>
+						<div class="form-group">
+							<label for="overtimeRedUnder" class="form-label"><?php p($l->t('Undertime red threshold (hours)')); ?></label>
+							<input type="number" class="form-input" id="overtimeRedUnder" name="overtimeRedUnder" min="0" max="500" step="0.25" value="<?php p((string)($settings['overtimeRedUnder'] ?? 15)); ?>">
+						</div>
+					</div>
+
+					<div class="form-group">
+						<label for="overtimeRecipients" class="form-label"><?php p($l->t('Balance traffic light recipients (overtime + undertime, comma separated emails)')); ?></label>
+						<textarea
+							id="overtimeRecipients"
+							name="overtimeRecipients"
+							rows="3"
+							class="form-input"
+							placeholder="<?php p($l->t('lead@example.com, hr@example.com')); ?>"
+							aria-describedby="overtimeRecipients-help"><?php p((string)($settings['overtimeRecipients'] ?? '')); ?></textarea>
+						<p id="overtimeRecipients-help" class="form-help">
+							<?php p($l->t('These recipients are used for both overtime and undertime alerts. Use valid email addresses separated by commas. Duplicates are removed automatically.')); ?>
+						</p>
+					</div>
+
+					<h4 id="block-trafficlight-matrix-heading" class="admin-settings-section__title"><?php p($l->t('Notification matrix')); ?></h4>
+					<p class="form-help form-help--block">
+						<?php p($l->t('Choose which severity levels should trigger notifications for overtime and undertime.')); ?>
+					</p>
+					<div class="table-responsive">
+						<table class="grid-table admin-notifications-matrix">
+							<thead>
+								<tr>
+									<th scope="col"><?php p($l->t('Direction')); ?></th>
+									<th scope="col"><?php p($l->t('Yellow notifications')); ?></th>
+									<th scope="col"><?php p($l->t('Red notifications')); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<th scope="row"><?php p($l->t('Overtime')); ?></th>
+									<td>
+										<div class="form-checkbox form-checkbox--center">
+											<input type="checkbox" name="overtimeMatrix[over][yellow]" <?php echo !empty($settings['overtimeMatrix']['over']['yellow']) ? 'checked' : ''; ?> aria-label="<?php p($l->t('Notify on overtime yellow')); ?>">
+										</div>
+									</td>
+									<td>
+										<div class="form-checkbox form-checkbox--center">
+											<input type="checkbox" name="overtimeMatrix[over][red]" <?php echo !empty($settings['overtimeMatrix']['over']['red']) ? 'checked' : ''; ?> aria-label="<?php p($l->t('Notify on overtime red')); ?>">
+										</div>
+									</td>
+								</tr>
+								<tr>
+									<th scope="row"><?php p($l->t('Undertime')); ?></th>
+									<td>
+										<div class="form-checkbox form-checkbox--center">
+											<input type="checkbox" name="overtimeMatrix[under][yellow]" <?php echo !empty($settings['overtimeMatrix']['under']['yellow']) ? 'checked' : ''; ?> aria-label="<?php p($l->t('Notify on undertime yellow')); ?>">
+										</div>
+									</td>
+									<td>
+										<div class="form-checkbox form-checkbox--center">
+											<input type="checkbox" name="overtimeMatrix[under][red]" <?php echo !empty($settings['overtimeMatrix']['under']['red']) ? 'checked' : ''; ?> aria-label="<?php p($l->t('Notify on undertime red')); ?>">
+										</div>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
 				</section>
 
 				<section class="admin-settings-section" aria-labelledby="hr-notifications-heading">
@@ -241,6 +338,7 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 					<p class="form-help form-help--block">
 						<?php p($l->t('These settings define if and when HR receives email updates for absence workflows.')); ?>
 					</p>
+					<h4 id="block-hr-setup-heading" class="admin-settings-section__title"><?php p($l->t('General HR notification setup')); ?></h4>
 					<div class="form-group">
 						<div class="form-checkbox">
 							<input type="checkbox"
@@ -273,7 +371,7 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 
 					<h4 id="notification-matrix-heading" class="admin-settings-section__title"><?php p($l->t('Rules by absence type and event')); ?></h4>
 					<p class="form-help form-help--block">
-						<?php p($l->t('Activate exactly which event should trigger an HR email for each absence type.')); ?>
+						<?php p($l->t('Activate exactly which event should trigger an HR email for each absence type. Disabled cells mean no email is sent for that combination.')); ?>
 					</p>
 					<div class="table-responsive">
 						<table class="grid-table admin-notifications-matrix">
@@ -339,5 +437,9 @@ window.ArbeitszeitCheck.notificationMatrixMeta = {
 window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
 window.ArbeitszeitCheck.l10n.notificationsSaved = <?php echo json_encode($l->t('Notification settings updated successfully'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.invalidRecipients = <?php echo json_encode($l->t('Please enter at least one valid recipient email address.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.invalidBalanceTrafficLightRecipients = <?php echo json_encode($l->t('Please enter at least one valid balance traffic light recipient email address (overtime/undertime).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.invalidThresholdValues = <?php echo json_encode($l->t('Threshold values must be valid numbers.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.invalidThresholdOrder = <?php echo json_encode($l->t('Yellow thresholds must be less than or equal to red thresholds.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.invalidCarryoverMaxDays = <?php echo json_encode($l->t('Maximum carryover days must be empty (unlimited) or between 0 and 366'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.failedToSaveNotifications = <?php echo json_encode($l->t('Failed to save notification settings'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>

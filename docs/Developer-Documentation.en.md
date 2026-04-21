@@ -21,8 +21,9 @@ This guide is for developers who want to contribute to ArbeitszeitCheck or integ
 10. [Security Guidelines](#security-guidelines)
 11. [Vacation carryover (Resturlaub)](#vacation-carryover-resturlaub)
 12. [HR notification matrix and admin notifications](#hr-notification-matrix-and-admin-notifications)
-13. [Vacation entitlement policy engine (tariff rules)](#vacation-entitlement-policy-engine-tariff-rules)
-14. [Revision-safe month closure](#revision-safe-month-closure)
+13. [Overtime and undertime traffic light](#overtime-and-undertime-traffic-light)
+14. [Vacation entitlement policy engine (tariff rules)](#vacation-entitlement-policy-engine-tariff-rules)
+15. [Revision-safe month closure](#revision-safe-month-closure)
 
 ---
 
@@ -514,6 +515,106 @@ Today’s admin-notification update introduces a dedicated admin page and an exp
 3. at least one valid recipient exists.
 
 The same admin page now centralizes related absence notification settings (carryover expiry/cap, rollover toggles, substitute requirements, iCal mail switches, substitution workflow mail toggles), so operators can maintain all absence-notification behavior in one place.
+
+---
+
+## Overtime and undertime traffic light
+
+The app now supports a bidirectional balance traffic-light model for overtime and undertime with dedicated thresholds, recipients, and event matrix controls.
+
+**Core services and classes**
+
+- `OvertimeService`
+  - remains the source for balance calculation (`cumulative_balance`).
+  - still derives required hours from working days (`HolidayService`) and assigned working-time model.
+- `OvertimeTrafficLightService`
+  - normalizes and validates thresholds.
+  - classifies balance into:
+    - `green`
+    - `yellow_over`, `red_over`
+    - `yellow_under`, `red_under`
+- `OvertimeTrafficLightJob`
+  - daily job that evaluates all eligible users and sends notifications only on transitions.
+- `OvertimeNotificationMailService`
+  - sends plain-text mail notifications to configured recipients with validation and deduped recipient normalization.
+
+**Configuration keys (`Constants.php`)**
+
+- `overtime_traffic_light_enabled`
+- `overtime_threshold_yellow_over`
+- `overtime_threshold_red_over`
+- `overtime_threshold_yellow_under`
+- `overtime_threshold_red_under`
+- `overtime_notification_recipients`
+- `overtime_notification_matrix_v1`
+
+The overtime matrix is normalized server-side as:
+
+- direction: `over | under`
+- level: `yellow | red`
+
+Example shape:
+
+```json
+{
+  "over": { "yellow": true, "red": true },
+  "under": { "yellow": false, "red": true }
+}
+```
+
+**Admin settings integration**
+
+The traffic-light controls are integrated into the existing admin notifications page:
+
+- backend: `AdminController::updateNotificationSettings`, `buildNotificationSettingsPayload`
+- frontend: `templates/admin-notifications.php`, `js/admin-notifications.js`
+
+Validation rules:
+
+- recipient list length and item count limits apply (same base constraints as HR notifications).
+- invalid mail addresses are rejected.
+- if traffic-light notifications are enabled, at least one valid recipient is required.
+- yellow threshold must be less than or equal to red threshold (for both over and under directions).
+
+**Notification flow**
+
+- in-app notifications:
+  - dispatched via `NotificationService::notifyOvertimeTrafficLight`
+  - rendered by `Notification\Notifier` subject `overtime_traffic_light`
+- email notifications:
+  - dispatched via `OvertimeNotificationMailService`
+  - sent to normalized configured recipients
+
+**Dedupe and anti-spam behavior**
+
+- Job persists per-user last state (`overtime_traffic_light_last_state`).
+- Notifications are sent only when:
+  1. state changed, and
+  2. new state is not `green`, and
+  3. matrix allows the new direction/level.
+
+This prevents repetitive daily spam when a user remains in the same warning/error state.
+
+**UI exposure**
+
+- Employee dashboard (`templates/dashboard.php`) now includes a traffic-light status badge next to overtime balance.
+- State is computed in `PageController::dashboard` from `cumulative_balance`.
+- Accessibility: status is represented by text + badge (not color-only), with `role="status"` and live-region semantics.
+
+**Domain boundaries with vacation/carryover**
+
+- Overtime traffic light uses overtime balance only (`OvertimeService`).
+- Vacation/carryover entitlement logic remains in:
+  - `AbsenceService`
+  - `VacationAllocationService`
+  - `VacationEntitlementEngine`
+- Shared dependency is limited to working-day/holiday logic via `HolidayService`; no carryover pool data is used in traffic-light classification.
+
+**Testing**
+
+- unit test: `tests/Unit/Service/OvertimeTrafficLightServiceTest.php`
+- full phpunit suite must pass after constructor changes in `PageController` tests.
+- JS admin notification form validation is covered by existing frontend test setup and manual regression.
 
 ---
 

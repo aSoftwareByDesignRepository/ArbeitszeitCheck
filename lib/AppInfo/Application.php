@@ -35,6 +35,8 @@ use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
+use OCA\ArbeitszeitCheck\Service\OvertimeTrafficLightService;
+use OCA\ArbeitszeitCheck\Service\OvertimeNotificationMailService;
 use OCA\Files\Event\LoadSidebar;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -370,6 +372,15 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(OvertimeNotificationMailService::class, function($c) {
+			return new OvertimeNotificationMailService(
+				$c->query(\OCP\Mail\IMailer::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IL10N::class),
+				$c->query(\Psr\Log\LoggerInterface::class)
+			);
+		});
+
 		$context->registerService(OvertimeService::class, function($c) {
 			return new OvertimeService(
 				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),
@@ -377,6 +388,12 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(HolidayService::class)
+			);
+		});
+
+		$context->registerService(OvertimeTrafficLightService::class, function($c) {
+			return new OvertimeTrafficLightService(
+				$c->query(\OCP\IConfig::class)
 			);
 		});
 

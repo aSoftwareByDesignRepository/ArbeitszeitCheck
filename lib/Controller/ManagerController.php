@@ -904,10 +904,11 @@ class ManagerController extends Controller
 				$todayHours = $this->timeTrackingService->getTodayHours($userId);
 
 				// Get week's hours using injected OvertimeService
-				$weekEnd = clone $weekStart;
-				$weekEnd->modify('+6 days');
-				$weekEnd->setTime(23, 59, 59);
-				$weekOvertime = $this->overtimeService->calculateOvertime($userId, $weekStart, $weekEnd);
+			$weekEnd = clone $weekStart;
+			$weekEnd->modify('+6 days');
+			$weekEnd->setTime(0, 0, 0);
+			$weekEndExclusive = (clone $weekEnd)->modify('+1 day');
+			$weekOvertime = $this->overtimeService->calculateOvertime($userId, $weekStart, $weekEndExclusive);
 				$weekHours = $weekOvertime['total_hours_worked'];
 
 				// Get current status
@@ -1212,17 +1213,19 @@ class ManagerController extends Controller
 				]);
 			}
 
-			try {
-				$start = new \DateTimeImmutable($startDate . ' 00:00:00');
-				$end = new \DateTimeImmutable($endDate . ' 23:59:59');
-			} catch (\Throwable $e) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Invalid date range. Please use valid dates in YYYY-MM-DD format.'),
-				], Http::STATUS_BAD_REQUEST);
-			}
+		try {
+			$start = new \DateTimeImmutable($startDate . ' 00:00:00');
+			// Use midnight of the end date; AbsenceMapper compares on DATE columns so
+			// only Y-m-d matters, but midnight is the canonical correct value.
+			$end = new \DateTimeImmutable($endDate . ' 00:00:00');
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Invalid date range. Please use valid dates in YYYY-MM-DD format.'),
+			], Http::STATUS_BAD_REQUEST);
+		}
 
-			if ($start > $end) {
+		if ($start > $end) {
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Invalid date range. The start date must be before the end date.'),

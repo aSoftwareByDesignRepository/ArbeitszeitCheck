@@ -159,6 +159,23 @@ class Notifier implements INotifier {
 				);
 				break;
 
+			case 'overtime_traffic_light':
+				$state = (string)($parameters['state'] ?? 'green');
+				$balance = (float)($parameters['balance'] ?? 0.0);
+				$title = $l->t('Balance traffic light update');
+				$message = $l->t('Your overtime balance is in the green range.');
+				if ($state === 'yellow_over') {
+					$message = $l->t('Your overtime balance reached yellow level (%s hours).', [number_format($balance, 2)]);
+				} elseif ($state === 'red_over') {
+					$message = $l->t('Your overtime balance reached red level (%s hours).', [number_format($balance, 2)]);
+				} elseif ($state === 'yellow_under') {
+					$message = $l->t('Your undertime balance reached yellow level (%s hours).', [number_format($balance, 2)]);
+				} elseif ($state === 'red_under') {
+					$message = $l->t('Your undertime balance reached red level (%s hours).', [number_format($balance, 2)]);
+				}
+				$notification->setParsedSubject($title)->setParsedMessage($message);
+				break;
+
 			case 'time_entry_correction_approved':
 				$date = $parameters['date'] ?? date('Y-m-d');
 				$notification->setParsedSubject(

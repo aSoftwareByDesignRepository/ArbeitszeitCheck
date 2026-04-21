@@ -462,9 +462,10 @@ class TimeEntryMapper extends QBMapper
 	{
 		$startOfDay = clone $date;
 		$startOfDay->setTime(0, 0, 0);
-		$endOfDay = clone $date;
-		$endOfDay->setTime(23, 59, 59);
-		$endOfDay->modify('+1 day'); // Make exclusive
+		// Exclusive upper bound: start of next calendar day (midnight).
+		// Do NOT use setTime(23,59,59) then +1 day — that gives next-day 23:59:59, not midnight.
+		$endOfDay = clone $startOfDay;
+		$endOfDay->modify('+1 day');
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->createFunction('COUNT(DISTINCT user_id)'))
@@ -630,6 +631,93 @@ class TimeEntryMapper extends QBMapper
 		}
 
 		return $overlapping;
+	}
+
+	/**
+	 * Find the most-recent completed entry whose end_time is strictly before $beforeTime.
+	 * Used for manual-entry rest-period validation; much cheaper than findByUser().
+	 *
+	 * @param string        $userId
+	 * @param \DateTime     $beforeTime Only entries ending before this instant are considered.
+	 * @param int|null      $excludeId  Optional entry ID to exclude (for update scenarios).
+	 * @return TimeEntry|null
+	 */
+	public function findLastCompletedBeforeTime(string $userId, \DateTime $beforeTime, ?int $excludeId = null): ?TimeEntry
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_COMPLETED)))
+			->andWhere($qb->expr()->isNotNull('end_time'))
+			->andWhere($qb->expr()->lt('end_time', $qb->createNamedParameter($beforeTime->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->orderBy('end_time', 'DESC')
+			->setMaxResults(1);
+
+		if ($excludeId !== null) {
+			$qb->andWhere($qb->expr()->neq('id', $qb->createNamedParameter($excludeId, IQueryBuilder::PARAM_INT)));
+		}
+
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException $e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Find the most-recent completed time entry (with an end_time) for a user.
+	 * Used for rest-period checks at clock-in time; much cheaper than findByUser().
+	 *
+	 * @param string $userId
+	 * @return TimeEntry|null
+	 */
+	public function findLastCompletedByUser(string $userId): ?TimeEntry
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_COMPLETED)))
+			->andWhere($qb->expr()->isNotNull('end_time'))
+			->orderBy('end_time', 'DESC')
+			->setMaxResults(1);
+
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException $e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Find the most-recent paused time entry whose updatedAt falls within $sinceHours of now.
+	 * Used as a fallback rest-period reference when no completed entry exists recently.
+	 *
+	 * @param string    $userId
+	 * @param int       $sinceHours Look-back window in hours (default 48 h).
+	 * @return TimeEntry|null
+	 */
+	public function findLastPausedWithinHours(string $userId, int $sinceHours = 48): ?TimeEntry
+	{
+		$cutoff = new \DateTime();
+		$cutoff->modify('-' . $sinceHours . ' hours');
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_PAUSED)))
+			->andWhere($qb->expr()->isNotNull('updated_at'))
+			->andWhere($qb->expr()->gte('updated_at', $qb->createNamedParameter($cutoff->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->orderBy('updated_at', 'DESC')
+			->setMaxResults(1);
+
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException $e) {
+			return null;
+		}
 	}
 
 	/**

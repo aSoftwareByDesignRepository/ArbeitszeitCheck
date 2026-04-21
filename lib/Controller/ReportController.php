@@ -304,7 +304,7 @@ class ReportController extends Controller
 			$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-30 days');
 			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
 			$start->setTime(0, 0, 0);
-			$end->setTime(23, 59, 59);
+			$end->setTime(0, 0, 0);
 			if ($start > $end) {
 				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
 			}
@@ -312,6 +312,7 @@ class ReportController extends Controller
 			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
 				throw new \Exception($this->l10n->t('Export date range must not exceed %d days. Please narrow the range.', [Constants::MAX_EXPORT_DATE_RANGE_DAYS]));
 			}
+			$endExclusive = (clone $end)->modify('+1 day');
 
 			$currentUserId = $this->getUserId();
 			// Special case: admin organization scope (userId="") -> report for all enabled users.
@@ -325,7 +326,7 @@ class ReportController extends Controller
 				$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
 			}
 
-			$report = $this->reportingService->generateOvertimeReport($start, $end, $reportUserId);
+			$report = $this->reportingService->generateOvertimeReport($start, $endExclusive, $reportUserId);
 
 			return new JSONResponse([
 				'success' => true,
@@ -371,19 +372,20 @@ class ReportController extends Controller
 				$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
 			}
 
-			$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-1 year');
-			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
-			$start->setTime(0, 0, 0);
-			$end->setTime(23, 59, 59);
-			if ($start > $end) {
-				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
-			}
-			$days = (int)$end->diff($start)->format('%a');
-			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
-				throw new \Exception($this->l10n->t('Export date range must not exceed %d days. Please narrow the range.', [Constants::MAX_EXPORT_DATE_RANGE_DAYS]));
-			}
+		$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-1 year');
+		$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+		$start->setTime(0, 0, 0);
+		$end->setTime(0, 0, 0);
+		if ($start > $end) {
+			throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+		}
+		$days = (int)$end->diff($start)->format('%a');
+		if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+			throw new \Exception($this->l10n->t('Export date range must not exceed %d days. Please narrow the range.', [Constants::MAX_EXPORT_DATE_RANGE_DAYS]));
+		}
+		$endExclusive = (clone $end)->modify('+1 day');
 
-			$report = $this->reportingService->generateAbsenceReport($start, $end, $reportUserId);
+		$report = $this->reportingService->generateAbsenceReport($start, $endExclusive, $reportUserId);
 
 			return new JSONResponse([
 				'success' => true,
@@ -429,7 +431,7 @@ class ReportController extends Controller
 			$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-30 days');
 			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
 			$start->setTime(0, 0, 0);
-			$end->setTime(23, 59, 59);
+			$end->setTime(0, 0, 0);
 			if ($start > $end) {
 				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
 			}
@@ -437,6 +439,7 @@ class ReportController extends Controller
 			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
 				throw new \Exception($this->l10n->t('Export date range must not exceed %d days. Please narrow the range.', [Constants::MAX_EXPORT_DATE_RANGE_DAYS]));
 			}
+			$endExclusive = (clone $end)->modify('+1 day');
 
 			$currentUserId = $this->getUserId();
 			$teamUserIds = [];
@@ -473,21 +476,21 @@ class ReportController extends Controller
 				}
 			}
 
-			$report = $this->reportingService->generateTeamReport($teamUserIds, $start, $end);
+		$report = $this->reportingService->generateTeamReport($teamUserIds, $start, $endExclusive);
 
-			$download = (string)$this->request->getParam('download', '0') === '1';
-			if ($download) {
-				$format = (string)$this->request->getParam('format', 'csv');
-				$variantParam = (string)$this->request->getParam('variant', 'summary');
-				$variant = in_array($variantParam, ['summary', 'time_entries'], true) ? $variantParam : 'summary';
-				$layoutParam = (string)$this->request->getParam('layout', 'long');
-				$layout = in_array($layoutParam, ['long', 'wide'], true) ? $layoutParam : 'long';
+		$download = (string)$this->request->getParam('download', '0') === '1';
+		if ($download) {
+			$format = (string)$this->request->getParam('format', 'csv');
+			$variantParam = (string)$this->request->getParam('variant', 'summary');
+			$variant = in_array($variantParam, ['summary', 'time_entries'], true) ? $variantParam : 'summary';
+			$layoutParam = (string)$this->request->getParam('layout', 'long');
+			$layout = in_array($layoutParam, ['long', 'wide'], true) ? $layoutParam : 'long';
 
-				if ($variant === 'time_entries') {
-					$enableMidnightSplit = $this->config->getAppValue('arbeitszeitcheck', 'export_midnight_split_enabled', '1') === '1';
-					$longRows = [];
-					foreach ($teamUserIds as $uid) {
-						$entries = $this->timeEntryMapper->findByUserAndDateRange($uid, $start, $end);
+			if ($variant === 'time_entries') {
+				$enableMidnightSplit = $this->config->getAppValue('arbeitszeitcheck', 'export_midnight_split_enabled', '1') === '1';
+				$longRows = [];
+				foreach ($teamUserIds as $uid) {
+					$entries = $this->timeEntryMapper->findByUserAndDateRange($uid, $start, $endExclusive);
 						$displayName = $this->getUserDisplayName($uid);
 						foreach ($this->timeEntryExportTransformer->entriesToExportRows($entries, $enableMidnightSplit) as $row) {
 							$row['user_id'] = $uid;
