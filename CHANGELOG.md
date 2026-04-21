@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.2.1 - 2026-04-21
+
+### Fixed
+
+- **Paused-entry recovery and lifecycle**: Paused entries can now be accessed again in edit/delete workflows and are consistently finalized as `completed` when edited with an end time.
+- **Resume behavior for same-day paused sessions**: Clock-in now resumes a same-day paused entry instead of creating duplicate automatic entries, while preserving the pause gap as break history.
+- **Historical paused leftovers**: Added migration `Version1020Date20260421000000` to repair all remaining orphaned `paused` rows (including cases not covered by the earlier one-time migration).
+
 ## 1.2.0 - 2026-04-21
 
 ### Added

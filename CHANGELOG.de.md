@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## 1.2.1 – 2026-04-21
+
+### Behoben
+
+- **Wiederzugriff auf pausierte Einträge**: Pausierte Einträge sind im Bearbeiten-/Löschen-Workflow wieder erreichbar und werden beim Speichern mit Endzeit konsistent als `completed` finalisiert.
+- **Fortsetzen statt Duplikat bei gleichem Tag**: `Clock In` setzt einen pausierten Tages-Eintrag fort, statt einen neuen automatischen Eintrag zu erzeugen; die Pausenlücke wird korrekt als Break-Historie archiviert.
+- **Historische Restfälle bei `paused`**: Neue Migration `Version1020Date20260421000000` repariert verbleibende verwaiste `paused`-Datensätze (auch Fälle außerhalb der früheren Einmal-Migration).
+
 ### Hinzugefügt
 
 - **Auto-Fallback mit Nachvollziehbarkeit**: Zeiteinträge speichern jetzt `ended_reason` und `policy_applied` (z. B. `manual_clock_out` oder `auto_break_fallback`) für klare Audit-/Export-Nachweise.
