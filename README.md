@@ -6,6 +6,7 @@ Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instan
 ### Kernfunktionen
 
 - **Rechtskonforme Zeiterfassung**: Kommen/Gehen, Pausen, manuelle Einträge mit Begründung
+  - Robuster Paused-Entry-Flow: pausierte Tages-Einträge werden bei erneutem Clock-In fortgesetzt (kein Duplikat), sind im Edit-Fenster wieder zugreifbar und werden bei Korrektur mit Endzeit sauber finalisiert
 - **ArbZG‑Compliance**:
   - Max. tägliche Arbeitszeit (8h, erweiterbar auf 10h, reine Arbeitszeit ohne Pausen)
   - Wöchentliche 48‑Stunden‑Durchschnittsprüfung (6‑Monats‑Zeitraum, Manager‑Warnungen)

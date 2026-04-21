@@ -60,6 +60,10 @@ Im Auswahldialog erscheinen nur Konten aus der Nextcloud-`admin`-Gruppe.
 ## 4. Alltägliche Aufgaben
 
 - **Kommen/Gehen und Pausen** über die Zeiterfassung; Korrekturen und Begründungen nach internen Regeln.
+- **Pausierter Eintrag (wieder aufnehmen oder korrigieren):**
+  - Wenn ein Eintrag den Status **Pausiert** hat, zeigt das Dashboard bei **Clock In** die Aktion **Fortsetzen (nach Pause)** und setzt den gleichen Tages-Eintrag fort (statt einen Duplikat-Eintrag zu erzeugen).
+  - Pausierte Einträge sind in den letzten 14 Tagen wieder normal **bearbeitbar/löschbar** (sofern nicht bereits genehmigt).
+  - Beim Speichern mit Endzeit wird ein pausierter Eintrag automatisch als **Abgeschlossen** (`completed`) finalisiert.
 - **Abwesenheiten** beantragen und ggf. auf Freigabe warten. **Resturlaub** und Überträge werden angezeigt, wenn die Administration das gepflegt hat.
   - **App-Teams (empfohlene Einrichtung):** Wenn Ihre Organisation **App-Teams** nutzt und in der App **kein:e Vorgesetzte:r** für Ihr Team hinterlegt ist, werden Anträge **ohne** Vertretung beim Absenden **automatisch genehmigt**—es gäbe sonst niemanden mit Managerfreigabe. Mit **Vertretung** läuft zuerst der Vertretungs-Schritt. Die Oberfläche kann dazu einen kurzen Hinweis anzeigen.
   - **Älteres Gruppenmodell:** Verhalten folgt dem früheren „gleiche Gruppe“-Modell; die Administration sollte sicherstellen, dass Genehmigungen für Ihre Organisation weiterhin sinnvoll möglich sind.

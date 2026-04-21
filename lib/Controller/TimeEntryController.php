@@ -229,6 +229,24 @@ class TimeEntryController extends Controller
 	}
 
 	/**
+	 * Parse localized decimal input (supports comma and dot).
+	 *
+	 * Returns null for null/empty/non-numeric input so callers can keep legacy
+	 * optional semantics while avoiding PHP's locale-insensitive float cast.
+	 */
+	private function parseNullableDecimal(mixed $value): ?float
+	{
+		if ($value === null) {
+			return null;
+		}
+		$normalized = str_replace(',', '.', trim((string)$value));
+		if ($normalized === '' || !is_numeric($normalized)) {
+			return null;
+		}
+		return (float)$normalized;
+	}
+
+	/**
 	 * Get time entries endpoint
 	 *
 	 * Retrieves time entries for the current user with optional filtering by date range and status.
@@ -1182,7 +1200,7 @@ class TimeEntryController extends Controller
 
 		// Old format: date, hours (backward compatibility)
 		$date = $params['date'] ?? null;
-		$hours = isset($params['hours']) ? (float)$params['hours'] : null;
+		$hours = $this->parseNullableDecimal($params['hours'] ?? null);
 		$description = $params['description'] ?? null;
 		$project_check_project_id = $params['project_check_project_id'] ?? $params['projectCheckProjectId'] ?? null;
 
@@ -1306,7 +1324,7 @@ class TimeEntryController extends Controller
 
 			// Backward compatibility: support old format (newDate, newHours, newDescription)
 			$newDate = $params['newDate'] ?? null;
-			$newHours = isset($params['newHours']) ? (float)$params['newHours'] : null;
+			$newHours = $this->parseNullableDecimal($params['newHours'] ?? null);
 			$newDescription = $params['newDescription'] ?? null;
 
 			// Require justification for correction request
@@ -1803,7 +1821,7 @@ class TimeEntryController extends Controller
 		$endTime = $params['endTime'] ?? null;
 		$breakStartTime = $params['breakStartTime'] ?? null;
 		$breakEndTime = $params['breakEndTime'] ?? null;
-		$hours = isset($params['hours']) ? (float)$params['hours'] : null;
+		$hours = $this->parseNullableDecimal($params['hours'] ?? null);
 		$description = $params['description'] ?? null;
 		$project_check_project_id = $params['project_check_project_id'] ?? $params['projectCheckProjectId'] ?? null;
 
@@ -2146,7 +2164,7 @@ class TimeEntryController extends Controller
 	{
 		$params = $this->request->getParams();
 		$date = $params['date'] ?? null;
-		$hours = isset($params['hours']) ? (float)$params['hours'] : null;
+		$hours = $this->parseNullableDecimal($params['hours'] ?? null);
 		$description = $params['description'] ?? null;
 		$project_check_project_id = $params['project_check_project_id'] ?? $params['projectCheckProjectId'] ?? null;
 
@@ -2183,7 +2201,7 @@ class TimeEntryController extends Controller
 
 		// Old format: date, hours (backward compatibility)
 		$date = $params['date'] ?? null;
-		$hours = isset($params['hours']) ? (float)$params['hours'] : null;
+		$hours = $this->parseNullableDecimal($params['hours'] ?? null);
 		$description = $params['description'] ?? null;
 		$project_check_project_id = $params['project_check_project_id'] ?? $params['projectCheckProjectId'] ?? null;
 

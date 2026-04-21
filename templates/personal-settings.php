@@ -56,7 +56,7 @@ $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 					class="form-input"
 					min="1"
 					max="24"
-					step="0.1"
+					step="0.01"
 					value="8"
 					aria-describedby="working-hours-help"
 				>

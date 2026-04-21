@@ -185,8 +185,19 @@
             : (Array.isArray(requireSubstituteRaw) ? requireSubstituteRaw : [requireSubstituteRaw]);
         delete formData['requireSubstituteTypes[]'];
 
-        // Convert numbers (use defaults on invalid/empty)
-        const num = (v, def) => { const n = parseFloat(v); return (Number.isFinite(n) ? n : def); };
+        // Convert localized decimal numbers (use defaults on invalid/empty)
+        const parseLocalizedNumber = (v) => {
+            if (v === undefined || v === null || String(v).trim() === '') {
+                return Number.NaN;
+            }
+            const normalized = String(v).trim().replace(/\s+/g, '').replace(',', '.');
+            const n = Number(normalized);
+            return Number.isFinite(n) ? n : Number.NaN;
+        };
+        const num = (v, def) => {
+            const n = parseLocalizedNumber(v);
+            return Number.isFinite(n) ? n : def;
+        };
         const int = (v, def) => { const n = parseInt(String(v), 10); return (Number.isInteger(n) ? n : def); };
         formData.maxDailyHours = num(formData.maxDailyHours, 10);
         formData.minRestPeriod = num(formData.minRestPeriod, 11);
@@ -486,7 +497,8 @@
      * Validate individual field
      */
     function validateField(field) {
-        const value = parseFloat(field.value);
+        const normalized = String(field.value || '').trim().replace(/\s+/g, '').replace(',', '.');
+        const value = Number(normalized);
         const min = parseFloat(field.getAttribute('min'));
         const max = parseFloat(field.getAttribute('max'));
 

@@ -515,11 +515,11 @@ $adminUsersListUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.getUsers
                            value="<?php p($settings['defaultWorkingHours'] ?? 8); ?>" 
                            min="1" 
                            max="24" 
-                           step="0.1" 
+                           step="0.01" 
                            required
                            aria-describedby="defaultWorkingHours-help">
                     <p id="defaultWorkingHours-help" class="form-help">
-                        <?php p($l->t('Default daily working hours. Used for new employees until individual models are set. Decimal hours are allowed (e.g. 7.7).')); ?>
+                        <?php p($l->t('Default daily working hours. Used for new employees until individual models are set. Decimal hours are allowed (e.g. 7.74).')); ?>
                     </p>
                 </div>
                 </section>

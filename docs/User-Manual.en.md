@@ -61,6 +61,10 @@ Only users in Nextcloud's `admin` group are eligible in this picker.
 ## 4. Everyday tasks
 
 - **Clock in / out** and **breaks**: Use the time tracking UI; follow your organization’s rules for corrections and comments.
+- **Paused entry (resume or fix):**
+  - If an entry is in **Paused** state, the dashboard shows **Resume after break** on clock-in and continues the same-day entry instead of creating a duplicate.
+  - Paused entries are editable/deletable again within the normal 14-day edit window (as long as they are not already approved).
+  - When saved with an end time, a paused entry is finalized automatically as **Completed**.
 - **Absences**: Create requests; wait for approval if your workflow requires it. Vacation balances and carryover (**Resturlaub**) may be shown if your admin configured them.
   - **App teams (recommended setup):** If your organization uses **app-managed teams** and **no manager is assigned** to your team in the app, requests you submit **without** a substitute are **approved automatically** when you send them—there is nobody who could approve them in the manager workflow. If you **do** pick a substitute, the substitute step still runs first. The UI may show a short explanation when this applies.
   - **Legacy group-based setup:** Behavior follows the older “same group” model; your admin should ensure approvals remain workable for your organization.
