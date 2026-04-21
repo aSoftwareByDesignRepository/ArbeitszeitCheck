@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.2.2 - 2026-04-21
+
+### Fixed
+
+- **Localized decimal inputs in admin settings**: Daily working-hour inputs now reliably accept comma-decimals like `7,74` and preserve two-decimal precision.
+- **Legacy hours API payload parsing**: Time-entry endpoints now parse optional decimal hour fields consistently for both comma and dot separators, preventing silent truncation in backward-compatible request formats.
+
+### Changed
+
+- **Input precision hints**: Updated settings input steps/help text to align with two-decimal hour values used in 38.7-hour week scenarios.
+
 ## 1.2.1 - 2026-04-21
 
 ### Fixed

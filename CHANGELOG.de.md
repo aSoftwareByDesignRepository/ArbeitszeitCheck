@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+## 1.2.2 – 2026-04-21
+
+### Behoben
+
+- **Lokalisierte Dezimaleingaben in den Admin-Einstellungen**: Tagesstunden-Felder akzeptieren jetzt zuverlässig Kommawerte wie `7,74` und behalten zwei Nachkommastellen korrekt bei.
+- **Parsing bei Legacy-Hours-Payloads**: Time-Entry-Endpunkte verarbeiten optionale Stundenwerte nun konsistent mit Komma und Punkt, sodass in rückwärtskompatiblen Requests keine stillen Abschneidungen mehr auftreten.
+
+### Geändert
+
+- **Präzisionshinweise in Eingabefeldern**: `step`-Werte und Hilfetexte wurden auf Zwei-Nachkommastellen-Szenarien (z. B. 38,7-Stunden-Woche) abgestimmt.
+
 ## 1.2.1 – 2026-04-21
 
 ### Behoben
