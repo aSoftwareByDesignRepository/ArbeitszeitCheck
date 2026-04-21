@@ -266,6 +266,38 @@
     color: var(--color-primary-element-text);
 }
 
+.dashboard-status-card__quickstats {
+    margin: 0;
+    padding: var(--space-3, 0.75rem);
+    border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
+    border-radius: var(--radius-lg, 8px);
+    background: var(--arbeitszeitcheck-color-background-dark, var(--color-background-dark));
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3, 0.75rem);
+}
+
+.dashboard-status-card__quickstat {
+    margin: 0;
+    text-align: center;
+}
+
+.dashboard-status-card__quickstat dt {
+    margin: 0;
+    font-size: var(--arbeitszeitcheck-font-size-xs, 0.75rem);
+    color: var(--arbeitszeitcheck-color-text-maxcontrast);
+    text-align: center;
+}
+
+.dashboard-status-card__quickstat dd {
+    margin: var(--space-1, 0.25rem) 0 0;
+    font-size: var(--arbeitszeitcheck-font-size-base, 1rem);
+    font-weight: 600;
+    color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
 /* Session Timer */
 .dashboard-status-card__timer {
     padding: var(--space-4, 1rem);
@@ -623,6 +655,10 @@
 
     .dashboard-status-card__timer {
         padding: var(--space-3);
+    }
+
+    .dashboard-status-card__quickstats {
+        grid-template-columns: 1fr;
     }
 
     .timer-value {

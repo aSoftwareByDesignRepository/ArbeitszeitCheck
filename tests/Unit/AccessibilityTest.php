@@ -29,6 +29,7 @@ class AccessibilityTest extends TestCase {
 			__DIR__ . '/../../templates/admin-settings.php',
 			__DIR__ . '/../../templates/admin-notifications.php',
 			__DIR__ . '/../../templates/reports.php',
+			__DIR__ . '/../../templates/dashboard-widget-workspace.php',
 		];
 
 		foreach ($templateFiles as $templateFile) {

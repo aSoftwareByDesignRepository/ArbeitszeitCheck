@@ -189,6 +189,32 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                         </div>
                     </div>
                     <div class="card-body">
+                        <dl class="dashboard-status-card__quickstats" aria-label="<?php p($l->t('Status quick overview')); ?>">
+                            <div class="dashboard-status-card__quickstat">
+                                <dt><?php p($l->t('Worked Today:')); ?></dt>
+                                <dd><?php p(round((float)($status['working_today_hours'] ?? 0), 2)); ?> <?php p($l->t('hours')); ?></dd>
+                            </div>
+                            <div class="dashboard-status-card__quickstat">
+                                <dt><?php p($l->t('Overtime Balance:')); ?></dt>
+                                <dd><?php p(round((float)($overtime['cumulative_balance'] ?? 0), 2)); ?> <?php p($l->t('hours')); ?></dd>
+                            </div>
+                            <div class="dashboard-status-card__quickstat">
+                                <dt><?php p($l->t('This Week:')); ?></dt>
+                                <dd><?php p(round((float)($overtime['total_hours_worked'] ?? 0), 2)); ?> <?php p($l->t('hours')); ?></dd>
+                            </div>
+                            <div class="dashboard-status-card__quickstat">
+                                <dt><?php p($l->t('Next action')); ?></dt>
+                                <dd>
+                                    <?php p(match ($statusKeySafe) {
+                                        'active' => $l->t('Pause or Clock Out'),
+                                        'break' => $l->t('End Break or Clock Out'),
+                                        'paused' => $l->t('Resume work'),
+                                        default => $l->t('Clock In'),
+                                    }); ?>
+                                </dd>
+                            </div>
+                        </dl>
+
                         <?php if ($statusKeySafe !== 'clocked_out'): ?>
                             <?php if ($statusKeySafe === 'break'): ?>
                                 <!-- Break Timer (shown when on break) -->

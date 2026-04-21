@@ -261,7 +261,7 @@ class TimeTrackingServiceTest extends TestCase {
 		$this->assertEquals(0.0, $result['working_today_hours']);
 	}
 
-	public function testClockInStartsFreshEntryWhenPausedEntryExists(): void
+	public function testClockInResumesPausedEntryWhenPausedEntryExists(): void
 	{
 		$userId = 'testuser';
 
@@ -294,15 +294,17 @@ class TimeTrackingServiceTest extends TestCase {
 		$pausedEntry->setIsManualEntry(false);
 		$pausedEntry->setCreatedAt(new \DateTime());
 
-		$this->timeEntryMapper->expects($this->never())
-			->method('findPausedOrUnfinishedTodayByUser');
+		$this->timeEntryMapper->expects($this->once())
+			->method('findPausedOrUnfinishedTodayByUser')
+			->with($userId)
+			->willReturn($pausedEntry);
 
 		$this->timeEntryMapper->expects($this->once())
 			->method('getTotalHoursByUserAndDateRange')
 			->willReturn(0.0);
 
 		$this->timeEntryMapper->expects($this->once())
-			->method('insert')
+			->method('update')
 			->willReturnCallback(static function (TimeEntry $entry): TimeEntry {
 				$entry->setId(999);
 				return $entry;
@@ -320,7 +322,7 @@ class TimeTrackingServiceTest extends TestCase {
 		$result = $this->service->clockIn($userId);
 		$this->assertSame(999, $result->getId());
 		$this->assertSame(TimeEntry::STATUS_ACTIVE, $result->getStatus());
-		$this->assertNull($result->getBreaks());
+		$this->assertNotNull($result->getBreaks());
 	}
 
 	public function testClockInWithPausedEntryFromPreviousDayStartsNewEntry(): void
@@ -329,6 +331,7 @@ class TimeTrackingServiceTest extends TestCase {
 
 		$this->timeEntryMapper->method('findActiveByUser')->willReturn(null);
 		$this->timeEntryMapper->method('findOnBreakByUser')->willReturn(null);
+		$this->timeEntryMapper->method('findPausedOrUnfinishedTodayByUser')->willReturn(null);
 
 		$startYesterday = (new \DateTime())->modify('-1 day')->setTime(9, 0, 0);
 		$pausedOneHourAgo = (new \DateTime())->modify('-1 hour');
@@ -362,6 +365,7 @@ class TimeTrackingServiceTest extends TestCase {
 
 		$this->timeEntryMapper->method('findActiveByUser')->willReturn(null);
 		$this->timeEntryMapper->method('findOnBreakByUser')->willReturn(null);
+		$this->timeEntryMapper->method('findPausedOrUnfinishedTodayByUser')->willReturn(null);
 
 		$start = (new \DateTime())->setTime(9, 0, 0);
 		$pausedAt = (new \DateTime())->setTime(18, 0, 0); // 9 hours duration

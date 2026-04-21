@@ -29,6 +29,16 @@ return [
 		['name' => 'time_tracking#endBreak', 'url' => '/api/break/end', 'verb' => 'POST'],
 		['name' => 'time_tracking#getBreakStatus', 'url' => '/api/break/status', 'verb' => 'GET'],
 
+		// Dashboard widget workspace + API routes
+		['name' => 'dashboard_widget#workspace', 'url' => '/dashboard-widget-workspace', 'verb' => 'GET'],
+		['name' => 'dashboard_widget#employeeData', 'url' => '/api/dashboard-widget/employee', 'verb' => 'GET'],
+		['name' => 'dashboard_widget#managerData', 'url' => '/api/dashboard-widget/manager', 'verb' => 'GET'],
+		['name' => 'dashboard_widget#adminData', 'url' => '/api/dashboard-widget/admin', 'verb' => 'GET'],
+		['name' => 'dashboard_widget#clockIn', 'url' => '/api/dashboard-widget/clock/in', 'verb' => 'POST'],
+		['name' => 'dashboard_widget#startBreak', 'url' => '/api/dashboard-widget/break/start', 'verb' => 'POST'],
+		['name' => 'dashboard_widget#endBreak', 'url' => '/api/dashboard-widget/break/end', 'verb' => 'POST'],
+		['name' => 'dashboard_widget#clockOut', 'url' => '/api/dashboard-widget/clock/out', 'verb' => 'POST'],
+
 		// Time entry management routes
 		['name' => 'time_entry#index_api', 'url' => '/api/time-entries-legacy', 'verb' => 'GET'],
 		['name' => 'time_entry#create', 'url' => '/time-entries/create', 'verb' => 'GET'],

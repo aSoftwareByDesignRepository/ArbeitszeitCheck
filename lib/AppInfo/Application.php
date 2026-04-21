@@ -37,6 +37,9 @@ use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\OvertimeTrafficLightService;
 use OCA\ArbeitszeitCheck\Service\OvertimeNotificationMailService;
+use OCA\ArbeitszeitCheck\Dashboard\EmployeeStatusWidget;
+use OCA\ArbeitszeitCheck\Dashboard\ManagerTeamStatusWidget;
+use OCA\ArbeitszeitCheck\Dashboard\AdminGlobalStatusWidget;
 use OCA\Files\Event\LoadSidebar;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -446,8 +449,9 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
-		// Register dashboard widget (if implemented)
-		// $context->registerDashboardWidget(DashboardWidget::class);
+		$context->registerDashboardWidget(EmployeeStatusWidget::class);
+		$context->registerDashboardWidget(ManagerTeamStatusWidget::class);
+		$context->registerDashboardWidget(AdminGlobalStatusWidget::class);
 	}
 
 	/**
