@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Service;
 
+use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
+use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\DashboardWidgetDataService;
+use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
@@ -13,6 +16,23 @@ use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
 
 class DashboardWidgetDataServiceTest extends TestCase {
+	private function createService(
+		TimeTrackingService $timeTrackingService,
+		PermissionService $permissionService,
+		IUserManager $userManager,
+		?TeamResolverService $teamResolverService = null
+	): DashboardWidgetDataService {
+		return new DashboardWidgetDataService(
+			$timeTrackingService,
+			$this->createMock(OvertimeService::class),
+			$this->createMock(AbsenceService::class),
+			$this->createMock(AbsenceMapper::class),
+			$teamResolverService ?? $this->createMock(TeamResolverService::class),
+			$permissionService,
+			$userManager
+		);
+	}
+
 	public function testEmployeeWidgetDataUsesTimeTrackingStatus(): void {
 		$timeTrackingService = $this->createMock(TimeTrackingService::class);
 		$timeTrackingService->method('getStatus')->with('u1')->willReturn([
@@ -21,9 +41,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			'current_session_duration' => 1234,
 		]);
 
-		$service = new DashboardWidgetDataService(
+		$service = $this->createService(
 			$timeTrackingService,
-			$this->createMock(TeamResolverService::class),
 			$this->createMock(PermissionService::class),
 			$this->createMock(IUserManager::class)
 		);
@@ -37,9 +56,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		$permission = $this->createMock(PermissionService::class);
 		$permission->method('canAccessManagerDashboard')->with('u1')->willReturn(false);
 
-		$service = new DashboardWidgetDataService(
+		$service = $this->createService(
 			$this->createMock(TimeTrackingService::class),
-			$this->createMock(TeamResolverService::class),
 			$permission,
 			$this->createMock(IUserManager::class)
 		);
@@ -67,7 +85,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		// MAX_ADMIN_USERS = 200 is always used as the search window regardless of the display limit
 		$userManager->method('search')->with('', 200, 0)->willReturn([$user]);
 
-		$service = new DashboardWidgetDataService($timeTrackingService, $team, $permission, $userManager);
+		$service = $this->createService($timeTrackingService, $permission, $userManager, $team);
 		$data = $service->getAdminWidgetData('admin1', 5);
 
 		$this->assertTrue($data['authorized']);
@@ -97,9 +115,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		$userManager = $this->createMock(IUserManager::class);
 		$userManager->method('search')->with('', 200, 0)->willReturn($users);
 
-		$service = new DashboardWidgetDataService(
+		$service = $this->createService(
 			$timeTrackingService,
-			$this->createMock(TeamResolverService::class),
 			$permission,
 			$userManager
 		);
@@ -127,9 +144,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		$userManager = $this->createMock(IUserManager::class);
 		$userManager->expects($this->once())->method('search')->with('', 200, 0)->willReturn([$user]);
 
-		$service = new DashboardWidgetDataService(
+		$service = $this->createService(
 			$timeTrackingService,
-			$this->createMock(TeamResolverService::class),
 			$permission,
 			$userManager
 		);

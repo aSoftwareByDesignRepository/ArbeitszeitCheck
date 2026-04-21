@@ -48,8 +48,8 @@ class EmployeeStatusWidgetTest extends TestCase {
 		$items  = $widget->getItemsV2('u1');
 
 		$this->assertInstanceOf(WidgetItems::class, $items);
-		$this->assertCount(1, $items->getItems());
-		$this->assertStringContainsString('Status:', $items->getItems()[0]->getTitle());
+		$this->assertGreaterThanOrEqual(4, count($items->getItems()));
+		$this->assertSame('Working', $items->getItems()[0]->getTitle());
 	}
 
 	/** @dataProvider statusLabelProvider */
@@ -99,8 +99,7 @@ class EmployeeStatusWidgetTest extends TestCase {
 		$items    = $widget->getItemsV2('u1');
 		$subtitle = $items->getItems()[0]->getSubtitle();
 
-		$this->assertStringContainsString('5.50', $subtitle);
-		$this->assertStringContainsString('Next:', $subtitle);
+		$this->assertStringContainsString('Session: 01:00', $subtitle);
 	}
 
 	public function testReloadIntervalIsPositive(): void {

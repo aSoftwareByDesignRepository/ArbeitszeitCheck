@@ -13,12 +13,10 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
-use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IL10N;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use OCP\IUserSession;
-use OCP\Util;
 
 class DashboardWidgetController extends Controller {
 	public function __construct(
@@ -32,22 +30,6 @@ class DashboardWidgetController extends Controller {
 		private readonly PermissionService $permissionService,
 	) {
 		parent::__construct($appName, $request);
-	}
-
-	#[NoAdminRequired]
-	#[NoCSRFRequired]
-	public function workspace(): TemplateResponse {
-		Util::addTranslations('arbeitszeitcheck');
-
-		$userId = $this->getUserId();
-		$params = [
-			'isManager' => $this->permissionService->canAccessManagerDashboard($userId),
-			'isAdmin' => $this->permissionService->isAdmin($userId),
-			'urlGenerator' => $this->urlGenerator,
-			'l' => $this->l10n,
-		];
-
-		return new TemplateResponse('arbeitszeitcheck', 'dashboard-widget-workspace', $params);
 	}
 
 	#[NoAdminRequired]

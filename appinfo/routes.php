@@ -29,8 +29,7 @@ return [
 		['name' => 'time_tracking#endBreak', 'url' => '/api/break/end', 'verb' => 'POST'],
 		['name' => 'time_tracking#getBreakStatus', 'url' => '/api/break/status', 'verb' => 'GET'],
 
-		// Dashboard widget workspace + API routes
-		['name' => 'dashboard_widget#workspace', 'url' => '/dashboard-widget-workspace', 'verb' => 'GET'],
+		// Dashboard widget API routes
 		['name' => 'dashboard_widget#employeeData', 'url' => '/api/dashboard-widget/employee', 'verb' => 'GET'],
 		['name' => 'dashboard_widget#managerData', 'url' => '/api/dashboard-widget/manager', 'verb' => 'GET'],
 		['name' => 'dashboard_widget#adminData', 'url' => '/api/dashboard-widget/admin', 'verb' => 'GET'],
