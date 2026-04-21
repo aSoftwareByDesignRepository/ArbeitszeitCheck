@@ -101,6 +101,14 @@ class TimeTrackingService
 			throw new \Exception($this->l10n->t('User is currently on break. End break first.'));
 		}
 
+		// Check for a paused (orphaned) entry from today and resume it instead of
+		// creating a duplicate. The pause gap is archived as a break interval so that
+		// working-time calculations remain accurate.
+		$pausedTodayEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId);
+		if ($pausedTodayEntry !== null && $pausedTodayEntry->getStatus() === TimeEntry::STATUS_PAUSED) {
+			return $this->resumePausedEntry($userId, $pausedTodayEntry, $projectCheckProjectId, $description);
+		}
+
 		// Validate project ID length (DB column limit; ProjectCheck may not enforce)
 		if ($projectCheckProjectId !== null && mb_strlen($projectCheckProjectId) > TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH) {
 			throw new \Exception($this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH]));
@@ -218,6 +226,71 @@ class TimeTrackingService
 		);
 
 		return $updatedEntry;
+	}
+
+	/**
+	 * Resume a same-day paused entry instead of creating a new one.
+	 *
+	 * The gap between the moment the entry was paused (updated_at) and now is
+	 * archived as a break interval so that working-time calculations stay correct.
+	 * Project and description are updated when the caller supplies new values.
+	 *
+	 * @throws \Exception When the month is already closed or the daily maximum is reached.
+	 */
+	private function resumePausedEntry(
+		string $userId,
+		TimeEntry $pausedEntry,
+		?string $projectCheckProjectId = null,
+		?string $description = null
+	): TimeEntry {
+		$this->monthClosureGuard->assertTimeEntryMutable($pausedEntry);
+
+		// Respect the daily maximum – the paused entry's own hours already count.
+		$today = new \DateTime();
+		$today->setTime(0, 0, 0);
+		$tomorrow = clone $today;
+		$tomorrow->modify('+1 day');
+		$todayHours   = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $today, $tomorrow);
+		$maxDailyHours = $this->getMaxDailyHours();
+		if ($todayHours >= $maxDailyHours) {
+			throw new \Exception($this->l10n->t(
+				'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
+				[(int)$maxDailyHours, $todayHours]
+			));
+		}
+
+		$now      = new \DateTime();
+		$pausedAt = $pausedEntry->getUpdatedAt() ?? $now;
+
+		// Archive the gap since the entry was paused as a break so it is excluded
+		// from net working time. Only do so when the gap is positive.
+		if ($pausedAt < $now) {
+			$this->archiveBreakToJson($pausedEntry, $pausedAt, $now);
+		}
+
+		// Update optional fields if the caller supplied new values.
+		if ($projectCheckProjectId !== null) {
+			$pausedEntry->setProjectCheckProjectId($projectCheckProjectId);
+		}
+		if ($description !== null) {
+			$pausedEntry->setDescription($description);
+		}
+
+		$pausedEntry->setStatus(TimeEntry::STATUS_ACTIVE);
+		$pausedEntry->setUpdatedAt($now);
+
+		$resumed = $this->timeEntryMapper->update($pausedEntry);
+
+		$this->auditLogMapper->logAction(
+			$userId,
+			'clock_in',
+			'time_entry',
+			$resumed->getId(),
+			null,
+			$this->safeGetSummary($resumed, $userId)
+		);
+
+		return $resumed;
 	}
 
 	/**
@@ -345,8 +418,33 @@ class TimeTrackingService
 			$currentEntry = $activeEntry ?: $breakEntry;
 			$currentEntry = $this->enforceBreakAutoFallbackForUser($userId, $currentEntry);
 
-			// If no active entry we are fully clocked out.
+			// If no active/break entry, check for a paused entry from today before
+			// declaring the user fully clocked out.
 			if ($currentEntry === null) {
+				$pausedEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId);
+				if ($pausedEntry !== null && $pausedEntry->getStatus() === TimeEntry::STATUS_PAUSED) {
+					$sessionStart = $pausedEntry->getStartTime();
+					$pausedAt     = $pausedEntry->getUpdatedAt() ?? new \DateTime();
+					$sessionDuration = $sessionStart
+						? max(0, $pausedAt->getTimestamp() - $sessionStart->getTimestamp() - (int)($pausedEntry->getBreakDurationHours() * 3600))
+						: 0;
+					try {
+						$pausedSummary = $pausedEntry->getSummary();
+					} catch (\Throwable $e) {
+						\OCP\Log\logger('arbeitszeitcheck')->error(
+							'Error getting summary for paused entry in getStatus: ' . $e->getMessage(),
+							['exception' => $e]
+						);
+						$pausedSummary = ['id' => $pausedEntry->getId(), 'userId' => $userId, 'status' => TimeEntry::STATUS_PAUSED];
+					}
+					return $this->appendAutoClockoutNotice([
+						'status' => TimeEntry::STATUS_PAUSED,
+						'current_entry' => $pausedSummary,
+						'working_today_hours' => $this->getTodayHours($userId),
+						'current_session_duration' => $sessionDuration,
+					], $userId);
+				}
+
 				return $this->appendAutoClockoutNotice([
 					'status' => 'clocked_out',
 					'current_entry' => null,

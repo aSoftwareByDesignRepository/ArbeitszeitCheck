@@ -452,27 +452,17 @@ class TimeEntryController extends Controller
 				return $this->configureCSP($response);
 			}
 
-			// Check if entry can be edited
-			// Allow editing if:
-			// 1. It's a manual entry (user created it themselves) - but not if already approved
-			// 2. It has pending approval status (correction request)
-			// 3. It's an automatic entry that is completed (not yet approved) - allow direct editing for convenience
-			// 4. The entry date is within the last 2 weeks (14 days) - for data integrity and compliance
-			// Do NOT allow editing if entry is already approved (approvedBy is set) or older than 2 weeks
-			$isApproved = $entry->getApprovedBy() !== null;
-			$entryDate = $entry->getStartTime();
-			$editCutoff = new \DateTime();
-			$editCutoff->modify('-' . Constants::EDIT_WINDOW_DAYS . ' days');
-			$editCutoff->setTime(0, 0, 0);
-			$isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
-
-			$canEdit = !$isApproved && $isWithinEditWindow && (
-				$entry->getIsManualEntry()
-				|| $entry->getStatus() === TimeEntry::STATUS_PENDING_APPROVAL
-				|| ($entry->getStatus() === TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())
-			);
+			// Check if entry can be edited (logic lives in TimeEntry::canEdit to stay DRY)
+			$canEdit = $entry->canEdit(Constants::EDIT_WINDOW_DAYS);
 
 			if (!$canEdit) {
+				$isApproved        = $entry->getApprovedBy() !== null;
+				$entryDate         = $entry->getStartTime();
+				$editCutoff        = new \DateTime();
+				$editCutoff->modify('-' . Constants::EDIT_WINDOW_DAYS . ' days');
+				$editCutoff->setTime(0, 0, 0);
+				$isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
+
 				$errorMessage = $isApproved
 					? $this->l10n->t('Cannot edit this time entry. Please use "Request Correction" for approved entries.')
 					: (!$isWithinEditWindow
@@ -781,27 +771,17 @@ class TimeEntryController extends Controller
 				return $mc0;
 			}
 
-			// Check if entry can be edited
-			// Allow editing if:
-			// 1. It's a manual entry (user created it themselves) - but not if already approved
-			// 2. It has pending approval status (correction request)
-			// 3. It's an automatic entry that is completed (not yet approved) - allow direct editing for convenience
-			// 4. The entry date is within the last 2 weeks (14 days) - for data integrity and compliance
-			// Do NOT allow editing if entry is already approved (approvedBy is set) or older than 2 weeks
-			$isApproved = $entry->getApprovedBy() !== null;
-			$entryDate = $entry->getStartTime();
-			$editCutoff = new \DateTime();
-			$editCutoff->modify('-' . Constants::EDIT_WINDOW_DAYS . ' days');
-			$editCutoff->setTime(0, 0, 0);
-			$isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
-
-			$canEdit = !$isApproved && $isWithinEditWindow && (
-				$entry->getIsManualEntry()
-				|| $entry->getStatus() === TimeEntry::STATUS_PENDING_APPROVAL
-				|| ($entry->getStatus() === TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())
-			);
+			// Check if entry can be edited (logic lives in TimeEntry::canEdit to stay DRY)
+			$canEdit = $entry->canEdit(Constants::EDIT_WINDOW_DAYS);
 
 			if (!$canEdit) {
+				$isApproved        = $entry->getApprovedBy() !== null;
+				$entryDate         = $entry->getStartTime();
+				$editCutoff        = new \DateTime();
+				$editCutoff->modify('-' . Constants::EDIT_WINDOW_DAYS . ' days');
+				$editCutoff->setTime(0, 0, 0);
+				$isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
+
 				$errorMessage = $isApproved
 					? $this->l10n->t('Cannot edit this time entry. Please use "Request Correction" for approved entries.')
 					: (!$isWithinEditWindow
@@ -1047,6 +1027,16 @@ class TimeEntryController extends Controller
 				$entry->setProjectCheckProjectId($project_check_project_id);
 			}
 
+			// Finalise paused entries: when the user supplies an end_time, the entry
+			// is no longer orphaned – promote it to completed so all downstream logic
+			// (compliance checks, reports, approval flow) treats it correctly.
+			if ($entry->getStatus() === TimeEntry::STATUS_PAUSED && $entry->getEndTime() !== null) {
+				$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+				if (!$entry->getEndedReason()) {
+					$entry->setEndedReason(TimeEntry::ENDED_REASON_MANUAL_CLOCK_OUT);
+				}
+			}
+
 			// Check rest period compliance before saving (ArbZG §5)
 			if ($entry->getStartTime()) {
 				$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($userId, $entry->getStartTime(), $id);
@@ -1224,8 +1214,8 @@ class TimeEntryController extends Controller
 				], Http::STATUS_FORBIDDEN);
 			}
 
-			// Check if entry can be deleted
-			$canDelete = $entry->getIsManualEntry();
+			// Check if entry can be deleted (manual entries + orphaned paused entries)
+			$canDelete = $entry->canDelete();
 			$impact = [
 				'canDelete' => $canDelete,
 				'isManualEntry' => $entry->getIsManualEntry(),
@@ -1577,8 +1567,8 @@ class TimeEntryController extends Controller
 				return $mcDel;
 			}
 
-			// Check if entry can be deleted (only manual entries)
-			if (!$entry->getIsManualEntry()) {
+			// Check if entry can be deleted (manual entries + orphaned paused entries)
+			if (!$entry->canDelete()) {
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Cannot delete automatic time entries')

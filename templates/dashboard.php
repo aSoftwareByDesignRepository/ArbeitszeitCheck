@@ -139,23 +139,26 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
             <div class="arbeitszeitcheck-dashboard__grid">
                 <!-- Status Card -->
                 <?php
-                $statusKey = $status['status'] ?? 'clocked_out';
-                $statusKeySafe = in_array($statusKey, ['active', 'break', 'clocked_out'], true) ? $statusKey : 'clocked_out';
-                $statusBadgeVariant = match ($statusKeySafe) {
-                    'active' => 'success',
-                    'break' => 'warning',
-                    default => 'secondary',
-                };
-                $statusLabel = match ($statusKeySafe) {
-                    'active' => $l->t('Clocked In'),
-                    'break' => $l->t('On Break'),
-                    default => $l->t('Clocked Out'),
-                };
-                $statusIcon = match ($statusKeySafe) {
-                    'active' => '⏱',
-                    'break' => '☕',
-                    default => '⏸',
-                };
+			$statusKey = $status['status'] ?? 'clocked_out';
+			$statusKeySafe = in_array($statusKey, ['active', 'break', 'clocked_out', 'paused'], true) ? $statusKey : 'clocked_out';
+			$statusBadgeVariant = match ($statusKeySafe) {
+				'active' => 'success',
+				'break' => 'warning',
+				'paused' => 'warning',
+				default => 'secondary',
+			};
+			$statusLabel = match ($statusKeySafe) {
+				'active' => $l->t('Clocked In'),
+				'break' => $l->t('On Break'),
+				'paused' => $l->t('Paused'),
+				default => $l->t('Clocked Out'),
+			};
+			$statusIcon = match ($statusKeySafe) {
+				'active' => '⏱',
+				'break' => '☕',
+				'paused' => '⏸',
+				default => '⏸',
+			};
                 $startedAt = null;
                 if (!empty($status['current_entry']['startTime'])) {
                     try {
@@ -186,8 +189,8 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                         </div>
                     </div>
                     <div class="card-body">
-                        <?php if (($status['status'] ?? 'clocked_out') !== 'clocked_out'): ?>
-                            <?php if (($status['status'] ?? 'clocked_out') === 'break'): ?>
+                        <?php if ($statusKeySafe !== 'clocked_out'): ?>
+                            <?php if ($statusKeySafe === 'break'): ?>
                                 <!-- Break Timer (shown when on break) -->
                                 <div class="break-timer dashboard-status-card__timer" data-break-start-time="<?php p($status['current_entry']['breakStartTime'] ?? ''); ?>">
                                     <span class="timer-label"><?php p($l->t('Break Time:')); ?></span>
@@ -207,11 +210,22 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                         </div>
                                     <?php endif; ?>
                                 </div>
-                                <!-- Working Time (shown when on break, but paused) -->
+                                <!-- Frozen working-time counter below the break timer -->
                                 <div class="session-timer dashboard-status-card__timer dashboard-status-card__timer--paused" data-start-time="<?php p($status['current_entry']['startTime'] ?? ''); ?>" style="opacity: 0.6; margin-top: 1rem;">
                                     <span class="timer-label"><?php p($l->t('Working Time:')); ?></span>
                                     <span class="timer-value" id="session-timer-value"><?php p($durationFormatted); ?></span>
                                 </div>
+                            <?php elseif ($statusKeySafe === 'paused'): ?>
+                                <!-- Paused: frozen working-time display (no live counter) -->
+                                <div class="session-timer dashboard-status-card__timer dashboard-status-card__timer--paused" data-start-time="<?php p($status['current_entry']['startTime'] ?? ''); ?>">
+                                    <span class="timer-label"><?php p($l->t('Working Time:')); ?></span>
+                                    <span class="timer-value" id="session-timer-value"><?php p($durationFormatted); ?></span>
+                                </div>
+                                <?php if ($startedAt !== null): ?>
+                                    <div class="dashboard-status-card__meta">
+                                        <?php p($l->t('Started at')); ?> <?php p($startedAt); ?>
+                                    </div>
+                                <?php endif; ?>
                             <?php else: ?>
                                 <!-- Working Timer (shown when active) -->
                                 <div class="session-timer dashboard-status-card__timer" data-start-time="<?php p($status['current_entry']['startTime'] ?? ''); ?>">
@@ -227,13 +241,13 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                         <?php endif; ?>
 
                         <div class="card-actions" role="group" aria-label="<?php p($l->t('Time tracking actions')); ?>">
-                            <?php if (($status['status'] ?? 'clocked_out') === 'clocked_out' || ($status['status'] ?? 'clocked_out') === 'paused'): ?>
+                            <?php if ($statusKeySafe === 'clocked_out' || $statusKeySafe === 'paused'): ?>
                                 <button id="btn-clock-in"
                                     class="btn btn--primary"
                                     type="button"
-                                    aria-label="<?php p($l->t('Clock in to start tracking your working time')); ?>"
-                                    title="<?php p($l->t('Click to clock in and start tracking your working time')); ?>">
-                                    <?php p($l->t('Clock In')); ?>
+                                    aria-label="<?php p($statusKeySafe === 'paused' ? $l->t('Resume working – continues your paused time entry') : $l->t('Clock in to start tracking your working time')); ?>"
+                                    title="<?php p($statusKeySafe === 'paused' ? $l->t('Resume working – continues your paused time entry') : $l->t('Click to clock in and start tracking your working time')); ?>">
+                                    <?php p($statusKeySafe === 'paused' ? $l->t('clock_in_resume') : $l->t('Clock In')); ?>
                                 </button>
                             <?php elseif (($status['status'] ?? 'clocked_out') === 'active'): ?>
                                 <button id="btn-start-break"
@@ -559,25 +573,7 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
                                     </td>
                                     <td>
                                         <?php
-                                        // Show edit button only if entry can be edited
-                                        // Same logic as in time-entries.php:
-                                        // 1. Manual entries (not approved)
-                                        // 2. Entries with pending approval
-                                        // 3. Completed automatic entries (not yet approved)
-                                        // 4. Only entries from the last 2 weeks (14 days) - for data integrity and compliance
-                                        // Do NOT show if entry is already approved or older than 2 weeks
-                                        $isApproved = $entry->getApprovedBy() !== null;
-                                        $entryDate = $entry->getStartTime();
-                                        $editCutoff = new \DateTime();
-                                        $editCutoff->modify('-' . \OCA\ArbeitszeitCheck\Constants::EDIT_WINDOW_DAYS . ' days');
-                                        $editCutoff->setTime(0, 0, 0);
-                                        $isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
-
-                                        $canEdit = !$isApproved && $isWithinEditWindow && (
-                                            $entry->getIsManualEntry()
-                                            || $entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_PENDING_APPROVAL
-                                            || ($entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())
-                                        );
+                                        $canEdit = $entry->canEdit(\OCA\ArbeitszeitCheck\Constants::EDIT_WINDOW_DAYS);
                                         if ($canEdit):
                                         ?>
                                             <button class="btn btn--sm btn--secondary"

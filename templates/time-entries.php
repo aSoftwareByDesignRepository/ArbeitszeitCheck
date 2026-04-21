@@ -793,24 +793,7 @@ $appTimezone = \OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitch
                                         </td>
                                         <td class="actions-cell">
                                             <?php
-                                            // Show edit button for:
-                                            // 1. Manual entries (not approved)
-                                            // 2. Entries with pending approval
-                                            // 3. Completed automatic entries (not yet approved)
-                                            // 4. Only entries from the last 2 weeks (14 days) - for data integrity and compliance
-                                            // Do NOT show if entry is already approved or older than 2 weeks
-                                            $isApproved = $entry->getApprovedBy() !== null;
-                                            $entryDate = $entry->getStartTime();
-                                            $editCutoff = new \DateTime();
-                                            $editCutoff->modify('-' . \OCA\ArbeitszeitCheck\Constants::EDIT_WINDOW_DAYS . ' days');
-                                            $editCutoff->setTime(0, 0, 0);
-                                            $isWithinEditWindow = $entryDate && $entryDate >= $editCutoff;
-
-                                            $canEdit = !$isApproved && $isWithinEditWindow && (
-                                                $entry->getIsManualEntry()
-                                                || $entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_PENDING_APPROVAL
-                                                || ($entry->getStatus() === \OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_COMPLETED && !$entry->getIsManualEntry())
-                                            );
+                                            $canEdit = $entry->canEdit(\OCA\ArbeitszeitCheck\Constants::EDIT_WINDOW_DAYS);
                                             if ($canEdit):
                                             ?>
                                                 <button class="btn btn--sm btn--secondary"
@@ -822,8 +805,7 @@ $appTimezone = \OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitch
                                                 </button>
                                             <?php endif; ?>
                                             <?php
-                                            // Only show delete button for manual entries
-                                            $canDelete = $entry->getIsManualEntry();
+                                            $canDelete = $entry->canDelete();
                                             if ($canDelete):
                                             ?>
                                                 <button class="btn btn--sm btn--danger btn-delete"

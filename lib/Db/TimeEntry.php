@@ -454,6 +454,53 @@ class TimeEntry extends Entity
 	}
 
 	/**
+	 * Whether the entry's owner may edit it.
+	 *
+	 * Centralises the business rule so controllers and templates stay in sync:
+	 *  – not already approved
+	 *  – start time within the edit window (default 14 days)
+	 *  – status is one that allows editing: manual, pending_approval,
+	 *    completed-automatic, or paused (orphaned/unfinished automatic entry)
+	 *
+	 * @param int $editWindowDays Number of past days within which editing is permitted.
+	 */
+	public function canEdit(int $editWindowDays = 14): bool
+	{
+		if ($this->approvedBy !== null) {
+			return false;
+		}
+
+		$entryDate = $this->startTime;
+		if (!$entryDate instanceof \DateTime) {
+			return false;
+		}
+
+		$cutoff = new \DateTime();
+		$cutoff->modify('-' . $editWindowDays . ' days');
+		$cutoff->setTime(0, 0, 0);
+		if ($entryDate < $cutoff) {
+			return false;
+		}
+
+		return $this->isManualEntry
+			|| $this->status === self::STATUS_PENDING_APPROVAL
+			|| ($this->status === self::STATUS_COMPLETED && !$this->isManualEntry)
+			|| $this->status === self::STATUS_PAUSED;
+	}
+
+	/**
+	 * Whether the entry's owner may delete it.
+	 *
+	 * Manual entries can always be deleted. Paused (orphaned automatic) entries
+	 * are also deletable because they were never properly completed and have no
+	 * approved payroll impact.
+	 */
+	public function canDelete(): bool
+	{
+		return $this->isManualEntry || $this->status === self::STATUS_PAUSED;
+	}
+
+	/**
 	 * Get a summary array for API responses
 	 *
 	 * @return array
