@@ -228,6 +228,10 @@ class VacationAllocationService
 	 *   allocation_valid: bool,
 	 *   shortfall: float
 	 * }
+	 *
+	 * @param bool $persistEntitlementSnapshot When true, store/revise the entitlement snapshot row (audit).
+	 *        Set false for read-only display paths (e.g. dashboard stats, widgets) to avoid write amplification,
+	 *        lock churn, and failure modes unrelated to the allocation math.
 	 */
 	public function computeYearAllocation(
 		string $userId,
@@ -237,6 +241,7 @@ class VacationAllocationService
 		?\DateTime $prospectiveEnd = null,
 		?\DateTimeInterface $asOf = null,
 		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
+		bool $persistEntitlementSnapshot = true,
 	): array {
 		$asOf = $asOf ?? new \DateTime('today');
 		$entitlementResolved = $this->vacationEntitlementEngine->computeForDate($userId, $asOf);
@@ -352,17 +357,30 @@ class VacationAllocationService
 			'entitlement_trace' => $entitlementResolved['trace'],
 		];
 
-		$this->entitlementSnapshotService->store(
-			$userId,
-			$year,
-			$asOf,
-			$annualEntitlement,
-			(string)$entitlementResolved['source'],
-			$entitlementResolved['ruleSetId'],
-			(array)$entitlementResolved['trace'],
-			'system',
-			hash('sha256', json_encode([$entitlementResolved['source'], $entitlementResolved['ruleSetId'], $entitlementResolved['trace'], $annualEntitlement]))
-		);
+		if ($persistEntitlementSnapshot) {
+			$fingerprint = 'invalid';
+			try {
+				$enc = json_encode(
+					[$entitlementResolved['source'], $entitlementResolved['ruleSetId'], $entitlementResolved['trace'], $annualEntitlement],
+					JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+				);
+				$fingerprint = hash('sha256', $enc);
+			} catch (\JsonException) {
+				// Extremely unlikely: non-encodable trace. Still persist numeric entitlement with stable placeholder hash.
+				$fingerprint = hash('sha256', (string)$annualEntitlement . '|' . (string)$entitlementResolved['source']);
+			}
+			$this->entitlementSnapshotService->store(
+				$userId,
+				$year,
+				$asOf,
+				$annualEntitlement,
+				(string)$entitlementResolved['source'],
+				$entitlementResolved['ruleSetId'],
+				(array)$entitlementResolved['trace'],
+				'system',
+				$fingerprint
+			);
+		}
 
 		return $result;
 	}

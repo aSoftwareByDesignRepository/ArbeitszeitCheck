@@ -137,8 +137,8 @@ class AbsenceServiceTest extends TestCase
 		$this->vacationAllocationStub = null;
 		$this->vacationAllocationFailProspective = false;
 		$this->vacationAllocationService = $this->createMock(VacationAllocationService::class);
-		$this->vacationAllocationService->method('computeYearAllocation')->willReturnCallback(function ($userId, $year, $exclude, $pStart, $pEnd, $asOf, $createdAt = null) {
-			unset($userId, $year, $exclude, $asOf, $createdAt);
+		$this->vacationAllocationService->method('computeYearAllocation')->willReturnCallback(function ($userId, $year, $exclude, $pStart, $pEnd, $asOf, $createdAt = null, $persistSnapshot = true) {
+			unset($userId, $year, $exclude, $asOf, $createdAt, $persistSnapshot);
 			if ($this->vacationAllocationStub !== null) {
 				return $this->vacationAllocationStub;
 			}

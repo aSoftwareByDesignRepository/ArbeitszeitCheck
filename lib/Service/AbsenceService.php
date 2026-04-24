@@ -1048,7 +1048,8 @@ class AbsenceService
 
 		try {
 			$today = new \DateTime('today');
-			$alloc = $this->vacationAllocationService->computeYearAllocation($userId, $year, null, null, null, $today, null);
+			// Read-only: do not persist entitlement snapshots (avoids DB writes/locks on every dashboard/widget poll).
+			$alloc = $this->vacationAllocationService->computeYearAllocation($userId, $year, null, null, null, $today, null, false);
 			$totalEntitlement = (float)$alloc['entitlement'];
 			$carryoverOpening = (float)$alloc['carryover_opening'];
 			$totalAvailable = $totalEntitlement + $carryoverOpening;
@@ -1079,7 +1080,8 @@ class AbsenceService
 				'sick_days' => $sickDays,
 			];
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting vacation stats: ' . $e->getMessage(), ['exception' => $e]);
+			// Warning: stats fall back to defaults; snapshot persist is already skipped for this path.
+			\OCP\Log\logger('arbeitszeitcheck')->warning('Error getting vacation stats (using fallback): ' . $e->getMessage(), ['exception' => $e]);
 			return [
 				'year' => $year,
 				'entitlement' => Constants::DEFAULT_VACATION_DAYS_PER_YEAR,
@@ -1129,7 +1131,8 @@ class AbsenceService
 				$startDate,
 				$endDate,
 				$today,
-				$prospectiveRequestCreatedAt
+				$prospectiveRequestCreatedAt,
+				false
 			);
 			if ($alloc['allocation_valid']) {
 				continue;
@@ -1141,7 +1144,8 @@ class AbsenceService
 				null,
 				null,
 				$today,
-				null
+				null,
+				false
 			);
 			$msg = $this->l10n->t(
 				'Not enough vacation days remaining. You have %1$s days left for %2$s but requested %3$s days.',

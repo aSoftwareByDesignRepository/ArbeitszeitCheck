@@ -135,7 +135,8 @@ if (($status['status'] ?? 'clocked_out') === 'break' && !empty($status['current_
         <?php endif; ?>
 
         <!-- Dashboard Grid -->
-        <section class="section" aria-labelledby="dashboard-status-heading" aria-label="<?php p($l->t('Current status and today\'s stats')); ?>">
+        <section class="section dashboard-key-metrics" aria-labelledby="dashboard-overview-title" aria-label="<?php p($l->t('Work status, hours, and vacation at a glance')); ?>">
+            <h2 id="dashboard-overview-title" class="sr-only"><?php p($l->t('At a glance')); ?></h2>
             <div class="arbeitszeitcheck-dashboard__grid">
                 <!-- Status Card -->
                 <?php

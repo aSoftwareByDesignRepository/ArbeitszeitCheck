@@ -90,15 +90,34 @@
     opacity: 1;
 }
 
+/* Dashboard “at a glance” block: one scannable group (WCAG: section + sr-only h2) */
+.dashboard-key-metrics {
+    scroll-margin-top: var(--space-4, 1rem);
+}
+
 /* Dashboard Grid - Clear spacing between cards (generous gaps for clarity) */
 .arbeitszeitcheck-dashboard__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
     gap: var(--space-10);
     margin-bottom: 0;
+    margin-top: 0;
     visibility: visible;
     opacity: 1;
     width: 100%;
+}
+
+@media (min-width: 1200px) {
+    .arbeitszeitcheck-dashboard__grid {
+        gap: var(--space-12);
+    }
+}
+
+/* Primary actions: 2px focus ring for keyboard users (WCAG 2.4.7) */
+.arbeitszeitcheck-dashboard__grid .btn:focus-visible,
+.dashboard-vacation-card__actions .btn:focus-visible {
+    outline: 2px solid var(--color-primary-element, var(--arbeitszeitcheck-color-primary, #0066cc));
+    outline-offset: 2px;
 }
 
 /* Cards - Clear boundaries, comfortable padding (simple UX, foolproof) */

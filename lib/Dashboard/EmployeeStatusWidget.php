@@ -18,6 +18,12 @@ use OCP\IURLGenerator;
 use OCP\Util;
 
 class EmployeeStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, IReloadableWidget {
+	/** In-request cache: Nextcloud may call getItemsV2 and getWidgetButtons in one request. */
+	private ?string $cachedWidgetUserId = null;
+
+	/** @var array<string, mixed>|null */
+	private ?array $cachedWidgetData = null;
+
 	public function __construct(
 		private readonly IL10N $l10n,
 		private readonly IURLGenerator $urlGenerator,
@@ -55,7 +61,7 @@ class EmployeeStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, 
 	}
 
 	public function getItemsV2(string $userId, ?string $since = null, int $limit = 7): WidgetItems {
-		$data    = $this->widgetDataService->getEmployeeWidgetData($userId);
+		$data    = $this->getEmployeeDataSafe($userId);
 		$status  = (string)$data['status'];
 		$url     = $this->dashboardQuickActionsUrl();
 		$icon    = $this->getIconUrl();
@@ -142,7 +148,7 @@ class EmployeeStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, 
 	}
 
 	public function getWidgetButtons(string $userId): array {
-		$data = $this->widgetDataService->getEmployeeWidgetData($userId);
+		$data = $this->getEmployeeDataSafe($userId);
 		$status = (string)$data['status'];
 
 		return [
@@ -201,5 +207,54 @@ class EmployeeStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, 
 			'paused' => $this->l10n->t('Clock In'),
 			default => $this->l10n->t('Clock In'),
 		};
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function getEmployeeDataSafe(string $userId): array {
+		if ($this->cachedWidgetUserId === $userId && $this->cachedWidgetData !== null) {
+			return $this->cachedWidgetData;
+		}
+		try {
+			$this->cachedWidgetData = $this->widgetDataService->getEmployeeWidgetData($userId);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Employee dashboard widget: failed to load data', [
+				'exception' => $e,
+			]);
+			$this->cachedWidgetData = $this->fallbackEmployeeWidgetData();
+		}
+		$this->cachedWidgetUserId = $userId;
+		return $this->cachedWidgetData;
+	}
+
+	/**
+	 * Safe defaults so the Nextcloud dashboard never receives an empty/ broken widget.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function fallbackEmployeeWidgetData(): array {
+		$y = (int)date('Y');
+		return [
+			'userId' => '',
+			'status' => 'clocked_out',
+			'workingTodayHours' => 0.0,
+			'currentSessionDuration' => 0,
+			'sessionStartFormatted' => '',
+			'breakStartFormatted' => '',
+			'weekHoursWorked' => 0.0,
+			'weekHoursRequired' => 0.0,
+			'weeklyContractHours' => 40.0,
+			'cumulativeBalance' => 0.0,
+			'breakRequired' => false,
+			'remainingBreakMinutes' => 0,
+			'breakWarningLevel' => 'none',
+			'vacationYear' => $y,
+			'vacationRemaining' => 0.0,
+			'vacationEntitlement' => 0.0,
+			'vacationUsed' => 0.0,
+			'vacationCarryover' => 0.0,
+			'vacationCarryoverUsable' => 0.0,
+		];
 	}
 }

@@ -119,4 +119,15 @@ class EmployeeStatusWidgetTest extends TestCase {
 
 		$this->assertNotEmpty($buttons);
 	}
+
+	public function testWidgetSurvivesDataServiceException(): void {
+		$this->dataService->method('getEmployeeWidgetData')->willThrowException(new \RuntimeException('simulated'));
+		$widget = new EmployeeStatusWidget($this->l10n, $this->urlGenerator, $this->dataService);
+		$items  = $widget->getItemsV2('u1');
+		$this->assertInstanceOf(WidgetItems::class, $items);
+		$this->assertGreaterThanOrEqual(1, count($items->getItems()));
+		$this->assertSame('Clocked Out', $items->getItems()[0]->getTitle());
+		$btns   = $widget->getWidgetButtons('u1');
+		$this->assertNotEmpty($btns);
+	}
 }

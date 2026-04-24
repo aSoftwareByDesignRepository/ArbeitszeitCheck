@@ -307,4 +307,58 @@ class VacationAllocationServiceTest extends TestCase
 		$r = $s->computeYearAllocation('u1', 2026, null, null, null, new \DateTime('2026-02-15'));
 		$this->assertEqualsWithDelta(5.0, $r['carryover_opening'], 0.001);
 	}
+
+	public function testReadOnlyAllocationSkipsEntitlementSnapshotStore(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnMap([
+			['arbeitszeitcheck', Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_MONTH, '3', '3'],
+			['arbeitszeitcheck', Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_DAY, '31', '31'],
+		]);
+		$absenceMapper = $this->createMock(AbsenceMapper::class);
+		$absenceMapper->method('findVacationApprovedOverlappingYear')->willReturn([]);
+		$userWtm = $this->createMock(UserWorkingTimeModelMapper::class);
+		$settings = $this->createMock(UserSettingsMapper::class);
+		$balance = $this->createMock(VacationYearBalanceMapper::class);
+		$balance->method('getCarryoverDays')->willReturn(0.0);
+		$holiday = $this->createMock(HolidayService::class);
+		$engine = $this->createMock(VacationEntitlementEngine::class);
+		$engine->method('computeForDate')->willReturn([
+			'days' => 25.0,
+			'source' => 'manual',
+			'ruleSetId' => null,
+			'trace' => [],
+		]);
+		$snapshot = $this->createMock(EntitlementSnapshotService::class);
+		$snapshot->expects($this->never())->method('store');
+		$s = $this->makeService($config, $absenceMapper, $userWtm, $settings, $balance, $holiday, $engine, $snapshot);
+		$s->computeYearAllocation('u1', 2026, null, null, null, new \DateTime('2026-02-15'), null, false);
+	}
+
+	public function testDefaultAllocationStillPersistsEntitlementSnapshotStore(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnMap([
+			['arbeitszeitcheck', Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_MONTH, '3', '3'],
+			['arbeitszeitcheck', Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_DAY, '31', '31'],
+		]);
+		$absenceMapper = $this->createMock(AbsenceMapper::class);
+		$absenceMapper->method('findVacationApprovedOverlappingYear')->willReturn([]);
+		$userWtm = $this->createMock(UserWorkingTimeModelMapper::class);
+		$settings = $this->createMock(UserSettingsMapper::class);
+		$balance = $this->createMock(VacationYearBalanceMapper::class);
+		$balance->method('getCarryoverDays')->willReturn(0.0);
+		$holiday = $this->createMock(HolidayService::class);
+		$engine = $this->createMock(VacationEntitlementEngine::class);
+		$engine->method('computeForDate')->willReturn([
+			'days' => 25.0,
+			'source' => 'manual',
+			'ruleSetId' => null,
+			'trace' => [],
+		]);
+		$snapshot = $this->createMock(EntitlementSnapshotService::class);
+		$snapshot->expects($this->once())->method('store');
+		$s = $this->makeService($config, $absenceMapper, $userWtm, $settings, $balance, $holiday, $engine, $snapshot);
+		$s->computeYearAllocation('u1', 2026, null, null, null, new \DateTime('2026-02-15'));
+	}
 }
