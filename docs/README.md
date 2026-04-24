@@ -6,8 +6,8 @@ This folder contains the documentation included with ArbeitszeitCheck for admini
 
 | Document | Description |
 |----------|-------------|
-| [User-Manual.en.md](User-Manual.en.md) | Short end-user/admin guide (calendar vs Nextcloud Calendar, absences, roles, app-admin allowlist usage, overtime/undertime traffic light notifications, revision-safe month closure including optional grace period and auto-finalization) |
-| [User-Manual.de.md](User-Manual.de.md) | Kurzanleitung für Endnutzer/Admins (Deutsch), inkl. App-Admin-Whitelist sowie Monatsnachweis mit Karenz und Auto-Finalisierung |
+| [User-Manual.en.md](User-Manual.en.md) | Short end-user/admin guide (calendar vs Nextcloud Calendar, absences, roles, dashboard quick-actions workspace with role-based overview blocks, manager approvals tabs for absences/time-entry corrections, app-admin allowlist usage, overtime/undertime traffic light notifications, revision-safe month closure including optional grace period and auto-finalization) |
+| [User-Manual.de.md](User-Manual.de.md) | Kurzanleitung für Endnutzer/Admins (Deutsch), inkl. Dashboard-Schnellaktionen mit rollenbasierten Übersichten, Manager-Reitern für Abwesenheiten/Korrekturen, App-Admin-Whitelist sowie Monatsnachweis mit Karenz und Auto-Finalisierung |
 | [GDPR-Compliance-Guide.en.md](GDPR-Compliance-Guide.en.md) | How to operate ArbeitszeitCheck in a GDPR-compliant way (legal basis, data minimization, employee rights, retention) |
 | [Compliance-Implementation.en.md](Compliance-Implementation.en.md) | Technical implementation of ArbZG compliance checks (breaks, rest periods, real-time vs batch) |
 | [Compliance-Implementation.de.md](Compliance-Implementation.de.md) | Same content in German |

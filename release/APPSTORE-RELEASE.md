@@ -228,6 +228,37 @@ Submit; fix any validation errors (wrong checksum/signature almost always means 
 
 ---
 
+## 7.5 Mandatory release-asset identity check (hard gate)
+
+Before App Store submit, verify that your local archive and the GitHub release asset are exactly the same bytes.
+
+```bash
+VERSION=X.Y.Z
+APPID=arbeitszeitcheck
+GH_REPO=aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck
+LOCAL_ARCHIVE="build/release/${APPID}-${VERSION}.tar.gz"
+VERIFY_DIR="$(mktemp -d)"
+
+gh release download "v${VERSION}" \
+  --repo "${GH_REPO}" \
+  --pattern "${APPID}-${VERSION}.tar.gz" \
+  --dir "${VERIFY_DIR}" \
+  --clobber
+
+sha256sum "${LOCAL_ARCHIVE}" "${VERIFY_DIR}/${APPID}-${VERSION}.tar.gz"
+cmp -s "${LOCAL_ARCHIVE}" "${VERIFY_DIR}/${APPID}-${VERSION}.tar.gz" && echo "OK: byte-identical"
+
+rm -rf "${VERIFY_DIR}"
+```
+
+Release policy:
+
+- If `OK: byte-identical` is missing, stop and do not submit to App Store.
+- Recreate one canonical archive, then re-run checksum/signature and upload steps.
+- App Store upload must use exactly that canonical archive (or the downloaded matching GitHub asset).
+
+---
+
 ## 8. Required chat handoff (every release)
 
 After release creation and before closing the task, always paste these two items in chat:
@@ -262,5 +293,6 @@ This handoff is mandatory for every release so upload data can be copied without
 - [ ] OpenSSL base64 signature **from the same tarball file**
 - [ ] Nothing uploaded to git except docs/checksums (no `.tar.gz`, no keys)
 - [ ] **GitHub Release** on **`nextcloud-arbeitszeitcheck`**: tag `vX.Y.Z`, attach **`build/release/arbeitszeitcheck-X.Y.Z.tar.gz`**, `gh --repo aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck` (**required**)
+- [ ] Byte-identity gate passed (`cmp` + identical SHA-256 local archive vs downloaded GitHub release asset)
 - [ ] App Store upload uses **that same** tarball bytes
 - [ ] Chat handoff posted: App Store signature + direct GitHub tarball URL

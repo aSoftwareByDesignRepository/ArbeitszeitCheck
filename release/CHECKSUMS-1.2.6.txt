@@ -1,0 +1,7 @@
+# ArbeitszeitCheck 1.2.6 checksums
+# Generate after building the signed release archive:
+#   sha256sum arbeitszeitcheck-1.2.6.tar.gz
+#   sha512sum arbeitszeitcheck-1.2.6.tar.gz
+
+SHA256 (arbeitszeitcheck-1.2.6.tar.gz) = <pending>
+SHA512 (arbeitszeitcheck-1.2.6.tar.gz) = <pending>

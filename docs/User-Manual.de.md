@@ -60,6 +60,10 @@ Im Auswahldialog erscheinen nur Konten aus der Nextcloud-`admin`-Gruppe.
 ## 4. Alltägliche Aufgaben
 
 - **Kommen/Gehen und Pausen** über die Zeiterfassung; Korrekturen und Begründungen nach internen Regeln.
+- **Dashboard-Schnellaktionen (Workspace):**
+  - Das Dashboard enthält einen eigenen Schnellaktionsbereich mit **Mein Status**, **Aktuelle Sitzung** und direkten Aktionen für **Clock In**, **Pause**, **Fortsetzen** und **Clock Out**.
+  - Je nach Rolle zeigt dieselbe Seite zusätzlich **Teamübersicht** (Führungskraft) und **Unternehmensübersicht** (Admin) mit kompakten Statuslisten.
+  - Wenn eine Aktion wegen einer abgelaufenen Nextcloud-Sitzung fehlschlägt, Seite aktualisieren und erneut ausführen.
 - **Pausierter Eintrag (wieder aufnehmen oder korrigieren):**
   - Wenn ein Eintrag den Status **Pausiert** hat, zeigt das Dashboard bei **Clock In** die Aktion **Fortsetzen (nach Pause)** und setzt den gleichen Tages-Eintrag fort (statt einen Duplikat-Eintrag zu erzeugen).
   - Pausierte Einträge sind in den letzten 14 Tagen wieder normal **bearbeitbar/löschbar** (sofern nicht bereits genehmigt).
@@ -67,7 +71,7 @@ Im Auswahldialog erscheinen nur Konten aus der Nextcloud-`admin`-Gruppe.
 - **Abwesenheiten** beantragen und ggf. auf Freigabe warten. **Resturlaub** und Überträge werden angezeigt, wenn die Administration das gepflegt hat.
   - **App-Teams (empfohlene Einrichtung):** Wenn Ihre Organisation **App-Teams** nutzt und in der App **kein:e Vorgesetzte:r** für Ihr Team hinterlegt ist, werden Anträge **ohne** Vertretung beim Absenden **automatisch genehmigt**—es gäbe sonst niemanden mit Managerfreigabe. Mit **Vertretung** läuft zuerst der Vertretungs-Schritt. Die Oberfläche kann dazu einen kurzen Hinweis anzeigen.
   - **Älteres Gruppenmodell:** Verhalten folgt dem früheren „gleiche Gruppe“-Modell; die Administration sollte sicherstellen, dass Genehmigungen für Ihre Organisation weiterhin sinnvoll möglich sind.
-- **Manager-Dashboard** (als Führungskraft): Unter **Ausstehende Genehmigungen** erscheint der **Abwesenheitstyp in Ihrer Sprache** (z. B. Urlaub, Krankheit), nicht technische Kurzbezeichnungen. Wo freigeschaltet, bietet **Abwesenheiten der Mitarbeitenden** eine eigene Listen-/Filteransicht.
+- **Manager-Dashboard** (als Führungskraft): Unter **Ausstehende Genehmigungen** können Sie zwischen den Reitern **Abwesenheiten** und **Zeiteintrag-Korrekturen** wechseln. Bei Abwesenheiten erscheint der **Abwesenheitstyp in Ihrer Sprache** (z. B. Urlaub, Krankheit), nicht technische Kurzbezeichnungen. Wo freigeschaltet, bietet **Abwesenheiten der Mitarbeitenden** eine eigene Listen-/Filteransicht.
 - **Mobile Nutzung (Smartphone/Tablet):** Die Oberfläche ist responsiv optimiert (klarere Abschnittsabstände, größere Touch-Ziele, iPhone-Safe-Area-Berücksichtigung). Auf sehr kleinen Displays funktionieren Formulare meist am besten im Hochformat, breite Tabellen/Berichte im Querformat.
 - **Berichte** für Zeiträume erstellen und erlaubte Exporte nutzen (CSV, DATEV, …).
 - **Compliance-Hinweise** (z. B. fehlende Pausen) nach Vorgabe des Arbeitgebers bearbeiten.

@@ -29,7 +29,7 @@ class Version1017Date20260420120000 extends SimpleMigrationStep {
 			$table->addColumn('created_at', Types::DATETIME, ['notnull' => true]);
 			$table->addColumn('updated_at', Types::DATETIME, ['notnull' => true]);
 			$table->setPrimaryKey(['id'], 'at_tariff_rule_sets_pk');
-			$table->addUniqueIndex(['tariff_code', 'version'], 'at_tariff_rule_sets_code_ver_uq');
+			$table->addUniqueIndex(['tariff_code', 'version'], 'at_trs_code_ver_uq');
 			$table->addIndex(['status'], 'at_tariff_rule_sets_status_idx');
 			$table->addIndex(['valid_from', 'valid_to'], 'at_tariff_rule_sets_valid_idx');
 		}
@@ -44,8 +44,8 @@ class Version1017Date20260420120000 extends SimpleMigrationStep {
 			$table->addColumn('created_at', Types::DATETIME, ['notnull' => true]);
 			$table->addColumn('updated_at', Types::DATETIME, ['notnull' => true]);
 			$table->setPrimaryKey(['id'], 'at_tariff_rule_modules_pk');
-			$table->addIndex(['rule_set_id'], 'at_tariff_rule_modules_ruleset_idx');
-			$table->addIndex(['module_type'], 'at_tariff_rule_modules_type_idx');
+			$table->addIndex(['rule_set_id'], 'at_trm_ruleset_idx');
+			$table->addIndex(['module_type'], 'at_trm_type_idx');
 		}
 
 		if (!$schema->hasTable('at_user_vacation_policies')) {
@@ -63,7 +63,7 @@ class Version1017Date20260420120000 extends SimpleMigrationStep {
 			$table->addColumn('updated_at', Types::DATETIME, ['notnull' => true]);
 			$table->setPrimaryKey(['id'], 'at_user_vac_policy_pk');
 			$table->addIndex(['user_id'], 'at_user_vac_policy_user_idx');
-			$table->addIndex(['effective_from', 'effective_to'], 'at_user_vac_policy_effective_idx');
+			$table->addIndex(['effective_from', 'effective_to'], 'at_uvp_effective_idx');
 			$table->addIndex(['tariff_rule_set_id'], 'at_user_vac_policy_tariff_idx');
 		}
 
@@ -81,8 +81,8 @@ class Version1017Date20260420120000 extends SimpleMigrationStep {
 			$table->addColumn('computed_by', Types::STRING, ['notnull' => true, 'length' => 64, 'default' => 'system']);
 			$table->addColumn('policy_fingerprint', Types::STRING, ['notnull' => false, 'length' => 128]);
 			$table->setPrimaryKey(['id'], 'at_entitlement_snapshots_pk');
-			$table->addIndex(['user_id', 'period_key'], 'at_entitlement_snapshots_user_period_idx');
-			$table->addIndex(['computed_at'], 'at_entitlement_snapshots_computed_idx');
+			$table->addIndex(['user_id', 'period_key'], 'at_ents_user_period_idx');
+			$table->addIndex(['computed_at'], 'at_ents_computed_idx');
 		}
 
 		return $schema;

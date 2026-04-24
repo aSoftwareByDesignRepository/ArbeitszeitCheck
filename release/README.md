@@ -6,6 +6,8 @@ This directory holds **release documentation** and optional **checksum list file
 
 See **[APPSTORE-RELEASE.md](./APPSTORE-RELEASE.md)** — build tarball, SHA-256/512, OpenSSL signature, **required GitHub Release** on the public app repo (`aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck`, not the private monorepo — see `ready2publish/REPOSITORY-LAYOUT.md`), App Store upload (same `.tar.gz` bytes), and a **gitignore checklist** (what must not be committed).
 
+Hard rule: run the mandatory byte-identity gate before App Store submit (local archive hash and `cmp` must match a freshly downloaded GitHub release asset).
+
 ## Files in this folder
 
 | File | Purpose |

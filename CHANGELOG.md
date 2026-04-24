@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.2.6 - 2026-04-24
+
+### Added
+
+- **Absence approval forensics**: Added `approved_by_user_id` persistence on absence records (approve/reject/auto-approve), with schema migration and API summary output.
+
+### Changed
+
+- **Vacation entitlement snapshot integrity**: Added deterministic key-based upsert on `(user_id, period_key, as_of_date)` and migration-backed unique index enforcement.
+- **Concurrency control in critical workflows**: Absence create/update/approve/reject/substitute flows now use user-scoped mutation locks plus transactional rechecks/row locks to prevent race-based overlap and over-approval inconsistencies.
+- **Release safety**: Workflow/unit/integration tests were updated and executed against the hardened mutation paths.
+
+### Fixed
+
+- **Legacy snapshot repair path**: Upsert now handles historical malformed rows and concurrent unique-key conflicts safely by retrying as deterministic update.
+- **Vacation balance write races**: `VacationYearBalanceMapper::upsert` now resolves concurrent unique-key collisions via re-read/update fallback.
+
+## 1.2.5 - 2026-04-22
+
+### Changed
+
+- **Release packaging refresh**: Bumped app metadata to `1.2.5` and regenerated the signed release artifact set for App Store and GitHub publication.
+
+## 1.2.4 - 2026-04-21
+
+### Changed
+
+- **Publishable release refresh**: Bumped app metadata to `1.2.4` and generated a new signed release artifact set (archive, checksums, and App Store signature) for App Store/GitHub publication.
+
+## 1.2.3 - 2026-04-21
+
+### Changed
+
+- **Release packaging refresh**: Prepared a new signed App Store/GitHub release archive for the current code line using the Docker-based signing workflow.
+
 ## 1.2.2 - 2026-04-21
 
 ### Fixed

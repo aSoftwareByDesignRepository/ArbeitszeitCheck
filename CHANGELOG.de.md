@@ -1,5 +1,40 @@
 ## [Unreleased]
 
+## 1.2.6 – 2026-04-24
+
+### Hinzugefügt
+
+- **Forensik bei Abwesenheitsfreigaben**: `approved_by_user_id` wird nun direkt am Abwesenheitsdatensatz gespeichert (Freigabe/Ablehnung/Auto-Freigabe), inkl. Migration und API-Ausgabe.
+
+### Geändert
+
+- **Integrität der Urlaubsanspruch-Snapshots**: Deterministisches Key-Upsert auf `(user_id, period_key, as_of_date)` ergänzt und per Migrations-Unique-Index auf Datenbankebene abgesichert.
+- **Nebenläufigkeitskontrolle in kritischen Workflows**: Create/Update/Approve/Reject/Substitute-Flows sind nun mit nutzerspezifischen Mutations-Locks plus transaktionalen Rechecks/Row-Locks abgesichert, um Race-Conditions bei Überschneidungen und Überfreigaben zu verhindern.
+- **Release-Absicherung**: Workflow-bezogene Unit- und Integrationstests wurden auf die gehärteten Mutationspfade angepasst und erfolgreich ausgeführt.
+
+### Behoben
+
+- **Legacy-Snapshot-Reparaturpfad**: Upsert behandelt historische fehlerhafte Zeilen sowie parallele Unique-Key-Konflikte robust via deterministischem Retry-Update.
+- **Race-Condition bei Resturlaub-Updates**: `VacationYearBalanceMapper::upsert` löst gleichzeitige Unique-Key-Konflikte jetzt per Re-Read/Update-Fallback.
+
+## 1.2.5 – 2026-04-22
+
+### Geändert
+
+- **Release-Paket aktualisiert**: App-Metadaten auf `1.2.5` angehoben und den signierten Release-Artefaktsatz für App-Store- und GitHub-Veröffentlichung neu erzeugt.
+
+## 1.2.4 – 2026-04-21
+
+### Geändert
+
+- **Release-Stand veröffentlichbar gemacht**: App-Metadaten auf `1.2.4` angehoben und ein neuer signierter Release-Artefaktsatz (Archiv, Checksummen, App-Store-Signatur) für App-Store-/GitHub-Veröffentlichung erstellt.
+
+## 1.2.3 – 2026-04-21
+
+### Geändert
+
+- **Release-Paket aktualisiert**: Neues signiertes App-Store-/GitHub-Release-Archiv für den aktuellen Code-Stand mit Docker-basiertem Signatur-Workflow erstellt.
+
 ## 1.2.2 – 2026-04-21
 
 ### Behoben

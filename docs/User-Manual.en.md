@@ -61,6 +61,10 @@ Only users in Nextcloud's `admin` group are eligible in this picker.
 ## 4. Everyday tasks
 
 - **Clock in / out** and **breaks**: Use the time tracking UI; follow your organization’s rules for corrections and comments.
+- **Dashboard quick actions workspace**:
+  - The dashboard includes a dedicated quick-actions area with **My status**, **Current session**, and direct buttons for **Clock In**, **Pause**, **Continue**, and **Clock Out**.
+  - Depending on your role, the same page can also show **Team overview** (manager) and **Company overview** (admin) with compact status lists.
+  - If a request fails because your Nextcloud session expired, refresh the page and retry.
 - **Paused entry (resume or fix):**
   - If an entry is in **Paused** state, the dashboard shows **Resume after break** on clock-in and continues the same-day entry instead of creating a duplicate.
   - Paused entries are editable/deletable again within the normal 14-day edit window (as long as they are not already approved).
@@ -68,7 +72,7 @@ Only users in Nextcloud's `admin` group are eligible in this picker.
 - **Absences**: Create requests; wait for approval if your workflow requires it. Vacation balances and carryover (**Resturlaub**) may be shown if your admin configured them.
   - **App teams (recommended setup):** If your organization uses **app-managed teams** and **no manager is assigned** to your team in the app, requests you submit **without** a substitute are **approved automatically** when you send them—there is nobody who could approve them in the manager workflow. If you **do** pick a substitute, the substitute step still runs first. The UI may show a short explanation when this applies.
   - **Legacy group-based setup:** Behavior follows the older “same group” model; your admin should ensure approvals remain workable for your organization.
-- **Manager dashboard** (if you are a team lead): Under **Pending approvals**, absence requests list each person with the **absence type in your language** (e.g. vacation vs sick leave), not raw internal codes. Where enabled, **Employee absences** provides a dedicated list/filter view of team absences.
+- **Manager dashboard** (if you are a team lead): Under **Pending approvals**, you can switch between **Absences** and **Time entry corrections** tabs. Absence requests list each person with the **absence type in your language** (e.g. vacation vs sick leave), not raw internal codes. Where enabled, **Employee absences** provides a dedicated list/filter view of team absences.
 - **Overtime balance traffic light**: On the dashboard, your balance can appear as green/yellow/red and distinguishes overtime vs undertime warnings. This is an orientation signal; your organization defines policy actions.
 - **Mobile use (phones/tablets):** The UI is optimized for responsive use with clearer section spacing, larger touch targets, and iPhone safe-area aware layout. If you use a very small screen, prefer portrait mode for forms and landscape for wide tables/reports.
 - **Reports**: Generate period reports or exports your admin allows (CSV, DATEV, etc.).
