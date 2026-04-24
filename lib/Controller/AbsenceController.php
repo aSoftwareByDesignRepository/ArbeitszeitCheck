@@ -717,7 +717,6 @@ class AbsenceController extends Controller
 	/**
 	 * Create absence endpoint
 	 *
-	 * NoCSRFRequired: JSON POST body is not decoded before CSRF check, so requesttoken in body/header is not seen. Session still required.
 	 * When request does not expect JSON (e.g. form POST without JS), returns redirect so the user never sees raw JSON.
 	 *
 	 * @return JSONResponse|RedirectResponse
@@ -792,8 +791,6 @@ class AbsenceController extends Controller
 
 	/**
 	 * Update absence endpoint (POST method for form submissions)
-	 *
-	 * NoCSRFRequired: same as store(); JSON body not decoded before CSRF check.
 	 *
 	 * @param int $id Absence ID
 	 * @return JSONResponse|RedirectResponse
@@ -922,11 +919,11 @@ class AbsenceController extends Controller
 			}
 
 			if ($absence->getUserId() !== $userId) {
-				// Do not leak whether the ID belongs to another user; just deny access.
+				// Do not leak whether the ID belongs to another user.
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Access denied')
-				], Http::STATUS_FORBIDDEN);
+					'error' => $this->l10n->t('Absence not found')
+				], Http::STATUS_NOT_FOUND);
 			}
 
 			try {

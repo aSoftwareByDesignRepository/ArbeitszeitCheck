@@ -519,6 +519,31 @@ class AbsenceMapper extends QBMapper
 	}
 
 	/**
+	 * Lock absence rows for one user overlapping a date window.
+	 * Used to serialize create/update overlap checks under concurrent requests.
+	 */
+	public function lockUserAbsenceWindow(string $userId, \DateTimeInterface $startDate, \DateTimeInterface $endDate): void
+	{
+		$platform = $this->db->getDatabaseProvider();
+		if (!in_array($platform, [IDBConnection::PLATFORM_MYSQL, IDBConnection::PLATFORM_POSTGRES, IDBConnection::PLATFORM_ORACLE], true)) {
+			return;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->orderBy('id', 'ASC');
+
+		$sql = $qb->getSQL() . ' FOR UPDATE';
+		$result = $this->db->executeQuery($sql, $qb->getParameters(), $qb->getParameterTypes());
+		$result->fetchAll();
+		$result->closeCursor();
+	}
+
+	/**
 	 * Count all absences for a user
 	 *
 	 * @param string $userId

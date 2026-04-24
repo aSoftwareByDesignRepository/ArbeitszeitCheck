@@ -27,6 +27,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IL10N;
+use OCP\Lock\ILockingProvider;
 use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
 
@@ -86,6 +87,9 @@ class AbsenceServiceTest extends TestCase
 	/** @var IDBConnection|\PHPUnit\Framework\MockObject\MockObject */
 	private $db;
 
+	/** @var ILockingProvider|\PHPUnit\Framework\MockObject\MockObject */
+	private $lockingProvider;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -104,7 +108,20 @@ class AbsenceServiceTest extends TestCase
 		$this->config = $this->createMock(IConfig::class);
 		$this->config->method('getAppValue')->with('arbeitszeitcheck', 'require_substitute_types', '[]')->willReturn('[]');
 		$this->db = $this->createMock(IDBConnection::class);
+		$this->lockingProvider = $this->createMock(ILockingProvider::class);
+		$this->lockingProvider->method('acquireLock');
+		$this->lockingProvider->method('releaseLock');
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->userManager->method('get')->willReturnCallback(function (string $uid) {
+			if (in_array($uid, ['colleague1', 'colleague2', 'designated_substitute', 'substitute1'], true)) {
+				$user = $this->createMock(\OCP\IUser::class);
+				$user->method('isEnabled')->willReturn(true);
+				$user->method('getUID')->willReturn($uid);
+				$user->method('getDisplayName')->willReturn($uid);
+				return $user;
+			}
+			return null;
+		});
 		$this->userWorkingTimeModelMapper = $this->createMock(UserWorkingTimeModelMapper::class);
 		$this->vacationYearBalanceMapper = $this->createMock(VacationYearBalanceMapper::class);
 		$this->vacationYearBalanceMapper->method('getCarryoverDays')->willReturn(0.0);
@@ -157,6 +174,7 @@ class AbsenceServiceTest extends TestCase
 			$this->userWorkingTimeModelMapper,
 			$this->config,
 			$this->db,
+			$this->lockingProvider,
 			$this->userManager,
 			$this->l10n,
 			$this->notificationService,
@@ -183,7 +201,7 @@ class AbsenceServiceTest extends TestCase
 			'reason' => 'Summer vacation'
 		];
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('findOverlapping')
 			->with($userId, $this->isInstanceOf(\DateTime::class), $this->isInstanceOf(\DateTime::class), $this->anything())
 			->willReturn([]);
@@ -201,6 +219,9 @@ class AbsenceServiceTest extends TestCase
 		$absence->setEndDate(clone $end);
 		$absence->setStatus(Absence::STATUS_PENDING);
 		$absence->setDays(5.0);
+
+		$this->absenceMapper->expects($this->once())
+			->method('lockUserAbsenceWindow');
 
 		$this->absenceMapper->expects($this->once())
 			->method('insert')
@@ -256,6 +277,7 @@ class AbsenceServiceTest extends TestCase
 			$this->userWorkingTimeModelMapper,
 			$this->config,
 			$this->db,
+			$this->lockingProvider,
 			$this->userManager,
 			$this->l10n,
 			$this->notificationService,
@@ -284,6 +306,38 @@ class AbsenceServiceTest extends TestCase
 
 		$this->expectException(\Exception::class);
 		$this->expectExceptionMessage('Date is required and cannot be empty');
+
+		$this->service->createAbsence($data, $userId);
+	}
+
+	public function testCreateAbsenceRejectsRelativeDateString(): void
+	{
+		$userId = 'testuser';
+		$data = [
+			'type' => Absence::TYPE_VACATION,
+			'start_date' => 'next monday',
+			'end_date' => (new \DateTime())->modify('+7 days')->format('Y-m-d'),
+			'reason' => 'Test',
+		];
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy');
+
+		$this->service->createAbsence($data, $userId);
+	}
+
+	public function testCreateAbsenceRejectsIsoDateTimeString(): void
+	{
+		$userId = 'testuser';
+		$data = [
+			'type' => Absence::TYPE_VACATION,
+			'start_date' => '2026-06-01T12:34:56Z',
+			'end_date' => (new \DateTime())->modify('+7 days')->format('Y-m-d'),
+			'reason' => 'Test',
+		];
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy');
 
 		$this->service->createAbsence($data, $userId);
 	}
@@ -406,7 +460,7 @@ class AbsenceServiceTest extends TestCase
 			'reason' => 'Sick'
 		];
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('findOverlapping')
 			->willReturn([]);
 		$this->absenceMapper->method('getSickLeaveDays')->willReturn(0.0);
@@ -650,7 +704,7 @@ class AbsenceServiceTest extends TestCase
 			->with($absenceId)
 			->willReturn($absence);
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('findOverlapping')
 			->willReturn([]);
 
@@ -662,6 +716,9 @@ class AbsenceServiceTest extends TestCase
 		$this->absenceMapper->method('getSickLeaveDays')->willReturn(0.0);
 		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
 		$this->userSettingsMapper->method('getIntegerSetting')->willReturn(25);
+
+		$this->absenceMapper->expects($this->once())
+			->method('lockUserAbsenceWindow');
 
 		$this->absenceMapper->expects($this->once())
 			->method('update')
@@ -682,6 +739,66 @@ class AbsenceServiceTest extends TestCase
 		$result = $this->service->updateAbsence($absenceId, $updateData, $userId);
 
 		$this->assertInstanceOf(Absence::class, $result);
+	}
+
+	public function testUpdateAbsenceWithNewSubstituteTransitionsToSubstitutePending(): void
+	{
+		$userId = 'testuser';
+		$absenceId = 223;
+		$start = (new \DateTime())->modify('+10 days');
+		$end = (clone $start)->modify('+2 days');
+
+		$absence = new Absence();
+		$absence->setId($absenceId);
+		$absence->setUserId($userId);
+		$absence->setStatus(Absence::STATUS_PENDING);
+		$absence->setType(Absence::TYPE_VACATION);
+		$absence->setStartDate(clone $start);
+		$absence->setEndDate(clone $end);
+		$absence->setDays(3.0);
+		$absence->setSubstituteUserId(null);
+
+		$this->absenceMapper->method('find')->willReturn($absence);
+		$this->absenceMapper->method('findOverlapping')->willReturn([]);
+		$this->holidayCalendarService->method('computeWorkingDaysPerYearForUser')
+			->willReturn([(int)$start->format('Y') => 3.0]);
+		$this->holidayCalendarService->method('computeWorkingDaysForUser')->willReturn(3.0);
+		$this->absenceMapper->method('update')->willReturnCallback(static fn (Absence $a) => $a);
+		$this->auditLogMapper->expects($this->once())->method('logAction');
+		$this->notificationService->expects($this->once())->method('notifySubstitutionRequest');
+
+		$result = $this->service->updateAbsence($absenceId, ['substitute_user_id' => 'colleague1'], $userId);
+		$this->assertSame(Absence::STATUS_SUBSTITUTE_PENDING, $result->getStatus());
+	}
+
+	public function testUpdateAbsenceRemovingSubstituteTransitionsToPending(): void
+	{
+		$userId = 'testuser';
+		$absenceId = 224;
+		$start = (new \DateTime())->modify('+10 days');
+		$end = (clone $start)->modify('+2 days');
+
+		$absence = new Absence();
+		$absence->setId($absenceId);
+		$absence->setUserId($userId);
+		$absence->setStatus(Absence::STATUS_SUBSTITUTE_PENDING);
+		$absence->setType(Absence::TYPE_VACATION);
+		$absence->setStartDate(clone $start);
+		$absence->setEndDate(clone $end);
+		$absence->setDays(3.0);
+		$absence->setSubstituteUserId('colleague1');
+
+		$this->absenceMapper->method('find')->willReturn($absence);
+		$this->absenceMapper->method('findOverlapping')->willReturn([]);
+		$this->holidayCalendarService->method('computeWorkingDaysPerYearForUser')
+			->willReturn([(int)$start->format('Y') => 3.0]);
+		$this->holidayCalendarService->method('computeWorkingDaysForUser')->willReturn(3.0);
+		$this->absenceMapper->method('update')->willReturnCallback(static fn (Absence $a) => $a);
+		$this->auditLogMapper->expects($this->once())->method('logAction');
+		$this->notificationService->expects($this->never())->method('notifySubstitutionRequest');
+
+		$result = $this->service->updateAbsence($absenceId, ['substitute_user_id' => null], $userId);
+		$this->assertSame(Absence::STATUS_PENDING, $result->getStatus());
 	}
 
 	/**
@@ -788,7 +905,7 @@ class AbsenceServiceTest extends TestCase
 		$absence->setEndDate($end);
 		$absence->setDays(5.0);
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -824,9 +941,10 @@ class AbsenceServiceTest extends TestCase
 
 		$absence = new Absence();
 		$absence->setId($absenceId);
+		$absence->setUserId('employee');
 		$absence->setStatus(Absence::STATUS_APPROVED);
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -858,7 +976,7 @@ class AbsenceServiceTest extends TestCase
 		$absence->setEndDate($end);
 		$absence->setDays(5.0);
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -1001,7 +1119,7 @@ class AbsenceServiceTest extends TestCase
 		$absence->method('getDays')->willReturn(5);
 		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -1037,12 +1155,13 @@ class AbsenceServiceTest extends TestCase
 		$wrongSubstituteId = 'wrong_substitute';
 
 		$absence = $this->getMockBuilder(Absence::class)
-			->addMethods(['getStatus', 'getSubstituteUserId'])
+			->addMethods(['getStatus', 'getSubstituteUserId', 'getUserId'])
 			->getMock();
 		$absence->method('getStatus')->willReturn(Absence::STATUS_SUBSTITUTE_PENDING);
 		$absence->method('getSubstituteUserId')->willReturn('designated_substitute');
+		$absence->method('getUserId')->willReturn('employee1');
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -1062,12 +1181,13 @@ class AbsenceServiceTest extends TestCase
 		$substituteUserId = 'substitute1';
 
 		$absence = $this->getMockBuilder(Absence::class)
-			->addMethods(['getStatus', 'getSubstituteUserId'])
+			->addMethods(['getStatus', 'getSubstituteUserId', 'getUserId'])
 			->getMock();
 		$absence->method('getStatus')->willReturn(Absence::STATUS_PENDING);
 		$absence->method('getSubstituteUserId')->willReturn($substituteUserId);
+		$absence->method('getUserId')->willReturn('employee1');
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -1102,7 +1222,7 @@ class AbsenceServiceTest extends TestCase
 		$absence->method('getDays')->willReturn(5);
 		$absence->method('getSummary')->willReturn(['id' => $absenceId]);
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -1142,12 +1262,13 @@ class AbsenceServiceTest extends TestCase
 		$wrongSubstituteId = 'wrong_substitute';
 
 		$absence = $this->getMockBuilder(Absence::class)
-			->addMethods(['getStatus', 'getSubstituteUserId'])
+			->addMethods(['getStatus', 'getSubstituteUserId', 'getUserId'])
 			->getMock();
 		$absence->method('getStatus')->willReturn(Absence::STATUS_SUBSTITUTE_PENDING);
 		$absence->method('getSubstituteUserId')->willReturn('designated_substitute');
+		$absence->method('getUserId')->willReturn('employee1');
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);

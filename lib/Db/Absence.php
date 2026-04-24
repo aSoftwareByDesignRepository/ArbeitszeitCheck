@@ -37,6 +37,8 @@ use OCA\ArbeitszeitCheck\Service\HolidayService;
  * @method void setApproverComment(string|null $approverComment)
  * @method int|null getApprovedBy()
  * @method void setApprovedBy(int|null $approvedBy)
+ * @method string|null getApprovedByUserId()
+ * @method void setApprovedByUserId(string|null $approvedByUserId)
  * @method \DateTime|null getApprovedAt()
  * @method void setApprovedAt(\DateTime|null $approvedAt)
  * @method \DateTime getCreatedAt()
@@ -91,6 +93,9 @@ class Absence extends Entity
 	/** @var int|null */
 	protected $approvedBy;
 
+	/** @var string|null */
+	protected $approvedByUserId;
+
 	/** @var \DateTime|null */
 	protected $approvedAt;
 
@@ -117,6 +122,7 @@ class Absence extends Entity
 		$this->addType('status', 'string');
 		$this->addType('approverComment', 'string');
 		$this->addType('approvedBy', 'integer');
+		$this->addType('approvedByUserId', 'string');
 		$this->addType('approvedAt', 'datetime');
 		$this->addType('createdAt', 'datetime');
 		$this->addType('updatedAt', 'datetime');
@@ -275,6 +281,7 @@ class Absence extends Entity
 			'status' => $this->getStatus(),
 			'approverComment' => $this->getApproverComment(),
 			'approvedBy' => $this->getApprovedBy(),
+			'approvedByUserId' => $this->getApprovedByUserId(),
 			'approvedAt' => $this->getApprovedAt()?->format('c'),
 			'createdAt' => $createdAt ? $createdAt->format('c') : null,
 			'updatedAt' => $updatedAt ? $updatedAt->format('c') : null,

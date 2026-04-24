@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Db;
 
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -41,19 +42,28 @@ class VacationYearBalanceMapper extends QBMapper
 	public function upsert(string $userId, int $year, float $carryoverDays): VacationYearBalance
 	{
 		$now = new \DateTime();
+		$normalized = max(0.0, min(366.0, $carryoverDays));
 		try {
 			$entity = $this->findByUserAndYear($userId, $year);
-			$entity->setCarryoverDays(max(0.0, min(366.0, $carryoverDays)));
+			$entity->setCarryoverDays($normalized);
 			$entity->setUpdatedAt($now);
 			return $this->update($entity);
 		} catch (DoesNotExistException $e) {
 			$entity = new VacationYearBalance();
 			$entity->setUserId($userId);
 			$entity->setYear($year);
-			$entity->setCarryoverDays(max(0.0, min(366.0, $carryoverDays)));
+			$entity->setCarryoverDays($normalized);
 			$entity->setCreatedAt($now);
 			$entity->setUpdatedAt($now);
-			return $this->insert($entity);
+			try {
+				return $this->insert($entity);
+			} catch (UniqueConstraintViolationException) {
+				// Concurrent writer created the row first. Re-read and update deterministically.
+				$existing = $this->findByUserAndYear($userId, $year);
+				$existing->setCarryoverDays($normalized);
+				$existing->setUpdatedAt($now);
+				return $this->update($existing);
+			}
 		}
 	}
 

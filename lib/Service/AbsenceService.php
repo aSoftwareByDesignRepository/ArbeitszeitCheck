@@ -22,6 +22,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IL10N;
+use OCP\Lock\ILockingProvider;
 use OCA\ArbeitszeitCheck\Constants;
 use OCP\IUserManager;
 
@@ -37,6 +38,7 @@ class AbsenceService
 	private UserWorkingTimeModelMapper $userWorkingTimeModelMapper;
 	private IConfig $config;
 	private IDBConnection $db;
+	private ILockingProvider $lockingProvider;
 	private IUserManager $userManager;
 	private IL10N $l10n;
 	private ?NotificationService $notificationService;
@@ -55,6 +57,7 @@ class AbsenceService
 		UserWorkingTimeModelMapper $userWorkingTimeModelMapper,
 		IConfig $config,
 		IDBConnection $db,
+		ILockingProvider $lockingProvider,
 		IUserManager $userManager,
 		IL10N $l10n,
 		?NotificationService $notificationService,
@@ -72,6 +75,7 @@ class AbsenceService
 		$this->userWorkingTimeModelMapper = $userWorkingTimeModelMapper;
 		$this->config = $config;
 		$this->db = $db;
+		$this->lockingProvider = $lockingProvider;
 		$this->userManager = $userManager;
 		$this->l10n = $l10n;
 		$this->notificationService = $notificationService;
@@ -93,34 +97,42 @@ class AbsenceService
 	 */
 	public function createAbsence(array $data, string $userId): Absence
 	{
-		$this->validateAbsenceData($data, $userId);
-
-		$absence = new Absence();
-		$absence->setUserId($userId);
-		$absence->setType($data['type']);
-		$absence->setStartDate($this->parseDate($data['start_date']));
-		$absence->setEndDate($this->parseDate($data['end_date']));
-		$absence->setReason($data['reason'] ?? null);
-		$substituteUserId = isset($data['substitute_user_id']) ? trim((string)$data['substitute_user_id']) : null;
-		$absence->setSubstituteUserId($substituteUserId ?: null);
-		// If substitute is selected: wait for substitute approval first (Vertretungs-Freigabe)
-		$absence->setStatus($substituteUserId ? Absence::STATUS_SUBSTITUTE_PENDING : Absence::STATUS_PENDING);
-		$absence->setCreatedAt(new \DateTime());
-		$absence->setUpdatedAt(new \DateTime());
-
-		// Calculate working days (Mon–Fri minus Feiertage inkl. Firmenfeiertage)
-		$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
-		$absence->setDays($workingDays);
-
-		// All DB writes are atomic: if the audit log insertion fails, the absence
-		// insertion is rolled back and the user sees an error rather than having an
-		// absence in the DB with no audit trail.
-		$savedAbsence = null;
-		$autoApproved = false;
-
-		$this->db->beginTransaction();
+		$lockKey = $this->acquireUserMutationLock($userId);
 		try {
-			$savedAbsence = $this->absenceMapper->insert($absence);
+			$this->validateAbsenceData($data, $userId);
+
+			$absence = new Absence();
+			$absence->setUserId($userId);
+			$absence->setType($data['type']);
+			$absence->setStartDate($this->parseDate($data['start_date']));
+			$absence->setEndDate($this->parseDate($data['end_date']));
+			$absence->setReason($data['reason'] ?? null);
+			$substituteUserId = isset($data['substitute_user_id']) ? trim((string)$data['substitute_user_id']) : null;
+			$absence->setSubstituteUserId($substituteUserId ?: null);
+			// If substitute is selected: wait for substitute approval first (Vertretungs-Freigabe)
+			$absence->setStatus($substituteUserId ? Absence::STATUS_SUBSTITUTE_PENDING : Absence::STATUS_PENDING);
+			$absence->setCreatedAt(new \DateTime());
+			$absence->setUpdatedAt(new \DateTime());
+
+			// Calculate working days (Mon–Fri minus Feiertage inkl. Firmenfeiertage)
+			$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
+			$absence->setDays($workingDays);
+
+			// All DB writes are atomic: if the audit log insertion fails, the absence
+			// insertion is rolled back and the user sees an error rather than having an
+			// absence in the DB with no audit trail.
+			$savedAbsence = null;
+			$autoApproved = false;
+
+			$this->db->beginTransaction();
+			try {
+				$this->absenceMapper->lockUserAbsenceWindow($userId, $absence->getStartDate(), $absence->getEndDate());
+				$overlappingInTx = $this->absenceMapper->findOverlapping($userId, $absence->getStartDate(), $absence->getEndDate(), null);
+				if (!empty($overlappingInTx)) {
+					throw new \Exception($this->l10n->t('This period overlaps with an existing absence.'));
+				}
+
+				$savedAbsence = $this->absenceMapper->insert($absence);
 
 			$this->auditLogMapper->logAction(
 				$userId,
@@ -137,11 +149,11 @@ class AbsenceService
 				$autoApproved = true;
 			}
 
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
-		}
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
 
 		// Side effects (notifications / emails) always happen after the DB commit so
 		// that a) no DB lock is held while sending mail, and b) notifications are only
@@ -189,7 +201,10 @@ class AbsenceService
 			$this->absenceNotificationMailService->sendHrOfficeNotification($savedAbsence, 'request_created', $userId);
 		}
 
-		return $savedAbsence;
+			return $savedAbsence;
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
+		}
 	}
 
 	/**
@@ -228,10 +243,12 @@ class AbsenceService
 	 */
 	public function updateAbsence(int $id, array $data, string $userId): Absence
 	{
-		$absence = $this->getAbsence($id, $userId);
-		if (!$absence) {
-			throw new \Exception($this->l10n->t('Absence not found'));
-		}
+		$lockKey = $this->acquireUserMutationLock($userId);
+		try {
+			$absence = $this->getAbsence($id, $userId);
+			if (!$absence) {
+				throw new \Exception($this->l10n->t('Absence not found'));
+			}
 
 		// Check if absence can be updated (pending, substitute_pending, or substitute_declined can be modified by owner)
 		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_SUBSTITUTE_DECLINED], true)) {
@@ -239,6 +256,10 @@ class AbsenceService
 		}
 
 		$oldData = $absence->getSummary();
+
+		$oldStatus = $absence->getStatus();
+		$oldSubstituteId = $absence->getSubstituteUserId();
+		$substituteFieldTouched = array_key_exists('substitute_user_id', $data);
 
 		// Update allowed fields (use parseDate for consistent validation)
 		if (isset($data['start_date'])) {
@@ -250,7 +271,7 @@ class AbsenceService
 		if (isset($data['reason'])) {
 			$absence->setReason($data['reason']);
 		}
-		if (array_key_exists('substitute_user_id', $data)) {
+		if ($substituteFieldTouched) {
 			$absence->setSubstituteUserId($data['substitute_user_id'] ? (string)$data['substitute_user_id'] : null);
 		}
 
@@ -275,11 +296,11 @@ class AbsenceService
 		$absence->setDays($workingDays);
 		$absence->setUpdatedAt(new \DateTime());
 
-		// When resubmitting after substitute_declined: clear decline comment, set status, notify new substitute
-		$wasDeclined = $absence->getStatus() === Absence::STATUS_SUBSTITUTE_DECLINED;
+		// Normalize substitute workflow whenever substitute assignment changes.
+		$wasDeclined = $oldStatus === Absence::STATUS_SUBSTITUTE_DECLINED;
 		$newSubstituteId = $absence->getSubstituteUserId();
-
-		if ($wasDeclined) {
+		$substituteChanged = $substituteFieldTouched && $newSubstituteId !== $oldSubstituteId;
+		if ($substituteChanged) {
 			$absence->setApproverComment(null);
 			$absence->setStatus($newSubstituteId ? Absence::STATUS_SUBSTITUTE_PENDING : Absence::STATUS_PENDING);
 		}
@@ -288,6 +309,12 @@ class AbsenceService
 
 		$this->db->beginTransaction();
 		try {
+			$this->absenceMapper->lockUserAbsenceWindow($userId, $absence->getStartDate(), $absence->getEndDate());
+			$overlappingInTx = $this->absenceMapper->findOverlapping($userId, $absence->getStartDate(), $absence->getEndDate(), $id);
+			if (!empty($overlappingInTx)) {
+				throw new \Exception($this->l10n->t('This period overlaps with an existing absence.'));
+			}
+
 			$updatedAbsence = $this->absenceMapper->update($absence);
 
 			$this->auditLogMapper->logAction(
@@ -306,7 +333,7 @@ class AbsenceService
 		}
 
 		// Side effects after commit
-		if ($wasDeclined && $newSubstituteId && $this->notificationService) {
+		if ($substituteChanged && $newSubstituteId && $this->notificationService) {
 			$startDate = $updatedAbsence->getStartDate();
 			$endDate = $updatedAbsence->getEndDate();
 			$this->notificationService->notifySubstitutionRequest(
@@ -321,12 +348,15 @@ class AbsenceService
 				]
 			);
 		}
-		if ($wasDeclined && $newSubstituteId && $this->absenceNotificationMailService) {
+		if ($substituteChanged && $newSubstituteId && $this->absenceNotificationMailService) {
 			$this->absenceNotificationMailService->sendSubstitutionRequestToSubstitute($updatedAbsence);
 			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'request_created', $userId);
 		}
 
-		return $updatedAbsence;
+			return $updatedAbsence;
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
+		}
 	}
 
 	/**
@@ -545,29 +575,36 @@ class AbsenceService
 	 */
 	public function approveAbsence(int $id, string $approverId, ?string $comment = null): Absence
 	{
-		$absence = $this->absenceMapper->find($id);
-		if (!$absence) {
-			throw new \Exception($this->l10n->t('Absence not found'));
-		}
-
-		if ($absence->getStatus() !== Absence::STATUS_PENDING) {
-			throw new \Exception($this->l10n->t('Absence is not pending approval'));
-		}
-
-		$oldData = $absence->getSummary();
-
-		$absence->setStatus(Absence::STATUS_APPROVED);
-		$absence->setApproverComment($comment);
-		// Note: approvedBy stores approver user ID as string in database via entity mapping
-		// The audit log stores it properly as string in performedBy field
-		$absence->setApprovedBy(null); // Store approver ID in audit log instead (performedBy field)
-		$absence->setApprovedAt(new \DateTime());
-		$absence->setUpdatedAt(new \DateTime());
-
+		$lockAbsence = $this->absenceMapper->find($id);
+		$lockKey = $this->acquireUserMutationLock($lockAbsence->getUserId());
 		$updatedAbsence = null;
-
-		$this->db->beginTransaction();
 		try {
+			$this->db->beginTransaction();
+			$absence = $this->absenceMapper->find($id);
+			if (!$absence) {
+				throw new \Exception($this->l10n->t('Absence not found'));
+			}
+
+			if ($absence->getStatus() !== Absence::STATUS_PENDING) {
+				throw new \Exception($this->l10n->t('Absence is not pending approval'));
+			}
+
+			if ($absence->getType() === Absence::TYPE_VACATION) {
+				$sd = $absence->getStartDate();
+				$ed = $absence->getEndDate();
+				if ($sd && $ed) {
+					$this->lockVacationApprovalScope($absence->getUserId(), $sd, $ed);
+				}
+			}
+
+			$oldData = $absence->getSummary();
+			$absence->setStatus(Absence::STATUS_APPROVED);
+			$absence->setApproverComment($comment);
+			$absence->setApprovedBy(null);
+			$absence->setApprovedByUserId($approverId);
+			$absence->setApprovedAt(new \DateTime());
+			$absence->setUpdatedAt(new \DateTime());
+
 			if ($absence->getType() === Absence::TYPE_VACATION) {
 				$sd = $absence->getStartDate();
 				$ed = $absence->getEndDate();
@@ -592,6 +629,8 @@ class AbsenceService
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
 			throw $e;
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
 		}
 
 		// Side effects after commit
@@ -628,29 +667,28 @@ class AbsenceService
 	 */
 	public function rejectAbsence(int $id, string $approverId, ?string $comment = null): Absence
 	{
-		$absence = $this->absenceMapper->find($id);
-		if (!$absence) {
-			throw new \Exception($this->l10n->t('Absence not found'));
-		}
-
-		if ($absence->getStatus() !== Absence::STATUS_PENDING) {
-			throw new \Exception($this->l10n->t('Absence is not pending approval'));
-		}
-
-		$oldData = $absence->getSummary();
-
-		$absence->setStatus(Absence::STATUS_REJECTED);
-		$absence->setApproverComment($comment);
-		// Note: approvedBy stores approver user ID as string in database via entity mapping
-		// The audit log stores it properly as string in performedBy field
-		$absence->setApprovedBy(null); // Store approver ID in audit log instead (performedBy field)
-		$absence->setApprovedAt(new \DateTime());
-		$absence->setUpdatedAt(new \DateTime());
-
+		$lockAbsence = $this->absenceMapper->find($id);
+		$lockKey = $this->acquireUserMutationLock($lockAbsence->getUserId());
 		$updatedAbsence = null;
-
-		$this->db->beginTransaction();
 		try {
+			$this->db->beginTransaction();
+			$absence = $this->absenceMapper->find($id);
+			if (!$absence) {
+				throw new \Exception($this->l10n->t('Absence not found'));
+			}
+
+			if ($absence->getStatus() !== Absence::STATUS_PENDING) {
+				throw new \Exception($this->l10n->t('Absence is not pending approval'));
+			}
+
+			$oldData = $absence->getSummary();
+			$absence->setStatus(Absence::STATUS_REJECTED);
+			$absence->setApproverComment($comment);
+			$absence->setApprovedBy(null);
+			$absence->setApprovedByUserId($approverId);
+			$absence->setApprovedAt(new \DateTime());
+			$absence->setUpdatedAt(new \DateTime());
+
 			$updatedAbsence = $this->absenceMapper->update($absence);
 
 			$this->auditLogMapper->logAction(
@@ -667,6 +705,8 @@ class AbsenceService
 		} catch (\Throwable $e) {
 			$this->db->rollBack();
 			throw $e;
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
 		}
 
 		// Side effect after commit
@@ -688,6 +728,43 @@ class AbsenceService
 	}
 
 	/**
+	 * Serialize vacation approval calculations for one employee by locking overlapping vacation rows.
+	 *
+	 * For MySQL/PostgreSQL/Oracle we issue a `SELECT ... FOR UPDATE` over approved+pending vacation
+	 * rows in the affected year range. This prevents concurrent manager approvals from validating
+	 * entitlement against stale snapshots and over-approving.
+	 *
+	 * SQLite does not support row-level `FOR UPDATE`; transaction semantics remain best-effort there.
+	 */
+	private function lockVacationApprovalScope(string $userId, \DateTimeInterface $startDate, \DateTimeInterface $endDate): void
+	{
+		$platform = $this->db->getDatabaseProvider();
+		if (!in_array($platform, [IDBConnection::PLATFORM_MYSQL, IDBConnection::PLATFORM_POSTGRES, IDBConnection::PLATFORM_ORACLE], true)) {
+			return;
+		}
+
+		$startYear = (int)$startDate->format('Y');
+		$endYear = (int)$endDate->format('Y');
+		$scopeStart = new \DateTime(sprintf('%04d-01-01', min($startYear, $endYear)));
+		$scopeEnd = new \DateTime(sprintf('%04d-12-31', max($startYear, $endYear)));
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from('at_absences')
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(Absence::TYPE_VACATION, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->in('status', $qb->createNamedParameter([Absence::STATUS_APPROVED, Absence::STATUS_PENDING], \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($scopeEnd->format('Y-m-d'), \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($scopeStart->format('Y-m-d'), \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR)))
+			->orderBy('id', 'ASC');
+
+		$sql = $qb->getSQL() . ' FOR UPDATE';
+		$result = $this->db->executeQuery($sql, $qb->getParameters(), $qb->getParameterTypes());
+		$result->fetchAll();
+		$result->closeCursor();
+	}
+
+	/**
 	 * Approve absence by substitute (Vertretungs-Freigabe)
 	 * Transitions status from substitute_pending to pending (ready for manager approval)
 	 *
@@ -702,6 +779,12 @@ class AbsenceService
 		if (!$absence) {
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
+		$lockKey = $this->acquireUserMutationLock($absence->getUserId());
+		try {
+			$absence = $this->absenceMapper->find($id);
+			if (!$absence) {
+				throw new \Exception($this->l10n->t('Absence not found'));
+			}
 
 		if ($absence->getStatus() !== Absence::STATUS_SUBSTITUTE_PENDING) {
 			throw new \Exception($this->l10n->t('Absence is not awaiting substitute approval'));
@@ -793,7 +876,10 @@ class AbsenceService
 				$this->absenceIcalMailService->sendIcalToSubstituteOnSubstitutionApproval($updatedAbsence);
 			}
 		}
-		return $updatedAbsence;
+			return $updatedAbsence;
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
+		}
 	}
 
 	/**
@@ -812,6 +898,12 @@ class AbsenceService
 		if (!$absence) {
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
+		$lockKey = $this->acquireUserMutationLock($absence->getUserId());
+		try {
+			$absence = $this->absenceMapper->find($id);
+			if (!$absence) {
+				throw new \Exception($this->l10n->t('Absence not found'));
+			}
 
 		if ($absence->getStatus() !== Absence::STATUS_SUBSTITUTE_PENDING) {
 			throw new \Exception($this->l10n->t('Absence is not awaiting substitute approval'));
@@ -869,7 +961,26 @@ class AbsenceService
 		if ($this->absenceNotificationMailService) {
 			$this->absenceNotificationMailService->sendHrOfficeNotification($updatedAbsence, 'substitute_declined', $substituteUserId);
 		}
-		return $updatedAbsence;
+			return $updatedAbsence;
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
+		}
+	}
+
+	private function acquireUserMutationLock(string $userId): string
+	{
+		$key = 'arbeitszeitcheck/absence-user/' . $userId;
+		$this->lockingProvider->acquireLock($key, ILockingProvider::LOCK_EXCLUSIVE, 'Absence workflow lock for user ' . $userId);
+		return $key;
+	}
+
+	private function releaseUserMutationLock(string $key): void
+	{
+		try {
+			$this->lockingProvider->releaseLock($key, ILockingProvider::LOCK_EXCLUSIVE);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->warning('Failed to release absence workflow lock: ' . $e->getMessage(), ['exception' => $e]);
+		}
 	}
 
 	/**
@@ -1249,6 +1360,7 @@ class AbsenceService
 		$absence->setStatus(Absence::STATUS_APPROVED);
 		$absence->setApproverComment($this->l10n->t('Auto-approved: no approver is assigned to your team in the app.'));
 		$absence->setApprovedBy(null);
+		$absence->setApprovedByUserId('system');
 		$absence->setApprovedAt(new \DateTime());
 		$absence->setUpdatedAt(new \DateTime());
 
@@ -1358,12 +1470,17 @@ class AbsenceService
 			return new \DateTime(sprintf('%04d-%02d-%02d', $year, $month, $day));
 		}
 		
-		// Try ISO format (yyyy-mm-dd)
-		try {
-			return new \DateTime($dateString);
-		} catch (\Throwable $e) {
-			throw new \Exception($this->l10n->t('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: %s', [$dateString]));
+		// Strict ISO format only (yyyy-mm-dd). Reject ambiguous or relative strings.
+		$iso = \DateTimeImmutable::createFromFormat('!Y-m-d', $dateString);
+		$isoErrors = \DateTimeImmutable::getLastErrors();
+		$isoIsValid = $iso !== false
+			&& ($isoErrors === false || (($isoErrors['warning_count'] ?? 0) === 0 && ($isoErrors['error_count'] ?? 0) === 0))
+			&& $iso->format('Y-m-d') === $dateString;
+		if ($isoIsValid) {
+			return new \DateTime($iso->format('Y-m-d'));
 		}
+
+		throw new \Exception($this->l10n->t('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: %s', [$dateString]));
 	}
 
 	/**

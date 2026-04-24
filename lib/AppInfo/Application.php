@@ -285,6 +285,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
 				$c->query(\OCP\IConfig::class),
 				$c->query(\OCP\IDBConnection::class),
+				$c->query(\OCP\Lock\ILockingProvider::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(NotificationService::class),
@@ -349,7 +350,8 @@ class Application extends App implements IBootstrap {
 
 		$context->registerService(\OCA\ArbeitszeitCheck\Service\EntitlementSnapshotService::class, function($c) {
 			return new \OCA\ArbeitszeitCheck\Service\EntitlementSnapshotService(
-				$c->query(\OCA\ArbeitszeitCheck\Db\EntitlementComputationSnapshotMapper::class)
+				$c->query(\OCA\ArbeitszeitCheck\Db\EntitlementComputationSnapshotMapper::class),
+				$c->query(\OCP\Lock\ILockingProvider::class)
 			);
 		});
 
