@@ -23,7 +23,9 @@ use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
 use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCP\IConfig;
+use OCP\IDBConnection;
 use OCP\IL10N;
+use OCP\Lock\ILockingProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -66,12 +68,13 @@ class TimeTrackingServiceTest extends TestCase {
 			default => $default
 		});
 		$config->method('getUserValue')->willReturn('');
-		$config->method('setUserValue')->willReturn(null);
 		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
 		$userSettingsMapper->method('getStringSetting')->willReturn('1');
 		$userWorkingTimeModelMapper = $this->createMock(UserWorkingTimeModelMapper::class);
 		$workingTimeModelMapper = $this->createMock(WorkingTimeModelMapper::class);
 		$monthClosureGuard = $this->createMock(MonthClosureGuard::class);
+		$db = $this->createMock(IDBConnection::class);
+		$lockingProvider = $this->createMock(ILockingProvider::class);
 
 		$this->service = new TimeTrackingService(
 			$this->timeEntryMapper,
@@ -84,7 +87,9 @@ class TimeTrackingServiceTest extends TestCase {
 			$userSettingsMapper,
 			$userWorkingTimeModelMapper,
 			$workingTimeModelMapper,
-			$monthClosureGuard
+			$monthClosureGuard,
+			$db,
+			$lockingProvider
 		);
 	}
 
@@ -215,11 +220,6 @@ class TimeTrackingServiceTest extends TestCase {
 		$this->timeEntryMapper->expects($this->atLeastOnce())
 			->method('findActiveByUser')
 			->with($userId)
-			->willReturn($mockEntry);
-
-		$this->timeEntryMapper->expects($this->once())
-			->method('find')
-			->with(1)
 			->willReturn($mockEntry);
 
 		$this->timeEntryMapper->expects($this->atLeastOnce())

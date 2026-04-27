@@ -108,6 +108,61 @@ class ReportController extends Controller
 		return $user->getUID();
 	}
 
+	private function parseDateYmd(?string $value, string $fieldName): ?\DateTime
+	{
+		if ($value === null || trim($value) === '') {
+			return null;
+		}
+		$parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+		$errors = \DateTimeImmutable::getLastErrors();
+		$isValid = $parsed !== false
+			&& ($errors === false || (($errors['warning_count'] ?? 0) === 0 && ($errors['error_count'] ?? 0) === 0))
+			&& $parsed->format('Y-m-d') === $value;
+		if (!$isValid) {
+			throw new \Exception($this->l10n->t('Invalid %s format. Use Y-m-d (e.g. 2024-01-15)', [$fieldName]));
+		}
+		return new \DateTime($parsed->format('Y-m-d'));
+	}
+
+	private function parseMonthYm(?string $value): ?\DateTime
+	{
+		if ($value === null || trim($value) === '') {
+			return null;
+		}
+		$parsed = \DateTimeImmutable::createFromFormat('!Y-m', $value);
+		$errors = \DateTimeImmutable::getLastErrors();
+		$isValid = $parsed !== false
+			&& ($errors === false || (($errors['warning_count'] ?? 0) === 0 && ($errors['error_count'] ?? 0) === 0))
+			&& $parsed->format('Y-m') === $value;
+		if (!$isValid) {
+			throw new \Exception($this->l10n->t('Invalid month format. Use Y-m (e.g. 2024-01)'));
+		}
+		return new \DateTime($parsed->format('Y-m-01'));
+	}
+
+	private function buildSafeApiError(\Throwable $e): array
+	{
+		$raw = $e->getMessage();
+		if (strpos($raw, 'User not authenticated') !== false) {
+			return ['status' => Http::STATUS_BAD_REQUEST, 'error' => $this->l10n->t('User not authenticated')];
+		}
+		if (strpos($raw, 'Access denied') !== false) {
+			return ['status' => Http::STATUS_FORBIDDEN, 'error' => $this->l10n->t('Access denied')];
+		}
+
+		$knownValidationPrefixes = ['Invalid ', 'Start date', 'Export date range', 'No users', 'Either ', 'Failed to encode report'];
+		foreach ($knownValidationPrefixes as $prefix) {
+			if (strpos($raw, $prefix) === 0) {
+				return ['status' => Http::STATUS_BAD_REQUEST, 'error' => $raw];
+			}
+		}
+
+		return [
+			'status' => Http::STATUS_BAD_REQUEST,
+			'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+		];
+	}
+
 	/**
 	 * Generate daily report
 	 *
@@ -133,7 +188,7 @@ class ReportController extends Controller
 				$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
 			}
 
-			$reportDate = $date ? new \DateTime($date) : new \DateTime();
+			$reportDate = $this->parseDateYmd($date, 'date') ?? new \DateTime();
 			$report = $this->reportingService->generateDailyReport($reportDate, $reportUserId);
 
 			return new JSONResponse([
@@ -142,15 +197,11 @@ class ReportController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
-			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
+			$mapped = $this->buildSafeApiError($e);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $errorMessage
-			], $status);
+				'error' => $mapped['error']
+			], $mapped['status']);
 		}
 	}
 
@@ -167,7 +218,7 @@ class ReportController extends Controller
 	{
 		try {
 			if ($weekStart) {
-				$weekStartDate = new \DateTime($weekStart);
+				$weekStartDate = $this->parseDateYmd($weekStart, 'week_start');
 			} else {
 				$weekStartDate = new \DateTime();
 				$dayOfWeek = (int)$weekStartDate->format('w');
@@ -195,16 +246,11 @@ class ReportController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
-			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
+			$mapped = $this->buildSafeApiError($e);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $errorMessage
-			], $status);
+				'error' => $mapped['error']
+			], $mapped['status']);
 		}
 	}
 
@@ -220,11 +266,7 @@ class ReportController extends Controller
 	public function monthly(?string $month = null, ?string $userId = null, ?string $startDate = null, ?string $endDate = null): JSONResponse
 	{
 		try {
-			if ($month) {
-				$monthDate = new \DateTime($month . '-01');
-			} else {
-				$monthDate = new \DateTime();
-			}
+			$monthDate = $this->parseMonthYm($month) ?? new \DateTime();
 
 			$currentUserId = $this->getUserId();
 			// Special case: admin organization scope (userId="") -> report for all enabled users.
@@ -241,8 +283,8 @@ class ReportController extends Controller
 			$periodStart = null;
 			$periodEnd = null;
 			if ($startDate !== null && $startDate !== '' && $endDate !== null && $endDate !== '') {
-				$periodStart = new \DateTime($startDate);
-				$periodEnd = new \DateTime($endDate);
+				$periodStart = $this->parseDateYmd($startDate, 'start_date');
+				$periodEnd = $this->parseDateYmd($endDate, 'end_date');
 				if ($periodStart > $periodEnd) {
 					throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
 				}
@@ -275,16 +317,11 @@ class ReportController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
-			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
+			$mapped = $this->buildSafeApiError($e);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $errorMessage
-			], $status);
+				'error' => $mapped['error']
+			], $mapped['status']);
 		}
 	}
 
@@ -301,8 +338,8 @@ class ReportController extends Controller
 	public function overtime(?string $startDate = null, ?string $endDate = null, ?string $userId = null): JSONResponse
 	{
 		try {
-			$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-30 days');
-			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+			$start = $this->parseDateYmd($startDate, 'start_date') ?? (new \DateTime())->modify('-30 days');
+			$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
 			$start->setTime(0, 0, 0);
 			$end->setTime(0, 0, 0);
 			if ($start > $end) {
@@ -334,16 +371,11 @@ class ReportController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
-			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
+			$mapped = $this->buildSafeApiError($e);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $errorMessage
-			], $status);
+				'error' => $mapped['error']
+			], $mapped['status']);
 		}
 	}
 
@@ -372,8 +404,8 @@ class ReportController extends Controller
 				$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
 			}
 
-		$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-1 year');
-		$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+		$start = $this->parseDateYmd($startDate, 'start_date') ?? (new \DateTime())->modify('-1 year');
+		$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
 		$start->setTime(0, 0, 0);
 		$end->setTime(0, 0, 0);
 		if ($start > $end) {
@@ -393,16 +425,11 @@ class ReportController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
-			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
+			$mapped = $this->buildSafeApiError($e);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $errorMessage
-			], $status);
+				'error' => $mapped['error']
+			], $mapped['status']);
 		}
 	}
 
@@ -428,8 +455,8 @@ class ReportController extends Controller
 		?string $teamId = null
 	): JSONResponse|DataDownloadResponse {
 		try {
-			$start = $startDate ? new \DateTime($startDate) : (new \DateTime())->modify('-30 days');
-			$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+			$start = $this->parseDateYmd($startDate, 'start_date') ?? (new \DateTime())->modify('-30 days');
+			$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
 			$start->setTime(0, 0, 0);
 			$end->setTime(0, 0, 0);
 			if ($start > $end) {
@@ -592,15 +619,11 @@ class ReportController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController: ' . $e->getMessage(), ["exception" => $e]);
-			$errorMessage = $e->getMessage();
-			if (strpos($errorMessage, 'User not authenticated') !== false) {
-				$errorMessage = $this->l10n->t('User not authenticated');
-			}
-			$status = strpos($e->getMessage(), 'Access denied') !== false ? Http::STATUS_FORBIDDEN : Http::STATUS_BAD_REQUEST;
+			$mapped = $this->buildSafeApiError($e);
 			return new JSONResponse([
 				'success' => false,
-				'error' => $errorMessage
-			], $status);
+				'error' => $mapped['error']
+			], $mapped['status']);
 		}
 	}
 

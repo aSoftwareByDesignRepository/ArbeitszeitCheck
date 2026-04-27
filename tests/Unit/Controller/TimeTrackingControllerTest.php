@@ -156,7 +156,7 @@ class TimeTrackingControllerTest extends TestCase
 		$response = $this->controller->clockIn();
 
 		$this->assertInstanceOf(JSONResponse::class, $response);
-		$this->assertEquals(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 		$this->assertEquals('Already clocked in', $data['error']);
@@ -212,7 +212,7 @@ class TimeTrackingControllerTest extends TestCase
 
 		$response = $this->controller->clockOut();
 
-		$this->assertEquals(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 	}
@@ -317,7 +317,7 @@ class TimeTrackingControllerTest extends TestCase
 
 		$response = $this->controller->startBreak();
 
-		$this->assertEquals(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 	}
@@ -339,7 +339,7 @@ class TimeTrackingControllerTest extends TestCase
 
 		$response = $this->controller->endBreak();
 
-		$this->assertEquals(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 	}

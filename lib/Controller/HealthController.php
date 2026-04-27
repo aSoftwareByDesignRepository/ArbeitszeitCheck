@@ -55,9 +55,7 @@ class HealthController extends Controller
 					'database' => $this->checkDatabase(),
 					'compliance' => $this->checkCompliance(),
 					'projectcheck_integration' => $this->checkProjectCheckIntegration()
-				],
-				'version' => '1.0.0',
-				'nextcloud_version' => \OCP\Server::get(\OCP\ServerVersion::class)->getVersionString()
+				]
 			];
 
 			// Determine overall status

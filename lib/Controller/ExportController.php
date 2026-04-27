@@ -44,6 +44,36 @@ class ExportController extends Controller
 	private IConfig $config;
 	private PermissionService $permissionService;
 
+	private function parseDateYmd(?string $value, string $fieldName): ?\DateTime
+	{
+		if ($value === null || trim($value) === '') {
+			return null;
+		}
+		$parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+		$errors = \DateTimeImmutable::getLastErrors();
+		$isValid = $parsed !== false
+			&& ($errors === false || (($errors['warning_count'] ?? 0) === 0 && ($errors['error_count'] ?? 0) === 0))
+			&& $parsed->format('Y-m-d') === $value;
+		if (!$isValid) {
+			throw new \Exception($this->l10n->t('Invalid %s format. Use Y-m-d (e.g. 2024-01-15)', [$fieldName]));
+		}
+		return new \DateTime($parsed->format('Y-m-d'));
+	}
+
+	private function safeExportErrorMessage(\Throwable $e): string
+	{
+		$raw = $e->getMessage();
+		if (strpos($raw, 'User not authenticated') !== false) {
+			return $this->l10n->t('User not authenticated');
+		}
+		if (strpos($raw, 'Start date must be before or equal to end date') !== false
+			|| strpos($raw, 'Export date range must not exceed') !== false
+			|| strpos($raw, 'Invalid ') === 0) {
+			return $raw;
+		}
+		return $this->l10n->t('Export failed. Please try again. If the problem continues, contact your administrator.');
+	}
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -92,10 +122,10 @@ class ExportController extends Controller
 			$userId = $user->getUID();
 
 		// Determine date range (default to last 30 days if not specified)
-		$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+		$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
 		// Normalise to midnight of the end date for range calculations and display.
 		$end->setTime(0, 0, 0);
-		$start = $startDate ? new \DateTime($startDate) : clone $end;
+		$start = $this->parseDateYmd($startDate, 'start_date') ?? clone $end;
 		if (!$startDate) {
 			$start->modify('-30 days');
 		}
@@ -174,7 +204,7 @@ class ExportController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::timeEntries: ' . $e->getMessage(), ["exception" => $e]);
 			// Return error as CSV with error message
-			$errorData = [['error' => $this->l10n->t('Export failed: %s', [$e->getMessage()])]];
+			$errorData = [['error' => $this->safeExportErrorMessage($e)]];
 			return $this->exportAsCsv($errorData, 'time-entries-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
@@ -202,9 +232,9 @@ class ExportController extends Controller
 			$userId = $user->getUID();
 
 		// Determine date range (default to last year if not specified)
-		$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+		$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
 		$end->setTime(0, 0, 0);
-		$start = $startDate ? new \DateTime($startDate) : clone $end;
+		$start = $this->parseDateYmd($startDate, 'start_date') ?? clone $end;
 		if (!$startDate) {
 			$start->modify('-1 year');
 		}
@@ -269,7 +299,7 @@ class ExportController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::absences: ' . $e->getMessage(), ["exception" => $e]);
 			// Return error as CSV with error message
-			$errorData = [['error' => $this->l10n->t('Export failed: %s', [$e->getMessage()])]];
+			$errorData = [['error' => $this->safeExportErrorMessage($e)]];
 			return $this->exportAsCsv($errorData, 'absences-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
@@ -294,9 +324,9 @@ class ExportController extends Controller
 			$userId = $user->getUID();
 
 		// Determine date range (default to last 30 days if not specified)
-		$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+		$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
 		$end->setTime(0, 0, 0);
-		$start = $startDate ? new \DateTime($startDate) : clone $end;
+		$start = $this->parseDateYmd($startDate, 'start_date') ?? clone $end;
 		if (!$startDate) {
 			$start->modify('-30 days');
 		}
@@ -354,7 +384,7 @@ class ExportController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::compliance: ' . $e->getMessage(), ["exception" => $e]);
 			// Return error as CSV with error message
-			$errorData = [['error' => $this->l10n->t('Export failed: %s', [$e->getMessage()])]];
+			$errorData = [['error' => $this->safeExportErrorMessage($e)]];
 			return $this->exportAsCsv($errorData, 'compliance-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
@@ -444,7 +474,7 @@ class ExportController extends Controller
 			return new DataDownloadResponse($content, $filename, 'text/plain; charset=iso-8859-1');
 		} catch (\Throwable $e) {
 			// Return error as CSV with error message
-			$errorData = [['error' => $e->getMessage()]];
+			$errorData = [['error' => $this->safeExportErrorMessage($e)]];
 			return $this->exportAsCsv($errorData, 'datev-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
@@ -474,9 +504,9 @@ class ExportController extends Controller
 			$userId = $user->getUID();
 
 		// Determine date range (default to last 30 days if not specified)
-		$end = $endDate ? new \DateTime($endDate) : new \DateTime();
+		$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
 		$end->setTime(0, 0, 0);
-		$start = $startDate ? new \DateTime($startDate) : clone $end;
+		$start = $this->parseDateYmd($startDate, 'start_date') ?? clone $end;
 		if (!$startDate) {
 			$start->modify('-30 days');
 		}
@@ -504,7 +534,7 @@ class ExportController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::datev: ' . $e->getMessage(), ["exception" => $e]);
 			// Return error as CSV with error message
-			$errorData = [['error' => $e->getMessage()]];
+			$errorData = [['error' => $this->safeExportErrorMessage($e)]];
 			return $this->exportAsCsv($errorData, 'datev-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
@@ -542,7 +572,7 @@ class ExportController extends Controller
 		} catch (\Throwable $e) {
 			return new JSONResponse([
 				'success' => false,
-				'error' => $this->l10n->t('Export failed: %s', [$e->getMessage()])
+				'error' => $this->safeExportErrorMessage($e)
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}

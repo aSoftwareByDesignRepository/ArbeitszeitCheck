@@ -22,6 +22,7 @@ use OCA\ArbeitszeitCheck\Service\AbsenceNotificationMailService;
 use OCA\ArbeitszeitCheck\Service\HolidayService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
+use OCA\ArbeitszeitCheck\Service\MonthClosureService;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
@@ -90,6 +91,9 @@ class AbsenceServiceTest extends TestCase
 	/** @var ILockingProvider|\PHPUnit\Framework\MockObject\MockObject */
 	private $lockingProvider;
 
+	/** @var MonthClosureService|\PHPUnit\Framework\MockObject\MockObject */
+	private $monthClosureService;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -111,6 +115,7 @@ class AbsenceServiceTest extends TestCase
 		$this->lockingProvider = $this->createMock(ILockingProvider::class);
 		$this->lockingProvider->method('acquireLock');
 		$this->lockingProvider->method('releaseLock');
+		$this->monthClosureService = $this->createMock(MonthClosureService::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->userManager->method('get')->willReturnCallback(function (string $uid) {
 			if (in_array($uid, ['colleague1', 'colleague2', 'designated_substitute', 'substitute1'], true)) {
@@ -182,7 +187,8 @@ class AbsenceServiceTest extends TestCase
 			$this->holidayCalendarService,
 			$this->vacationYearBalanceMapper,
 			$this->vacationAllocationService,
-			null
+			null,
+			$this->monthClosureService
 		);
 	}
 
@@ -955,6 +961,42 @@ class AbsenceServiceTest extends TestCase
 		$this->service->approveAbsence($absenceId, $approverId);
 	}
 
+	public function testApproveAbsenceBlockedWhenMonthFinalized(): void
+	{
+		$approverId = 'manager';
+		$absenceId = 321;
+		$start = new \DateTime('2026-04-01');
+		$end = new \DateTime('2026-04-03');
+
+		$absence = new Absence();
+		$absence->setId($absenceId);
+		$absence->setUserId('employee');
+		$absence->setStatus(Absence::STATUS_PENDING);
+		$absence->setStartDate(clone $start);
+		$absence->setEndDate(clone $end);
+
+		$this->absenceMapper->expects($this->exactly(2))
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+
+		$this->monthClosureService->expects($this->once())
+			->method('assertDateRangeMutable')
+			->with(
+				'employee',
+				$this->isInstanceOf(\DateTimeInterface::class),
+				$this->isInstanceOf(\DateTimeInterface::class)
+			)
+			->willThrowException(new \Exception('Month is finalized'));
+
+		$this->absenceMapper->expects($this->never())->method('update');
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('Month is finalized');
+
+		$this->service->approveAbsence($absenceId, $approverId);
+	}
+
 	/**
 	 * Test rejecting an absence request
 	 */
@@ -1194,6 +1236,41 @@ class AbsenceServiceTest extends TestCase
 
 		$this->expectException(\Exception::class);
 		$this->expectExceptionMessage('Absence is not awaiting substitute approval');
+
+		$this->service->approveBySubstitute($absenceId, $substituteUserId);
+	}
+
+	public function testApproveBySubstituteBlockedWhenMonthFinalized(): void
+	{
+		$absenceId = 456;
+		$substituteUserId = 'substitute1';
+
+		$absence = new Absence();
+		$absence->setId($absenceId);
+		$absence->setUserId('employee1');
+		$absence->setStatus(Absence::STATUS_SUBSTITUTE_PENDING);
+		$absence->setSubstituteUserId($substituteUserId);
+		$absence->setStartDate(new \DateTime('2026-04-05'));
+		$absence->setEndDate(new \DateTime('2026-04-06'));
+
+		$this->absenceMapper->expects($this->exactly(2))
+			->method('find')
+			->with($absenceId)
+			->willReturn($absence);
+
+		$this->monthClosureService->expects($this->once())
+			->method('assertDateRangeMutable')
+			->with(
+				'employee1',
+				$this->isInstanceOf(\DateTimeInterface::class),
+				$this->isInstanceOf(\DateTimeInterface::class)
+			)
+			->willThrowException(new \Exception('Month is finalized'));
+
+		$this->absenceMapper->expects($this->never())->method('update');
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('Month is finalized');
 
 		$this->service->approveBySubstitute($absenceId, $substituteUserId);
 	}

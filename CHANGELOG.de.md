@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+## 1.2.7 – 2026-04-27
+
+### Hinzugefügt
+
+- **Audit-Checkliste für kritische Workflows**: `tests/WORKFLOW_AUDIT_CHECKLIST.md` ergänzt als kompakte Release-Checkliste für Zeiterfassung, Korrekturen manueller Einträge, Abwesenheiten/Genehmigungen, Monatsfinalisierung, Reporting/Compliance/Export und öffentliche Fehleroberflächen.
+
+### Geändert
+
+- **Mutationssicherheit in der Zeiterfassung**: Clock-/Pausen-Mutationen nutzen nun nutzerspezifische Locks und Transaktionen; Statusabfragen bleiben read-only, während automatische Pausen-Fallbacks und Tagesmaximum-Finalisierung über explizite Mutationspfade/Hintergrundjobs laufen.
+- **API-Eingaben und Fehlerbehandlung gehärtet**: Report-, Export-, Compliance-, Manager- und Time-Tracking-Endpunkte verwenden strengere Datums-/Zeitvalidierung, sichere Validierungsantworten und generische öffentliche Fehlermeldungen bei unerwarteten Fehlern.
+- **Monatsabschluss konsequenter durchgesetzt**: Abwesenheits-Update/Delete/Cancel/Shorten/Freigabe-/Vertretungsflows prüfen die Änderbarkeit des Monats erneut, bevor Workflow-Mutationen geschrieben werden.
+
+### Behoben
+
+- **Fingerprinting am Health-Endpunkt**: Die öffentliche Health-Antwort enthält keine App- oder Nextcloud-Versionsfelder mehr.
+
 ## 1.2.6 – 2026-04-24
 
 ### Hinzugefügt

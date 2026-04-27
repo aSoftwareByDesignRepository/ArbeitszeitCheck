@@ -28,7 +28,7 @@ in your Nextcloud instance.
 
 ## Requirements
 
-- Nextcloud 32–36
+- Nextcloud 32–33
 - PHP 8.1–8.4
 	]]></description>
 	<description lang="de"><![CDATA[
@@ -50,11 +50,11 @@ gehosteten Nextcloud.
 
 ## Voraussetzungen
 
-- Nextcloud 32–36
+- Nextcloud 32–33
 - PHP 8.1–8.4
 	]]></description>
 
-	<version>1.2.6</version>
+	<version>1.2.7</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="info@software-by-design.de" homepage="https://software-by-design.de">Alexander Mäule</author>
 
@@ -68,8 +68,8 @@ gehosteten Nextcloud.
 	<repository>https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck.git</repository>
 
 	<dependencies>
-		<!-- Compatible with Nextcloud 32, 33, 34, 35, 36 (current and future releases) -->
-		<nextcloud min-version="32" max-version="36"/>
+		<!-- Compatible with current stable Nextcloud 33 and previous stable 32. -->
+		<nextcloud min-version="32" max-version="33"/>
 		<php min-version="8.1" max-version="8.4"/>
 	</dependencies>
 

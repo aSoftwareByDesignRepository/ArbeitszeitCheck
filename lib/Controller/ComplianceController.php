@@ -382,6 +382,27 @@ class ComplianceController extends Controller
 		return $d;
 	}
 
+	private function parseIsoDateTimeParam(string $value, string $paramName): \DateTime
+	{
+		$formats = [
+			\DateTime::ATOM,
+			'Y-m-d\TH:i:s.u\Z',
+			'Y-m-d\TH:i:s\Z',
+			'Y-m-d\TH:i:sP',
+		];
+		foreach ($formats as $format) {
+			$parsed = \DateTime::createFromFormat($format, $value);
+			if ($parsed !== false) {
+				return $parsed;
+			}
+		}
+
+		throw new \Exception($this->l10n->t(
+			'Invalid %s format. Use ISO-8601 (e.g. 2024-01-15T09:00:00Z).',
+			[$paramName]
+		));
+	}
+
 	/**
 	 * Get compliance violations API endpoint
 	 *
@@ -728,18 +749,7 @@ class ComplianceController extends Controller
 		try {
 			$userId = $this->getUserId();
 
-			$startDt = \DateTime::createFromFormat(\DateTime::ATOM, $startTime)
-				?: \DateTime::createFromFormat('Y-m-d\TH:i:s.u\Z', $startTime)
-				?: \DateTime::createFromFormat('Y-m-d\TH:i:s\Z', $startTime)
-				?: \DateTime::createFromFormat('Y-m-d\TH:i:sP', $startTime)
-				?: new \DateTime($startTime);
-
-			if ($startDt === false) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Invalid start time format. Use ISO-8601 (e.g. 2024-01-15T09:00:00Z).')
-				], Http::STATUS_BAD_REQUEST);
-			}
+			$startDt = $this->parseIsoDateTimeParam($startTime, 'start_time');
 
 			$result = $this->complianceService->checkRestPeriodForStartTime($userId, $startDt, $excludeEntryId);
 

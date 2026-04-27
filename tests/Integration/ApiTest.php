@@ -41,8 +41,6 @@ class ApiTest extends TestCase {
 		$this->assertArrayHasKey('status', $data);
 		$this->assertArrayHasKey('timestamp', $data);
 		$this->assertArrayHasKey('services', $data);
-		$this->assertArrayHasKey('version', $data);
-		$this->assertArrayHasKey('nextcloud_version', $data);
 
 		// Verify status is valid
 		$this->assertContains($data['status'], ['healthy', 'degraded', 'unhealthy']);
@@ -102,19 +100,14 @@ class ApiTest extends TestCase {
 	}
 
 	/**
-	 * Test that health check response includes version information
+	 * Test that health check response excludes version fingerprinting
 	 */
-	public function testHealthCheckVersion(): void {
+	public function testHealthCheckVersionFingerprintRemoved(): void {
 		$healthController = \OC::$server->query(\OCA\ArbeitszeitCheck\Controller\HealthController::class);
 		$response = $healthController->check();
 		$data = $response->getData();
 
-		$this->assertArrayHasKey('version', $data);
-		$this->assertIsString($data['version']);
-		$this->assertNotEmpty($data['version']);
-
-		$this->assertArrayHasKey('nextcloud_version', $data);
-		$this->assertIsString($data['nextcloud_version']);
-		$this->assertNotEmpty($data['nextcloud_version']);
+		$this->assertArrayNotHasKey('version', $data);
+		$this->assertArrayNotHasKey('nextcloud_version', $data);
 	}
 }

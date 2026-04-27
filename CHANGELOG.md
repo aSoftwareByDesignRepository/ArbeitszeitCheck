@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.2.7 - 2026-04-27
+
+### Added
+
+- **Critical workflow audit checklist**: Added `tests/WORKFLOW_AUDIT_CHECKLIST.md` as a concise release checklist for time tracking, manual entry corrections, absences/approvals, month closure, reporting/compliance/export behavior, and public error-surface expectations.
+
+### Changed
+
+- **Time tracking mutation safety**: Clock/break mutations now use user-scoped locks and transactions; status polling remains read-only while automatic break fallback and daily maximum enforcement run through explicit mutation paths/background jobs.
+- **API input and error hardening**: Report, export, compliance, manager, and time tracking endpoints now use stricter date/time parsing, safer validation responses, and generic public error messages for unexpected failures.
+- **Month-closure enforcement**: Absence update/delete/cancel/shorten/approval/substitute flows now re-check month mutability before applying workflow mutations.
+
+### Fixed
+
+- **Health endpoint fingerprinting**: The public health response no longer exposes app or Nextcloud version fields.
+
 ## 1.2.6 - 2026-04-24
 
 ### Added

@@ -202,5 +202,53 @@ class PermissionServiceTest extends TestCase
 		$this->assertTrue($service->isAdmin('hr_admin'));
 		$this->assertFalse($service->isAdmin('other_admin'));
 	}
+
+	public function testCanManageEmployeeDeniesNonAllowlistedNextcloudAdmin(): void
+	{
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('isAdmin')->willReturn(true);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')
+			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
+			->willReturn('["hr_admin"]');
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$teamResolver->method('useAppTeams')->willReturn(false);
+		$teamResolver->expects($this->never())->method('canUserManageEmployee');
+		$service = $this->createService($groupManager, $teamResolver, null, $config);
+
+		$this->assertFalse($service->canManageEmployee('other_admin', 'employee1'));
+	}
+
+	public function testCanAccessManagerDashboardDeniesNonAllowlistedNextcloudAdmin(): void
+	{
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('isAdmin')->willReturn(true);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')
+			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
+			->willReturn('["hr_admin"]');
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$teamResolver->method('useAppTeams')->willReturn(false);
+		$teamResolver->expects($this->never())->method('getTeamMemberIds');
+		$service = $this->createService($groupManager, $teamResolver, null, $config);
+
+		$this->assertFalse($service->canAccessManagerDashboard('other_admin'));
+	}
+
+	public function testCanResolveViolationDeniesNonAllowlistedNextcloudAdmin(): void
+	{
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('isAdmin')->willReturn(true);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')
+			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
+			->willReturn('["hr_admin"]');
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$teamResolver->method('useAppTeams')->willReturn(false);
+		$teamResolver->expects($this->never())->method('canUserManageEmployee');
+		$service = $this->createService($groupManager, $teamResolver, null, $config);
+
+		$this->assertFalse($service->canResolveViolation('other_admin', 'employee1'));
+	}
 }
 

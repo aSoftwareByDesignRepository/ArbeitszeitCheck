@@ -832,18 +832,10 @@ class ManagerControllerTest extends TestCase
 		$entry->setCreatedAt(new \DateTime());
 		$entry->setUpdatedAt(new \DateTime());
 
-		$updatedEntry = new TimeEntry();
-		$updatedEntry->setId($entryId);
-		$updatedEntry->setUserId($teamMemberId);
-		$updatedEntry->setStatus(TimeEntry::STATUS_REJECTED);
-		$updatedEntry->setStartTime($entry->getStartTime());
-		$updatedEntry->setEndTime($entry->getEndTime());
-		$updatedEntry->setDescription('Original');
-		$updatedEntry->setCreatedAt(new \DateTime());
-		$updatedEntry->setUpdatedAt(new \DateTime());
-
 		$this->timeEntryMapper->method('find')->willReturn($entry);
-		$this->timeEntryMapper->method('update')->willReturn($updatedEntry);
+		$this->timeEntryMapper->method('update')->willReturnCallback(static function (TimeEntry $candidate): TimeEntry {
+			return $candidate;
+		});
 
 		$this->auditLogMapper->expects($this->once())->method('logAction');
 		$this->notificationService->expects($this->once())->method('notifyTimeEntryCorrectionRejected');
@@ -854,6 +846,55 @@ class ManagerControllerTest extends TestCase
 		$this->assertTrue($data['success']);
 		$this->assertArrayHasKey('entry', $data);
 		$this->assertArrayHasKey('message', $data);
+		$this->assertSame(TimeEntry::STATUS_COMPLETED, $data['entry']['status']);
+	}
+
+	public function testApproveTimeEntryCorrectionAppliesProposedValuesOnApproval(): void
+	{
+		$managerId = 'manager1';
+		$teamMemberId = 'employee1';
+		$entryId = 3;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canManageEmployee')->with($managerId, $teamMemberId)->willReturn(true);
+
+		$entry = new TimeEntry();
+		$entry->setId($entryId);
+		$entry->setUserId($teamMemberId);
+		$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setJustification(json_encode([
+			'justification' => 'Adjust end time',
+			'proposed' => [
+				'startTime' => '2024-01-15T09:00:00Z',
+				'endTime' => '2024-01-15T17:30:00Z',
+			],
+		]));
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
+		$this->complianceService->method('checkRestPeriodForStartTime')->willReturn(['valid' => true, 'message' => 'ok']);
+		$this->config->method('getAppValue')->willReturn('1');
+		$this->auditLogMapper->expects($this->once())->method('logAction');
+		$this->notificationService->expects($this->once())->method('notifyTimeEntryCorrectionApproved');
+
+		$this->timeEntryMapper->expects($this->once())
+			->method('update')
+			->with($this->callback(static function (TimeEntry $updated): bool {
+				return $updated->getStatus() === TimeEntry::STATUS_COMPLETED
+					&& $updated->getEndTime() !== null
+					&& $updated->getEndTime()->format('H:i') === '17:30';
+			}))
+			->willReturnCallback(static fn (TimeEntry $updated): TimeEntry => $updated);
+
+		$response = $this->controller->approveTimeEntryCorrection($entryId, 'Approved');
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertSame(TimeEntry::STATUS_COMPLETED, $data['entry']['status']);
 	}
 
 	/**

@@ -206,6 +206,11 @@ class TimeEntryController extends Controller
 	 */
 	private function parseDate(string $dateString): \DateTime
 	{
+		$dateString = trim($dateString);
+		if ($dateString === '') {
+			throw new \Exception($this->l10n->t('Date is required and cannot be empty'));
+		}
+
 		// Try German format first (dd.mm.yyyy)
 		if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateString, $matches)) {
 			$day = (int)$matches[1];
@@ -220,12 +225,16 @@ class TimeEntryController extends Controller
 			return new \DateTime(sprintf('%04d-%02d-%02d', $year, $month, $day));
 		}
 
-		// Try ISO format (yyyy-mm-dd)
-		try {
-			return new \DateTime($dateString);
-		} catch (\Throwable $e) {
-			throw new \Exception($this->l10n->t('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: %s', [$dateString]));
+		$iso = \DateTimeImmutable::createFromFormat('!Y-m-d', $dateString);
+		$isoErrors = \DateTimeImmutable::getLastErrors();
+		$isoIsValid = $iso !== false
+			&& ($isoErrors === false || (($isoErrors['warning_count'] ?? 0) === 0 && ($isoErrors['error_count'] ?? 0) === 0))
+			&& $iso->format('Y-m-d') === $dateString;
+		if ($isoIsValid) {
+			return new \DateTime($iso->format('Y-m-d'));
 		}
+
+		throw new \Exception($this->l10n->t('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: %s', [$dateString]));
 	}
 
 	/**
@@ -244,6 +253,23 @@ class TimeEntryController extends Controller
 			return null;
 		}
 		return (float)$normalized;
+	}
+
+	private function parseIsoDateTime(string $value, string $fieldName): \DateTime
+	{
+		$formats = [
+			\DateTime::ATOM,
+			'Y-m-d\TH:i:s.u\Z',
+			'Y-m-d\TH:i:s\Z',
+			'Y-m-d\TH:i:sP',
+		];
+		foreach ($formats as $format) {
+			$parsed = \DateTime::createFromFormat($format, $value);
+			if ($parsed !== false) {
+				return $parsed;
+			}
+		}
+		throw new \Exception($this->l10n->t('Invalid %s format. Use ISO-8601 (e.g. 2024-01-15T09:00:00Z).', [$fieldName]));
 	}
 
 	/**
@@ -1357,14 +1383,14 @@ class TimeEntryController extends Controller
 
 			// New format: startTime and endTime
 			if ($startTime && $endTime) {
-				$proposedStartTime = new \DateTime($startTime);
-				$proposedEndTime = new \DateTime($endTime);
+				$proposedStartTime = $this->parseIsoDateTime($startTime, 'start_time');
+				$proposedEndTime = $this->parseIsoDateTime($endTime, 'end_time');
 				$proposedData['startTime'] = $proposedStartTime->format('c');
 				$proposedData['endTime'] = $proposedEndTime->format('c');
 
 				if ($breakStartTime && $breakEndTime) {
-					$proposedBreakStartTime = new \DateTime($breakStartTime);
-					$proposedBreakEndTime = new \DateTime($breakEndTime);
+					$proposedBreakStartTime = $this->parseIsoDateTime($breakStartTime, 'break_start_time');
+					$proposedBreakEndTime = $this->parseIsoDateTime($breakEndTime, 'break_end_time');
 					$proposedData['breakStartTime'] = $proposedBreakStartTime->format('c');
 					$proposedData['breakEndTime'] = $proposedBreakEndTime->format('c');
 				}
@@ -1393,48 +1419,25 @@ class TimeEntryController extends Controller
 				'requested_at' => date('c')
 			];
 
+			if ($proposedData === []) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('At least one proposed change is required.')
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$proposalValidationError = $this->validateCorrectionProposal($entry, $proposedData);
+			if ($proposalValidationError !== null) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $proposalValidationError
+				], Http::STATUS_BAD_REQUEST);
+			}
+
 			// Update entry with correction request
 			$entry->setJustification(json_encode($correctionData));
 			$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
 			$entry->setUpdatedAt(new \DateTime());
-
-			// Apply proposed changes temporarily (will be finalized on approval)
-			if ($startTime && $endTime) {
-				// New format
-				$entry->setStartTime(new \DateTime($startTime));
-				$entry->setEndTime(new \DateTime($endTime));
-
-				if ($breakStartTime && $breakEndTime) {
-					$entry->setBreakStartTime(new \DateTime($breakStartTime));
-					$entry->setBreakEndTime(new \DateTime($breakEndTime));
-				}
-
-				if ($description !== null) {
-					$entry->setDescription($description);
-				}
-			} elseif ($newDate || $newHours !== null) {
-				// Old format (backward compatibility)
-				if ($newDate) {
-					$entry->setStartTime($this->parseDate($newDate));
-					if ($entry->getEndTime() && $newHours !== null) {
-						$endTime = clone $entry->getStartTime();
-						$endTime->modify('+' . round($newHours * 3600) . ' seconds');
-						$entry->setEndTime($endTime);
-					}
-				} elseif ($newHours !== null && $entry->getStartTime()) {
-					$endTime = clone $entry->getStartTime();
-					$endTime->modify('+' . round($newHours * 3600) . ' seconds');
-					$entry->setEndTime($endTime);
-				}
-				if ($newDescription !== null) {
-					$entry->setDescription($newDescription);
-				}
-			}
-
-			$mcNew = $this->assertGuardTimeEntry($entry);
-			if ($mcNew !== null) {
-				return $mcNew;
-			}
 
 			$updatedEntry = $this->timeEntryMapper->update($entry);
 
@@ -1503,13 +1506,20 @@ class TimeEntryController extends Controller
 	 */
 	private function autoApproveTimeEntryCorrection(TimeEntry $entry, AuditLogMapper $auditLogMapper): TimeEntry
 	{
+		$justificationData = json_decode($entry->getJustification() ?? '{}', true);
+		if (is_array($justificationData)) {
+			$proposal = $justificationData['proposed'] ?? null;
+			if (is_array($proposal) && $proposal !== []) {
+				$this->applyCorrectionProposalToEntry($entry, $proposal);
+			}
+		}
+
 		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
 		$entry->setApprovedByUserId(null);
 		$entry->setApprovedAt(new \DateTime());
 		$entry->setUpdatedAt(new \DateTime());
 
 		// Preserve justification with auto-approval marker
-		$justificationData = json_decode($entry->getJustification() ?? '{}', true);
 		if (is_array($justificationData)) {
 			$justificationData['approval_comment'] = $this->l10n->t('Auto-approved: no approver is assigned to your team in the app.');
 			$justificationData['approved_at'] = date('c');
@@ -2358,8 +2368,7 @@ class TimeEntryController extends Controller
 				return \DateTime::createFromFormat(\DateTime::ATOM, $ts)
 					?: \DateTime::createFromFormat('Y-m-d\TH:i:s.u\Z', $ts)
 					?: \DateTime::createFromFormat('Y-m-d\TH:i:s\Z', $ts)
-					?: \DateTime::createFromFormat('Y-m-d\TH:i:sP', $ts)
-					?: (new \DateTime($ts) ?: null);
+					?: \DateTime::createFromFormat('Y-m-d\TH:i:sP', $ts);
 			};
 
 			$startDt = $parse($startTime);
@@ -2451,5 +2460,73 @@ class TimeEntryController extends Controller
 				'exception' => $e
 			]);
 		}
+	}
+
+	private function applyCorrectionProposalToEntry(TimeEntry $entry, array $proposal): void
+	{
+		if (isset($proposal['startTime'])) {
+			$entry->setStartTime($this->parseIsoDateTime((string)$proposal['startTime'], 'start_time'));
+		}
+		if (isset($proposal['endTime'])) {
+			$entry->setEndTime($this->parseIsoDateTime((string)$proposal['endTime'], 'end_time'));
+		}
+		if (array_key_exists('breakStartTime', $proposal)) {
+			$entry->setBreakStartTime($proposal['breakStartTime'] ? $this->parseIsoDateTime((string)$proposal['breakStartTime'], 'break_start_time') : null);
+		}
+		if (array_key_exists('breakEndTime', $proposal)) {
+			$entry->setBreakEndTime($proposal['breakEndTime'] ? $this->parseIsoDateTime((string)$proposal['breakEndTime'], 'break_end_time') : null);
+		}
+		if (array_key_exists('description', $proposal)) {
+			$entry->setDescription($proposal['description'] === null ? null : (string)$proposal['description']);
+		}
+		if (isset($proposal['date'])) {
+			$newStart = $this->parseDate((string)$proposal['date']);
+			$entry->setStartTime($newStart);
+			if (isset($proposal['hours'])) {
+				$endTime = clone $newStart;
+				$endTime->modify('+' . round(((float)$proposal['hours']) * 3600) . ' seconds');
+				$entry->setEndTime($endTime);
+			}
+		} elseif (isset($proposal['hours']) && $entry->getStartTime()) {
+			$endTime = clone $entry->getStartTime();
+			$endTime->modify('+' . round(((float)$proposal['hours']) * 3600) . ' seconds');
+			$entry->setEndTime($endTime);
+		}
+	}
+
+	private function validateCorrectionProposal(TimeEntry $entry, array $proposal): ?string
+	{
+		$candidate = clone $entry;
+		$this->applyCorrectionProposalToEntry($candidate, $proposal);
+
+		$mc = $this->assertGuardTimeEntry($candidate);
+		if ($mc !== null) {
+			$data = $mc->getData();
+			return is_array($data) && isset($data['error']) ? (string)$data['error'] : $this->l10n->t('This calendar month is finalized.');
+		}
+
+		if ($candidate->getStartTime()) {
+			$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($entry->getUserId(), $candidate->getStartTime(), $entry->getId());
+			if (!($restPeriodCheck['valid'] ?? false)) {
+				return (string)($restPeriodCheck['message'] ?? $this->l10n->t('Rest period validation failed.'));
+			}
+		}
+
+		if ($candidate->getEndTime() && $candidate->getStartTime()) {
+			$this->timeTrackingService->calculateAndSetAutomaticBreak($candidate);
+			$this->timeTrackingService->adjustEndTimeForDailyMaximum($candidate);
+			$overlapping = $this->timeEntryMapper->findOverlapping($entry->getUserId(), $candidate->getStartTime(), $candidate->getEndTime(), $entry->getId());
+			if (!empty($overlapping)) {
+				return $this->l10n->t('This correction overlaps with existing time entries.');
+			}
+		}
+
+		$errors = $candidate->validate();
+		if (!empty($errors)) {
+			$firstError = reset($errors);
+			return $this->l10n->t((string)$firstError);
+		}
+
+		return null;
 	}
 }

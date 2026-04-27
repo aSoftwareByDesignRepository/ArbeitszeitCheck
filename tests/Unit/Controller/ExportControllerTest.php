@@ -440,7 +440,7 @@ class ExportControllerTest extends TestCase
 		$this->assertEquals(\OCP\AppFramework\Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
-		$this->assertStringContainsString('Configuration error', $data['error']);
+		$this->assertStringContainsString('Export failed', $data['error']);
 	}
 
 	public function testDatevConfigReturnsUnauthorizedWhenNotAuthenticated(): void

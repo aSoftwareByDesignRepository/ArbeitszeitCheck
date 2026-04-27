@@ -1,0 +1,3 @@
+# arbeitszeitcheck-1.2.7.tar.gz
+3fdda829178207d185e675400e0ce118459e8747edc992e8ef25fa224abd9e89  arbeitszeitcheck-1.2.7.tar.gz
+1e1e413a08274ca1747dfa18e39d06b613d7ec7feec0383642b5a8add8bb427d39bdec5607c60e4d716b77deaa737657af187d2ef7e74bd9bafa0af46e2099e4  arbeitszeitcheck-1.2.7.tar.gz

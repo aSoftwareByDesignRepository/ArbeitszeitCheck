@@ -147,7 +147,7 @@ class SubstituteController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'substitution-requests', [
 				'requests' => [],
 				'urlGenerator' => $this->urlGenerator,
-				'error' => $e->getMessage(),
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 				'l' => $this->l10n,
 			]);
 			return $this->configureCSP($response);

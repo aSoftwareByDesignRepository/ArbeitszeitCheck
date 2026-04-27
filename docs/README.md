@@ -13,6 +13,13 @@ This folder contains the documentation included with ArbeitszeitCheck for admini
 | [Compliance-Implementation.de.md](Compliance-Implementation.de.md) | Same content in German |
 | [Developer-Documentation.en.md](Developer-Documentation.en.md) | Architecture, development setup, contribution guidelines, and technical notes (including vacation carryover / Resturlaub, assignable-manager / auto-approval semantics, HR notification matrix, overtime/undertime traffic light design, vacation entitlement policy engine with tariff rule sets/snapshots, centralized frontend URL/security guardrails, and mobile/iPhone UX implementation notes) |
 
+## Related Test Documentation
+
+The test inventory and release checklist live under `tests/`:
+
+- `tests/WORKFLOW_ROLE_MATRIX.md` maps routes to roles, permissions, and edge cases.
+- `tests/WORKFLOW_AUDIT_CHECKLIST.md` lists audit-critical workflow invariants that must stay covered by PHPUnit and E2E tests.
+
 ## Legal Notice
 
 These documents are for information and implementation support only. They do not replace legal advice. Consult your data protection officer (DPO) or legal counsel for organization-specific compliance.

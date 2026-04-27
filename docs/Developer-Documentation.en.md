@@ -1,7 +1,7 @@
 # Developer Documentation – ArbeitszeitCheck
 
 **Version:** aligned with the current app release (`appinfo/info.xml`)  
-**Last Updated:** 2026-04-21
+**Last Updated:** 2026-04-27
 
 This guide is for developers who want to contribute to ArbeitszeitCheck or integrate with it.
 
@@ -932,6 +932,19 @@ Run:
 ```bash
 npm run e2e
 ```
+
+### Audit-critical workflow checklist
+
+`tests/WORKFLOW_AUDIT_CHECKLIST.md` is the short release checklist for workflows where regressions can affect legal/audit evidence: time tracking state transitions, manual entry corrections, absences and approvals, month closure, reports/exports/compliance, and public error surfaces. Keep it aligned with PHPUnit and Playwright coverage whenever these flows change.
+
+`tests/WORKFLOW_ROLE_MATRIX.md` remains the broader route/role inventory. Use both documents together: the matrix defines who may reach each route, while the audit checklist defines the invariants that must remain green.
+
+Important current invariants:
+
+- Status polling endpoints must stay read-only. Background jobs or explicit mutation endpoints perform automatic break fallback / daily maximum enforcement.
+- Report and export APIs accept strict date formats (`Y-m-d`, `Y-m`, ISO-8601 where documented) and reject ambiguous dates.
+- Public or broad API surfaces should log internal details server-side but return generic, localized error messages to callers.
+- Health responses must avoid version/fingerprint fields and expose only operational status.
 
 ### Docker-based development (optional)
 

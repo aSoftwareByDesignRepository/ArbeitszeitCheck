@@ -103,6 +103,15 @@ class BreakReminderJob extends TimedJob
 					return;
 				}
 
+				$autoCompletedEntry = $this->timeTrackingService->enforceDailyMaximumForUser($userId);
+				if ($autoCompletedEntry !== null) {
+					$this->logger->info('Daily maximum auto-completion executed in background job', [
+						'user_id' => $userId,
+						'entry_id' => $autoCompletedEntry->getId(),
+					]);
+					return;
+				}
+
 				// Check user settings - skip if break reminders disabled
 				$notificationsEnabled = $this->userSettingsMapper->getBooleanSetting(
 					$userId,

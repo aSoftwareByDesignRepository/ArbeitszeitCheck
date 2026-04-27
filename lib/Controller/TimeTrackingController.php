@@ -58,6 +58,45 @@ class TimeTrackingController extends Controller
 		return $user->getUID();
 	}
 
+	private function buildSafeErrorResponse(\Throwable $e): JSONResponse
+	{
+		$rawMessage = $e->getMessage();
+		if (strpos($rawMessage, 'User not authenticated') !== false) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('User not authenticated')
+			], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$businessRules = [
+			'User is already clocked in',
+			'Already clocked in',
+			'User is currently on break. End break first.',
+			'Project ID must not exceed',
+			'Selected project does not exist',
+			'Cannot clock in: Maximum daily working hours',
+			'User is not currently clocked in',
+			'No active time entry',
+			'Break is already started',
+			'User is not currently on break',
+			'No active break',
+			'Minimum rest period',
+		];
+		foreach ($businessRules as $needle) {
+			if (strpos($rawMessage, $needle) !== false) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t($rawMessage),
+				], Http::STATUS_BAD_REQUEST);
+			}
+		}
+
+		return new JSONResponse([
+			'success' => false,
+			'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+		], Http::STATUS_INTERNAL_SERVER_ERROR);
+	}
+
 	/**
 	 * Clock in endpoint (called via AJAX with JSON)
 	 */
@@ -87,17 +126,7 @@ class TimeTrackingController extends Controller
 			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			if (strpos($e->getMessage(), 'User not authenticated') !== false) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('User not authenticated')
-				], Http::STATUS_UNAUTHORIZED);
-			}
-			return new JSONResponse([
-				'success' => false,
-				'error' => $e->getMessage()
-			], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return $this->buildSafeErrorResponse($e);
 		}
 	}
 
@@ -130,17 +159,7 @@ class TimeTrackingController extends Controller
 			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			if (strpos($e->getMessage(), 'User not authenticated') !== false) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('User not authenticated')
-				], Http::STATUS_UNAUTHORIZED);
-			}
-			return new JSONResponse([
-				'success' => false,
-				'error' => $e->getMessage()
-			], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return $this->buildSafeErrorResponse($e);
 		}
 	}
 
@@ -160,10 +179,7 @@ class TimeTrackingController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController::getStatus: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
-			return new JSONResponse([
-				'success' => false,
-				'error' => $e->getMessage()
-			], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return $this->buildSafeErrorResponse($e);
 		}
 	}
 
@@ -196,17 +212,7 @@ class TimeTrackingController extends Controller
 			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			if (strpos($e->getMessage(), 'User not authenticated') !== false) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('User not authenticated')
-				], Http::STATUS_UNAUTHORIZED);
-			}
-			return new JSONResponse([
-				'success' => false,
-				'error' => $e->getMessage()
-			], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return $this->buildSafeErrorResponse($e);
 		}
 	}
 
@@ -239,17 +245,7 @@ class TimeTrackingController extends Controller
 			], Http::STATUS_CONFLICT);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
-			// Check if it's an authentication error
-			if (strpos($e->getMessage(), 'User not authenticated') !== false) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('User not authenticated')
-				], Http::STATUS_UNAUTHORIZED);
-			}
-			return new JSONResponse([
-				'success' => false,
-				'error' => $e->getMessage()
-			], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return $this->buildSafeErrorResponse($e);
 		}
 	}
 
@@ -269,10 +265,7 @@ class TimeTrackingController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController::getBreakStatus: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
-			return new JSONResponse([
-				'success' => false,
-				'error' => $e->getMessage()
-			], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return $this->buildSafeErrorResponse($e);
 		}
 	}
 }

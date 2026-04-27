@@ -240,7 +240,7 @@ class ReportControllerTest extends TestCase
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
-		$this->assertEquals('Report generation failed', $data['error']);
+		$this->assertEquals('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.', $data['error']);
 	}
 
 	/**
@@ -912,7 +912,7 @@ class ReportControllerTest extends TestCase
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
-		$this->assertEquals('Weekly report failed', $data['error']);
+		$this->assertEquals('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.', $data['error']);
 	}
 
 	/**

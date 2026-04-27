@@ -1734,6 +1734,18 @@ class ManagerController extends Controller
 			}
 
 			$oldValues = $entry->getSummary();
+			$justificationData = json_decode($entry->getJustification() ?? '{}', true);
+			$proposal = is_array($justificationData) ? ($justificationData['proposed'] ?? null) : null;
+			if (is_array($proposal) && $proposal !== []) {
+				$validationError = $this->validateCorrectionProposal($entry, $proposal);
+				if ($validationError !== null) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $validationError
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$this->applyCorrectionProposalToEntry($entry, $proposal);
+			}
 
 			// Approve the correction - finalize the proposed changes
 			$entry->setStatus(\OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_COMPLETED);
@@ -1742,14 +1754,11 @@ class ManagerController extends Controller
 			$entry->setUpdatedAt(new \DateTime());
 
 			// If there's a comment, append it to justification
-			if ($comment) {
-				$justificationData = json_decode($entry->getJustification() ?? '{}', true);
-				if (is_array($justificationData)) {
-					$justificationData['approval_comment'] = $comment;
-					$justificationData['approved_at'] = date('c');
-					$justificationData['approved_by'] = $managerId;
-					$entry->setJustification(json_encode($justificationData));
-				}
+			if ($comment && is_array($justificationData)) {
+				$justificationData['approval_comment'] = $comment;
+				$justificationData['approved_at'] = date('c');
+				$justificationData['approved_by'] = $managerId;
+				$entry->setJustification(json_encode($justificationData));
 			}
 
 			$updatedEntry = $this->timeEntryMapper->update($entry);
@@ -1885,8 +1894,10 @@ class ManagerController extends Controller
 				$entry->setDescription($originalData['description'] ?? '');
 			}
 
-			// Reject the correction
-			$entry->setStatus(\OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_REJECTED);
+			// Reject the correction while preserving authoritative completed records.
+			$entry->setStatus(\OCA\ArbeitszeitCheck\Db\TimeEntry::STATUS_COMPLETED);
+			$entry->setApprovedByUserId(null);
+			$entry->setApprovedAt(null);
 			$entry->setUpdatedAt(new \DateTime());
 
 			// Store rejection reason
@@ -2110,4 +2121,73 @@ class ManagerController extends Controller
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
+
+	private function applyCorrectionProposalToEntry(TimeEntry $entry, array $proposal): void
+	{
+		if (isset($proposal['startTime'])) {
+			$entry->setStartTime(new \DateTime((string)$proposal['startTime']));
+		}
+		if (isset($proposal['endTime'])) {
+			$entry->setEndTime(new \DateTime((string)$proposal['endTime']));
+		}
+		if (array_key_exists('breakStartTime', $proposal)) {
+			$entry->setBreakStartTime($proposal['breakStartTime'] ? new \DateTime((string)$proposal['breakStartTime']) : null);
+		}
+		if (array_key_exists('breakEndTime', $proposal)) {
+			$entry->setBreakEndTime($proposal['breakEndTime'] ? new \DateTime((string)$proposal['breakEndTime']) : null);
+		}
+		if (array_key_exists('description', $proposal)) {
+			$entry->setDescription($proposal['description'] === null ? null : (string)$proposal['description']);
+		}
+		if (isset($proposal['date'])) {
+			$newStart = new \DateTime((string)$proposal['date']);
+			$entry->setStartTime($newStart);
+			if (isset($proposal['hours'])) {
+				$endTime = clone $newStart;
+				$endTime->modify('+' . round(((float)$proposal['hours']) * 3600) . ' seconds');
+				$entry->setEndTime($endTime);
+			}
+		} elseif (isset($proposal['hours']) && $entry->getStartTime()) {
+			$endTime = clone $entry->getStartTime();
+			$endTime->modify('+' . round(((float)$proposal['hours']) * 3600) . ' seconds');
+			$entry->setEndTime($endTime);
+		}
+	}
+
+	private function validateCorrectionProposal(TimeEntry $entry, array $proposal): ?string
+	{
+		$candidate = clone $entry;
+		$this->applyCorrectionProposalToEntry($candidate, $proposal);
+
+		try {
+			$this->monthClosureGuard->assertTimeEntryMutable($candidate);
+		} catch (MonthFinalizedException $e) {
+			return $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.');
+		}
+
+		if ($candidate->getStartTime()) {
+			$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($entry->getUserId(), $candidate->getStartTime(), $entry->getId());
+			if (!($restPeriodCheck['valid'] ?? false)) {
+				return (string)($restPeriodCheck['message'] ?? $this->l10n->t('Rest period validation failed.'));
+			}
+		}
+
+		if ($candidate->getEndTime() && $candidate->getStartTime()) {
+			$this->timeTrackingService->calculateAndSetAutomaticBreak($candidate);
+			$this->timeTrackingService->adjustEndTimeForDailyMaximum($candidate);
+			$overlapping = $this->timeEntryMapper->findOverlapping($entry->getUserId(), $candidate->getStartTime(), $candidate->getEndTime(), $entry->getId());
+			if (!empty($overlapping)) {
+				return $this->l10n->t('This correction overlaps with existing time entries.');
+			}
+		}
+
+		$errors = $candidate->validate();
+		if (!empty($errors)) {
+			$firstError = reset($errors);
+			return $this->l10n->t((string)$firstError);
+		}
+
+		return null;
+	}
+
 }

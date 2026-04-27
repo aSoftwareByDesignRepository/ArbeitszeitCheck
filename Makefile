@@ -17,7 +17,7 @@ release:
 		mkdir -p "$$staging/$(app_name)" && \
 		rsync -a --exclude='.git' --exclude='$(build_dir)' --exclude='.github' \
 			--exclude='node_modules' --exclude='tests' --exclude='.phpunit.result.cache' \
-			--exclude='scripts' --exclude='release/*.tar.gz' --exclude='release/*.asc' \
+			--exclude='test-results' --exclude='scripts' --exclude='release/*.tar.gz' --exclude='release/*.asc' \
 			--exclude='appinfo/signature.json' \
 			./ "$$staging/$(app_name)/" && \
 		tar -czf $(archive_path) -C "$$staging" $(app_name) && \
@@ -26,9 +26,9 @@ release:
 
 verify-release:
 	@test -f $(archive_path) || (echo "Error: Run 'make release' first"; exit 1)
-	@if tar -tzf $(archive_path) | grep -Eq '/(\.git/|node_modules/|build/|tests/|scripts/)'; then \
+	@if tar -tzf $(archive_path) | grep -Eq '/(\.git/|node_modules/|build/|tests/|test-results/|scripts/)'; then \
 		echo "Error: release archive contains forbidden development paths"; \
-		tar -tzf $(archive_path) | grep -E '/(\.git/|node_modules/|build/|tests/|scripts/)' || true; \
+		tar -tzf $(archive_path) | grep -E '/(\.git/|node_modules/|build/|tests/|test-results/|scripts/)' || true; \
 		exit 1; \
 	fi
 	@echo "Release archive layout looks clean."
@@ -43,9 +43,9 @@ verify-signature-manifest:
 			echo "Error: signature.json missing from signed archive"; \
 			exit 1; \
 		fi && \
-		if grep -Eq '"([^"]*/)?(\.git|node_modules|build|tests|scripts)\\/' "$$sig"; then \
+		if grep -Eq '"([^"]*/)?(\.git|node_modules|build|tests|test-results|scripts)\\/' "$$sig"; then \
 			echo "Error: signature.json references forbidden development paths"; \
-			grep -E '"([^"]*/)?(\.git|node_modules|build|tests|scripts)\\/' "$$sig" || true; \
+			grep -E '"([^"]*/)?(\.git|node_modules|build|tests|test-results|scripts)\\/' "$$sig" || true; \
 			exit 1; \
 		fi
 	@echo "Signature manifest sanity check passed."

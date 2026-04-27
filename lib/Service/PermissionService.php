@@ -123,7 +123,7 @@ class PermissionService
 		if ($managerUserId === $employeeUserId) {
 			return false;
 		}
-		if ($this->groupManager->isAdmin($managerUserId)) {
+		if ($this->isAdmin($managerUserId)) {
 			return true;
 		}
 		// Security hardening: manager-level access to sensitive employee data requires
@@ -139,7 +139,7 @@ class PermissionService
 	 */
 	public function canAccessManagerDashboard(string $userId): bool
 	{
-		if ($this->groupManager->isAdmin($userId)) {
+		if ($this->isAdmin($userId)) {
 			return true;
 		}
 		// Security hardening: manager area requires explicit app-team manager assignments.
@@ -178,7 +178,7 @@ class PermissionService
 	 */
 	public function canResolveViolation(string $actorUserId, string $violationOwnerUserId): bool
 	{
-		if ($this->groupManager->isAdmin($actorUserId)) {
+		if ($this->isAdmin($actorUserId)) {
 			return true;
 		}
 		return $this->canManageEmployee($actorUserId, $violationOwnerUserId);

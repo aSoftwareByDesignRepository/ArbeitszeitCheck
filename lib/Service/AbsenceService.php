@@ -249,11 +249,11 @@ class AbsenceService
 			if (!$absence) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
-
 		// Check if absence can be updated (pending, substitute_pending, or substitute_declined can be modified by owner)
 		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_SUBSTITUTE_DECLINED], true)) {
 			throw new \Exception($this->l10n->t('Only pending absences can be updated'));
 		}
+		$this->assertAbsenceMutable($absence);
 
 		$oldData = $absence->getSummary();
 
@@ -372,11 +372,11 @@ class AbsenceService
 		if (!$absence) {
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
-
 		// Check if absence can be deleted (pending, substitute_pending, or substitute_declined can be deleted by owner)
 		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_SUBSTITUTE_DECLINED], true)) {
 			throw new \Exception($this->l10n->t('Only pending absences can be deleted'));
 		}
+		$this->assertAbsenceMutable($absence);
 
 		$this->db->beginTransaction();
 		try {
@@ -422,7 +422,6 @@ class AbsenceService
 		if (!$absence) {
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
-
 		$status = $absence->getStatus();
 		if (!in_array($status, [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_APPROVED], true)) {
 			throw new \Exception($this->l10n->t('This absence cannot be cancelled.'));
@@ -438,6 +437,7 @@ class AbsenceService
 		if ($startDate <= $today) {
 			throw new \Exception($this->l10n->t('You can only cancel absences that have not started yet.'));
 		}
+		$this->assertAbsenceMutable($absence);
 
 		$oldData = $absence->getSummary();
 
@@ -497,7 +497,6 @@ class AbsenceService
 		if (!$absence) {
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
-
 		if ($absence->getStatus() !== Absence::STATUS_APPROVED) {
 			throw new \Exception($this->l10n->t('Only approved absences can be shortened.'));
 		}
@@ -507,6 +506,7 @@ class AbsenceService
 		if (!$startDate || !$originalEndDate) {
 			throw new \Exception($this->l10n->t('Start date or end date is missing for this absence.'));
 		}
+		$this->assertAbsenceMutable($absence);
 
 		$today = new \DateTimeImmutable('today');
 		if ($startDate > $today) {
@@ -520,7 +520,6 @@ class AbsenceService
 		$newEnd->setTime(0, 0, 0);
 
 		if ($this->monthClosureService !== null) {
-			$this->monthClosureService->assertDateRangeMutable($userId, $startDate, $originalEndDate);
 			$newEndWithDayEnd = clone $newEnd;
 			$newEndWithDayEnd->setTime(23, 59, 59);
 			$this->monthClosureService->assertDateRangeMutable($userId, $startDate, $newEndWithDayEnd);
@@ -584,10 +583,10 @@ class AbsenceService
 			if (!$absence) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
-
 			if ($absence->getStatus() !== Absence::STATUS_PENDING) {
 				throw new \Exception($this->l10n->t('Absence is not pending approval'));
 			}
+			$this->assertAbsenceMutable($absence);
 
 			if ($absence->getType() === Absence::TYPE_VACATION) {
 				$sd = $absence->getStartDate();
@@ -676,10 +675,10 @@ class AbsenceService
 			if (!$absence) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
-
 			if ($absence->getStatus() !== Absence::STATUS_PENDING) {
 				throw new \Exception($this->l10n->t('Absence is not pending approval'));
 			}
+			$this->assertAbsenceMutable($absence);
 
 			$oldData = $absence->getSummary();
 			$absence->setStatus(Absence::STATUS_REJECTED);
@@ -785,7 +784,6 @@ class AbsenceService
 			if (!$absence) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
-
 		if ($absence->getStatus() !== Absence::STATUS_SUBSTITUTE_PENDING) {
 			throw new \Exception($this->l10n->t('Absence is not awaiting substitute approval'));
 		}
@@ -794,6 +792,7 @@ class AbsenceService
 		if ($actualSubstitute === null || $actualSubstitute !== $substituteUserId) {
 			throw new \Exception($this->l10n->t('You are not the designated substitute for this absence'));
 		}
+		$this->assertAbsenceMutable($absence);
 
 		$oldData = $absence->getSummary();
 		$absence->setStatus(Absence::STATUS_PENDING);
@@ -904,7 +903,6 @@ class AbsenceService
 			if (!$absence) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
-
 		if ($absence->getStatus() !== Absence::STATUS_SUBSTITUTE_PENDING) {
 			throw new \Exception($this->l10n->t('Absence is not awaiting substitute approval'));
 		}
@@ -913,6 +911,7 @@ class AbsenceService
 		if ($actualSubstitute === null || $actualSubstitute !== $substituteUserId) {
 			throw new \Exception($this->l10n->t('You are not the designated substitute for this absence'));
 		}
+		$this->assertAbsenceMutable($absence);
 
 		$oldData = $absence->getSummary();
 		$absence->setStatus(Absence::STATUS_SUBSTITUTE_DECLINED);
@@ -1352,6 +1351,8 @@ class AbsenceService
 	 */
 	private function doAutoApproveDbWork(Absence $absence): Absence
 	{
+		$this->assertAbsenceMutable($absence);
+
 		if ($absence->getType() === Absence::TYPE_VACATION) {
 			$sd = $absence->getStartDate();
 			$ed = $absence->getEndDate();
@@ -1485,6 +1486,23 @@ class AbsenceService
 		}
 
 		throw new \Exception($this->l10n->t('Invalid date format. Expected yyyy-mm-dd or dd.mm.yyyy: %s', [$dateString]));
+	}
+
+	private function assertAbsenceMutable(Absence $absence): void
+	{
+		if ($this->monthClosureService === null) {
+			return;
+		}
+
+		$startDate = $absence->getStartDate();
+		$endDate = $absence->getEndDate();
+		if ($startDate === null || $endDate === null) {
+			throw new \Exception($this->l10n->t('Start date or end date is missing for this absence.'));
+		}
+
+		$endDateInclusive = clone $endDate;
+		$endDateInclusive->setTime(23, 59, 59);
+		$this->monthClosureService->assertDateRangeMutable($absence->getUserId(), $startDate, $endDateInclusive);
 	}
 
 	/**

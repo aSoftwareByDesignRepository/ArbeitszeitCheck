@@ -21,7 +21,9 @@ use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
+use OCP\IDBConnection;
 use OCP\IL10N;
+use OCP\Lock\ILockingProvider;
 
 /**
  * TimeTracking service for time tracking business logic
@@ -39,6 +41,8 @@ class TimeTrackingService
 	private UserWorkingTimeModelMapper $userWorkingTimeModelMapper;
 	private WorkingTimeModelMapper $workingTimeModelMapper;
 	private MonthClosureGuard $monthClosureGuard;
+	private IDBConnection $db;
+	private ILockingProvider $lockingProvider;
 
 	public function __construct(
 		TimeEntryMapper $timeEntryMapper,
@@ -51,7 +55,9 @@ class TimeTrackingService
 		UserSettingsMapper $userSettingsMapper,
 		UserWorkingTimeModelMapper $userWorkingTimeModelMapper,
 		WorkingTimeModelMapper $workingTimeModelMapper,
-		MonthClosureGuard $monthClosureGuard
+		MonthClosureGuard $monthClosureGuard,
+		IDBConnection $db,
+		ILockingProvider $lockingProvider
 	) {
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->violationMapper = $violationMapper;
@@ -64,6 +70,8 @@ class TimeTrackingService
 		$this->userWorkingTimeModelMapper = $userWorkingTimeModelMapper;
 		$this->workingTimeModelMapper = $workingTimeModelMapper;
 		$this->monthClosureGuard = $monthClosureGuard;
+		$this->db = $db;
+		$this->lockingProvider = $lockingProvider;
 	}
 
 	private function getMaxDailyHours(): float
@@ -87,87 +95,80 @@ class TimeTrackingService
 	 */
 	public function clockIn(string $userId, ?string $projectCheckProjectId = null, ?string $description = null): TimeEntry
 	{
-		$this->monthClosureGuard->assertUserDayMutable($userId, new \DateTime());
-
-		// Check if user is already clocked in
-		$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
-		if ($activeEntry !== null) {
-			throw new \Exception($this->l10n->t('User is already clocked in'));
-		}
-
-		// Check if user is on break
-		$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
-		if ($breakEntry !== null) {
-			throw new \Exception($this->l10n->t('User is currently on break. End break first.'));
-		}
-
-		// Check for a paused (orphaned) entry from today and resume it instead of
-		// creating a duplicate. The pause gap is archived as a break interval so that
-		// working-time calculations remain accurate.
-		$pausedTodayEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId);
-		if ($pausedTodayEntry !== null && $pausedTodayEntry->getStatus() === TimeEntry::STATUS_PAUSED) {
-			return $this->resumePausedEntry($userId, $pausedTodayEntry, $projectCheckProjectId, $description);
-		}
-
-		// Validate project ID length (DB column limit; ProjectCheck may not enforce)
-		if ($projectCheckProjectId !== null && mb_strlen($projectCheckProjectId) > TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH) {
-			throw new \Exception($this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH]));
-		}
-
-		// Validate ProjectCheck project if provided
-		if ($projectCheckProjectId && !$this->projectCheckService->projectExists($projectCheckProjectId)) {
-			throw new \Exception($this->l10n->t('Selected project does not exist'));
-		}
-
-		// Check compliance rules before clocking in
-		$this->checkComplianceBeforeClockIn($userId);
-		
-		// CRITICAL: Check if user has already worked 10 hours today (ArbZG §3)
-		// Prevent clocking in if daily maximum is already reached
-		$today = new \DateTime();
-		$today->setTime(0, 0, 0);
-		$tomorrow = clone $today;
-		$tomorrow->modify('+1 day');
-		$todayHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $today, $tomorrow);
-		$maxDailyHours = $this->getMaxDailyHours();
-		if ($todayHours >= $maxDailyHours) {
-			throw new \Exception($this->l10n->t(
-				'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
-				[(int)$maxDailyHours, $todayHours]
-			));
-		}
-
-		$timeEntry = new TimeEntry();
-		$timeEntry->setUserId($userId);
-		$timeEntry->setStartTime(new \DateTime());
-		$timeEntry->setStatus(TimeEntry::STATUS_ACTIVE);
-		$timeEntry->setEndedReason(null);
-		$timeEntry->setPolicyApplied(null);
-		$timeEntry->setIsManualEntry(false);
-		$timeEntry->setProjectCheckProjectId($projectCheckProjectId);
-		$timeEntry->setDescription($description);
-		$timeEntry->setCreatedAt(new \DateTime());
-		$timeEntry->setUpdatedAt(new \DateTime());
-
-		$savedEntry = $this->timeEntryMapper->insert($timeEntry);
-
-		// Log the action
+		$lockKey = $this->acquireUserMutationLock($userId);
 		try {
-			$summary = $savedEntry->getSummary();
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting summary for clock_in audit log: ' . $e->getMessage(), ["exception" => $e]);
-			$summary = ['id' => $savedEntry->getId(), 'userId' => $userId, 'status' => $savedEntry->getStatus()];
-		}
-		$this->auditLogMapper->logAction(
-			$userId,
-			'clock_in',
-			'time_entry',
-			$savedEntry->getId(),
-			null,
-			$summary
-		);
+			$this->db->beginTransaction();
+			try {
+				$this->monthClosureGuard->assertUserDayMutable($userId, new \DateTime());
+				$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
+				if ($activeEntry !== null) {
+					throw new \Exception($this->l10n->t('User is already clocked in'));
+				}
 
-		return $savedEntry;
+				$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
+				if ($breakEntry !== null) {
+					throw new \Exception($this->l10n->t('User is currently on break. End break first.'));
+				}
+
+				$pausedTodayEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId);
+				if ($pausedTodayEntry !== null && $pausedTodayEntry->getStatus() === TimeEntry::STATUS_PAUSED) {
+					$resumed = $this->resumePausedEntry($userId, $pausedTodayEntry, $projectCheckProjectId, $description);
+					$this->db->commit();
+					return $resumed;
+				}
+
+				if ($projectCheckProjectId !== null && mb_strlen($projectCheckProjectId) > TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH) {
+					throw new \Exception($this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH]));
+				}
+				if ($projectCheckProjectId && !$this->projectCheckService->projectExists($projectCheckProjectId)) {
+					throw new \Exception($this->l10n->t('Selected project does not exist'));
+				}
+
+				$this->checkComplianceBeforeClockIn($userId);
+				$today = new \DateTime();
+				$today->setTime(0, 0, 0);
+				$tomorrow = clone $today;
+				$tomorrow->modify('+1 day');
+				$todayHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange($userId, $today, $tomorrow);
+				$maxDailyHours = $this->getMaxDailyHours();
+				if ($todayHours >= $maxDailyHours) {
+					throw new \Exception($this->l10n->t(
+						'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
+						[(int)$maxDailyHours, $todayHours]
+					));
+				}
+
+				$now = new \DateTime();
+				$timeEntry = new TimeEntry();
+				$timeEntry->setUserId($userId);
+				$timeEntry->setStartTime($now);
+				$timeEntry->setStatus(TimeEntry::STATUS_ACTIVE);
+				$timeEntry->setEndedReason(null);
+				$timeEntry->setPolicyApplied(null);
+				$timeEntry->setIsManualEntry(false);
+				$timeEntry->setProjectCheckProjectId($projectCheckProjectId);
+				$timeEntry->setDescription($description);
+				$timeEntry->setCreatedAt($now);
+				$timeEntry->setUpdatedAt($now);
+
+				$savedEntry = $this->timeEntryMapper->insert($timeEntry);
+				$this->auditLogMapper->logAction(
+					$userId,
+					'clock_in',
+					'time_entry',
+					$savedEntry->getId(),
+					null,
+					$this->safeGetSummary($savedEntry, $userId)
+				);
+				$this->db->commit();
+				return $savedEntry;
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
+		}
 	}
 
 	/**
@@ -183,49 +184,52 @@ class TimeTrackingService
 		string $policyApplied = 'standard'
 	): TimeEntry
 	{
-		// Check for active entry OR break entry (user can clock out during break)
-		$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
-		$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
-		
-		$currentEntry = $activeEntry ?: $breakEntry;
-		if ($currentEntry === null) {
-			throw new \Exception($this->l10n->t('User is not currently clocked in'));
+		$lockKey = $this->acquireUserMutationLock($userId);
+		try {
+			$this->db->beginTransaction();
+			try {
+				$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
+				$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
+				$currentEntry = $activeEntry ?: $breakEntry;
+				if ($currentEntry === null) {
+					throw new \Exception($this->l10n->t('User is not currently clocked in'));
+				}
+
+				$this->monthClosureGuard->assertTimeEntryMutable($currentEntry);
+				$oldSummary = $this->safeGetSummary($currentEntry, $userId);
+				$now = new \DateTime();
+				if ($currentEntry->getStatus() === TimeEntry::STATUS_BREAK && $currentEntry->getBreakStartTime() !== null) {
+					$this->archiveBreakToJson($currentEntry, $currentEntry->getBreakStartTime(), $now);
+					$currentEntry->setBreakStartTime(null);
+					$currentEntry->setBreakEndTime(null);
+				}
+
+				$currentEntry->setEndTime($now);
+				$currentEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+				$currentEntry->setEndedReason($endedReason);
+				$currentEntry->setPolicyApplied($policyApplied);
+				$currentEntry->setUpdatedAt($now);
+				$this->calculateAndSetAutomaticBreak($currentEntry);
+
+				$updatedEntry = $this->timeEntryMapper->update($currentEntry);
+				$this->checkComplianceAfterClockOut($updatedEntry);
+				$this->auditLogMapper->logAction(
+					$userId,
+					'clock_out',
+					'time_entry',
+					$updatedEntry->getId(),
+					$oldSummary,
+					$this->safeGetSummary($updatedEntry, $userId)
+				);
+				$this->db->commit();
+				return $updatedEntry;
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
 		}
-
-		$this->monthClosureGuard->assertTimeEntryMutable($currentEntry);
-
-		$oldSummary = $this->safeGetSummary($currentEntry, $userId);
-		$now = new \DateTime();
-
-		// If the user clocks out while on break, persist the break interval in JSON.
-		if ($currentEntry->getStatus() === TimeEntry::STATUS_BREAK && $currentEntry->getBreakStartTime() !== null) {
-			$this->archiveBreakToJson($currentEntry, $currentEntry->getBreakStartTime(), $now);
-			$currentEntry->setBreakStartTime(null);
-			$currentEntry->setBreakEndTime(null);
-		}
-
-		$currentEntry->setEndTime($now);
-		$currentEntry->setStatus(TimeEntry::STATUS_COMPLETED);
-		$currentEntry->setEndedReason($endedReason);
-		$currentEntry->setPolicyApplied($policyApplied);
-		$currentEntry->setUpdatedAt($now);
-
-		// Ensure legal break requirements are still satisfied when closing the entry.
-		$this->calculateAndSetAutomaticBreak($currentEntry);
-
-		$updatedEntry = $this->timeEntryMapper->update($currentEntry);
-		$this->checkComplianceAfterClockOut($updatedEntry);
-		$newSummary = $this->safeGetSummary($updatedEntry, $userId);
-		$this->auditLogMapper->logAction(
-			$userId,
-			'clock_out',
-			'time_entry',
-			$updatedEntry->getId(),
-			$oldSummary,
-			$newSummary
-		);
-
-		return $updatedEntry;
 	}
 
 	/**
@@ -302,57 +306,48 @@ class TimeTrackingService
 	 */
 	public function startBreak(string $userId): TimeEntry
 	{
-		$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
-		if ($activeEntry === null) {
-			throw new \Exception($this->l10n->t('User is not currently clocked in'));
-		}
-
-		$this->monthClosureGuard->assertTimeEntryMutable($activeEntry);
-
-		// Allow multiple breaks - check if there's an active break
-		if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() === null) {
-			throw new \Exception($this->l10n->t('Break is already started'));
-		}
-
-		$now = new \DateTime();
-		// Clear previous break times if they exist (for new break)
-		if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() !== null) {
-			$this->archiveBreakToJson($activeEntry, $activeEntry->getBreakStartTime(), $activeEntry->getBreakEndTime());
-			// Previous break was completed and archived, start new one.
-			$activeEntry->setBreakStartTime($now);
-			$activeEntry->setBreakEndTime(null);
-		} else {
-			// First break
-			$activeEntry->setBreakStartTime($now);
-		}
-		$activeEntry->setStatus(TimeEntry::STATUS_BREAK);
-		$activeEntry->setUpdatedAt($now);
-
-		$updatedEntry = $this->timeEntryMapper->update($activeEntry);
-
-		// Log the action
+		$lockKey = $this->acquireUserMutationLock($userId);
 		try {
-			$oldSummary = $activeEntry->getSummary();
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting old summary for start_break audit log: ' . $e->getMessage(), ["exception" => $e]);
-			$oldSummary = ['id' => $activeEntry->getId(), 'userId' => $userId];
-		}
-		try {
-			$newSummary = $updatedEntry->getSummary();
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting new summary for start_break audit log: ' . $e->getMessage(), ["exception" => $e]);
-			$newSummary = ['id' => $updatedEntry->getId(), 'userId' => $userId];
-		}
-		$this->auditLogMapper->logAction(
-			$userId,
-			'start_break',
-			'time_entry',
-			$updatedEntry->getId(),
-			$oldSummary,
-			$newSummary
-		);
+			$this->db->beginTransaction();
+			try {
+				$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
+				if ($activeEntry === null) {
+					throw new \Exception($this->l10n->t('User is not currently clocked in'));
+				}
+				$this->monthClosureGuard->assertTimeEntryMutable($activeEntry);
+				if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() === null) {
+					throw new \Exception($this->l10n->t('Break is already started'));
+				}
 
-		return $updatedEntry;
+				$oldSummary = $this->safeGetSummary($activeEntry, $userId);
+				$now = new \DateTime();
+				if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() !== null) {
+					$this->archiveBreakToJson($activeEntry, $activeEntry->getBreakStartTime(), $activeEntry->getBreakEndTime());
+					$activeEntry->setBreakStartTime($now);
+					$activeEntry->setBreakEndTime(null);
+				} else {
+					$activeEntry->setBreakStartTime($now);
+				}
+				$activeEntry->setStatus(TimeEntry::STATUS_BREAK);
+				$activeEntry->setUpdatedAt($now);
+				$updatedEntry = $this->timeEntryMapper->update($activeEntry);
+				$this->auditLogMapper->logAction(
+					$userId,
+					'start_break',
+					'time_entry',
+					$updatedEntry->getId(),
+					$oldSummary,
+					$this->safeGetSummary($updatedEntry, $userId)
+				);
+				$this->db->commit();
+				return $updatedEntry;
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
+		}
 	}
 
 	/**
@@ -364,43 +359,39 @@ class TimeTrackingService
 	 */
 	public function endBreak(string $userId): TimeEntry
 	{
-		$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
-		if ($breakEntry === null) {
-			throw new \Exception($this->l10n->t('User is not currently on break'));
-		}
-
-		$this->monthClosureGuard->assertTimeEntryMutable($breakEntry);
-
-		$now = new \DateTime();
-		$breakEntry->setBreakEndTime($now);
-		$breakEntry->setStatus(TimeEntry::STATUS_ACTIVE);
-		$breakEntry->setUpdatedAt($now);
-
-		$updatedEntry = $this->timeEntryMapper->update($breakEntry);
-
-		// Log the action
+		$lockKey = $this->acquireUserMutationLock($userId);
 		try {
-			$oldSummary = $breakEntry->getSummary();
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting old summary for end_break audit log: ' . $e->getMessage(), ["exception" => $e]);
-			$oldSummary = ['id' => $breakEntry->getId(), 'userId' => $userId];
-		}
-		try {
-			$newSummary = $updatedEntry->getSummary();
-		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting new summary for end_break audit log: ' . $e->getMessage(), ["exception" => $e]);
-			$newSummary = ['id' => $updatedEntry->getId(), 'userId' => $userId];
-		}
-		$this->auditLogMapper->logAction(
-			$userId,
-			'end_break',
-			'time_entry',
-			$updatedEntry->getId(),
-			$oldSummary,
-			$newSummary
-		);
+			$this->db->beginTransaction();
+			try {
+				$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
+				if ($breakEntry === null) {
+					throw new \Exception($this->l10n->t('User is not currently on break'));
+				}
 
-		return $updatedEntry;
+				$this->monthClosureGuard->assertTimeEntryMutable($breakEntry);
+				$oldSummary = $this->safeGetSummary($breakEntry, $userId);
+				$now = new \DateTime();
+				$breakEntry->setBreakEndTime($now);
+				$breakEntry->setStatus(TimeEntry::STATUS_ACTIVE);
+				$breakEntry->setUpdatedAt($now);
+				$updatedEntry = $this->timeEntryMapper->update($breakEntry);
+				$this->auditLogMapper->logAction(
+					$userId,
+					'end_break',
+					'time_entry',
+					$updatedEntry->getId(),
+					$oldSummary,
+					$this->safeGetSummary($updatedEntry, $userId)
+				);
+				$this->db->commit();
+				return $updatedEntry;
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
+		}
 	}
 
 	/**
@@ -416,7 +407,6 @@ class TimeTrackingService
 			$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
 
 			$currentEntry = $activeEntry ?: $breakEntry;
-			$currentEntry = $this->enforceBreakAutoFallbackForUser($userId, $currentEntry);
 
 			// If no active/break entry, check for a paused entry from today before
 			// declaring the user fully clocked out.
@@ -453,29 +443,6 @@ class TimeTrackingService
 				], $userId);
 			}
 
-			// CRITICAL: Automatically complete entry if daily maximum working hours reached (ArbZG §3)
-			// This ensures that active entries are automatically closed when 10 hours are reached
-			$this->completeEntryIfDailyMaximumReached($currentEntry);
-			
-			// Refresh entry from database in case it was just completed
-			$currentEntry = $this->timeEntryMapper->find($currentEntry->getId());
-			
-			// If entry was just completed, return updated status
-			if ($currentEntry->getStatus() === TimeEntry::STATUS_COMPLETED) {
-				try {
-					$summary = $currentEntry->getSummary();
-				} catch (\Throwable $e) {
-					\OCP\Log\logger('arbeitszeitcheck')->error('Error getting summary for completed entry: ' . $e->getMessage(), ["exception" => $e]);
-					$summary = ['id' => $currentEntry->getId(), 'userId' => $userId, 'status' => TimeEntry::STATUS_COMPLETED];
-				}
-				return $this->appendAutoClockoutNotice([
-					'status' => 'completed',
-					'current_entry' => $summary,
-					'working_today_hours' => $this->getTodayHours($userId),
-					'current_session_duration' => null
-				], $userId);
-			}
-			
 			$now = new \DateTime();
 			$sessionStart = $currentEntry->getStartTime();
 			
@@ -1263,6 +1230,49 @@ class TimeTrackingService
 		}
 	}
 
+	public function enforceDailyMaximumForUser(string $userId): ?TimeEntry
+	{
+		$lockKey = $this->acquireUserMutationLock($userId);
+		try {
+			$this->db->beginTransaction();
+			try {
+				$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
+				$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
+				$currentEntry = $activeEntry ?: $breakEntry;
+				if ($currentEntry === null) {
+					$this->db->commit();
+					return null;
+				}
+
+				$this->monthClosureGuard->assertTimeEntryMutable($currentEntry);
+				$completed = $this->completeEntryIfDailyMaximumReached($currentEntry);
+				if (!$completed) {
+					$this->db->commit();
+					return null;
+				}
+
+				$updated = $this->timeEntryMapper->find($currentEntry->getId());
+				$now = new \DateTime();
+				$noticeMessage = $this->l10n->t(
+					'Session was automatically completed at %1$s because the maximum daily working hours were reached (ArbZG §3).',
+					[$now->format('d.m.Y H:i')]
+				);
+				$this->config->setUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', json_encode([
+					'message' => $noticeMessage,
+					'reason' => 'daily_maximum_reached',
+					'at' => $now->format('c'),
+				]));
+				$this->db->commit();
+				return $updated;
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
+		}
+	}
+
 	/**
 	 * @return array{mode:string,threshold_minutes:int,window_start_hour:int,window_end_hour:int}
 	 */
@@ -1322,10 +1332,36 @@ class TimeTrackingService
 		}
 		$decoded = json_decode($raw, true);
 		if (is_array($decoded)) {
+			if (isset($decoded['at']) && is_string($decoded['at'])) {
+				try {
+					$noticeAt = new \DateTimeImmutable($decoded['at']);
+					$ageSeconds = (new \DateTimeImmutable())->getTimestamp() - $noticeAt->getTimestamp();
+					if ($ageSeconds > 86400) {
+						return $status;
+					}
+				} catch (\Throwable $e) {
+					// Keep legacy notices visible if timestamp cannot be parsed.
+				}
+			}
 			$status['auto_clockout_notice'] = $decoded;
 		}
-		$this->config->setUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', '');
 		return $status;
+	}
+
+	private function acquireUserMutationLock(string $userId): string
+	{
+		$key = 'arbeitszeitcheck/time-tracking-user/' . $userId;
+		$this->lockingProvider->acquireLock($key, ILockingProvider::LOCK_EXCLUSIVE, 'Time tracking workflow lock for user ' . $userId);
+		return $key;
+	}
+
+	private function releaseUserMutationLock(string $key): void
+	{
+		try {
+			$this->lockingProvider->releaseLock($key, ILockingProvider::LOCK_EXCLUSIVE);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->warning('Failed to release time tracking workflow lock: ' . $e->getMessage(), ['exception' => $e]);
+		}
 	}
 
 }
