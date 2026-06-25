@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Repair;
 
 use OCA\ArbeitszeitCheck\Repair\UninstallDropTables;
+use OCP\Files\IRootFolder;
+use OCP\Files\NotFoundException;
 use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\Migration\IOutput;
@@ -16,6 +18,7 @@ final class UninstallDropTablesBehaviorTest extends TestCase
 {
 	private IDBConnection&MockObject $connection;
 	private IConfig&MockObject $config;
+	private IRootFolder&MockObject $rootFolder;
 	private IOutput&MockObject $output;
 
 	protected function setUp(): void
@@ -23,6 +26,7 @@ final class UninstallDropTablesBehaviorTest extends TestCase
 		parent::setUp();
 		$this->connection = $this->createMock(IDBConnection::class);
 		$this->config = $this->createMock(IConfig::class);
+		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->output = $this->createMock(IOutput::class);
 	}
 
@@ -34,7 +38,7 @@ final class UninstallDropTablesBehaviorTest extends TestCase
 		$this->connection->expects(self::never())->method('executeStatement');
 		$this->config->expects(self::never())->method('deleteAppValues');
 
-		$step = new UninstallDropTables($this->connection, $this->config);
+		$step = new UninstallDropTables($this->connection, $this->config, $this->rootFolder);
 		$step->run($this->output);
 	}
 
@@ -46,7 +50,7 @@ final class UninstallDropTablesBehaviorTest extends TestCase
 		$this->connection->expects(self::never())->method('executeStatement');
 		$this->config->expects(self::never())->method('deleteAppValues');
 
-		$step = new UninstallDropTables($this->connection, $this->config);
+		$step = new UninstallDropTables($this->connection, $this->config, $this->rootFolder);
 		$step->run($this->output);
 		$step->run($this->output);
 	}
@@ -61,7 +65,7 @@ final class UninstallDropTablesBehaviorTest extends TestCase
 		$this->connection->expects(self::never())->method('executeStatement');
 		$this->config->expects(self::never())->method('deleteAppValues');
 
-		$step = new UninstallDropTables($this->connection, $this->config);
+		$step = new UninstallDropTables($this->connection, $this->config, $this->rootFolder);
 		$step->run($this->output);
 	}
 
@@ -86,7 +90,12 @@ final class UninstallDropTablesBehaviorTest extends TestCase
 			->method('deleteAppValues')
 			->with(UninstallDropTables::APP_ID);
 
-		$step = new UninstallDropTables($this->connection, $this->config);
+		$this->config->method('getSystemValue')->willReturnCallback(
+			static fn (string $key, mixed $default = ''): mixed => $key === 'instanceid' ? '' : $default,
+		);
+		$this->rootFolder->expects(self::never())->method('get');
+
+		$step = new UninstallDropTables($this->connection, $this->config, $this->rootFolder);
 		$method = (new ReflectionClass(UninstallDropTables::class))->getMethod('dropAllTablesAndMetadata');
 		$method->setAccessible(true);
 		$method->invoke($step, $this->output);

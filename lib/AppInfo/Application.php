@@ -12,6 +12,11 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\AppInfo;
 
+use OCP\Lock\ILockingProvider;
+use OCP\Files\IRootFolder;
+use OCP\App\IAppManager;
+use OCA\ArbeitszeitCheck\Service\UpgradeBackupService;
+use OCA\ArbeitszeitCheck\Repair\BackupBeforeUpdate;
 use OCA\ArbeitszeitCheck\Capabilities;
 use OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays;
 use OCA\ArbeitszeitCheck\Repair\EnsureArbeitszeitCheckSchema;
@@ -380,10 +385,28 @@ class Application extends App implements IBootstrap {
 
 		$context->registerService(UninstallDropTables::class, function ($c): UninstallDropTables {
 			return new UninstallDropTables(
-				$c->query(IDBConnection::class),
+				$c->query(\OCP\IDBConnection::class),
 				$c->query(\OCP\IConfig::class),
+				$c->query(IRootFolder::class),
 			);
 		});
+		$context->registerService(UpgradeBackupService::class, function ($c): UpgradeBackupService {
+			return new UpgradeBackupService(
+				$c->query(\OCP\IDBConnection::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(IRootFolder::class),
+				$c->query(IAppManager::class),
+				$c->query(ILockingProvider::class),
+				$c->query(\Psr\Log\LoggerInterface::class),
+			);
+		});
+
+		$context->registerService(BackupBeforeUpdate::class, function ($c): BackupBeforeUpdate {
+			return new BackupBeforeUpdate(
+				$c->query(UpgradeBackupService::class),
+			);
+		});
+
 
 		// Register CSPService
 		$context->registerService(CSPService::class, function($c) {

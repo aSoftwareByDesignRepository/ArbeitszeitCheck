@@ -155,6 +155,7 @@ Registro de tiempo centrado en la ley laboral alemana (ArbZG) y el RGPD. Registr
 	</optional-dependencies>
 
 	<commands>
+		<command>OCA\ArbeitszeitCheck\Command\UpgradeBackupCommand</command>
 		<command>OCA\ArbeitszeitCheck\Command\GenerateTestDataCommand</command>
 		<command>OCA\ArbeitszeitCheck\Command\ImportVacationBalanceCommand</command>
 		<command>OCA\ArbeitszeitCheck\Command\VacationRolloverCommand</command>
@@ -232,7 +233,10 @@ Registro de tiempo centrado en la ley laboral alemana (ArbZG) y el RGPD. Registr
 		<uninstall>
 			<step>OCA\ArbeitszeitCheck\Repair\UninstallDropTables</step>
 		</uninstall>
-	</repair-steps>
+		<pre-migration>
+			<step>OCA\ArbeitszeitCheck\Repair\BackupBeforeUpdate</step>
+		</pre-migration>
+</repair-steps>
 	<background-jobs>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\DailyComplianceCheckJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\ClockOutReminderJob</job>
