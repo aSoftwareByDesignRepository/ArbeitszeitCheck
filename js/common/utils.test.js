@@ -18,12 +18,40 @@ describe('ArbeitszeitCheckUtils', () => {
     )
   })
 
-  it('encodeAttributeJson hex-escapes quotes for HTML attributes', () => {
+  it('encodeAttributeJson uses HTML entities so attributes round-trip through JSON.parse', () => {
     const u = window.ArbeitszeitCheckUtils
-    const encoded = u.encodeAttributeJson({ startTime: '2026-05-20T08:00:00+02:00' })
+    const payload = { startTime: '2026-05-20T08:00:00+02:00', endTime: '2026-05-20T17:00:00+02:00' }
+    const encoded = u.encodeAttributeJson(payload)
     expect(encoded).not.toContain('"')
-    expect(encoded).toContain('\\u0022startTime\\u0022')
+    expect(encoded).toContain('&quot;startTime&quot;')
     expect(encoded).toContain('2026-05-20T08:00:00+02:00')
+
+    document.body.innerHTML = '<button id="attr-json-test" data-entry-summary="' + encoded + '"></button>'
+    const raw = document.getElementById('attr-json-test').getAttribute('data-entry-summary')
+    expect(u.parseAttributeJson(raw)).toEqual(payload)
+  })
+
+  it('parseAttributeJson decodes legacy unicode-escaped attribute JSON', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const legacy = '{\\u0022startTime\\u0022:\\u00222026-05-20T08:00:00+02:00\\u0022}'
+    expect(u.parseAttributeJson(legacy)).toEqual({ startTime: '2026-05-20T08:00:00+02:00' })
+  })
+
+  it('parseAttributeJson rejects non-object payloads', () => {
+    const u = window.ArbeitszeitCheckUtils
+    expect(u.parseAttributeJson('null')).toBeNull()
+    expect(u.parseAttributeJson('[]')).toBeNull()
+    expect(u.parseAttributeJson('"x"')).toBeNull()
+  })
+
+  it('isTimeEntryClockSummary requires ISO clock instants', () => {
+    const u = window.ArbeitszeitCheckUtils
+    expect(u.isTimeEntryClockSummary({
+      startTime: '2026-05-20T08:00:00+02:00',
+      endTime: '2026-05-20T17:00:00+02:00',
+    })).toBe(true)
+    expect(u.isTimeEntryClockSummary({ startTime: '2026-05-20T08:00:00+02:00' })).toBe(false)
+    expect(u.isTimeEntryClockSummary(null)).toBe(false)
   })
 
   it('createElement sets className and textContent and avoids implicit html', () => {
@@ -105,6 +133,79 @@ describe('ArbeitszeitCheckUtils', () => {
 
     window.OC = previousWindowOc
     globalThis.OC = previousGlobalOc
+  })
+
+  it('resolveUrl falls back to subdirectory webroot when OC is unavailable', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const previousWindowOc = window.OC
+    const previousGlobalOc = globalThis.OC
+
+    Object.defineProperty(window, 'location', {
+      value: { origin: 'https://example.test', protocol: 'https:', pathname: '/nextcloud/apps/arbeitszeitcheck/admin/dashboard' },
+      configurable: true,
+    })
+    window.OC = undefined
+    globalThis.OC = undefined
+
+    expect(u.resolveUrl('/apps/arbeitszeitcheck/api/admin/dashboard-employees?filter=all&format=csv'))
+      .toBe('/nextcloud/apps/arbeitszeitcheck/api/admin/dashboard-employees?filter=all&format=csv')
+
+    window.OC = previousWindowOc
+    globalThis.OC = previousGlobalOc
+  })
+
+  it('buildAppUrl delegates to resolveUrl', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const originalGenerateUrl = window.OC.generateUrl
+    window.OC.generateUrl = (path) => '/nextcloud' + path
+
+    expect(u.buildAppUrl('/apps/arbeitszeitcheck/api/admin/users'))
+      .toBe('/nextcloud/apps/arbeitszeitcheck/api/admin/users')
+
+    window.OC.generateUrl = originalGenerateUrl
+  })
+
+  it('triggerDownload blocks external URLs', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const assignMock = vi.fn()
+    const previousLocation = window.location
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...previousLocation, assign: assignMock },
+    })
+
+    expect(u.triggerDownload('https://evil.example/export.csv')).toBe(false)
+    expect(assignMock).not.toHaveBeenCalled()
+
+    Object.defineProperty(window, 'location', { configurable: true, value: previousLocation })
+  })
+
+  it('triggerDownload navigates for same-origin app exports', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const originalGenerateUrl = window.OC.generateUrl
+    window.OC.generateUrl = (path) => '/nextcloud' + path
+    const assignMock = vi.fn()
+    const previousLocation = window.location
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...previousLocation, assign: assignMock },
+    })
+
+    expect(u.triggerDownload('/apps/arbeitszeitcheck/api/admin/dashboard-employees?format=csv')).toBe(true)
+    expect(assignMock).toHaveBeenCalledWith('/nextcloud/apps/arbeitszeitcheck/api/admin/dashboard-employees?format=csv')
+
+    window.OC.generateUrl = originalGenerateUrl
+    Object.defineProperty(window, 'location', { configurable: true, value: previousLocation })
+  })
+
+  it('openDownload blocks external URLs', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
+    expect(u.openDownload('https://evil.example/export.csv')).toBe(false)
+    expect(openSpy).not.toHaveBeenCalled()
+
+    openSpy.mockRestore()
   })
 
   it('isExternalUrl distinguishes same-origin from external origins', () => {
@@ -195,6 +296,46 @@ describe('ArbeitszeitCheckUtils', () => {
     expect(showError).toHaveBeenCalledTimes(1)
 
     delete window.ArbeitszeitCheckMessaging
+  })
+
+  it('confirmDestructiveAction keeps confirmDialog this binding', async () => {
+    const u = window.ArbeitszeitCheckUtils
+    const showConfirmDialog = vi.fn().mockResolvedValue(true)
+    window.AzcComponents = {
+      confirmDialog(options) {
+        return this.showConfirmDialog(options)
+      },
+      showConfirmDialog,
+    }
+
+    const result = await u.confirmDestructiveAction({ title: 'Delete', message: 'Sure?' })
+    expect(showConfirmDialog).toHaveBeenCalledWith({ title: 'Delete', message: 'Sure?' })
+    expect(result).toEqual({ confirmed: true, reason: '' })
+
+    delete window.AzcComponents
+  })
+
+  it('confirmDestructiveAction resolves after real destructive dialog confirmation', async () => {
+    await import('./components.js')
+    const u = window.ArbeitszeitCheckUtils
+    document.body.innerHTML = `
+      <header id="header"></header>
+      <nav id="app-navigation"></nav>
+      <main id="azc-main-content"></main>`
+
+    const pending = u.confirmDestructiveAction({
+      title: 'Delete organisation default?',
+      message: 'This permanently removes this rule from history.',
+      variant: 'destructive',
+      confirmLabel: 'Delete',
+    })
+
+    await vi.waitFor(() => document.querySelector('.confirm-dialog__confirm'))
+    const confirm = document.querySelector('.confirm-dialog__confirm')
+    expect(confirm.disabled).toBe(false)
+    confirm.click()
+
+    await expect(pending).resolves.toEqual({ confirmed: true, reason: '' })
   })
 
   it('syncAzcOverlayMetrics measures #header and sets CSS variables on body', async () => {

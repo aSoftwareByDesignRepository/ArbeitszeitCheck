@@ -338,9 +338,7 @@
 				endTime: entry.displayEndTime || entry.endTime || null,
 				breaks: entry.displayBreaks || entry.breaks || null,
 			};
-			const summaryJson = Utils.encodeAttributeJson
-				? Utils.encodeAttributeJson(summaryPayload)
-				: escapeHtml(JSON.stringify(summaryPayload));
+			const summaryJson = Utils.encodeAttributeJson(summaryPayload);
 			const actionCell = canCorrect
 				? `<button type="button" class="azc-btn azc-btn--secondary azc-btn--sm btn-manager-correct" data-entry-id="${escapeHtml(String(entry.id))}" data-entry-updated="${escapeHtml(entry.updatedAt || '')}" data-entry-summary="${summaryJson}" aria-label="${escapeHtml(t('Correct time entry', 'Correct time entry'))}">${escapeHtml(t('Correct', 'Correct'))}</button>`
 				: '<span class="text-muted">–</span>';
@@ -699,9 +697,18 @@
 			const summary = MgrCorrection
 				? MgrCorrection.parseEntrySummary(btn.getAttribute('data-entry-summary'))
 				: null;
-			if (id && MgrCorrection) {
-				MgrCorrection.open(id, updatedAt, summary || {});
+			if (!id || !MgrCorrection) {
+				return;
 			}
+			if (!summary) {
+				const message = t(
+					'correctionErrorLoadEntry',
+					'Could not load the stored times for this entry. Please reload the page and try again.'
+				);
+				Messaging?.showError?.(message);
+				return;
+			}
+			MgrCorrection.open(id, updatedAt, summary);
 		});
 	}
 

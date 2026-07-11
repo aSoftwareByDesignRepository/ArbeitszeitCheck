@@ -44,19 +44,92 @@
 	}
 
 	function parseEntrySummary(raw) {
-		if (!raw) {
-			return null;
+		const parsed = Utils.parseAttributeJson
+			? Utils.parseAttributeJson(raw)
+			: null;
+		if (Utils.isTimeEntryClockSummary && Utils.isTimeEntryClockSummary(parsed)) {
+			return parsed;
 		}
-		try {
-			return JSON.parse(raw);
-		} catch (e) {
-			return null;
+		return null;
+	}
+
+	function correctionLoadErrorMessage() {
+		return t(
+			'correctionErrorLoadEntry',
+			'Could not load the stored times for this entry. Please reload the page and try again.'
+		);
+	}
+
+	function formatIsoDisplay(iso, mode) {
+		if (!iso) {
+			return '–';
 		}
+		const api = window.ArbeitszeitCheckTime;
+		if (api) {
+			if (mode === 'date') {
+				return api.formatDate(iso) || '–';
+			}
+			return api.formatTime(iso) || '–';
+		}
+		return String(iso).slice(0, 16).replace('T', ' ');
+	}
+
+	function formatBreaksList(breaks) {
+		if (!Array.isArray(breaks) || breaks.length === 0) {
+			return '–';
+		}
+		return breaks.map((b) => {
+			const start = b.start || b.startTime || '';
+			const end = b.end || b.endTime || '';
+			if (typeof start === 'string' && /^\d{2}:\d{2}$/.test(start)) {
+				return start + '–' + end;
+			}
+			const s = formatIsoDisplay(start, 'time');
+			const e = formatIsoDisplay(end, 'time');
+			return s + '–' + e;
+		}).join(', ');
+	}
+
+	function buildSnapshotHtml(summary) {
+		const esc = (value) => (Utils.escapeHtml ? Utils.escapeHtml(String(value ?? '')) : String(value ?? ''));
+		const rows = [
+			[t('correctionLabelDate', 'Date'), formatIsoDisplay(summary.startTime, 'date')],
+			[t('correctionLabelStart', 'Start'), formatIsoDisplay(summary.startTime, 'time')],
+			[t('correctionLabelEnd', 'End'), formatIsoDisplay(summary.endTime, 'time')],
+			[t('correctionLabelBreaks', 'Breaks'), formatBreaksList(summary.breaks)],
+		];
+		const rowHtml = rows.map(([label, val]) => {
+			return '<tr><th scope="row">' + esc(label) + '</th><td>' + esc(val) + '</td></tr>';
+		}).join('');
+		const currentHeading = t('correctionCurrentHeading', 'Currently stored');
+		const currentAria = t('correctionCurrentAria', 'Times currently saved for this entry');
+		const proposedHeading = t('correctionProposedHeading', 'Corrected times');
+		const proposedHint = t('correctionProposedHint', 'Enter the date and times as they should be recorded.');
+		return [
+			'<section class="correction-dialog__block correction-dialog__block--current" aria-labelledby="mgr-correct-current-heading">',
+			'<h3 id="mgr-correct-current-heading" class="correction-dialog__block-title">' + esc(currentHeading) + '</h3>',
+			'<div class="correction-snapshot__wrap" role="region" aria-label="' + esc(currentAria) + '">',
+			'<table class="correction-snapshot__table">',
+			'<caption class="sr-only">' + esc(currentAria) + '</caption>',
+			'<tbody>',
+			rowHtml,
+			'</tbody>',
+			'</table>',
+			'</div>',
+			'</section>',
+			'<section class="correction-dialog__block correction-dialog__block--proposed" aria-labelledby="mgr-correct-proposed-heading">',
+			'<h3 id="mgr-correct-proposed-heading" class="correction-dialog__block-title">' + esc(proposedHeading) + '</h3>',
+			'<p class="correction-dialog__block-hint">' + esc(proposedHint) + '</p>',
+		].join('');
 	}
 
 	function open(entryId, updatedAt, summary) {
 		if (!ClockForm || !Components.createModal) {
 			Messaging.showError(t('Could not open correction dialog.', 'Could not open correction dialog.'));
+			return;
+		}
+		if (!Utils.isTimeEntryClockSummary || !Utils.isTimeEntryClockSummary(summary)) {
+			Messaging.showError(correctionLoadErrorMessage());
 			return;
 		}
 
@@ -67,7 +140,7 @@
 		}
 
 		const idPrefix = 'mgr-correct-' + entryId;
-		const formHtml = ClockForm.buildFormHtml(idPrefix, labels());
+		const formHtml = buildSnapshotHtml(summary) + ClockForm.buildFormHtml(idPrefix, labels()) + '</section>';
 		const footerHtml = [
 			'<div class="reject-modal-actions modal-footer">',
 			'<button type="button" class="btn btn--secondary btn-mgr-correct-cancel">' + t('Cancel', 'Cancel') + '</button>',
@@ -81,10 +154,15 @@
 			content: '<div class="manager-create-dialog__meta manager-correct-dialog__meta"></div>' + formHtml + footerHtml,
 			size: 'xl',
 		});
+		modal.classList.add('azc-manager-correction-modal');
+
+		const saveBtn = modal.querySelector('.btn-mgr-correct-save');
+		const cancelBtn = modal.querySelector('.btn-mgr-correct-cancel');
 
 		const meta = modal.querySelector('.manager-correct-dialog__meta');
 		let projectSelect = null;
-		if (window.ArbeitszeitCheck?.projectCheckEnabled && summary?.userId) {
+		let projectOptionsReady = !(window.ArbeitszeitCheck?.projectCheckEnabled && summary.userId);
+		if (window.ArbeitszeitCheck?.projectCheckEnabled && summary.userId) {
 			const wrap = document.createElement('div');
 			wrap.className = 'azc-filter-field';
 			const pid = 'mgr-correct-project-' + entryId;
@@ -123,26 +201,55 @@
 						});
 					}
 				})
+				.catch(() => {
+					Messaging.showError(t('Could not load projects.', 'Could not load projects.'));
+					if (!projectSelect) {
+						return;
+					}
+					projectSelect.innerHTML = '';
+					const none = document.createElement('option');
+					none.value = '';
+					none.textContent = t('No project link', 'No project link');
+					projectSelect.appendChild(none);
+					if (summary.projectCheckProjectId) {
+						const keep = document.createElement('option');
+						keep.value = String(summary.projectCheckProjectId);
+						keep.textContent = t('Keep current project link', 'Keep current project link');
+						keep.selected = true;
+						projectSelect.appendChild(keep);
+					}
+				})
 				.finally(() => {
+					projectOptionsReady = true;
 					if (projectSelect) {
 						projectSelect.disabled = false;
+					}
+					if (saveBtn) {
+						saveBtn.disabled = false;
+						saveBtn.removeAttribute('aria-busy');
 					}
 				});
 		}
 
 		const initial = {
-			startTime: summary?.startTime || null,
-			endTime: summary?.endTime || null,
-			breaks: summary?.breaks || [],
+			startTime: summary.startTime,
+			endTime: summary.endTime,
+			breaks: summary.breaks || [],
 		};
 		const formApi = ClockForm.bindForm(modal, idPrefix, initial, t);
 
-		const saveBtn = modal.querySelector('.btn-mgr-correct-save');
-		const cancelBtn = modal.querySelector('.btn-mgr-correct-cancel');
+		if (projectSelect && !projectOptionsReady && saveBtn) {
+			saveBtn.disabled = true;
+			saveBtn.setAttribute('aria-busy', 'true');
+		}
 
 		cancelBtn?.addEventListener('click', () => Components.closeModal(modal));
 
 		saveBtn?.addEventListener('click', () => {
+			if (projectSelect && !projectOptionsReady) {
+				formApi.setStatus(t('correctionLoadingProjects', 'Loading projects…'), false);
+				return;
+			}
 			const result = formApi.validateAndCollect();
 			if (!result.ok) {
 				formApi.setStatus(result.error, true);
@@ -160,7 +267,7 @@
 			if (result.payload.breaks && result.payload.breaks.length > 0) {
 				payload.breaks = result.payload.breaks;
 			}
-			if (projectSelect) {
+			if (projectSelect && projectOptionsReady) {
 				payload.projectCheckProjectId = projectSelect.value || '';
 			}
 
@@ -177,8 +284,6 @@
 						document.dispatchEvent(new CustomEvent('arbeitszeitcheck:manager-entry-corrected'));
 					} else {
 						Messaging.showError(data.error || t('Correction failed.', 'Correction failed.'));
-						saveBtn.disabled = false;
-						saveBtn.removeAttribute('aria-busy');
 					}
 				},
 				onError: (err) => {
@@ -190,9 +295,12 @@
 					} else {
 						Messaging.showError(err?.error || t('Correction failed.', 'Correction failed.'));
 					}
+				},
+			}).finally(() => {
+				if (document.body.contains(modal)) {
 					saveBtn.disabled = false;
 					saveBtn.removeAttribute('aria-busy');
-				},
+				}
 			});
 		});
 

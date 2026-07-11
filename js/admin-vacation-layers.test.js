@@ -34,7 +34,7 @@ function stageDom() {
     <h1 id="azc-vacation-layers-title">Vacation entitlement</h1>
     <div id="l0-active"></div>
     <span id="l0-count"></span>
-    <tbody id="l0-history-rows"></tbody>
+    <table><tbody id="l0-history-rows"></tbody></table>
     <span id="l1-count"></span>
     <p id="l1-prereq" hidden></p>
     <tbody id="l1-rows"></tbody>
@@ -92,8 +92,26 @@ function ajaxStub({ overview = { success: true, org: { active: null, history: []
       Promise.resolve().then(() => opts && opts.onSuccess && opts.onSuccess({ success: true, users }));
       return Promise.resolve({ success: true, users });
     }
+    if (opts && opts.method === 'DELETE') {
+      Promise.resolve().then(() => opts.onSuccess && opts.onSuccess({ success: true }));
+      return Promise.resolve({ success: true });
+    }
     return Promise.resolve(null);
   });
+}
+
+async function importVacationLayersStack(ajaxMock) {
+  if (typeof window.__ArbeitszeitCheckVacationLayersTeardown === 'function') {
+    window.__ArbeitszeitCheckVacationLayersTeardown();
+  }
+  await import('./common/utils.js');
+  window.ArbeitszeitCheckUtils.ajax = ajaxMock;
+  await import('./common/components.js');
+  window.ArbeitszeitCheckMessaging = { showError: vi.fn(), showSuccess: vi.fn(), announceAssertive: vi.fn() };
+  window.t = (_app, s) => s;
+  await import('./admin-vacation-layers.js');
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 let ajaxSpy;
@@ -102,20 +120,19 @@ beforeEach(async () => {
   vi.resetModules();
   stageDom();
   ajaxSpy = ajaxStub();
-  window.ArbeitszeitCheckUtils = { ajax: ajaxSpy };
-  window.ArbeitszeitCheckMessaging = { showError: vi.fn(), showSuccess: vi.fn() };
-  window.ArbeitszeitCheckComponents = { showConfirmDialog: vi.fn().mockResolvedValue(true) };
-  window.t = (_app, s) => s;
-  await import('./admin-vacation-layers.js');
-  // Wait one microtask for the bootstrap fetch to resolve.
-  await Promise.resolve();
+  await importVacationLayersStack(ajaxSpy);
 });
 
 afterEach(() => {
+  if (typeof window.__ArbeitszeitCheckVacationLayersTeardown === 'function') {
+    window.__ArbeitszeitCheckVacationLayersTeardown();
+  }
   delete window.__ArbeitszeitCheckVacationLayersTestables;
+  delete window.__ArbeitszeitCheckVacationLayersTeardown;
   delete window.ArbeitszeitCheckUtils;
   delete window.ArbeitszeitCheckMessaging;
   delete window.ArbeitszeitCheckComponents;
+  delete window.AzcComponents;
   document.body.innerHTML = '';
 });
 
@@ -229,12 +246,7 @@ describe('simulator combobox keyboard interactions', () => {
         { userId: 'bob', displayName: 'Bob Builder' },
       ],
     });
-    window.ArbeitszeitCheckUtils = { ajax: ajaxSpy };
-    window.ArbeitszeitCheckMessaging = { showError: vi.fn(), showSuccess: vi.fn() };
-    window.ArbeitszeitCheckComponents = { showConfirmDialog: vi.fn().mockResolvedValue(true) };
-    window.t = (_app, s) => s;
-    await import('./admin-vacation-layers.js');
-    await Promise.resolve();
+    await importVacationLayersStack(ajaxSpy);
   });
 
   it('attaches combobox semantics to the user search input', () => {
@@ -385,12 +397,7 @@ describe('Add buttons enable when prerequisites are met', () => {
         ruleSets: [],
       },
     });
-    window.ArbeitszeitCheckUtils = { ajax: ajaxSpy };
-    window.ArbeitszeitCheckMessaging = { showError: vi.fn(), showSuccess: vi.fn() };
-    window.ArbeitszeitCheckComponents = { showConfirmDialog: vi.fn().mockResolvedValue(true) };
-    window.t = (_app, s) => s;
-    await import('./admin-vacation-layers.js');
-    await Promise.resolve();
+    await importVacationLayersStack(ajaxSpy);
   });
 
   it('enables both Add buttons when prerequisites are available', () => {
@@ -405,5 +412,125 @@ describe('Add buttons enable when prerequisites are met', () => {
     const hintTeam = document.getElementById('l2-prereq');
     expect(hintModel.hidden).toBe(true);
     expect(hintTeam.hidden).toBe(true);
+  });
+});
+
+describe('parseDeleteId', () => {
+  function t() { return window.__ArbeitszeitCheckVacationLayersTestables; }
+
+  it('accepts positive integer ids', () => {
+    expect(t().parseDeleteId('7')).toBe(7);
+    expect(t().parseDeleteId(12)).toBe(12);
+  });
+
+  it('rejects invalid ids', () => {
+    expect(t().parseDeleteId('0')).toBeNull();
+    expect(t().parseDeleteId('-1')).toBeNull();
+    expect(t().parseDeleteId('abc')).toBeNull();
+    expect(t().parseDeleteId('')).toBeNull();
+    expect(t().parseDeleteId(null)).toBeNull();
+  });
+});
+
+describe('history delete workflow', () => {
+  const orgRow = {
+    id: 7,
+    vacationMode: 'manual_fixed',
+    manualDays: 27,
+    tariffRuleSetId: null,
+    description: '',
+    effectiveFrom: '2026-01-01',
+    effectiveTo: null,
+  };
+
+  beforeEach(async () => {
+    vi.resetModules();
+    document.body.innerHTML = '';
+    stageDom();
+    ajaxSpy = ajaxStub({
+      overview: {
+        success: true,
+        org: { active: orgRow, history: [orgRow] },
+        model: { defaults: [], availableModels: [] },
+        team: { policies: [], availableTeams: [] },
+        ruleSets: [],
+      },
+    });
+    await importVacationLayersStack(ajaxSpy);
+  });
+
+  it('opens an accessible confirm dialog when delete is clicked', async () => {
+    const deleteBtn = document.querySelector('[data-delete-org="7"]');
+    expect(deleteBtn).toBeTruthy();
+    deleteBtn.click();
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('.confirm-dialog')).toBeTruthy();
+    });
+    const confirm = document.querySelector('.confirm-dialog__confirm');
+    expect(confirm).toBeTruthy();
+    expect(confirm.disabled).toBe(false);
+    expect(document.querySelector('.confirm-dialog__cancel')).toBeTruthy();
+  });
+
+  it('issues DELETE when destructive action is confirmed', async () => {
+    vi.spyOn(window.ArbeitszeitCheckUtils, 'confirmDestructiveAction')
+      .mockResolvedValue({ confirmed: true, reason: '' });
+
+    const deleteBtn = document.querySelector('[data-delete-org="7"]');
+    deleteBtn.click();
+    await vi.waitFor(() => {
+      expect(ajaxSpy.mock.calls.some((call) => call[1] && call[1].method === 'DELETE')).toBe(true);
+    });
+
+    const deleteCall = ajaxSpy.mock.calls.find((call) => call[1] && call[1].method === 'DELETE');
+    expect(String(deleteCall[0])).toBe('/org/7');
+    expect(window.ArbeitszeitCheckMessaging.showSuccess).toHaveBeenCalled();
+  });
+
+  it('does not delete when destructive action is cancelled', async () => {
+    vi.spyOn(window.ArbeitszeitCheckUtils, 'confirmDestructiveAction')
+      .mockResolvedValue(null);
+
+    const deleteBtn = document.querySelector('[data-delete-org="7"]');
+    deleteBtn.click();
+    await Promise.resolve();
+
+    const deleteCall = ajaxSpy.mock.calls.find((call) => call[1] && call[1].method === 'DELETE');
+    expect(deleteCall).toBeFalsy();
+  });
+
+  it('blocks concurrent delete requests while one is in flight', async () => {
+    vi.spyOn(window.ArbeitszeitCheckUtils, 'confirmDestructiveAction')
+      .mockResolvedValue({ confirmed: true, reason: '' });
+
+    let finishDelete;
+    const blocked = new Promise((resolve) => { finishDelete = resolve; });
+    const baseAjax = ajaxSpy;
+    const trackingAjax = vi.fn((url, opts) => {
+      if (opts && opts.method === 'DELETE') {
+        blocked.then(() => {
+          if (opts.onSuccess) opts.onSuccess({ success: true });
+        });
+        return Promise.resolve(null);
+      }
+      return baseAjax(url, opts);
+    });
+    window.ArbeitszeitCheckUtils.ajax = trackingAjax;
+
+    const deleteBtn = document.querySelector('[data-delete-org="7"]');
+    deleteBtn.click();
+    await vi.waitFor(() => {
+      expect(trackingAjax.mock.calls.filter((call) => call[1] && call[1].method === 'DELETE').length).toBe(1);
+    });
+
+    deleteBtn.click();
+    await Promise.resolve();
+
+    const deleteCalls = trackingAjax.mock.calls.filter((call) => call[1] && call[1].method === 'DELETE');
+    expect(deleteCalls.length).toBe(1);
+
+    finishDelete();
+    await Promise.resolve();
   });
 });

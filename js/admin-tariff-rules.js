@@ -10,7 +10,7 @@
 	const Messaging = window.ArbeitszeitCheckMessaging || {};
 	const Components = window.AzcComponents || window.ArbeitszeitCheckComponents || {};
 
-	const API_LIST = '/apps/arbeitszeitcheck/api/admin/tariff-rule-sets';
+	const API_LIST = generateUrl('/apps/arbeitszeitcheck/api/admin/tariff-rule-sets');
 
 	/** @type {Array<{id:number|string,tariffCode?:string,version?:string,status?:string}>} */
 	let cachedRuleSets = [];

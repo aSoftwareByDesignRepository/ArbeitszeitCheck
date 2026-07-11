@@ -119,7 +119,7 @@ Hinweis: `npm run build` ist ein Platzhalter (**kein** Bundler‑Build; Frontend
 
 - **One URL resolution path:** Frontend requests should use `ArbeitszeitCheckUtils.ajax(...)` (or `ArbeitszeitCheckUtils.resolveUrl(...)` when using `fetch` explicitly) to normalize app URLs reliably on both pretty-URL and `/index.php` installations.
 - **Strict external-call policy:** `ArbeitszeitCheckUtils.ajax(...)` blocks cross-origin URLs by default. External calls require explicit opt-in via `allowExternal: true`.
-- **Lint enforcement:** ESLint rejects raw `fetch('/apps/arbeitszeitcheck/...')` and implicit external `fetch(...)` patterns outside approved abstractions.
+- **Lint enforcement:** ESLint rejects raw `/apps/arbeitszeitcheck/...` paths outside approved URL helpers (`buildAppUrl`, `resolveUrl`, `Utils.ajax`, `OC.generateUrl`, `triggerDownload`, …), raw `fetch('/apps/arbeitszeitcheck/...')`, and implicit external `fetch(...)` patterns.
 - **Mobile/iPhone consistency:** Shared layout styles in `css/common/` include safe-area-aware spacing and touch-target improvements (WCAG 2.1 AA focus) for user and manager pages.
 
 Weitere Details zur Architektur und zu Beitrag‑Richtlinien finden sich in `docs/Developer-Documentation.en.md`.

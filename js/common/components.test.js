@@ -38,6 +38,36 @@ describe('ArbeitszeitCheckComponents confirmDialog', () => {
     await expect(promise).resolves.toBeUndefined()
   })
 
+  it('destructive confirm without extra acknowledgement is immediately actionable', async () => {
+    const Components = window.ArbeitszeitCheckComponents
+    const promise = Components.confirmDialog({
+      title: 'Delete organisation default?',
+      message: 'This permanently removes this rule from history.',
+      variant: 'destructive',
+      confirmLabel: 'Delete',
+    })
+
+    const confirm = document.querySelector('.confirm-dialog__confirm')
+    expect(confirm).toBeTruthy()
+    expect(confirm.disabled).toBe(false)
+    confirm.click()
+
+    await expect(promise).resolves.toEqual({ confirmed: true, reason: '' })
+  })
+
+  it('confirmDialog works when referenced without explicit receiver', async () => {
+    const Components = window.ArbeitszeitCheckComponents
+    const detached = Components.confirmDialog
+    const promise = detached({
+      title: 'Delete',
+      message: 'Sure?',
+      variant: 'danger',
+    })
+
+    document.querySelector('.confirm-dialog__cancel')?.click()
+    await expect(promise).resolves.toBe(false)
+  })
+
   it('resolves false when cancel is clicked', async () => {
     const Components = window.ArbeitszeitCheckComponents
     const promise = Components.confirmDialog({

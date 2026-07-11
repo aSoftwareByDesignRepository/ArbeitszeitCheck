@@ -86,10 +86,13 @@ class UpgradeBackupService
 		}
 
 		$id = $this->newSnapshotId();
-		$snapshotFolder = $this->getBackupRootFolder()->newFolder($id);
-		$tablesFolder = $snapshotFolder->newFolder('tables');
 
 		try {
+			// Folder creation can fail (permissions, quota); keep it inside the
+			// try so callers always see an UpgradeBackupException.
+			$snapshotFolder = $this->getBackupRootFolder()->newFolder($id);
+			$tablesFolder = $snapshotFolder->newFolder('tables');
+
 			$tableManifest = [];
 			$backedUpTables = [];
 			foreach (UpgradeBackupCatalog::BACKUP_TABLES as $table) {

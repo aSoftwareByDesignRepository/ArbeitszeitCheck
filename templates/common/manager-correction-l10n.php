@@ -85,6 +85,17 @@ $managerCorrectionL10n = array_merge($managerCorrectionL10n, [
 	'remove' => $l->t('Remove'),
 	'start' => $l->t('Start'),
 	'end' => $l->t('End'),
+	'correctionCurrentHeading' => $l->t('Currently stored'),
+	'correctionCurrentAria' => $l->t('Times currently saved for this entry'),
+	'correctionProposedHeading' => $l->t('Corrected times'),
+	'correctionProposedHint' => $l->t('Enter the date and times as they should be recorded.'),
+	'correctionLabelDate' => $l->t('Date'),
+	'correctionLabelStart' => $l->t('Start'),
+	'correctionLabelEnd' => $l->t('End'),
+	'correctionLabelBreaks' => $l->t('Breaks'),
+	'correctionErrorLoadEntry' => $l->t('Could not load the stored times for this entry. Please reload the page and try again.'),
+	'correctionLoadingProjects' => $l->t('Loading projects…'),
+	'Keep current project link' => $l->t('Keep current project link'),
 ]);
 
 ?>

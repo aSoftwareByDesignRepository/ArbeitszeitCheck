@@ -92,7 +92,11 @@
     ruleSets: [],
     loaded: false,
     overviewInFlight: false,
+    overviewReloadPending: false,
   };
+
+  let deleteInFlight = false;
+  let deleteConfirmOpen = false;
 
   // -----------------------------------------------------------------------
   // Formatting helpers
@@ -198,8 +202,14 @@
   // -----------------------------------------------------------------------
   // Data load
   // -----------------------------------------------------------------------
-  function loadOverview() {
-    if (state.overviewInFlight) return;
+  function loadOverview(options = {}) {
+    const force = !!(options && options.force);
+    if (state.overviewInFlight) {
+      if (force) {
+        state.overviewReloadPending = true;
+      }
+      return;
+    }
     state.overviewInFlight = true;
     Utils.ajax(URLS.overview, {
       method: 'GET',
@@ -207,6 +217,10 @@
         state.overviewInFlight = false;
         if (!data || data.success !== true) {
           notifyError(t('Could not load vacation entitlement layers', 'Could not load vacation entitlement layers'));
+          if (state.overviewReloadPending) {
+            state.overviewReloadPending = false;
+            loadOverview();
+          }
           return;
         }
         state.org = data.org || { active: null, history: [] };
@@ -215,10 +229,18 @@
         state.ruleSets = Array.isArray(data.ruleSets) ? data.ruleSets : [];
         state.loaded = true;
         renderAll();
+        if (state.overviewReloadPending) {
+          state.overviewReloadPending = false;
+          loadOverview();
+        }
       },
       onError: (err) => {
         state.overviewInFlight = false;
         notifyError((err && err.error) || t('Could not load vacation entitlement layers', 'Could not load vacation entitlement layers'));
+        if (state.overviewReloadPending) {
+          state.overviewReloadPending = false;
+          loadOverview();
+        }
       },
     });
   }
@@ -1297,59 +1319,150 @@
   // -----------------------------------------------------------------------
   // Action wiring
   // -----------------------------------------------------------------------
-  document.addEventListener('click', (ev) => {
+  function onLayerActionClick(ev) {
     const target = ev.target;
-    if (!(target instanceof HTMLElement)) return;
-    const action = target.getAttribute('data-action');
-    if (action === 'add-org') { ev.preventDefault(); openOrgDialog(); return; }
-    if (action === 'add-model') { ev.preventDefault(); openModelDialog(); return; }
-    if (action === 'add-team') { ev.preventDefault(); openTeamDialog(); return; }
-    const delOrg = target.getAttribute('data-delete-org');
-    if (delOrg) {
+    if (!(target instanceof Element)) return;
+
+    const addOrgBtn = target.closest('[data-action="add-org"]');
+    if (addOrgBtn) { ev.preventDefault(); openOrgDialog(); return; }
+    const addModelBtn = target.closest('[data-action="add-model"]');
+    if (addModelBtn) { ev.preventDefault(); openModelDialog(); return; }
+    const addTeamBtn = target.closest('[data-action="add-team"]');
+    if (addTeamBtn) { ev.preventDefault(); openTeamDialog(); return; }
+
+    const delOrgBtn = target.closest('[data-delete-org]');
+    if (delOrgBtn) {
       ev.preventDefault();
-      void confirmDelete(t('Delete organisation default?', 'Delete organisation default?'), () => doDelete(URLS.orgDelete, delOrg));
+      const delOrg = delOrgBtn.getAttribute('data-delete-org');
+      void confirmDelete(
+        t('Delete organisation default?', 'Delete organisation default?'),
+        t(
+          'This permanently removes this rule from history. Employees without a team, model, or individual override will use the next matching rule or the legacy default.',
+          'This permanently removes this rule from history. Employees without a team, model, or individual override will use the next matching rule or the legacy default.'
+        ),
+        () => doDelete(URLS.orgDelete, delOrg, delOrgBtn)
+      );
       return;
     }
-    const delModel = target.getAttribute('data-delete-model');
-    if (delModel) {
+    const delModelBtn = target.closest('[data-delete-model]');
+    if (delModelBtn) {
       ev.preventDefault();
-      void confirmDelete(t('Delete model default?', 'Delete model default?'), () => doDelete(URLS.modelDelete, delModel));
+      const delModel = delModelBtn.getAttribute('data-delete-model');
+      void confirmDelete(
+        t('Delete model default?', 'Delete model default?'),
+        t(
+          'This permanently removes this working-time-model rule from history. Affected employees will fall back to the organisation default or another matching model rule.',
+          'This permanently removes this working-time-model rule from history. Affected employees will fall back to the organisation default or another matching model rule.'
+        ),
+        () => doDelete(URLS.modelDelete, delModel, delModelBtn)
+      );
       return;
     }
-    const delTeam = target.getAttribute('data-delete-team');
-    if (delTeam) {
+    const delTeamBtn = target.closest('[data-delete-team]');
+    if (delTeamBtn) {
       ev.preventDefault();
-      void confirmDelete(t('Delete team policy?', 'Delete team policy?'), () => doDelete(URLS.teamDelete, delTeam));
+      const delTeam = delTeamBtn.getAttribute('data-delete-team');
+      void confirmDelete(
+        t('Delete team policy?', 'Delete team policy?'),
+        t(
+          'This permanently removes this team policy from history. Team members without an individual override will fall back to a model or organisation rule.',
+          'This permanently removes this team policy from history. Team members without an individual override will fall back to a model or organisation rule.'
+        ),
+        () => doDelete(URLS.teamDelete, delTeam, delTeamBtn)
+      );
       return;
     }
-  });
+  }
+
+  if (typeof window !== 'undefined' && typeof window.__ArbeitszeitCheckVacationLayersTeardown === 'function') {
+    window.__ArbeitszeitCheckVacationLayersTeardown();
+  }
+  document.addEventListener('click', onLayerActionClick);
+  if (typeof window !== 'undefined') {
+    window.__ArbeitszeitCheckVacationLayersTeardown = () => {
+      document.removeEventListener('click', onLayerActionClick);
+    };
+  }
 
   /**
    * Prefer the app confirm dialog (arbeitszeitcheck strings + centered modal).
    * OC.dialogs uses core copy/styling and is not guaranteed to match the user locale.
    */
-  async function confirmDelete(message, onConfirm) {
-    const confirmed = await Utils.confirmDestructiveAction({
-      title: t('Confirm deletion', 'Confirm deletion'),
-      message,
-      confirmLabel: t('Delete', 'Delete'),
-      cancelLabel: t('Cancel', 'Cancel'),
-      variant: 'destructive',
-    });
-    if (confirmed) {
-      onConfirm();
+  async function confirmDelete(title, message, onConfirm) {
+    if (deleteConfirmOpen || deleteInFlight) {
+      return;
+    }
+    if (typeof Utils.confirmDestructiveAction !== 'function') {
+      notifyError(t(
+        'Confirmation dialog is not available. Please refresh the page and try again.',
+        'Confirmation dialog is not available. Please refresh the page and try again.'
+      ));
+      return;
+    }
+    deleteConfirmOpen = true;
+    try {
+      const confirmed = await Utils.confirmDestructiveAction({
+        title,
+        message,
+        confirmLabel: t('Delete', 'Delete'),
+        cancelLabel: t('Cancel', 'Cancel'),
+        variant: 'destructive',
+      });
+      if (confirmed) {
+        onConfirm();
+      }
+    } catch (err) {
+      notifyError(t(
+        'Could not show confirmation dialog. Please refresh the page and try again.',
+        'Could not show confirmation dialog. Please refresh the page and try again.'
+      ));
+    } finally {
+      if (!deleteInFlight) {
+        deleteConfirmOpen = false;
+      }
     }
   }
 
-  function doDelete(template, id) {
-    const url = String(template).replace(/\/0(\?|$)/, `/${encodeURIComponent(String(id))}$1`);
+  function setDeleteButtonBusy(btn, busy) {
+    if (!btn) return;
+    btn.disabled = !!busy;
+    btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+  }
+
+  function parseDeleteId(rawId) {
+    const id = parseInt(String(rawId), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return null;
+    }
+    return id;
+  }
+
+  function doDelete(template, id, triggerBtn) {
+    const numericId = parseDeleteId(id);
+    if (numericId === null) {
+      notifyError(t('Invalid entry.', 'Invalid entry.'));
+      return;
+    }
+    if (deleteInFlight) {
+      return;
+    }
+    deleteInFlight = true;
+    setDeleteButtonBusy(triggerBtn, true);
+
+    const url = String(template).replace(/\/0(\?|$)/, `/${encodeURIComponent(String(numericId))}$1`);
     Utils.ajax(url, {
       method: 'DELETE',
       onSuccess: () => {
+        deleteInFlight = false;
+        deleteConfirmOpen = false;
+        setDeleteButtonBusy(triggerBtn, false);
         notifySuccess(t('Deleted.', 'Deleted.'));
-        loadOverview();
+        loadOverview({ force: true });
       },
       onError: (err) => {
+        deleteInFlight = false;
+        deleteConfirmOpen = false;
+        setDeleteButtonBusy(triggerBtn, false);
         notifyError((err && err.error) || t('Could not delete', 'Could not delete'));
       },
     });
@@ -1862,6 +1975,7 @@
       manualDaysErrorMessage,
       parseDateRange,
       dateRangeErrorMessage,
+      parseDeleteId,
       MANUAL_DAYS_MIN,
       MANUAL_DAYS_MAX,
     };

@@ -83,8 +83,11 @@
             a.removeAttribute('aria-label');
             return;
         }
-        const path = '/apps/arbeitszeitcheck/api/month-closure/pdf?year=' + encodeURIComponent(String(year)) + '&month=' + encodeURIComponent(String(month));
-        a.href = (typeof OC !== 'undefined' && OC.generateUrl) ? OC.generateUrl(path) : path;
+        a.href = Utils.buildAppUrl
+            ? Utils.buildAppUrl('/apps/arbeitszeitcheck/api/month-closure/pdf?year=' + encodeURIComponent(String(year)) + '&month=' + encodeURIComponent(String(month)))
+            : (Utils.resolveUrl
+                ? Utils.resolveUrl('/apps/arbeitszeitcheck/api/month-closure/pdf?year=' + encodeURIComponent(String(year)) + '&month=' + encodeURIComponent(String(month)))
+                : '#');
         a.style.display = 'inline-block';
         a.removeAttribute('tabindex');
         const l = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n;
@@ -177,8 +180,7 @@
         }
         setFeedback('', false);
 
-        const path = '/apps/arbeitszeitcheck/api/month-closure/status?year=' + encodeURIComponent(String(y)) + '&month=' + encodeURIComponent(String(m));
-        Utils.ajax(path, {
+        Utils.ajax('/apps/arbeitszeitcheck/api/month-closure/status?year=' + encodeURIComponent(String(y)) + '&month=' + encodeURIComponent(String(m)), {
             method: 'GET',
             onSuccess: function (data) {
                 if (!data || !data.success) {

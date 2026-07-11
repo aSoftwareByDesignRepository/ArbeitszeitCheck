@@ -709,10 +709,9 @@
                             return;
                         }
 
-                        // Build URL via OC.generateUrl so it works on /index.php deployments.
-                        const completeUrl = (typeof OC !== 'undefined' && OC.generateUrl)
-                            ? OC.generateUrl('/apps/arbeitszeitcheck/api/time-entries/' + encodeURIComponent(entryId) + '/complete')
-                            : '/apps/arbeitszeitcheck/api/time-entries/' + encodeURIComponent(entryId) + '/complete';
+                        const completeUrl = this.resolveRequestUrl(
+                            '/apps/arbeitszeitcheck/api/time-entries/' + encodeURIComponent(entryId) + '/complete'
+                        );
 
                         button.disabled = true;
                         button.setAttribute('aria-busy', 'true');
@@ -834,8 +833,17 @@
             const exportBtn = document.getElementById('btn-export');
             if (exportBtn && this.config.apiUrl?.export) {
                 exportBtn.addEventListener('click', () => {
-                    // Open export in new window/tab
-                    window.open(this.config.apiUrl.export, '_blank');
+                    const Utils = window.ArbeitszeitCheckUtils || {};
+                    const exportUrl = Utils.buildAppUrl
+                        ? Utils.buildAppUrl(this.config.apiUrl.export)
+                        : (Utils.resolveUrl ? Utils.resolveUrl(this.config.apiUrl.export) : this.config.apiUrl.export);
+                    if (Utils.openDownload && !Utils.openDownload(exportUrl)) {
+                        this.showError?.(this.t?.('Export failed. Please try again.') || 'Export failed. Please try again.');
+                        return;
+                    }
+                    if (!Utils.openDownload) {
+                        window.open(exportUrl, '_blank', 'noopener,noreferrer');
+                    }
                 });
             }
 
@@ -896,10 +904,9 @@
                         if (impactUrl && impactUrl.includes('__ID__')) {
                             return impactUrl.replace('__ID__', entryId);
                         }
-                        if (typeof OC !== 'undefined' && OC.generateUrl) {
-                            return OC.generateUrl('/apps/arbeitszeitcheck/api/time-entries/' + encodeURIComponent(entryId) + '/deletion-impact');
-                        }
-                        return '/apps/arbeitszeitcheck/api/time-entries/' + encodeURIComponent(entryId) + '/deletion-impact';
+                        return this.resolveRequestUrl(
+                            '/apps/arbeitszeitcheck/api/time-entries/' + encodeURIComponent(entryId) + '/deletion-impact'
+                        );
                     };
 
                     const parseServerWarnings = () => {
@@ -1442,6 +1449,10 @@
             if (!endpoint || typeof endpoint !== 'string') {
                 return endpoint;
             }
+            const Utils = window.ArbeitszeitCheckUtils;
+            if (Utils && typeof Utils.resolveUrl === 'function') {
+                return Utils.resolveUrl(endpoint);
+            }
             if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
                 return endpoint;
             }
@@ -1929,9 +1940,9 @@
                 </div>
             `;
 
-            const timeEntriesUrl = this.config.apiUrl?.timeEntries || '/apps/arbeitszeitcheck/api/time-entries';
-            const absencesUrl = this.config.apiUrl?.absences || '/apps/arbeitszeitcheck/api/absences';
-            const holidaysUrl = this.config.apiUrl?.holidays || '/apps/arbeitszeitcheck/api/holidays';
+            const timeEntriesUrl = this.config.apiUrl?.timeEntries || this._buildApiPath('/apps/arbeitszeitcheck/api/time-entries');
+            const absencesUrl = this.config.apiUrl?.absences || this._buildApiPath('/apps/arbeitszeitcheck/api/absences');
+            const holidaysUrl = this.config.apiUrl?.holidays || this._buildApiPath('/apps/arbeitszeitcheck/api/holidays');
 
             // Load both time entries and absences in parallel
             Promise.all([
@@ -2722,6 +2733,10 @@
          * @returns {string}
          */
         _buildApiPath: function(path) {
+            const Utils = window.ArbeitszeitCheckUtils;
+            if (Utils && typeof Utils.buildAppUrl === 'function') {
+                return Utils.buildAppUrl(path.startsWith('/') ? path : '/' + path);
+            }
             if (typeof OC !== 'undefined' && OC.generateUrl) {
                 return OC.generateUrl(path.startsWith('/') ? path : '/' + path);
             }
@@ -3336,7 +3351,7 @@
             let html = '';
 
             const createBase = (this.config.apiUrl && this.config.apiUrl.absenceCreate)
-                || (typeof OC !== 'undefined' && OC.generateUrl ? OC.generateUrl('/apps/arbeitszeitcheck/absences/create') : '/apps/arbeitszeitcheck/absences/create');
+                || this.resolveRequestUrl('/apps/arbeitszeitcheck/absences/create');
             const createUrl = createBase + (createBase.indexOf('?') >= 0 ? '&' : '?')
                 + 'start=' + encodeURIComponent(dateKey) + '&end=' + encodeURIComponent(dateKey);
             const reqAbsLabelPlain = this.config.l10n?.requestAbsenceThisDay || mainT('Request absence for this day');

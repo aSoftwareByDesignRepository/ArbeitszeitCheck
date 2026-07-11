@@ -53,6 +53,26 @@
 		}
 	}
 
+	function buildApiUrl(path) {
+		if (Utils.buildAppUrl) {
+			return Utils.buildAppUrl(path);
+		}
+		if (Utils.resolveUrl) {
+			return Utils.resolveUrl(path);
+		}
+		return path;
+	}
+
+	function buildAuditExportUrl(filters) {
+		const params = buildQueryParams(filters, false);
+		params.append('format', 'csv');
+		if (config.exportUrl) {
+			const separator = config.exportUrl.indexOf('?') >= 0 ? '&' : '?';
+			return buildApiUrl(config.exportUrl + separator + params.toString());
+		}
+		return buildApiUrl('/apps/arbeitszeitcheck/api/admin/audit-logs/export?' + params.toString());
+	}
+
 	function escapeHtml(value) {
 		if (Utils.escapeHtml) {
 			return Utils.escapeHtml(value);
@@ -340,9 +360,16 @@
 			return;
 		}
 		setError('');
-		const params = buildQueryParams(filters, false);
-		params.append('format', 'csv');
-		window.location.href = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/audit-logs/export?' + params.toString());
+		const url = buildAuditExportUrl(filters);
+		if (Utils.triggerDownload && !Utils.triggerDownload(url)) {
+			if (Messaging && Messaging.showError) {
+				Messaging.showError(alT('Failed to start export. Please try again.'));
+			}
+			return;
+		}
+		if (!Utils.triggerDownload) {
+			window.location.href = url;
+		}
 	}
 
 	function resetFilters() {

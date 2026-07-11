@@ -17,6 +17,16 @@
         return (l10n[key] !== undefined ? l10n[key] : (typeof window.t === 'function' ? window.t('arbeitszeitcheck', fallback || key) : fallback || key));
     }
 
+    function buildApiUrl(path) {
+        if (Utils.buildAppUrl) {
+            return Utils.buildAppUrl(path);
+        }
+        if (Utils.resolveUrl) {
+            return Utils.resolveUrl(path);
+        }
+        return path;
+    }
+
     function escapeHtml(str) {
         if (str == null) return '';
         const div = document.createElement('div');
@@ -36,7 +46,8 @@
         itemsEl.setAttribute('aria-hidden', 'true');
         emptyEl.classList.add('visually-hidden');
 
-        const apiList = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.list) || '/apps/arbeitszeitcheck/api/substitution-requests';
+        const apiList = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.list)
+            || buildApiUrl('/apps/arbeitszeitcheck/api/substitution-requests');
         Utils.ajax(apiList, {
             method: 'GET',
             onSuccess: function(data) {
@@ -106,8 +117,10 @@
     }
 
     function approveRequest(absenceId) {
-        const base = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.approve) || '/apps/arbeitszeitcheck/api/substitution-requests/' + absenceId + '/approve';
-        const url = base.replace('__ID__', String(absenceId));
+        const configured = window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.approve;
+        const url = configured
+            ? configured.replace('__ID__', String(absenceId))
+            : buildApiUrl('/apps/arbeitszeitcheck/api/substitution-requests/' + absenceId + '/approve');
         Utils.ajax(url, {
             method: 'POST',
             data: {},
@@ -162,8 +175,10 @@
     }
 
     function declineRequest(absenceId, comment) {
-        const base = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.decline) || '/apps/arbeitszeitcheck/api/substitution-requests/' + absenceId + '/decline';
-        const url = base.replace('__ID__', String(absenceId));
+        const configured = window.ArbeitszeitCheck && window.ArbeitszeitCheck.substitutionApi && window.ArbeitszeitCheck.substitutionApi.decline;
+        const url = configured
+            ? configured.replace('__ID__', String(absenceId))
+            : buildApiUrl('/apps/arbeitszeitcheck/api/substitution-requests/' + absenceId + '/decline');
         Utils.ajax(url, {
             method: 'POST',
             data: { comment: comment || '' },

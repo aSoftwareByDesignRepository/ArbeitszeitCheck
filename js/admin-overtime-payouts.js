@@ -8,7 +8,7 @@
 
 	const cfg = window.ARBEITSZEITCHECK_OT_PAYOUT || {};
 	const i18n = cfg.i18n || {};
-	const Utils = window.ArbeitszeitCheck?.Utils;
+	const Utils = window.ArbeitszeitCheckUtils || window.ArbeitszeitCheck?.Utils || {};
 
 	function $(sel) {
 		return document.querySelector(sel);
@@ -294,7 +294,24 @@
 		if (typeof OC !== 'undefined' && OC.requestToken) {
 			params.set('requesttoken', OC.requestToken);
 		}
-		window.location.href = cfg.apiExport + '?' + params.toString();
+		const query = params.toString();
+		let url;
+		if (cfg.apiExport) {
+			const separator = cfg.apiExport.indexOf('?') >= 0 ? '&' : '?';
+			url = (Utils.buildAppUrl ? Utils.buildAppUrl(cfg.apiExport) : cfg.apiExport) + separator + query;
+		} else if (Utils.buildAppUrl) {
+			url = Utils.buildAppUrl('/apps/arbeitszeitcheck/api/admin/overtime-payouts/export?' + query);
+		} else {
+			setLive(i18n.error || 'Export failed.', 'error');
+			return;
+		}
+		if (Utils.triggerDownload && !Utils.triggerDownload(url)) {
+			setLive(i18n.error || 'Export failed.', 'error');
+			return;
+		}
+		if (!Utils.triggerDownload) {
+			window.location.href = url;
+		}
 	}
 
 	function applyQueryParams() {

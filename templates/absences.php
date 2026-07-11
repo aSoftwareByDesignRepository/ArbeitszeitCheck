@@ -1328,12 +1328,18 @@ $absenceFormEndDisplay = ($mode === 'create')
             if (!form) return;
 
             const comp = window.AzcComponents || window.ArbeitszeitCheckComponents;
-            const confirmFn = comp && (comp.confirmDialog || comp.showConfirmDialog);
+            const confirmFn = comp && (
+                typeof comp.confirmDialog === 'function'
+                    ? comp.confirmDialog
+                    : typeof comp.showConfirmDialog === 'function'
+                        ? comp.showConfirmDialog
+                        : null
+            );
             if (!confirmFn) {
                 return;
             }
 
-            const confirmed = await confirmFn({
+            const confirmed = await confirmFn.call(comp, {
                 title:        btn.dataset.confirmTitle   || '',
                 message:      btn.dataset.confirmMessage || '',
                 variant:      btn.dataset.confirmVariant || 'info',

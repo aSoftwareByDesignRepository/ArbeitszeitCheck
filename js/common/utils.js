@@ -246,6 +246,19 @@ const ArbeitszeitCheckUtils = {
   },
 
   /**
+   * Derive Nextcloud webroot prefix from the current page URL (e.g. `/nextcloud` or `/index.php`).
+   * Returns empty string when the app is mounted at the server root.
+   */
+  detectAppWebRootPrefix() {
+    if (typeof window === 'undefined' || !window.location?.pathname) {
+      return '';
+    }
+    const marker = '/apps/arbeitszeitcheck/';
+    const idx = window.location.pathname.indexOf(marker);
+    return idx > 0 ? window.location.pathname.slice(0, idx) : '';
+  },
+
+  /**
    * Resolve app and API URLs in one place.
    * - Keeps absolute URLs unchanged.
    * - Normalizes /apps/arbeitszeitcheck/... through OC.generateUrl when available.
@@ -264,21 +277,22 @@ const ArbeitszeitCheckUtils = {
       return url;
     }
 
+    const appMarker = '/apps/arbeitszeitcheck/';
+
     if (url.startsWith('/')) {
-      // Already normalized app path.
-      if (url.startsWith('/index.php/apps/arbeitszeitcheck/')) {
+      // Already normalized (webroot and/or /index.php prefix present).
+      if (url.includes(appMarker) && !url.startsWith(appMarker)) {
         return url;
       }
-      if (oc && typeof oc.generateUrl === 'function' && url.startsWith('/apps/arbeitszeitcheck/')) {
+      if (oc && typeof oc.generateUrl === 'function' && url.startsWith(appMarker)) {
         return oc.generateUrl(url);
       }
-      // Fallback for deployments requiring /index.php where OC is unavailable or incomplete.
-      if (url.startsWith('/apps/arbeitszeitcheck/') &&
-        typeof window !== 'undefined' &&
-        window.location &&
-        typeof window.location.pathname === 'string' &&
-        window.location.pathname.includes('/index.php/')) {
-        return '/index.php' + url;
+      // Fallback when OC is unavailable: infer webroot from current page location.
+      if (url.startsWith(appMarker)) {
+        const webRoot = this.detectAppWebRootPrefix();
+        if (webRoot) {
+          return webRoot + url;
+        }
       }
       return url;
     }
@@ -288,6 +302,48 @@ const ArbeitszeitCheckUtils = {
     }
 
     return url;
+  },
+
+  /**
+   * Build a same-origin app URL (canonical helper for API and export paths).
+   *
+   * @param {string} path
+   * @returns {string}
+   */
+  buildAppUrl(path) {
+    return this.resolveUrl(path);
+  },
+
+  /**
+   * Start a GET file download via same-origin navigation.
+   * Blocks external origins (audit-critical).
+   *
+   * @param {string} url
+   * @returns {boolean} false when blocked
+   */
+  triggerDownload(url) {
+    const resolved = this.resolveUrl(url);
+    if (this.isExternalUrl(resolved)) {
+      return false;
+    }
+    window.location.assign(resolved);
+    return true;
+  },
+
+  /**
+   * Open a same-origin export/download URL in a new browsing context.
+   *
+   * @param {string} url
+   * @param {string} [target='_blank']
+   * @returns {boolean} false when blocked
+   */
+  openDownload(url, target = '_blank') {
+    const resolved = this.resolveUrl(url);
+    if (this.isExternalUrl(resolved)) {
+      return false;
+    }
+    window.open(resolved, target, 'noopener,noreferrer');
+    return true;
   },
 
   /**
@@ -610,18 +666,75 @@ const ArbeitszeitCheckUtils = {
 
   /**
    * Encode JSON for safe embedding in HTML double-quoted attributes.
-   * Mirrors PHP `json_encode($x, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)`.
+   * Uses HTML entity escaping (like PHP `htmlspecialchars(json_encode(...), ENT_QUOTES)`)
+   * so `getAttribute()` returns valid JSON for `JSON.parse`. JSON `\u0022` escapes belong
+   * in `<script>` text, not in attribute values.
    *
    * @param {unknown} value
    * @returns {string}
    */
   encodeAttributeJson(value) {
-    return JSON.stringify(value)
-      .replace(/</g, '\\u003C')
-      .replace(/>/g, '\\u003E')
-      .replace(/&/g, '\\u0026')
-      .replace(/'/g, '\\u0027')
-      .replace(/"/g, '\\u0022');
+    const json = JSON.stringify(value);
+    return json
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  },
+
+  /**
+   * Parse JSON from a `data-*` attribute value. Tolerates legacy `\u0022` hex encoding.
+   *
+   * @param {string|null|undefined} raw
+   * @returns {unknown|null}
+   */
+  parseAttributeJson(raw) {
+    if (raw == null || raw === '') {
+      return null;
+    }
+    const trimmed = String(raw).trim();
+    if (!trimmed) {
+      return null;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (_) {
+      // Legacy encodeAttributeJson used JSON unicode escapes in attributes.
+      if (!/\\u00[0-9a-fA-F]{2}/.test(trimmed)) {
+        return null;
+      }
+      try {
+        const decoded = trimmed.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+          String.fromCharCode(parseInt(hex, 16))
+        );
+        parsed = JSON.parse(decoded);
+      } catch (_) {
+        return null;
+      }
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed;
+  },
+
+  /**
+   * Minimal shape check for time-entry correction summary payloads from data attributes.
+   *
+   * @param {unknown} value
+   * @returns {value is { startTime: string, endTime: string }}
+   */
+  isTimeEntryClockSummary(value) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+    const summary = /** @type {Record<string, unknown>} */ (value);
+    return typeof summary.startTime === 'string'
+      && summary.startTime !== ''
+      && typeof summary.endTime === 'string'
+      && summary.endTime !== '';
   },
 
   /**
@@ -717,8 +830,16 @@ const ArbeitszeitCheckUtils = {
    * @returns {Promise<null|{confirmed: boolean, reason?: string}>}
    */
   async confirmDestructiveAction(options, unavailableMessage) {
-    const confirmFn = (typeof window !== 'undefined')
-      && (window.AzcComponents?.confirmDialog || window.ArbeitszeitCheckComponents?.confirmDialog);
+    const components = (typeof window !== 'undefined')
+      ? (window.AzcComponents || window.ArbeitszeitCheckComponents)
+      : null;
+    const confirmFn = components && (
+      typeof components.confirmDialog === 'function'
+        ? components.confirmDialog
+        : typeof components.showConfirmDialog === 'function'
+          ? components.showConfirmDialog
+          : null
+    );
     const fallbackMsg = (typeof window !== 'undefined' && window.t)
       ? window.t('arbeitszeitcheck', 'Confirmation dialog is not available. Please refresh the page and try again.')
       : 'Confirmation dialog is not available. Please refresh the page and try again.';
@@ -732,7 +853,8 @@ const ArbeitszeitCheckUtils = {
       return null;
     }
 
-    const result = await confirmFn(options);
+    // confirmDialog delegates to showConfirmDialog via `this`; must keep component context.
+    const result = await confirmFn.call(components, options);
     if (!this.isConfirmAccepted(result)) {
       return null;
     }

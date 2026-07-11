@@ -35,6 +35,7 @@ $correctionL10n = [
 	'correctionErrorNoChanges' => $l->t('Change at least one time or break before submitting.'),
 	'correctionErrorJustificationMin' => $l->t('Please provide a reason of at least 10 characters.'),
 	'correctionErrorOpenDialog' => $l->t('Could not open correction dialog.'),
+	'correctionErrorLoadEntry' => $l->t('Could not load the stored times for this entry. Please reload the page and try again.'),
 	'correctionSubmitting' => $l->t('Submitting…'),
 	'correctionSubmitSuccess' => $l->t('Correction request submitted. Your manager will review it.'),
 	'correctionSubmitError' => $l->t('Could not submit correction.'),

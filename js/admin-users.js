@@ -1652,7 +1652,6 @@
         }
 
         const payloads = buildUpdatePayloads(form);
-        const profilePath = '/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/profile';
         const submitBtn = form.querySelector('button[type="submit"]');
         const originalLabel = submitBtn ? submitBtn.textContent : '';
         if (submitBtn) {
@@ -1662,7 +1661,7 @@
         }
 
         try {
-            await apiPut(profilePath, payloads);
+            await apiPut('/apps/arbeitszeitcheck/api/admin/users/' + encodeURIComponent(userId) + '/profile', payloads);
 
             Messaging.showSuccess(auMsg('userUpdated', 'User updated successfully'));
             Components.closeModal(document.getElementById('edit-user-modal'));

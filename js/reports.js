@@ -76,6 +76,16 @@
 			return path.startsWith('/') ? path : '/' + path;
 		}
 
+		/** Normalize export/download href (server route or app-relative path). */
+		function toDownloadHref(urlOrPath) {
+			const resolved = generateAppUrl(urlOrPath);
+			try {
+				return new URL(resolved, window.location.origin).toString();
+			} catch (e) {
+				return resolved;
+			}
+		}
+
 		// Helper: announce status to screen reader
 		function announceToScreenReader(message) {
 			const live = document.getElementById('report-preview-live');
@@ -1025,7 +1035,7 @@
 					return;
 				}
 				try {
-					const urlObj = new URL(teamApi, window.location.origin);
+					const urlObj = new URL(toDownloadHref(teamApi));
 					urlObj.searchParams.set('startDate', startIso);
 					urlObj.searchParams.set('endDate', endIso);
 					urlObj.searchParams.set('download', '1');
@@ -1077,7 +1087,7 @@
 				const adminTeamSelect = document.getElementById('admin-team-select');
 				const managerTeamSelect = document.getElementById('manager-team-select');
 				try {
-					const urlObj = new URL(teamApi, window.location.origin);
+					const urlObj = new URL(toDownloadHref(teamApi));
 					// Use the same date range that was used for the preview
 					urlObj.searchParams.set('startDate', startIso);
 					urlObj.searchParams.set('endDate', endIso);
@@ -1139,7 +1149,7 @@
 				return;
 			}
 			try {
-				const urlObj = new URL(exportBase, window.location.origin);
+				const urlObj = new URL(toDownloadHref(exportBase));
 				if (startIso) urlObj.searchParams.set('startDate', startIso);
 				if (endIso) urlObj.searchParams.set('endDate', endIso);
 				if (format) urlObj.searchParams.set('format', format);

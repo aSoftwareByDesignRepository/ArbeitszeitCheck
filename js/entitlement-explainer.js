@@ -85,13 +85,18 @@
 
   function resolveTraceUrl() {
     const S = strings();
-    const raw = S.traceUrl || '/apps/arbeitszeitcheck/api/absences/entitlement-trace';
-    const normalized = normalizeTraceUrl(raw);
     const Utils = window.ArbeitszeitCheckUtils;
-    if (Utils && typeof Utils.resolveUrl === 'function') {
-      return Utils.resolveUrl(normalized);
+    if (S.traceUrl) {
+      const normalized = normalizeTraceUrl(S.traceUrl);
+      if (Utils && typeof Utils.resolveUrl === 'function') {
+        return Utils.resolveUrl(normalized);
+      }
+      return normalized;
     }
-    return normalized;
+    if (Utils && typeof Utils.resolveUrl === 'function') {
+      return Utils.resolveUrl('/apps/arbeitszeitcheck/api/absences/entitlement-trace');
+    }
+    return '';
   }
 
   function layerHuman(label) {

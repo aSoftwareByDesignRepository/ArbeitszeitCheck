@@ -573,6 +573,7 @@ const ArbeitszeitCheckComponents = {
     }
 
     const isDestructive = variant === 'danger' || variant === 'destructive';
+    const needsExplicitAck = requireCheckbox || requireReason || requireTypedConfirm;
 
     return new Promise((resolve) => {
       const dialogId = `confirm-dialog-${Date.now()}`;
@@ -623,7 +624,7 @@ const ArbeitszeitCheckComponents = {
       const footerButtons = alertOnly
         ? `<button type="button" class="btn btn--primary confirm-dialog__confirm">${this._escapeHtml(confirmLabel)}</button>`
         : `<button type="button" class="btn btn--secondary confirm-dialog__cancel">${this._escapeHtml(cancelLabel)}</button>
-          <button type="button" class="btn btn--${isDestructive ? 'danger' : 'primary'} confirm-dialog__confirm" ${isDestructive ? 'disabled' : ''}>${this._escapeHtml(confirmLabel)}</button>`;
+          <button type="button" class="btn btn--${isDestructive ? 'danger' : 'primary'} confirm-dialog__confirm"${isDestructive && needsExplicitAck ? ' disabled' : ''}>${this._escapeHtml(confirmLabel)}</button>`;
 
       dialog.innerHTML = `
         <div class="modal-header">
@@ -778,6 +779,11 @@ const ArbeitszeitCheckComponents = {
     });
   }
 };
+
+// Methods delegate via `this`; bind once so detached references stay safe (audit-critical).
+ArbeitszeitCheckComponents.confirmDialog = ArbeitszeitCheckComponents.confirmDialog.bind(ArbeitszeitCheckComponents);
+ArbeitszeitCheckComponents.alertDialog = ArbeitszeitCheckComponents.alertDialog.bind(ArbeitszeitCheckComponents);
+ArbeitszeitCheckComponents.showConfirmDialog = ArbeitszeitCheckComponents.showConfirmDialog.bind(ArbeitszeitCheckComponents);
 
 // Export for use in other modules
 if (typeof window !== 'undefined') {

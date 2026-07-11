@@ -275,14 +275,11 @@
 
 	function parseEntrySummary(btn) {
 		const raw = btn.getAttribute('data-entry-summary');
-		if (!raw) {
-			return null;
+		const parsed = Utils.parseAttributeJson ? Utils.parseAttributeJson(raw) : null;
+		if (Utils.isTimeEntryClockSummary && Utils.isTimeEntryClockSummary(parsed)) {
+			return parsed;
 		}
-		try {
-			return JSON.parse(raw);
-		} catch (e) {
-			return null;
-		}
+		return null;
 	}
 
 	function resetWizardState(modal) {
@@ -831,6 +828,7 @@
 				e.stopPropagation();
 				const summary = parseEntrySummary(btn);
 				if (!summary) {
+					Messaging.showError(t('correctionErrorLoadEntry', 'Could not load the stored times for this entry. Please reload the page and try again.'));
 					return;
 				}
 				const m = ensureCorrectionModal();

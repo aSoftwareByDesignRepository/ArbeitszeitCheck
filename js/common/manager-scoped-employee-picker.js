@@ -14,10 +14,14 @@
 	}
 
 	function scopedEmployeesUrl() {
+		const Utils = window.ArbeitszeitCheckUtils || {};
+		if (Utils.buildAppUrl) {
+			return Utils.buildAppUrl('/apps/arbeitszeitcheck/api/manager/scoped-employees');
+		}
 		if (typeof OC !== 'undefined' && OC.generateUrl) {
 			return OC.generateUrl('/apps/arbeitszeitcheck/api/manager/scoped-employees');
 		}
-		return '/apps/arbeitszeitcheck/api/manager/scoped-employees';
+		return Utils.resolveUrl ? Utils.resolveUrl('/apps/arbeitszeitcheck/api/manager/scoped-employees') : '';
 	}
 
 	function defaultL10n(allowAll) {

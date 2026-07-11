@@ -138,6 +138,7 @@ class TimeEntryCorrectionService
 	{
 		$candidate = clone $entry;
 		$this->applyProposal($candidate, $proposal);
+		$this->ensureCandidateStatusForValidation($candidate);
 
 		try {
 			$this->monthClosureGuard->assertTimeEntryMutable($candidate);
@@ -456,6 +457,14 @@ class TimeEntryCorrectionService
 	 */
 	public function createManagerRecordedEntry(TimeEntry $entry, array $proposal, string $managerId, string $reason): TimeEntry
 	{
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setJustification(json_encode([
+			'manager_created' => true,
+			'reason' => $reason,
+			'created_at' => date('c'),
+			'created_by' => $managerId,
+		], JSON_THROW_ON_ERROR));
+
 		$error = $this->validateProposal($entry, $proposal, $managerId);
 		if ($error !== null) {
 			throw new \InvalidArgumentException($error);
@@ -463,17 +472,10 @@ class TimeEntryCorrectionService
 
 		$this->applyProposal($entry, $proposal);
 		$this->applyComplianceAdjustments($entry);
-		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
 		$entry->setApprovedByUserId($managerId);
 		$nowAt = AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config);
 		$entry->setApprovedAt(clone $nowAt);
 		$entry->setUpdatedAt(clone $nowAt);
-		$entry->setJustification(json_encode([
-			'manager_created' => true,
-			'reason' => $reason,
-			'created_at' => date('c'),
-			'created_by' => $managerId,
-		], JSON_THROW_ON_ERROR));
 
 		$inserted = $this->timeEntryMapper->insert($entry);
 		$this->runComplianceIfEnabled($inserted);
@@ -499,6 +501,21 @@ class TimeEntryCorrectionService
 			'proposed' => $proposed,
 			'requested_at' => date('c'),
 		], JSON_THROW_ON_ERROR));
+	}
+
+	/**
+	 * Proposal validation clones entries before persistence. New rows (e.g. manager-recorded
+	 * entries) have no status yet; infer the completed shape when the proposal includes an end time.
+	 */
+	private function ensureCandidateStatusForValidation(TimeEntry $candidate): void
+	{
+		$status = $candidate->getStatus();
+		if ($status !== null && $status !== '') {
+			return;
+		}
+		if ($candidate->getEndTime() !== null) {
+			$candidate->setStatus(TimeEntry::STATUS_COMPLETED);
+		}
 	}
 
 	private function runComplianceIfEnabled(TimeEntry $entry): void

@@ -276,6 +276,7 @@ window.ArbeitszeitCheck.auditLogViewerConfig = <?php echo json_encode([
 	'maxDateRangeDays' => $maxDateRangeDays,
 	'defaultStartDate' => $startDate,
 	'defaultEndDate' => $endDate,
+	'exportUrl' => \OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.exportAuditLogs'),
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
 </script>
 

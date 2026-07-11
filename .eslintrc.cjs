@@ -11,6 +11,7 @@ module.exports = {
   globals: {
     OC: 'readonly',
   },
+  plugins: ['arbeitszeitcheck'],
   extends: ['eslint:recommended'],
   parserOptions: {
     ecmaVersion: 'latest',
@@ -19,9 +20,11 @@ module.exports = {
   ignorePatterns: ['node_modules/', 'vendor/'],
   overrides: [
     {
-      files: ['js/**/*.test.js'],
+      files: ['js/**/*.test.js', 'tests/e2e/**/*.js'],
       rules: {
         'no-restricted-syntax': 'off',
+        'arbeitszeitcheck/no-raw-app-url': 'off',
+        'arbeitszeitcheck/no-raw-app-navigation': 'off',
       },
     },
   ],
@@ -31,6 +34,8 @@ module.exports = {
     'no-inner-declarations': 'off',
     'no-dupe-keys': 'warn',
     'no-useless-escape': 'warn',
+    'arbeitszeitcheck/no-raw-app-url': 'error',
+    'arbeitszeitcheck/no-raw-app-navigation': 'error',
     'no-restricted-syntax': [
       'error',
       {

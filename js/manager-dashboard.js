@@ -12,6 +12,16 @@
     const Messaging = window.ArbeitszeitCheckMessaging || {};
     const Components = window.ArbeitszeitCheckComponents || {};
 
+    function buildApiUrl(path) {
+        if (Utils.buildAppUrl) {
+            return Utils.buildAppUrl(path);
+        }
+        if (Utils.resolveUrl) {
+            return Utils.resolveUrl(path);
+        }
+        return path;
+    }
+
     let refreshInterval = null;
 
     /** Always read current l10n (inline template may run after this file; other scripts may replace the object). */
@@ -226,8 +236,7 @@
     }
 
     function approveAbsence(absenceId) {
-        const url = '/apps/arbeitszeitcheck/api/manager/absences/' + absenceId + '/approve';
-        Utils.ajax(url, {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/manager/absences/' + absenceId + '/approve'), {
             method: 'POST',
             data: {},
             onSuccess: function(data) {
@@ -281,8 +290,7 @@
     }
 
     function rejectAbsence(absenceId, comment) {
-        const url = '/apps/arbeitszeitcheck/api/manager/absences/' + absenceId + '/reject';
-        Utils.ajax(url, {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/manager/absences/' + absenceId + '/reject'), {
             method: 'POST',
             data: { comment: comment || '' },
             onSuccess: function(data) {
@@ -431,8 +439,7 @@
     }
 
     function approveTimeEntry(timeEntryId) {
-        const url = '/apps/arbeitszeitcheck/api/manager/time-entries/' + timeEntryId + '/approve-correction';
-        Utils.ajax(url, {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/manager/time-entries/' + timeEntryId + '/approve-correction'), {
             method: 'POST',
             data: {},
             onSuccess: function(data) {
@@ -487,8 +494,7 @@
     }
 
     function rejectTimeEntry(timeEntryId, reason) {
-        const url = '/apps/arbeitszeitcheck/api/manager/time-entries/' + timeEntryId + '/reject-correction';
-        Utils.ajax(url, {
+        Utils.ajax(buildApiUrl('/apps/arbeitszeitcheck/api/manager/time-entries/' + timeEntryId + '/reject-correction'), {
             method: 'POST',
             data: { reason: reason || '' },
             onSuccess: function(data) {

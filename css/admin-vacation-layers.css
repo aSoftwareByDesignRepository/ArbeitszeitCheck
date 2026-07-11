@@ -243,6 +243,12 @@
 
 #app-content.azc-app--admin-vacation-layers .admin-vacation-layers__row-action {
   flex-shrink: 0;
+  min-width: 5.5rem;
+}
+
+#app-content.azc-app--admin-vacation-layers .admin-vacation-layers__row-action[aria-busy="true"] {
+  cursor: wait;
+  opacity: 0.85;
 }
 
 /* -------------------------------------------------------------------------

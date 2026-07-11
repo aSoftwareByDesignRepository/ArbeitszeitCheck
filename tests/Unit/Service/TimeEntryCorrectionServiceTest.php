@@ -303,6 +303,53 @@ class TimeEntryCorrectionServiceTest extends TestCase
 		$this->assertNull($entry->getBreaks());
 	}
 
+	public function testValidateProposalInfersCompletedStatusForNewEntries(): void
+	{
+		$entry = new TimeEntry();
+		$entry->setUserId('bob');
+
+		$error = $this->service->validateProposal($entry, [
+			'startTime' => '2026-06-15T08:00:00+00:00',
+			'endTime' => '2026-06-15T16:00:00+00:00',
+		], 'manager1');
+
+		$this->assertNull($error);
+	}
+
+	public function testCreateManagerRecordedEntryAcceptsEntryWithoutInitialStatus(): void
+	{
+		$entry = new TimeEntry();
+		$entry->setUserId('bob');
+		$entry->setIsManualEntry(true);
+		$entry->setCreatedAt(new \DateTime('2026-06-15T08:00:00+00:00'));
+		$entry->setUpdatedAt(new \DateTime('2026-06-15T08:00:00+00:00'));
+
+		$this->timeEntryMapper->expects($this->once())
+			->method('insert')
+			->with($this->callback(static function (TimeEntry $saved): bool {
+				return $saved->getStatus() === TimeEntry::STATUS_COMPLETED
+					&& $saved->getUserId() === 'bob'
+					&& $saved->getApprovedByUserId() === 'manager1'
+					&& $saved->getStartTime()->format('Y-m-d H:i') === '2026-06-15 08:00'
+					&& $saved->getEndTime()->format('Y-m-d H:i') === '2026-06-15 16:00';
+			}))
+			->willReturnCallback(static function (TimeEntry $saved): TimeEntry {
+				$saved->setId(101);
+				return $saved;
+			});
+
+		$result = $this->service->createManagerRecordedEntry($entry, [
+			'startTime' => '2026-06-15T08:00:00+00:00',
+			'endTime' => '2026-06-15T16:00:00+00:00',
+		], 'manager1', 'Retroactive entry per HR audit.');
+
+		$this->assertSame(TimeEntry::STATUS_COMPLETED, $result->getStatus());
+		$this->assertSame('manager1', $result->getApprovedByUserId());
+		$justification = json_decode($result->getJustification(), true);
+		$this->assertTrue($justification['manager_created']);
+		$this->assertSame('Retroactive entry per HR audit.', $justification['reason']);
+	}
+
 	public function testValidateProposalAllowsUnchangedProjectWhenAdminLinkingDisabled(): void
 	{
 		$entry = $this->buildEntry();

@@ -12,6 +12,16 @@
     const Validation = window.ArbeitszeitCheckValidation || {};
     const Messaging = window.ArbeitszeitCheckMessaging || {};
 
+    function buildApiUrl(path) {
+        if (Utils.buildAppUrl) {
+            return Utils.buildAppUrl(path);
+        }
+        if (Utils.resolveUrl) {
+            return Utils.resolveUrl(path);
+        }
+        return path;
+    }
+
     /** @type {{ clear: function(): void, getUserId: function(): string } | null} */
     let monthReopenPicker = null;
 
@@ -355,8 +365,10 @@
         setLiveMessage(liveRegion, '', null);
 
         // Submit (use server-generated URL for subpath compatibility)
-        const apiUrl = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminSettingsApiUrl) || '/apps/arbeitszeitcheck/api/admin/settings';
-        Utils.ajax(apiUrl, {
+        Utils.ajax(
+            (window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminSettingsApiUrl)
+                || buildApiUrl('/apps/arbeitszeitcheck/api/admin/settings'),
+            {
             method: 'POST',
             data: formData,
             onSuccess: function(data) {

@@ -21,6 +21,24 @@
 		return value !== undefined && value !== '' ? value : (fallback || key);
 	}
 
+	function buildApiUrl(path) {
+		if (Utils && typeof Utils.buildAppUrl === 'function') {
+			return Utils.buildAppUrl(path);
+		}
+		if (Utils && typeof Utils.resolveUrl === 'function') {
+			return Utils.resolveUrl(path);
+		}
+		return path;
+	}
+
+	function buildEmployeeExportUrl(filter) {
+		const params = new URLSearchParams({
+			filter,
+			format: 'csv',
+		});
+		return buildApiUrl('/apps/arbeitszeitcheck/api/admin/dashboard-employees?' + params.toString());
+	}
+
 	function escapeHtml(value) {
 		if (value === null || value === undefined) {
 			return '';
@@ -144,12 +162,14 @@
 			: t('totalEmployeesDrilldownTitle', 'All employees');
 
 		const searchId = 'admin-drilldown-search';
+		const exportUrl = buildEmployeeExportUrl(filter);
+		const exportLabel = t('Export CSV', 'Export CSV');
 		const content = [
 			'<p class="form-help">' + escapeHtml(t('drilldownHelp', 'Search by name or user ID. Export downloads the full filtered list.')) + '</p>',
 			'<div class="admin-drilldown-toolbar">',
 			'<label class="sr-only" for="' + searchId + '">' + escapeHtml(t('Search employees', 'Search employees')) + '</label>',
 			'<input type="search" id="' + searchId + '" class="form-input admin-drilldown-search" placeholder="' + escapeHtml(t('Search employees…', 'Search employees…')) + '" autocomplete="off">',
-			'<a class="btn btn--secondary btn--sm admin-drilldown-export" href="#" role="button">' + escapeHtml(t('Export CSV', 'Export CSV')) + '</a>',
+			'<a class="btn btn--secondary btn--sm admin-drilldown-export" href="' + escapeHtml(exportUrl) + '" aria-label="' + escapeHtml(exportLabel) + '">' + escapeHtml(exportLabel) + '</a>',
 			'</div>',
 			'<div class="admin-drilldown-status" role="status" aria-live="polite">' + escapeHtml(t('Loading…', 'Loading…')) + '</div>',
 			'<div class="table-container admin-drilldown-table-wrap" hidden>',
@@ -177,7 +197,6 @@
 		const tbody = modal.querySelector('#admin-drilldown-tbody');
 		const tableWrap = modal.querySelector('.admin-drilldown-table-wrap');
 		const searchInput = modal.querySelector('#' + searchId);
-		const exportBtn = modal.querySelector('.admin-drilldown-export');
 
 		function renderRows() {
 			if (!tbody) {
@@ -262,15 +281,6 @@
 					state.search = searchInput.value;
 					renderRows();
 				}, 200);
-			});
-		}
-
-		if (exportBtn) {
-			exportBtn.addEventListener('click', (e) => {
-				e.preventDefault();
-				const url = '/apps/arbeitszeitcheck/api/admin/dashboard-employees?filter='
-					+ encodeURIComponent(state.filter) + '&format=csv';
-				window.location.href = url;
 			});
 		}
 
