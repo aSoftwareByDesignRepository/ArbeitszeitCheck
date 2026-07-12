@@ -19,6 +19,7 @@ final class Azc2Codec
 	public const ERROR_EXPIRED = 'EXPIRED';
 	public const ERROR_NO_PRODUCTS = 'NO_PRODUCTS';
 	public const ERROR_INVALID_PAYLOAD = 'INVALID_PAYLOAD';
+	public const ERROR_INSTANCE_MISMATCH = 'INSTANCE_MISMATCH';
 
 	/**
 	 * @return array{payload: array<string, mixed>, payloadBytes: string, payloadB64: string, signatureB64: string}|null
@@ -109,6 +110,12 @@ final class Azc2Codec
 		if (array_key_exists('bundle', $payload) && $payload['bundle'] !== true) {
 			return false;
 		}
+		if (array_key_exists('instanceId', $payload)) {
+			$instanceId = $payload['instanceId'];
+			if (!is_string($instanceId) || !preg_match('/^[a-z0-9-]{3,64}$/', $instanceId)) {
+				return false;
+			}
+		}
 		return true;
 	}
 
@@ -135,6 +142,9 @@ final class Azc2Codec
 			'mobileSeats' => (int)$payload['mobileSeats'],
 			'terminalDevices' => (int)$payload['terminalDevices'],
 		];
+		if (!empty($payload['instanceId']) && is_string($payload['instanceId'])) {
+			$ordered['instanceId'] = $payload['instanceId'];
+		}
 		if (!empty($payload['bundle'])) {
 			$ordered['bundle'] = true;
 		}

@@ -79,11 +79,12 @@ class KioskLicenseMiddleware extends Middleware
 			$adminHint = $l->t('Ask your administrator to add a Terminal license key.');
 			return new JSONResponse([
 				'success' => false,
-				'error' => $message,
+				'error' => 'TERMINAL_LICENSE_REQUIRED',
 				'message' => $message,
 				'code' => 'TERMINAL_LICENSE_REQUIRED',
 				'licensing' => [
-					'purchaseUrl' => 'https://software-by-design.de/arbeitszeitcheck/terminal',
+					'licenseRenewMailto' => 'mailto:info@software-by-design.de?subject=' . rawurlencode('ArbeitszeitCheck License'),
+					'productsUrl' => 'https://nextcloud.software-by-design.de/',
 					'adminHint' => $adminHint,
 				],
 			], Http::STATUS_PAYMENT_REQUIRED);

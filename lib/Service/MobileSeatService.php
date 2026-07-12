@@ -8,6 +8,7 @@ use OCA\ArbeitszeitCheck\Db\MobileSeat;
 use OCA\ArbeitszeitCheck\Db\MobileSeatMapper;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IDBConnection;
 use OCP\IUserManager;
 
 class MobileSeatService
@@ -17,6 +18,7 @@ class MobileSeatService
 		private readonly LicenseService $licenseService,
 		private readonly IUserManager $userManager,
 		private readonly ITimeFactory $timeFactory,
+		private readonly IDBConnection $db,
 	) {
 	}
 
@@ -70,20 +72,28 @@ class MobileSeatService
 			return ['ok' => true];
 		}
 		$limit = $this->getSeatLimit();
-		if ($this->getAssignedCount() >= $limit) {
-			return ['ok' => false, 'error' => 'seat_limit_reached'];
-		}
 
-		$seat = new MobileSeat();
-		$seat->setUserId($userId);
-		$seat->setAssignedAt($this->timeFactory->getDateTime());
-		$seat->setAssignedBy($assignedBy);
+		$this->db->beginTransaction();
 		try {
+			if ($this->mobileSeatMapper->countSeats() >= $limit) {
+				$this->db->rollBack();
+				return ['ok' => false, 'error' => 'seat_limit_reached'];
+			}
+
+			$seat = new MobileSeat();
+			$seat->setUserId($userId);
+			$seat->setAssignedAt($this->timeFactory->getDateTime());
+			$seat->setAssignedBy($assignedBy);
 			$this->mobileSeatMapper->insert($seat);
+			$this->db->commit();
 		} catch (\OCP\DB\Exception $e) {
+			$this->db->rollBack();
 			if ($this->mobileSeatMapper->findByUserId($userId) !== null) {
 				return ['ok' => true];
 			}
+			throw $e;
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
 			throw $e;
 		}
 		return ['ok' => true];

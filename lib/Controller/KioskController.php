@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Config\VendorPublicKey;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskActionService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskAuthService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskEnrollmentService;
@@ -78,6 +79,7 @@ class KioskController extends Controller
 					'expiresAt' => $state['validUntil'] ?? null,
 				],
 				'envelope' => $envelope,
+				'vendorPublicKeyB64' => VendorPublicKey::publicKeyB64(),
 			],
 		];
 		if ($enrollment !== null) {

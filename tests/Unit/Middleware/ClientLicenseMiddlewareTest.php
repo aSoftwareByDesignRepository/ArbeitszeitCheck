@@ -30,6 +30,66 @@ class ClientLicenseMiddlewareTest extends TestCase
 		return $factory;
 	}
 
+	public function testUnassignedMobileUserGets402OnGet(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$request->method('getMethod')->willReturn('GET');
+		$request->method('getPathInfo')->willReturn('/apps/arbeitszeitcheck/api/clock/status');
+		$request->method('getHeader')->willReturnCallback(function (string $name): string {
+			return match (strtolower($name)) {
+				'authorization' => 'Basic dGVzdDp0ZXN0',
+				default => '',
+			};
+		});
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('alice');
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$license = $this->createMock(LicenseService::class);
+		$license->method('isMobilePlanActive')->willReturn(true);
+		$seats = $this->createMock(MobileSeatService::class);
+		$seats->method('isUserAllowed')->with('alice')->willReturn(false);
+
+		$middleware = new ClientLicenseMiddleware(
+			$request,
+			$userSession,
+			$license,
+			$seats,
+			$this->l10nFactory(),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$this->expectException(ClientLicenseRequiredException::class);
+		$middleware->beforeController(new \stdClass(), 'status');
+	}
+
+	public function testBootstrapPathIsNotGated(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$request->method('getMethod')->willReturn('GET');
+		$request->method('getPathInfo')->willReturn('/apps/arbeitszeitcheck/api/mobile/bootstrap');
+		$request->method('getHeader')->willReturnCallback(function (string $name): string {
+			return strtolower($name) === 'authorization' ? 'Basic dGVzdDp0ZXN0' : '';
+		});
+
+		$license = $this->createMock(LicenseService::class);
+		$license->expects($this->never())->method('isMobilePlanActive');
+
+		$middleware = new ClientLicenseMiddleware(
+			$request,
+			$this->createMock(IUserSession::class),
+			$license,
+			$this->createMock(MobileSeatService::class),
+			$this->l10nFactory(),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$middleware->beforeController(new \stdClass(), 'bootstrap');
+		$this->addToAssertionCount(1);
+	}
+
 	public function testUnassignedMobileUserGets402(): void
 	{
 		$request = $this->createMock(IRequest::class);
@@ -175,6 +235,7 @@ class ClientLicenseMiddlewareTest extends TestCase
 		$this->assertSame(Http::STATUS_PAYMENT_REQUIRED, $response->getStatus());
 		$data = $response->getData();
 		$this->assertSame('LICENSE_REQUIRED', $data['code']);
+		$this->assertSame('LICENSE_REQUIRED', $data['error_code']);
 		$this->assertSame('ArbeitszeitCheck Mobile is not licensed for this user.', $data['error']);
 		$this->assertSame('ArbeitszeitCheck Mobile is not licensed for this user.', $data['message']);
 	}

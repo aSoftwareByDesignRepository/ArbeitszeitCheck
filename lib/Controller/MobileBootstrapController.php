@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Config\VendorPublicKey;
 use OCA\ArbeitszeitCheck\Capabilities;
 use OCA\ArbeitszeitCheck\Service\DashboardWidgetDataService;
 use OCA\ArbeitszeitCheck\Service\LicenseService;
@@ -67,7 +68,9 @@ class MobileBootstrapController extends Controller {
 		$planActive = $this->licenseService->isMobilePlanActive();
 		$validUntil = $this->licenseService->getValidUntil();
 		$enabledForUser = $planActive && $this->mobileSeatService->isUserAllowed($userId);
-		$envelope = $enabledForUser ? $this->licenseService->buildEnvelope() : null;
+		// Envelope is always returned when a mobile plan exists so clients can verify
+		// the org license locally and show LicenseGate (no seat) vs UnofficialServer.
+		$envelope = $planActive ? $this->licenseService->buildEnvelope() : null;
 
 		return new JSONResponse([
 			'success' => true,
@@ -98,6 +101,7 @@ class MobileBootstrapController extends Controller {
 						'source' => $planActive ? 'org_license' : 'none',
 					],
 					'envelope' => $envelope,
+					'vendorPublicKeyB64' => VendorPublicKey::publicKeyB64(),
 				],
 			],
 		]);

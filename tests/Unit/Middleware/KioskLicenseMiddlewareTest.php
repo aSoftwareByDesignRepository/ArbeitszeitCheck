@@ -108,6 +108,7 @@ class KioskLicenseMiddlewareTest extends TestCase
 		$this->assertSame(Http::STATUS_PAYMENT_REQUIRED, $response->getStatus());
 		$data = $response->getData();
 		$this->assertSame('TERMINAL_LICENSE_REQUIRED', $data['code']);
-		$this->assertSame('ArbeitszeitCheck Terminal is not licensed for this organisation.', $data['error']);
+		$this->assertSame('TERMINAL_LICENSE_REQUIRED', $data['error']);
+		$this->assertSame('ArbeitszeitCheck Terminal is not licensed for this organisation.', $data['message']);
 	}
 }

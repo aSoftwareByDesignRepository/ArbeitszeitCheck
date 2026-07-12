@@ -16,22 +16,12 @@ use OCP\L10N\IFactory;
 use Psr\Log\LoggerInterface;
 
 /**
- * Returns HTTP 402 for API clock/break writes via app password (Basic auth).
+ * Returns HTTP 402 for mobile API requests via app password (Basic auth).
  * Web UI session requests are not gated — OSS browser stamping stays free.
  */
 class ClientLicenseMiddleware extends Middleware
 {
-	/** @var list<string> */
-	private const GATED_PATHS = [
-		'/api/clock/in',
-		'/api/clock/out',
-		'/api/break/start',
-		'/api/break/end',
-		'/api/dashboard-widget/clock/in',
-		'/api/dashboard-widget/clock/out',
-		'/api/dashboard-widget/break/start',
-		'/api/dashboard-widget/break/end',
-	];
+	private const BOOTSTRAP_PATH = '/api/mobile/bootstrap';
 
 	public function __construct(
 		private readonly IRequest $request,
@@ -45,16 +35,12 @@ class ClientLicenseMiddleware extends Middleware
 
 	public function beforeController($controller, $methodName): void
 	{
-		if (strtoupper($this->request->getMethod()) !== 'POST') {
-			return;
-		}
-
 		if (!$this->usesBasicAppPassword()) {
 			return;
 		}
 
 		$path = $this->normalizeApiPath((string)$this->request->getPathInfo());
-		if (!in_array($path, self::GATED_PATHS, true)) {
+		if (!$this->shouldGateMobileApiPath($path)) {
 			return;
 		}
 
@@ -66,12 +52,20 @@ class ClientLicenseMiddleware extends Middleware
 		$userId = $user->getUID();
 
 		if (!$this->licenseService->isMobilePlanActive()) {
-			$this->logger->info('Mobile license gate: no active mobile plan', ['userId' => $userId, 'path' => $path]);
+			$this->logger->info('Mobile license gate: no active mobile plan', [
+				'userId' => $userId,
+				'path' => $path,
+				'method' => $this->request->getMethod(),
+			]);
 			throw new ClientLicenseRequiredException('no_plan');
 		}
 
 		if (!$this->mobileSeatService->isUserAllowed($userId)) {
-			$this->logger->info('Mobile license gate: user has no seat', ['userId' => $userId, 'path' => $path]);
+			$this->logger->info('Mobile license gate: user has no seat', [
+				'userId' => $userId,
+				'path' => $path,
+				'method' => $this->request->getMethod(),
+			]);
 			throw new ClientLicenseRequiredException('no_seat');
 		}
 	}
@@ -93,11 +87,30 @@ class ClientLicenseMiddleware extends Middleware
 			'error' => $message,
 			'message' => $message,
 			'code' => 'LICENSE_REQUIRED',
+			'error_code' => 'LICENSE_REQUIRED',
 			'licensing' => [
-				'purchaseUrl' => 'https://software-by-design.de/arbeitszeitcheck/mobile',
+				'licenseRenewMailto' => 'mailto:info@software-by-design.de?subject=' . rawurlencode('ArbeitszeitCheck License'),
+				'productsUrl' => 'https://nextcloud.software-by-design.de/',
 				'adminHint' => $adminHint,
 			],
 		], Http::STATUS_PAYMENT_REQUIRED);
+	}
+
+	private function shouldGateMobileApiPath(string $path): bool
+	{
+		if (!str_starts_with($path, '/api/')) {
+			return false;
+		}
+		if ($path === self::BOOTSTRAP_PATH) {
+			return false;
+		}
+		if (str_starts_with($path, '/api/kiosk')) {
+			return false;
+		}
+		if (str_starts_with($path, '/api/admin')) {
+			return false;
+		}
+		return true;
 	}
 
 	/**

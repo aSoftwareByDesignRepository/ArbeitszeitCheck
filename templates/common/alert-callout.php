@@ -89,7 +89,17 @@ $headingTag = ($calloutRole === 'alert' || $calloutRole === 'region') ? 'h2' : '
 				?>
 			<a<?php if ($actionId !== '') { ?> id="<?php p($actionId); ?>"<?php } ?>
 				class="<?php p($btnClass); ?>"
-				href="<?php p($href); ?>"><?php p($label); ?></a>
+				href="<?php p($href); ?>"
+				<?php
+				$actionTarget = (string)($action['target'] ?? '');
+				$actionRel = (string)($action['rel'] ?? '');
+				if ($actionTarget !== '') {
+					?>target="<?php p($actionTarget); ?>" <?php
+				}
+				if ($actionRel !== '') {
+					?>rel="<?php p($actionRel); ?>" <?php
+				}
+				?>><?php p($label); ?></a>
 			<?php } ?>
 		</div>
 		<?php } ?>

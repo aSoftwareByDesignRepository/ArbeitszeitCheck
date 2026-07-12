@@ -119,7 +119,7 @@ Registro de tiempo centrado en la ley laboral alemana (ArbZG) y el RGPD. Registr
 - PHP 8.1–8.4
 	]]></description>
 
-	<version>1.5.2</version>
+	<version>1.5.3</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="info@software-by-design.de" homepage="http://nextcloud.software-by-design.de">Alexander Mäule</author>
 
@@ -246,5 +246,6 @@ Registro de tiempo centrado en la ley laboral alemana (ArbZG) y el RGPD. Registr
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\VacationRolloverJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\MonthClosureAutoFinalizeJob</job>
 		<job>OCA\ArbeitszeitCheck\BackgroundJob\KioskMaintenanceJob</job>
+		<job>OCA\ArbeitszeitCheck\BackgroundJob\LicenseMaintenanceJob</job>
 	</background-jobs>
 </info>

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Service;
 
+use OCA\ArbeitszeitCheck\Config\InstanceId;
 use OCA\ArbeitszeitCheck\Db\LicenseState;
 use OCA\ArbeitszeitCheck\Db\LicenseStateMapper;
 use OCA\ArbeitszeitCheck\License\Azc2Codec;
+use OCA\ArbeitszeitCheck\License\LicenseFingerprint;
 use OCP\AppFramework\Utility\ITimeFactory;
 use Psr\Log\LoggerInterface;
 
@@ -21,6 +23,7 @@ class LicenseService
 		private readonly LicenseStateMapper $licenseStateMapper,
 		private readonly ITimeFactory $timeFactory,
 		private readonly LoggerInterface $logger,
+		private readonly InstanceId $instanceId,
 	) {
 	}
 
@@ -37,8 +40,14 @@ class LicenseService
 			Azc2Codec::ERROR_EXPIRED => 'Lizenz abgelaufen.',
 			Azc2Codec::ERROR_NO_PRODUCTS => 'Kein Mobile- oder Terminal-Zugang enthalten.',
 			Azc2Codec::ERROR_INVALID_PAYLOAD => 'Ungültige Lizenzdaten.',
+			Azc2Codec::ERROR_INSTANCE_MISMATCH => 'Diese Lizenz ist an eine andere Nextcloud-Instanz gebunden.',
 			default => '',
 		};
+	}
+
+	public function getInstanceIdForBinding(): string
+	{
+		return $this->instanceId->get();
 	}
 
 	public function applyLicenseKey(string $wireKey): bool
@@ -59,6 +68,20 @@ class LicenseService
 		}
 
 		$payload = $parsed['payload'];
+		$payloadInstanceId = isset($payload['instanceId']) && is_string($payload['instanceId'])
+			? trim($payload['instanceId'])
+			: '';
+		$currentInstanceId = $this->instanceId->get();
+		if ($payloadInstanceId !== '' && $payloadInstanceId !== $currentInstanceId) {
+			$this->lastApplyError = Azc2Codec::ERROR_INSTANCE_MISMATCH;
+			$this->logger->warning('AZC2 license apply rejected: instance mismatch', [
+				'expected' => $payloadInstanceId,
+				'actual' => $currentInstanceId,
+			]);
+			return false;
+		}
+
+		$fingerprint = LicenseFingerprint::fromWireParts($parsed['payloadB64'], $parsed['signatureB64']);
 		$now = $this->timeFactory->getDateTime();
 
 		$state = new LicenseState();
@@ -70,6 +93,8 @@ class LicenseService
 		$state->setKeyAppliedAt($now);
 		$state->setPayloadB64($parsed['payloadB64']);
 		$state->setSignatureB64($parsed['signatureB64']);
+		$state->setLicenseFingerprint($fingerprint);
+		$state->setBoundInstanceId($payloadInstanceId !== '' ? $payloadInstanceId : $currentInstanceId);
 
 		$this->licenseStateMapper->upsert($state);
 		$this->logger->info('AZC2 license applied', [
@@ -77,6 +102,7 @@ class LicenseService
 			'mobileSeats' => $state->getMobileSeats(),
 			'terminalDevices' => $state->getTerminalDevices(),
 			'validUntil' => $payload['validUntil'],
+			'boundInstanceId' => $state->getBoundInstanceId(),
 		]);
 
 		return true;
@@ -87,19 +113,8 @@ class LicenseService
 	 */
 	public function buildEnvelope(): ?array
 	{
-		$state = $this->licenseStateMapper->findCurrent();
+		$state = $this->getCurrentStateIfFullyValid();
 		if ($state === null) {
-			return null;
-		}
-		if (!$this->isLicenseValid($state)) {
-			return null;
-		}
-
-		$wire = Azc2Codec::FORMAT . '.'
-			. $state->getPayloadB64() . '.'
-			. $state->getSignatureB64();
-		if (Azc2Codec::parseAndVerify($wire) === null) {
-			$this->logger->warning('Stored AZC2 license failed cryptographic re-verification');
 			return null;
 		}
 
@@ -110,26 +125,28 @@ class LicenseService
 		];
 	}
 
-	public function isMobilePlanActive(): bool
+	public function isStoredLicenseCryptographicallyValid(): bool
 	{
 		$state = $this->licenseStateMapper->findCurrent();
-		return $state !== null
-			&& $this->isLicenseValid($state)
-			&& $state->getMobileSeats() > 0;
+		return $state !== null && $this->isStateCryptographicallyValid($state);
+	}
+
+	public function isMobilePlanActive(): bool
+	{
+		$state = $this->getCurrentStateIfFullyValid();
+		return $state !== null && $state->getMobileSeats() > 0;
 	}
 
 	public function isTerminalPlanActive(): bool
 	{
-		$state = $this->licenseStateMapper->findCurrent();
-		return $state !== null
-			&& $this->isLicenseValid($state)
-			&& $state->getTerminalDevices() > 0;
+		$state = $this->getCurrentStateIfFullyValid();
+		return $state !== null && $state->getTerminalDevices() > 0;
 	}
 
 	public function getMobileSeatLimit(): int
 	{
-		$state = $this->licenseStateMapper->findCurrent();
-		if ($state === null || !$this->isLicenseValid($state)) {
+		$state = $this->getCurrentStateIfFullyValid();
+		if ($state === null) {
 			return 0;
 		}
 		return max(0, $state->getMobileSeats());
@@ -137,8 +154,8 @@ class LicenseService
 
 	public function getTerminalDeviceLimit(): int
 	{
-		$state = $this->licenseStateMapper->findCurrent();
-		if ($state === null || !$this->isLicenseValid($state)) {
+		$state = $this->getCurrentStateIfFullyValid();
+		if ($state === null) {
 			return 0;
 		}
 		return max(0, $state->getTerminalDevices());
@@ -173,7 +190,8 @@ class LicenseService
 		if ($state === null) {
 			return null;
 		}
-		$valid = $this->isLicenseValid($state);
+		$dateValid = $this->isLicenseValid($state);
+		$cryptoValid = $this->isStateCryptographicallyValid($state);
 		$validUntil = $state->getValidUntil();
 		return [
 			'customerId' => $state->getCustomerId(),
@@ -181,14 +199,32 @@ class LicenseService
 			'mobileSeats' => $state->getMobileSeats(),
 			'terminalDevices' => $state->getTerminalDevices(),
 			'bundle' => $state->getBundle() === 1,
-			'active' => $valid,
+			'active' => $dateValid && $cryptoValid,
+			'dateValid' => $dateValid,
+			'cryptographicallyValid' => $cryptoValid,
 			'keyAppliedAt' => $state->getKeyAppliedAt()?->format('c'),
+			'boundInstanceId' => $state->getBoundInstanceId(),
+			'instanceBound' => $state->getBoundInstanceId() !== '',
 		];
 	}
 
 	public function clearLicense(): void
 	{
 		$this->licenseStateMapper->deleteAll();
+	}
+
+	public function hasStoredLicense(): bool
+	{
+		return $this->licenseStateMapper->findCurrent() !== null;
+	}
+
+	public function isStoredLicenseExpired(): bool
+	{
+		$state = $this->licenseStateMapper->findCurrent();
+		if ($state === null) {
+			return false;
+		}
+		return !$this->isLicenseValid($state);
 	}
 
 	private function isLicenseValid(LicenseState $state): bool
@@ -200,5 +236,34 @@ class LicenseService
 		$today = $this->timeFactory->getDateTime()->setTime(0, 0, 0);
 		$expiry = (clone $until)->setTime(0, 0, 0);
 		return $expiry >= $today;
+	}
+
+	private function getCurrentStateIfFullyValid(): ?LicenseState
+	{
+		$state = $this->licenseStateMapper->findCurrent();
+		if ($state === null || !$this->isLicenseValid($state)) {
+			return null;
+		}
+		if (!$this->isStateCryptographicallyValid($state)) {
+			return null;
+		}
+		return $state;
+	}
+
+	private function isStateCryptographicallyValid(LicenseState $state): bool
+	{
+		$payloadB64 = $state->getPayloadB64();
+		$signatureB64 = $state->getSignatureB64();
+		if ($payloadB64 === '' || $signatureB64 === '') {
+			return false;
+		}
+
+		$wire = Azc2Codec::FORMAT . '.' . $payloadB64 . '.' . $signatureB64;
+		if (Azc2Codec::parseAndVerify($wire) === null) {
+			$this->logger->warning('Stored AZC2 license failed cryptographic re-verification');
+			return false;
+		}
+
+		return true;
 	}
 }

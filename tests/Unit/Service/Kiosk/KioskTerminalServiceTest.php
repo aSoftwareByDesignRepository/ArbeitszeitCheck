@@ -44,6 +44,19 @@ class KioskTerminalServiceTest extends TestCase
 		$this->service->createPendingTerminal('Hall', 'admin');
 	}
 
+	public function testCreatePendingReservesDeviceSlot(): void
+	{
+		$this->licenseService->method('isTerminalPlanActive')->willReturn(true);
+		$this->terminalDeviceService->method('hasCapacity')->willReturn(true);
+		$this->terminalDeviceService->expects(self::once())->method('reserveSlot')->with('Hall');
+		$this->terminalDeviceService->expects(self::once())->method('linkToKioskTerminal');
+		$this->terminalMapper->expects(self::once())->method('insert');
+
+		$result = $this->service->createPendingTerminal('Hall', 'admin');
+		self::assertSame('pending', $result['terminal']->getStatus());
+		self::assertNotEmpty($result['pairingCode']);
+	}
+
 	public function testPairingCodeVerificationIsCaseInsensitive(): void
 	{
 		$this->licenseService->method('isTerminalPlanActive')->willReturn(true);
@@ -59,9 +72,9 @@ class KioskTerminalServiceTest extends TestCase
 
 		$this->terminalMapper->method('findPendingPairing')->willReturn([$terminal]);
 		$this->terminalMapper->expects(self::once())->method('update');
-		$this->terminalDeviceService->method('findByKioskTerminalId')->willReturn(null);
-		$this->terminalDeviceService->method('reserveSlot')->willReturn(new \OCA\ArbeitszeitCheck\Db\TerminalDevice());
-		$this->terminalDeviceService->method('linkToKioskTerminal')->willReturnArgument(0);
+		$device = new \OCA\ArbeitszeitCheck\Db\TerminalDevice();
+		$this->terminalDeviceService->method('findByKioskTerminalId')->willReturn($device);
+		$this->terminalDeviceService->expects(self::never())->method('reserveSlot');
 
 		$result = $this->service->pair('ab12cd34', '');
 		self::assertSame('tid-1', $result['terminalId']);
@@ -82,6 +95,9 @@ class KioskTerminalServiceTest extends TestCase
 
 		$this->terminalMapper->method('findPendingPairing')->willReturn([$expired, $fresh]);
 		$this->terminalMapper->expects(self::once())->method('update')->with($expired);
+		$this->terminalDeviceService->expects(self::once())
+			->method('revokeByKioskTerminalId')
+			->with('tid-expired');
 
 		self::assertSame(1, $this->service->expireStalePendingTerminals());
 		self::assertSame('revoked', $expired->getStatus());

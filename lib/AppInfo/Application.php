@@ -817,11 +817,17 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Config\InstanceId::class, function ($c) {
+			return new \OCA\ArbeitszeitCheck\Config\InstanceId(
+				$c->query(\OCP\IConfig::class),
+			);
+		});
 		$context->registerService(\OCA\ArbeitszeitCheck\Service\LicenseService::class, function ($c) {
 			return new \OCA\ArbeitszeitCheck\Service\LicenseService(
 				$c->query(\OCA\ArbeitszeitCheck\Db\LicenseStateMapper::class),
 				$c->query(\OCP\AppFramework\Utility\ITimeFactory::class),
 				$c->query(\Psr\Log\LoggerInterface::class),
+				$c->query(\OCA\ArbeitszeitCheck\Config\InstanceId::class),
 			);
 		});
 		$context->registerService(\OCA\ArbeitszeitCheck\Service\MobileSeatService::class, function ($c) {
@@ -830,6 +836,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Service\LicenseService::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\AppFramework\Utility\ITimeFactory::class),
+				$c->query(\OCP\IDBConnection::class),
 			);
 		});
 		$context->registerService(\OCA\ArbeitszeitCheck\Service\TerminalDeviceService::class, function ($c) {

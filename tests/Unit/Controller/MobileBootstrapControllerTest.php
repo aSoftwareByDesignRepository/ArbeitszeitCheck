@@ -87,6 +87,48 @@ class MobileBootstrapControllerTest extends TestCase {
 		$this->assertSame('clocked_out', $data['data']['employee']['status']);
 	}
 
+	public function testBootstrapReturnsEnvelopeWhenPlanActiveButUserHasNoSeat(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('bob');
+		$user->method('getDisplayName')->willReturn('Bob');
+
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$envelope = ['format' => 'AZC2', 'payloadB64' => 'abc', 'signatureB64' => 'sig'];
+
+		$license = $this->createMock(LicenseService::class);
+		$license->method('isMobilePlanActive')->willReturn(true);
+		$license->method('getValidUntil')->willReturn(new \DateTimeImmutable('2027-05-29'));
+		$license->method('buildEnvelope')->willReturn($envelope);
+		$license->method('getMobileSeatLimit')->willReturn(5);
+
+		$seats = $this->createMock(MobileSeatService::class);
+		$seats->method('isUserAllowed')->with('bob')->willReturn(false);
+		$seats->method('getAssignedCount')->willReturn(2);
+
+		$controller = new MobileBootstrapController(
+			'arbeitszeitcheck',
+			$this->createMock(IRequest::class),
+			$userSession,
+			$this->createMock(DashboardWidgetDataService::class),
+			$this->createMock(PermissionService::class),
+			$this->createMock(OvertimeBankService::class),
+			$this->createMock(IAppManager::class),
+			$this->createMock(IConfig::class),
+			$this->createMock(IAppConfig::class),
+			$this->createMock(L10NFactory::class),
+			$this->createMock(Capabilities::class),
+			$license,
+			$seats,
+		);
+
+		$response = $controller->bootstrap();
+		$data = $response->getData();
+		$this->assertFalse($data['data']['licensing']['mobile']['enabledForUser']);
+		$this->assertSame($envelope, $data['data']['licensing']['envelope']);
+	}
+
 	public function testBootstrapUnauthorizedWithoutUser(): void {
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn(null);

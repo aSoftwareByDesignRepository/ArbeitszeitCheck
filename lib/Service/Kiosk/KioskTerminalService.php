@@ -41,16 +41,24 @@ class KioskTerminalService
 		$now = $this->timeFactory->getDateTime();
 		$expires = (clone $now)->modify('+' . Constants::KIOSK_PAIRING_TTL_SECONDS . ' seconds');
 
-		$terminal = new KioskTerminal();
-		$terminal->setTerminalId($terminalId);
-		$terminal->setLabel($label);
-		$terminal->setTokenHash(KioskCrypto::hashSecret(KioskCrypto::generateToken()));
-		$terminal->setPairingCodeHash(KioskCrypto::hashSecret($pairingCode));
-		$terminal->setPairingExpiresAt($expires);
-		$terminal->setStatus('pending');
-		$terminal->setCreatedBy($createdBy);
-		$terminal->setCreatedAt($now);
-		$this->terminalMapper->insert($terminal);
+		$device = $this->terminalDeviceService->reserveSlot($label);
+		try {
+			$this->terminalDeviceService->linkToKioskTerminal($device, $terminalId);
+
+			$terminal = new KioskTerminal();
+			$terminal->setTerminalId($terminalId);
+			$terminal->setLabel($label);
+			$terminal->setTokenHash(KioskCrypto::hashSecret(KioskCrypto::generateToken()));
+			$terminal->setPairingCodeHash(KioskCrypto::hashSecret($pairingCode));
+			$terminal->setPairingExpiresAt($expires);
+			$terminal->setStatus('pending');
+			$terminal->setCreatedBy($createdBy);
+			$terminal->setCreatedAt($now);
+			$this->terminalMapper->insert($terminal);
+		} catch (\Throwable $e) {
+			$this->terminalDeviceService->revokeDevice($device);
+			throw $e;
+		}
 
 		return [
 			'terminal' => $terminal,
@@ -75,17 +83,32 @@ class KioskTerminalService
 			throw new KioskException('PAIRING_CODE_INVALID');
 		}
 
-		$terminalToken = KioskCrypto::generateToken();
-		$pending->setTokenHash(KioskCrypto::hashSecret($terminalToken));
-		$pending->setPairingCodeHash(null);
-		$pending->setPairingExpiresAt(null);
-		$pending->setStatus('active');
-		if ($label !== '') {
-			$pending->setLabel($label);
+		$existingDevice = $this->terminalDeviceService->findByKioskTerminalId($pending->getTerminalId());
+		$reservedDevice = $existingDevice;
+		if ($reservedDevice === null) {
+			$reservedDevice = $this->terminalDeviceService->reserveSlot($pending->getLabel());
 		}
-		$this->terminalMapper->update($pending);
 
-		$device = $this->registerDeviceSlot($pending);
+		$terminalToken = KioskCrypto::generateToken();
+		try {
+			$pending->setTokenHash(KioskCrypto::hashSecret($terminalToken));
+			$pending->setPairingCodeHash(null);
+			$pending->setPairingExpiresAt(null);
+			$pending->setStatus('active');
+			if ($label !== '') {
+				$pending->setLabel($label);
+			}
+			$this->terminalMapper->update($pending);
+
+			if ($existingDevice === null) {
+				$this->terminalDeviceService->linkToKioskTerminal($reservedDevice, $pending->getTerminalId());
+			}
+		} catch (\Throwable $e) {
+			if ($existingDevice === null && $reservedDevice !== null) {
+				$this->terminalDeviceService->revokeDevice($reservedDevice);
+			}
+			throw $e;
+		}
 
 		return [
 			'terminalId' => $pending->getTerminalId(),
@@ -194,21 +217,12 @@ class KioskTerminalService
 
 	private function expirePendingTerminal(KioskTerminal $terminal): void
 	{
+		$this->terminalDeviceService->revokeByKioskTerminalId($terminal->getTerminalId());
 		$terminal->setStatus('revoked');
 		$terminal->setPairingCodeHash(null);
 		$terminal->setPairingExpiresAt(null);
 		$terminal->setTokenHash(KioskCrypto::hashSecret(KioskCrypto::generateToken()));
 		$this->terminalMapper->update($terminal);
-	}
-
-	private function registerDeviceSlot(KioskTerminal $terminal): TerminalDevice
-	{
-		$existing = $this->terminalDeviceService->findByKioskTerminalId($terminal->getTerminalId());
-		if ($existing !== null) {
-			return $existing;
-		}
-		$device = $this->terminalDeviceService->reserveSlot($terminal->getLabel());
-		return $this->terminalDeviceService->linkToKioskTerminal($device, $terminal->getTerminalId());
 	}
 
 	private function findPendingByPairingCode(string $code, \DateTimeInterface $now): ?KioskTerminal

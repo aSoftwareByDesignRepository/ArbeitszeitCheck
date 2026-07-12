@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Service;
 
+use OCA\ArbeitszeitCheck\Config\InstanceId;
 use OCA\ArbeitszeitCheck\Db\LicenseState;
 use OCA\ArbeitszeitCheck\Db\LicenseStateMapper;
 use OCA\ArbeitszeitCheck\License\Azc2Codec;
 use OCA\ArbeitszeitCheck\Service\LicenseService;
+use OCA\ArbeitszeitCheck\Tests\Support\Azc2TestSigning;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\IConfig;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -126,6 +129,8 @@ class LicenseServiceTest extends TestCase
 		$state->setValidUntil(new \DateTime('2027-12-31'));
 		$state->setMobileSeats(5);
 		$state->setTerminalDevices(0);
+		$state->setPayloadB64((string)$this->fixture['payloadB64']);
+		$state->setSignatureB64((string)$this->fixture['signatureB64']);
 
 		$mapper = $this->createMock(LicenseStateMapper::class);
 		$mapper->method('findCurrent')->willReturn($state);
@@ -134,6 +139,24 @@ class LicenseServiceTest extends TestCase
 		$this->assertTrue($service->isMobilePlanActive());
 		$this->assertFalse($service->isTerminalPlanActive());
 		$this->assertSame(5, $service->getMobileSeatLimit());
+	}
+
+	public function testIsMobilePlanInactiveWhenStoredSignatureFailsReVerification(): void
+	{
+		$state = new LicenseState();
+		$state->setValidUntil(new \DateTime('2027-12-31'));
+		$state->setMobileSeats(5);
+		$state->setTerminalDevices(0);
+		$state->setPayloadB64((string)$this->fixture['payloadB64']);
+		$state->setSignatureB64('invalid-signature');
+
+		$mapper = $this->createMock(LicenseStateMapper::class);
+		$mapper->method('findCurrent')->willReturn($state);
+
+		$service = $this->makeService($mapper);
+		$this->assertFalse($service->isMobilePlanActive());
+		$this->assertFalse($service->isStoredLicenseCryptographicallyValid());
+		$this->assertNull($service->buildEnvelope());
 	}
 
 	public function testUpsertMergeClearsZeroSeatFields(): void
@@ -167,15 +190,76 @@ class LicenseServiceTest extends TestCase
 		$this->assertSame(3, $existing->getTerminalDevices());
 	}
 
+	public function testRejectInstanceMismatch(): void
+	{
+		$mapper = $this->createMock(LicenseStateMapper::class);
+		$mapper->expects($this->never())->method('upsert');
+
+		$service = new LicenseService(
+			$mapper,
+			$this->makeTimeFactory(),
+			$this->createMock(LoggerInterface::class),
+			$this->makeInstanceId('bound-server'),
+		);
+
+		$payload = $this->fixture['payload'];
+		$payload['instanceId'] = 'other-server';
+		$wireKey = Azc2TestSigning::signPayload($payload);
+
+		$this->assertFalse($service->applyLicenseKey($wireKey));
+		$this->assertSame(Azc2Codec::ERROR_INSTANCE_MISMATCH, $service->getLastApplyErrorCode());
+	}
+
+	public function testApplyInstanceBoundKeyStoresBinding(): void
+	{
+		$payload = $this->fixture['payload'];
+		$payload['instanceId'] = 'bound-server';
+		$wireKey = Azc2TestSigning::signPayload($payload);
+
+		$mapper = $this->createMock(LicenseStateMapper::class);
+		$mapper->method('findCurrent')->willReturn(null);
+		$mapper->expects($this->once())
+			->method('upsert')
+			->with($this->callback(function (LicenseState $state): bool {
+				return $state->getBoundInstanceId() === 'bound-server'
+					&& $state->getLicenseFingerprint() !== '';
+			}))
+			->willReturnArgument(0);
+
+		$service = new LicenseService(
+			$mapper,
+			$this->makeTimeFactory(),
+			$this->createMock(LoggerInterface::class),
+			$this->makeInstanceId('bound-server'),
+		);
+
+		$this->assertTrue($service->applyLicenseKey($wireKey));
+	}
+
 	private function makeService(LicenseStateMapper $mapper): LicenseService
+	{
+		return new LicenseService(
+			$mapper,
+			$this->makeTimeFactory(),
+			$this->createMock(LoggerInterface::class),
+			$this->makeInstanceId('test-instance'),
+		);
+	}
+
+	private function makeTimeFactory(): ITimeFactory
 	{
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getDateTime')->willReturn(new \DateTime('2026-06-10'));
 
-		return new LicenseService(
-			$mapper,
-			$time,
-			$this->createMock(LoggerInterface::class),
-		);
+		return $time;
+	}
+
+	private function makeInstanceId(string $id): InstanceId
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getSystemValueString')->with('instanceid', '')->willReturn($id);
+
+		return new InstanceId($config);
 	}
 }
+

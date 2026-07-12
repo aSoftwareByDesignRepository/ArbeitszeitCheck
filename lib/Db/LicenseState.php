@@ -25,6 +25,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setPayloadB64(string $payloadB64)
  * @method string getSignatureB64()
  * @method void setSignatureB64(string $signatureB64)
+ * @method string getBoundInstanceId()
+ * @method void setBoundInstanceId(string $boundInstanceId)
+ * @method string getLicenseFingerprint()
+ * @method void setLicenseFingerprint(string $licenseFingerprint)
  */
 class LicenseState extends Entity
 {
@@ -36,6 +40,8 @@ class LicenseState extends Entity
 	protected $keyAppliedAt;
 	protected $payloadB64 = '';
 	protected $signatureB64 = '';
+	protected $boundInstanceId = '';
+	protected $licenseFingerprint = '';
 
 	public function __construct()
 	{

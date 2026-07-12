@@ -86,7 +86,7 @@ class LicenseAdminController extends Controller
 	#[NoCSRFRequired]
 	public function index(): TemplateResponse
 	{
-		$this->registerFrontEndAssets('admin-license', 'admin-license', [], ['common/admin-user-picker']);
+		$this->registerFrontEndAssets('admin-license', 'admin-license');
 
 		$summary = $this->licenseService->getLicenseSummary();
 		$mobileLimit = $this->licenseService->getMobileSeatLimit();
@@ -107,7 +107,10 @@ class LicenseAdminController extends Controller
 				'mobileSeats' => $this->mobileSeatService->listSeats(),
 				'showMobileSeats' => $mobileLimit > 0,
 				'showTerminal' => $terminalLimit > 0,
-				'purchaseUrl' => 'https://software-by-design.de/arbeitszeitcheck/preise',
+				'licenseRenewMailto' => 'mailto:info@software-by-design.de?subject=' . rawurlencode('ArbeitszeitCheck License'),
+				'productsUrl' => 'https://nextcloud.software-by-design.de/',
+				'instanceId' => $this->licenseService->getInstanceIdForBinding(),
+				'kioskAdminUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.kiosk_admin.index'),
 				'apiLicenseUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.license_admin.applyLicense'),
 				'apiClearLicenseUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.license_admin.clearLicense'),
 				'apiSeatsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.license_admin.assignSeat'),
@@ -122,12 +125,23 @@ class LicenseAdminController extends Controller
 					'seatAssigned' => $this->l10n->t('Seat assigned.'),
 					'seatRemoved' => $this->l10n->t('Seat removed.'),
 					'assignFailed' => $this->l10n->t('Could not assign seat.'),
+					'removeFailed' => $this->l10n->t('Could not remove seat.'),
+					'removeSeat' => $this->l10n->t('Remove'),
+					'removeSeatConfirm' => $this->l10n->t('Remove mobile seat for this employee?'),
 					'clearConfirm' => $this->l10n->t('Remove the organisation license and revoke all mobile seats and kiosk terminals? This cannot be undone.'),
 					'clearSuccess' => $this->l10n->t('License removed.'),
 					'clearFailed' => $this->l10n->t('Could not remove license.'),
 					'clearLicense' => $this->l10n->t('Remove license'),
+					'cancel' => $this->l10n->t('Cancel'),
+					'confirm' => $this->l10n->t('Confirm'),
 					'activeLabel' => $this->l10n->t('Active'),
 					'inactiveLabel' => $this->l10n->t('Expired or invalid'),
+					'signatureInvalidLabel' => $this->l10n->t('Signature mismatch'),
+					'noLicenseTitle' => $this->l10n->t('No license yet'),
+					'noLicenseText' => $this->l10n->t('Paste your AZC2 license key below to unlock the Mobile and Terminal apps. The web app stays free.'),
+					'seatsFull' => $this->l10n->t('All seats are assigned'),
+					'searchNoResults' => $this->l10n->t('No matching employees found.'),
+					'saving' => $this->l10n->t('Saving…'),
 				],
 				'urlGenerator' => $this->urlGenerator,
 			],
@@ -171,8 +185,21 @@ class LicenseAdminController extends Controller
 		return new JSONResponse([
 			'ok' => false,
 			'error' => $this->licenseService->getLastApplyErrorCode(),
-			'message' => $this->licenseService->getLastApplyErrorMessage(),
+			'message' => $this->applyLicenseErrorMessage($this->licenseService->getLastApplyErrorCode()),
 		], Http::STATUS_UNPROCESSABLE_ENTITY);
+	}
+
+	private function applyLicenseErrorMessage(string $code): string
+	{
+		return match ($code) {
+			\OCA\ArbeitszeitCheck\License\Azc2Codec::ERROR_INVALID_FORMAT => $this->l10n->t('Invalid license format.'),
+			\OCA\ArbeitszeitCheck\License\Azc2Codec::ERROR_INVALID_SIGNATURE => $this->l10n->t('Invalid license signature.'),
+			\OCA\ArbeitszeitCheck\License\Azc2Codec::ERROR_EXPIRED => $this->l10n->t('License expired.'),
+			\OCA\ArbeitszeitCheck\License\Azc2Codec::ERROR_NO_PRODUCTS => $this->l10n->t('License does not include Mobile or Terminal access.'),
+			\OCA\ArbeitszeitCheck\License\Azc2Codec::ERROR_INVALID_PAYLOAD => $this->l10n->t('Invalid license data.'),
+			\OCA\ArbeitszeitCheck\License\Azc2Codec::ERROR_INSTANCE_MISMATCH => $this->l10n->t('This license is bound to a different Nextcloud instance.'),
+			default => $this->l10n->t('Could not save license.'),
+		};
 	}
 
 	#[NoCSRFRequired]

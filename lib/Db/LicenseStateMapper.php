@@ -43,6 +43,8 @@ class LicenseStateMapper extends QBMapper
 			$existing->setKeyAppliedAt($state->getKeyAppliedAt());
 			$existing->setPayloadB64($state->getPayloadB64());
 			$existing->setSignatureB64($state->getSignatureB64());
+			$existing->setBoundInstanceId($state->getBoundInstanceId());
+			$existing->setLicenseFingerprint($state->getLicenseFingerprint());
 			return $this->update($existing);
 		}
 		return $this->insert($state);
