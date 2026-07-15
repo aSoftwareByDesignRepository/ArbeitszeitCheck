@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.3 - 2026-07-15
+
+### Added
+
+- **Instance-bound AZC2 licenses:** license keys can now carry the Nextcloud instance ID and are rejected when applied on a different instance. The stored license state records the bound instance ID and a fingerprint of the applied key (migration 1033). The admin license page shows the instance ID to include when ordering a license.
+- **Daily license maintenance job:** a new background job re-applies license limits once a day, so expired licenses or reduced seat/terminal quotas take effect overnight instead of only on the next admin interaction.
+- **Signature-verification warning in admin UI:** if a stored license cannot be verified with the configured vendor public key, the admin page now shows a clear warning callout explaining the mismatch and how to fix it.
+
+### Changed
+
+- **Mobile license gate covers the whole mobile API:** previously only clock/break POST endpoints returned HTTP 402 without a valid mobile license; now all `/api/*` mobile requests are gated (bootstrap, kiosk, and admin endpoints excluded), with an explicit `LICENSE_REQUIRED` error code for clients.
+- **Admin license page overhaul:** redesigned layout with seat/terminal usage bars, assignment timestamps, and direct purchase/renewal contact actions.
+
+### Fixed
+
+- **Kiosk terminal pairing could leak device slots:** creating or activating a terminal now reserves the licensed device slot transactionally — if pairing fails midway, the reserved slot is revoked instead of staying occupied.
+
 ## 1.5.2 - 2026-07-11
 
 ### Added

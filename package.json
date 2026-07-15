@@ -1,6 +1,6 @@
 {
     "name": "arbeitszeitcheck",
-    "version": "1.5.2",
+    "version": "1.5.3",
     "description": "German labor law compliant time tracking system for Nextcloud",
     "type": "module",
     "scripts": {
