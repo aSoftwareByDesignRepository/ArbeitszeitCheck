@@ -140,8 +140,13 @@ class LicenseAdminController extends Controller
 					'noLicenseTitle' => $this->l10n->t('No license yet'),
 					'noLicenseText' => $this->l10n->t('Paste your AZC2 license key below to unlock the Mobile and Terminal apps. The web app stays free.'),
 					'seatsFull' => $this->l10n->t('All seats are assigned'),
+					'seatsFullHint' => $this->l10n->t('All mobile seats are assigned. Remove a user or upgrade your license.'),
 					'searchNoResults' => $this->l10n->t('No matching employees found.'),
 					'saving' => $this->l10n->t('Saving…'),
+					'colEmployee' => $this->l10n->t('Employee'),
+					'colUserId' => $this->l10n->t('User ID'),
+					'colAssigned' => $this->l10n->t('Assigned'),
+					'colActions' => $this->l10n->t('Actions'),
 				],
 				'urlGenerator' => $this->urlGenerator,
 			],
@@ -150,7 +155,6 @@ class LicenseAdminController extends Controller
 		return $this->configureCSP($response, 'admin');
 	}
 
-	#[NoCSRFRequired]
 	public function applyLicense(): JSONResponse
 	{
 		$body = file_get_contents('php://input');
@@ -202,7 +206,6 @@ class LicenseAdminController extends Controller
 		};
 	}
 
-	#[NoCSRFRequired]
 	public function clearLicense(): JSONResponse
 	{
 		$cleared = $this->licenseEnforcementService->clearAllCommercialState();
@@ -212,7 +215,6 @@ class LicenseAdminController extends Controller
 		]);
 	}
 
-	#[NoCSRFRequired]
 	public function assignSeat(): JSONResponse
 	{
 		$body = file_get_contents('php://input');
@@ -242,7 +244,6 @@ class LicenseAdminController extends Controller
 		]);
 	}
 
-	#[NoCSRFRequired]
 	public function removeSeat(): JSONResponse
 	{
 		$body = file_get_contents('php://input');
@@ -261,7 +262,6 @@ class LicenseAdminController extends Controller
 		]);
 	}
 
-	#[NoCSRFRequired]
 	public function searchUsers(): JSONResponse
 	{
 		$query = trim((string)$this->request->getParam('q', ''));

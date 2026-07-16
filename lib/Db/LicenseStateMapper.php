@@ -31,23 +31,36 @@ class LicenseStateMapper extends QBMapper
 		}
 	}
 
+	/**
+	 * Replace-or-insert the single license row atomically so two concurrent
+	 * applies cannot leave duplicate rows behind.
+	 */
 	public function upsert(LicenseState $state): LicenseState
 	{
-		$existing = $this->findCurrent();
-		if ($existing !== null) {
-			$existing->setCustomerId($state->getCustomerId());
-			$existing->setValidUntil($state->getValidUntil());
-			$existing->setMobileSeats($state->getMobileSeats());
-			$existing->setTerminalDevices($state->getTerminalDevices());
-			$existing->setBundle($state->getBundle());
-			$existing->setKeyAppliedAt($state->getKeyAppliedAt());
-			$existing->setPayloadB64($state->getPayloadB64());
-			$existing->setSignatureB64($state->getSignatureB64());
-			$existing->setBoundInstanceId($state->getBoundInstanceId());
-			$existing->setLicenseFingerprint($state->getLicenseFingerprint());
-			return $this->update($existing);
+		$this->db->beginTransaction();
+		try {
+			$existing = $this->findCurrent();
+			if ($existing !== null) {
+				$existing->setCustomerId($state->getCustomerId());
+				$existing->setValidUntil($state->getValidUntil());
+				$existing->setMobileSeats($state->getMobileSeats());
+				$existing->setTerminalDevices($state->getTerminalDevices());
+				$existing->setBundle($state->getBundle());
+				$existing->setKeyAppliedAt($state->getKeyAppliedAt());
+				$existing->setPayloadB64($state->getPayloadB64());
+				$existing->setSignatureB64($state->getSignatureB64());
+				$existing->setBoundInstanceId($state->getBoundInstanceId());
+				$existing->setLicenseFingerprint($state->getLicenseFingerprint());
+				$result = $this->update($existing);
+			} else {
+				$result = $this->insert($state);
+			}
+			$this->db->commit();
+			return $result;
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
 		}
-		return $this->insert($state);
 	}
 
 	public function deleteAll(): void

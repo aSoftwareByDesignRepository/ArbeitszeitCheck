@@ -108,6 +108,27 @@ class LicenseServiceTest extends TestCase
 		$this->assertSame($this->fixture['signatureB64'], $envelope['signatureB64']);
 	}
 
+	public function testApplyAcceptsWhitespaceWrappedKey(): void
+	{
+		// Keys copied from e-mails are often hard-wrapped; embedded whitespace
+		// must not invalidate an otherwise correctly signed key.
+		$mapper = $this->createMock(LicenseStateMapper::class);
+		$mapper->method('findCurrent')->willReturn(null);
+		$mapper->expects($this->once())->method('upsert')->willReturnArgument(0);
+
+		$wire = (string)$this->fixture['wireKey'];
+		$wrapped = "  " . substr($wire, 0, 40) . "\r\n" . substr($wire, 40, 40) . "\n\t" . substr($wire, 80) . "\n";
+
+		$service = $this->makeService($mapper);
+		$this->assertTrue($service->applyLicenseKey($wrapped));
+		$this->assertSame('', $service->getLastApplyErrorCode());
+	}
+
+	public function testNormalizeWireKeyStripsAllWhitespace(): void
+	{
+		$this->assertSame('AZC2.a.b', Azc2Codec::normalizeWireKey(" AZC2 .\na\r\n.\tb "));
+	}
+
 	public function testApplyTwiceIsIdempotent(): void
 	{
 		$stored = new LicenseState();

@@ -22,11 +22,22 @@ final class Azc2Codec
 	public const ERROR_INSTANCE_MISMATCH = 'INSTANCE_MISMATCH';
 
 	/**
+	 * Remove all whitespace from a pasted key. Keys are copied from e-mails or
+	 * PDFs where clients hard-wrap long lines; embedded newlines/spaces must not
+	 * invalidate an otherwise correctly signed key. Base64url payloads never
+	 * contain whitespace, so this cannot alter the signed bytes.
+	 */
+	public static function normalizeWireKey(string $wireKey): string
+	{
+		return preg_replace('/\s+/u', '', $wireKey) ?? trim($wireKey);
+	}
+
+	/**
 	 * @return array{payload: array<string, mixed>, payloadBytes: string, payloadB64: string, signatureB64: string}|null
 	 */
 	public static function parseAndVerify(string $wireKey): ?array
 	{
-		$wireKey = trim($wireKey);
+		$wireKey = self::normalizeWireKey($wireKey);
 		$parts = explode('.', $wireKey);
 		if (count($parts) !== 3 || $parts[0] !== self::FORMAT) {
 			return null;
@@ -157,7 +168,7 @@ final class Azc2Codec
 
 	public static function classifyApplyError(string $wireKey): string
 	{
-		$wireKey = trim($wireKey);
+		$wireKey = self::normalizeWireKey($wireKey);
 		$parts = explode('.', $wireKey);
 		if (count($parts) !== 3 || $parts[0] !== self::FORMAT) {
 			return self::ERROR_INVALID_FORMAT;

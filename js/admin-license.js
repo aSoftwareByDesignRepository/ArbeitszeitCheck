@@ -20,6 +20,7 @@
 	const apiRemoveSeat = page.dataset.apiRemoveSeat || '';
 	const apiSearchUsers = page.dataset.apiSearchUsers || '';
 	const requestToken = page.dataset.requesttoken || '';
+	const FLASH_KEY = 'azc-license-flash';
 	let i18n = {};
 	try {
 		i18n = JSON.parse(page.dataset.i18n || '{}');
@@ -41,6 +42,7 @@
 	const seatListBody = document.getElementById('azc-seat-list-body');
 	const seatEmpty = document.getElementById('azc-seat-empty');
 	const seatCount = document.getElementById('azc-seat-count');
+	const seatsFullHint = document.getElementById('azc-seats-full-hint');
 	const userSearch = document.getElementById('azc-seat-user-search');
 	const searchResults = document.getElementById('azc-seat-search-results');
 	const clearBackdrop = document.getElementById('azc-license-clear-backdrop');
@@ -49,6 +51,7 @@
 	const clearConfirm = document.getElementById('azc-license-clear-confirm');
 
 	let searchTimer = null;
+	let searchAbort = null;
 	let searchActiveIndex = -1;
 	let modalReturnFocus = null;
 
@@ -58,6 +61,10 @@
 		}
 	}
 
+	function prefersReducedMotion() {
+		return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
+
 	function showFeedback(message, type) {
 		if (!feedback) {
 			return;
@@ -65,6 +72,12 @@
 		feedback.hidden = false;
 		feedback.textContent = message;
 		feedback.className = 'azc-license-feedback azc-license-feedback--' + (type || 'success');
+		// The banner sits at the top of the page; make sure the admin actually
+		// sees it even when the triggering control is further down.
+		feedback.scrollIntoView({
+			block: 'nearest',
+			behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+		});
 		if (type === 'error') {
 			announce(alertRegion, message);
 			if (typeof Messaging.showError === 'function') {
@@ -85,6 +98,26 @@
 		}
 	}
 
+	// Show the outcome of a save/clear that triggered a page reload.
+	try {
+		const flash = window.sessionStorage.getItem(FLASH_KEY);
+		if (flash) {
+			window.sessionStorage.removeItem(FLASH_KEY);
+			showFeedback(flash, 'success');
+		}
+	} catch {
+		// Session storage unavailable (private mode restrictions) — reload without flash.
+	}
+
+	function setFlashAndReload(message) {
+		try {
+			window.sessionStorage.setItem(FLASH_KEY, message);
+		} catch {
+			// Best effort only.
+		}
+		window.location.reload();
+	}
+
 	function headers() {
 		return {
 			'Content-Type': 'application/json',
@@ -100,7 +133,7 @@
 	}
 
 	function escapeAttr(s) {
-		return String(s).replace(/"/g, '&quot;');
+		return escapeHtml(String(s));
 	}
 
 	function formatAssignedAt(iso) {
@@ -118,6 +151,15 @@
 		} catch {
 			return iso;
 		}
+	}
+
+	function formatSeatCount(used, limit) {
+		// window.t returns the translated string with printf placeholders
+		// intact (the JS l10n layer only substitutes {curly} variables).
+		const template = (typeof window.t === 'function'
+			? window.t('arbeitszeitcheck', '%1$d of %2$d seats assigned')
+			: null) || '%1$d of %2$d seats assigned';
+		return template.replace('%1$d', String(used)).replace('%2$d', String(limit));
 	}
 
 	function updateMeter(usedEl, limitEl, meterEl, used, limit) {
@@ -139,47 +181,49 @@
 		}
 	}
 
-	function updateOverview(data) {
-		const lic = data.license || data;
-		const mobileUsed = data.mobileSeatsUsed ?? 0;
-		const mobileLimit = data.mobileSeatsLimit ?? lic.mobileSeats ?? 0;
-		const terminalUsed = data.terminalDevicesUsed ?? 0;
-		const terminalLimit = data.terminalDevicesLimit ?? lic.terminalDevices ?? 0;
-
+	/**
+	 * Refresh only the mobile-seat counters. Seat responses do not carry
+	 * license or terminal data — never touch those parts of the page here.
+	 */
+	function updateSeatCounts(used, limit) {
+		if (!Number.isFinite(used) || !Number.isFinite(limit)) {
+			return;
+		}
 		updateMeter(
 			document.getElementById('azc-license-mobile-used'),
 			document.getElementById('azc-license-mobile-limit'),
 			document.getElementById('azc-license-mobile-meter'),
-			mobileUsed,
-			mobileLimit,
+			used,
+			limit,
 		);
-		updateMeter(
-			document.getElementById('azc-license-terminal-used'),
-			document.getElementById('azc-license-terminal-limit'),
-			document.getElementById('azc-license-terminal-meter'),
-			terminalUsed,
-			terminalLimit,
-		);
-
-		if (seatCount && mobileLimit > 0) {
-			seatCount.textContent = mobileUsed + ' / ' + mobileLimit;
+		if (seatCount && limit > 0) {
+			seatCount.textContent = formatSeatCount(used, limit);
 		}
-
+		const full = limit > 0 && used >= limit;
 		if (userSearch) {
-			const full = mobileLimit > 0 && mobileUsed >= mobileLimit;
 			userSearch.disabled = full;
 			userSearch.setAttribute('aria-disabled', full ? 'true' : 'false');
+			if (full) {
+				closeSearchResults();
+			}
+		}
+		if (seatsFullHint) {
+			seatsFullHint.hidden = !full;
 		}
 	}
 
+	/**
+	 * Refresh the license overview after a full license response
+	 * (apply license). Requires data.license to be present.
+	 */
 	function updateStatus(data) {
-		if (!data) {
+		if (!data || !data.license) {
 			return;
 		}
+		const lic = data.license;
 		if (statusPanel) {
 			statusPanel.hidden = false;
 		}
-		const lic = data.license || data;
 		const set = (id, val) => {
 			const el = document.getElementById(id);
 			if (el) {
@@ -200,7 +244,14 @@
 			badge.classList.toggle('azc-badge--success', active);
 			badge.classList.toggle('azc-badge--warning', !active);
 		}
-		updateOverview(data);
+		updateSeatCounts(data.mobileSeatsUsed ?? 0, data.mobileSeatsLimit ?? lic.mobileSeats ?? 0);
+		updateMeter(
+			document.getElementById('azc-license-terminal-used'),
+			document.getElementById('azc-license-terminal-limit'),
+			document.getElementById('azc-license-terminal-meter'),
+			data.terminalDevicesUsed ?? 0,
+			data.terminalDevicesLimit ?? lic.terminalDevices ?? 0,
+		);
 	}
 
 	function renderSeatRows(seats) {
@@ -218,19 +269,25 @@
 			seatEmpty.hidden = true;
 		}
 		const removeLabel = t('removeSeat', 'Remove');
+		const colEmployee = escapeAttr(t('colEmployee', 'Employee'));
+		const colUserId = escapeAttr(t('colUserId', 'User ID'));
+		const colAssigned = escapeAttr(t('colAssigned', 'Assigned'));
+		const colActions = escapeAttr(t('colActions', 'Actions'));
 		seats.forEach((seat) => {
 			const tr = document.createElement('tr');
 			tr.dataset.userId = seat.userId;
 			tr.innerHTML =
-				'<td data-label="Employee">' + escapeHtml(seat.displayName) + '</td>' +
-				'<td data-label="User ID"><code class="azc-license-user-id">' + escapeHtml(seat.userId) + '</code></td>' +
-				'<td data-label="Assigned">' + escapeHtml(formatAssignedAt(seat.assignedAt)) + '</td>' +
-				'<td data-label="Actions" class="actions-cell">' +
+				'<td data-label="' + colEmployee + '">' + escapeHtml(seat.displayName) + '</td>' +
+				'<td data-label="' + colUserId + '"><code class="azc-license-user-id">' + escapeHtml(seat.userId) + '</code></td>' +
+				'<td data-label="' + colAssigned + '">' + escapeHtml(formatAssignedAt(seat.assignedAt)) + '</td>' +
+				'<td data-label="' + colActions + '" class="actions-cell">' +
 				'<button type="button" class="azc-btn azc-btn--secondary azc-btn--small azc-seat-remove" data-user-id="' + escapeAttr(seat.userId) + '">' +
 				escapeHtml(removeLabel) + '</button></td>';
 			seatListBody.appendChild(tr);
 		});
 	}
+
+	/* ── Clear-license confirmation modal ────────────────────── */
 
 	function openClearModal() {
 		if (!clearModal) {
@@ -261,32 +318,43 @@
 		}
 	}
 
-	function closeSearchResults() {
-		if (!searchResults || !userSearch) {
+	// Keep keyboard focus inside the dialog while it is open (WCAG 2.4.3).
+	document.addEventListener('keydown', (e) => {
+		if (!clearModal || clearModal.hidden) {
 			return;
 		}
-		searchResults.hidden = true;
-		searchResults.innerHTML = '';
-		userSearch.setAttribute('aria-expanded', 'false');
-		searchActiveIndex = -1;
-	}
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			closeClearModal();
+			return;
+		}
+		if (e.key === 'Tab') {
+			const focusables = [clearCancel, clearConfirm].filter(Boolean);
+			if (focusables.length === 0) {
+				return;
+			}
+			const first = focusables[0];
+			const last = focusables[focusables.length - 1];
+			if (e.shiftKey && document.activeElement === first) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && document.activeElement === last) {
+				e.preventDefault();
+				first.focus();
+			} else if (!focusables.includes(document.activeElement)) {
+				e.preventDefault();
+				first.focus();
+			}
+		}
+	});
 
-	function highlightSearchOption(index) {
-		if (!searchResults) {
-			return;
-		}
-		const buttons = searchResults.querySelectorAll('button[role="option"]');
-		buttons.forEach((btn, i) => {
-			btn.setAttribute('aria-selected', i === index ? 'true' : 'false');
-		});
-		if (buttons[index]) {
-			buttons[index].focus();
-		}
-	}
+	/* ── Save / clear license ────────────────────────────────── */
 
 	if (saveBtn && keyInput) {
 		saveBtn.addEventListener('click', async () => {
-			const key = keyInput.value.trim();
+			// Keys copied from e-mails often contain line wraps — remove all
+			// whitespace before validating/sending (server does the same).
+			const key = keyInput.value.replace(/\s+/g, '');
 			if (!key) {
 				showFeedback(t('emptyKey', 'Please paste a license key.'), 'error');
 				keyInput.focus();
@@ -304,17 +372,17 @@
 				});
 				const data = await res.json();
 				if (data.ok) {
-					showFeedback(t('saveSuccess', 'License saved successfully.'), 'success');
-					window.location.reload();
-				} else {
-					showFeedback(data.message || t('saveFailed', 'Could not save license.'), 'error');
+					// Keep the button disabled: the page is about to reload and
+					// re-enabling it would open a double-submit window.
+					setFlashAndReload(t('saveSuccess', 'License saved successfully.'));
+					return;
 				}
+				showFeedback(data.message || t('saveFailed', 'Could not save license.'), 'error');
 			} catch {
 				showFeedback(t('networkError', 'Network error. Please try again.'), 'error');
-			} finally {
-				saveBtn.disabled = false;
-				saveBtn.textContent = originalLabel;
 			}
+			saveBtn.disabled = false;
+			saveBtn.textContent = originalLabel;
 		});
 	}
 
@@ -343,27 +411,20 @@
 				});
 				const data = await res.json();
 				if (data.ok) {
-					showFeedback(t('clearSuccess', 'License removed.'), 'success');
-					window.location.reload();
-				} else {
-					showFeedback(data.message || t('clearFailed', 'Could not remove license.'), 'error');
+					setFlashAndReload(t('clearSuccess', 'License removed.'));
+					return;
 				}
+				showFeedback(data.message || t('clearFailed', 'Could not remove license.'), 'error');
 			} catch {
 				showFeedback(t('networkError', 'Network error. Please try again.'), 'error');
-			} finally {
-				if (clearBtn) {
-					clearBtn.disabled = false;
-				}
+			}
+			if (clearBtn) {
+				clearBtn.disabled = false;
 			}
 		});
 	}
 
-	document.addEventListener('keydown', (e) => {
-		if (clearModal && !clearModal.hidden && e.key === 'Escape') {
-			e.preventDefault();
-			closeClearModal();
-		}
-	});
+	/* ── Seat removal ────────────────────────────────────────── */
 
 	if (seatListBody) {
 		seatListBody.addEventListener('click', async (ev) => {
@@ -389,7 +450,7 @@
 				const data = await res.json();
 				if (data.ok) {
 					renderSeatRows(data.seats);
-					updateStatus(data);
+					updateSeatCounts(data.mobileSeatsUsed ?? 0, data.mobileSeatsLimit ?? 0);
 					showFeedback(t('seatRemoved', 'Seat removed.'), 'success');
 				} else {
 					showFeedback(data.message || t('removeFailed', 'Could not remove seat.'), 'error');
@@ -401,6 +462,8 @@
 			}
 		});
 	}
+
+	/* ── Seat assignment (searchable combobox) ───────────────── */
 
 	async function assignSeat(userId) {
 		closeSearchResults();
@@ -414,7 +477,7 @@
 			const data = await res.json();
 			if (data.ok) {
 				renderSeatRows(data.seats);
-				updateStatus(data);
+				updateSeatCounts(data.mobileSeatsUsed ?? 0, data.mobileSeatsLimit ?? 0);
 				if (userSearch) {
 					userSearch.value = '';
 				}
@@ -427,6 +490,71 @@
 		}
 	}
 
+	function closeSearchResults() {
+		if (!searchResults || !userSearch) {
+			return;
+		}
+		searchResults.hidden = true;
+		searchResults.innerHTML = '';
+		userSearch.setAttribute('aria-expanded', 'false');
+		userSearch.removeAttribute('aria-activedescendant');
+		searchActiveIndex = -1;
+	}
+
+	function getSearchOptions() {
+		return searchResults ? searchResults.querySelectorAll('li[role="option"]') : [];
+	}
+
+	// Keyboard focus stays in the input; the highlighted option is conveyed
+	// via aria-activedescendant (WAI-ARIA combobox pattern).
+	function highlightSearchOption(index) {
+		const options = getSearchOptions();
+		options.forEach((opt, i) => {
+			opt.setAttribute('aria-selected', i === index ? 'true' : 'false');
+			opt.classList.toggle('is-active', i === index);
+		});
+		const active = options[index];
+		if (active && userSearch) {
+			userSearch.setAttribute('aria-activedescendant', active.id);
+			active.scrollIntoView({ block: 'nearest' });
+		} else if (userSearch) {
+			userSearch.removeAttribute('aria-activedescendant');
+		}
+	}
+
+	function renderSearchResults(users) {
+		if (!searchResults || !userSearch) {
+			return;
+		}
+		searchResults.innerHTML = '';
+		searchActiveIndex = -1;
+		userSearch.removeAttribute('aria-activedescendant');
+		if (users.length === 0) {
+			const li = document.createElement('li');
+			li.className = 'azc-seat-search-results__empty';
+			li.textContent = t('searchNoResults', 'No matching employees found.');
+			li.setAttribute('role', 'presentation');
+			searchResults.appendChild(li);
+		} else {
+			users.forEach((u, index) => {
+				const li = document.createElement('li');
+				li.setAttribute('role', 'option');
+				li.setAttribute('aria-selected', 'false');
+				li.id = 'azc-seat-option-' + index;
+				li.dataset.userId = u.id;
+				li.textContent = u.displayName + ' (' + u.id + ')';
+				li.addEventListener('mousedown', (e) => {
+					// mousedown (not click) so the input never loses focus.
+					e.preventDefault();
+					assignSeat(u.id);
+				});
+				searchResults.appendChild(li);
+			});
+		}
+		searchResults.hidden = false;
+		userSearch.setAttribute('aria-expanded', 'true');
+	}
+
 	if (userSearch && searchResults) {
 		userSearch.addEventListener('input', () => {
 			clearTimeout(searchTimer);
@@ -436,39 +564,25 @@
 				return;
 			}
 			searchTimer = setTimeout(async () => {
+				// Abort the previous in-flight search so a slow older response
+				// can never overwrite the results of a newer query.
+				if (searchAbort) {
+					searchAbort.abort();
+				}
+				searchAbort = new AbortController();
 				try {
 					const url = apiSearchUsers + '?q=' + encodeURIComponent(q);
-					const res = await fetch(url, { headers: { requesttoken: requestToken } });
+					const res = await fetch(url, {
+						headers: { requesttoken: requestToken, 'X-Requested-With': 'XMLHttpRequest' },
+						signal: searchAbort.signal,
+					});
 					const data = await res.json();
-					searchResults.innerHTML = '';
-					searchActiveIndex = -1;
 					const users = (data.ok && data.users) ? data.users.filter((u) => !u.hasSeat) : [];
-					if (users.length === 0) {
-						const li = document.createElement('li');
-						li.className = 'azc-seat-search-results__empty';
-						li.textContent = t('searchNoResults', 'No matching employees found.');
-						li.setAttribute('role', 'presentation');
-						searchResults.appendChild(li);
-						searchResults.hidden = false;
-						userSearch.setAttribute('aria-expanded', 'true');
+					renderSearchResults(users);
+				} catch (e) {
+					if (e && e.name === 'AbortError') {
 						return;
 					}
-					users.forEach((u, index) => {
-						const li = document.createElement('li');
-						li.setAttribute('role', 'presentation');
-						const btn = document.createElement('button');
-						btn.type = 'button';
-						btn.setAttribute('role', 'option');
-						btn.id = 'azc-seat-option-' + index;
-						btn.textContent = u.displayName + ' (' + u.id + ')';
-						btn.dataset.userId = u.id;
-						btn.addEventListener('click', () => assignSeat(u.id));
-						li.appendChild(btn);
-						searchResults.appendChild(li);
-					});
-					searchResults.hidden = false;
-					userSearch.setAttribute('aria-expanded', 'true');
-				} catch {
 					closeSearchResults();
 				}
 			}, 250);
@@ -478,8 +592,11 @@
 			if (!searchResults || searchResults.hidden) {
 				return;
 			}
-			const options = searchResults.querySelectorAll('button[role="option"]');
+			const options = getSearchOptions();
 			if (options.length === 0) {
+				if (e.key === 'Escape') {
+					closeSearchResults();
+				}
 				return;
 			}
 			if (e.key === 'ArrowDown') {
@@ -490,6 +607,14 @@
 				e.preventDefault();
 				searchActiveIndex = Math.max(searchActiveIndex - 1, 0);
 				highlightSearchOption(searchActiveIndex);
+			} else if (e.key === 'Home') {
+				e.preventDefault();
+				searchActiveIndex = 0;
+				highlightSearchOption(searchActiveIndex);
+			} else if (e.key === 'End') {
+				e.preventDefault();
+				searchActiveIndex = options.length - 1;
+				highlightSearchOption(searchActiveIndex);
 			} else if (e.key === 'Enter' && searchActiveIndex >= 0) {
 				e.preventDefault();
 				const uid = options[searchActiveIndex].dataset.userId;
@@ -497,8 +622,18 @@
 					assignSeat(uid);
 				}
 			} else if (e.key === 'Escape') {
+				e.preventDefault();
 				closeSearchResults();
 			}
+		});
+
+		userSearch.addEventListener('blur', () => {
+			// Delay so option mousedown handlers run first.
+			window.setTimeout(() => {
+				if (document.activeElement !== userSearch) {
+					closeSearchResults();
+				}
+			}, 150);
 		});
 
 		document.addEventListener('click', (e) => {

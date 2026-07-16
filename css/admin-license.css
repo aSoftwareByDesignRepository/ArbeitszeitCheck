@@ -239,6 +239,18 @@
 	border-top: 1px solid var(--azc-border, var(--color-border));
 }
 
+/* Neutralise Nextcloud core server.css definition-list styling
+   (dt { width: 130px; text-align: end } / dt, dd { display: inline-block;
+   padding: 12px }) which breaks the label-over-value layout. */
+#app-content.azc-app .azc-license-status__grid dt,
+#app-content.azc-app .azc-license-status__grid dd {
+	display: block;
+	width: auto;
+	padding: 0;
+	text-align: start;
+	white-space: normal;
+}
+
 #app-content.azc-app .azc-license-status__title {
 	font-size: var(--azc-fs-md, 1rem);
 	font-weight: 600;
@@ -343,31 +355,27 @@
 }
 
 #app-content.azc-app .azc-seat-search-results li {
-	padding: 0;
 	margin: 0;
 }
 
-#app-content.azc-app .azc-seat-search-results button {
+#app-content.azc-app .azc-seat-search-results li[role='option'] {
 	display: flex;
 	align-items: center;
 	width: 100%;
 	min-height: 44px;
 	padding: var(--azc-space-3, 0.75rem) var(--azc-space-4, 1rem);
-	border: none;
-	background: transparent;
 	color: var(--color-main-text);
 	font: inherit;
 	text-align: left;
 	cursor: pointer;
 }
 
-#app-content.azc-app .azc-seat-search-results button:hover,
-#app-content.azc-app .azc-seat-search-results button:focus-visible {
+#app-content.azc-app .azc-seat-search-results li[role='option']:hover {
 	background: var(--color-background-hover);
-	outline: none;
 }
 
-#app-content.azc-app .azc-seat-search-results button[aria-selected='true'] {
+#app-content.azc-app .azc-seat-search-results li[role='option'][aria-selected='true'],
+#app-content.azc-app .azc-seat-search-results li[role='option'].is-active {
 	background: color-mix(in srgb, var(--color-primary-element) 14%, transparent);
 	box-shadow: inset 3px 0 0 var(--color-primary-element);
 }
@@ -381,6 +389,47 @@
 /* ── Seats table ─────────────────────────────────────────────── */
 #app-content.azc-app .azc-license-seats-table-wrap {
 	margin-top: var(--azc-space-3, 0.75rem);
+}
+
+/* Self-contained table styling: Nextcloud core server.css sets
+   table { white-space: nowrap; border-collapse: separate } which squeezes
+   and misaligns the seats table. Override explicitly so this page never
+   depends on another page's stylesheet. */
+#app-content.azc-app .azc-license-seats-table {
+	width: 100%;
+	border-collapse: collapse;
+	border-spacing: 0;
+	white-space: normal;
+}
+
+#app-content.azc-app .azc-license-seats-table th,
+#app-content.azc-app .azc-license-seats-table td {
+	padding: var(--azc-space-3, 0.75rem) var(--azc-space-4, 1rem);
+	text-align: start;
+	vertical-align: middle;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	border-bottom: 1px solid var(--azc-border, var(--color-border));
+}
+
+#app-content.azc-app .azc-license-seats-table thead th {
+	font-weight: 600;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	background: var(--arbeitszeitcheck-color-table-header-background, var(--color-background-dark));
+}
+
+#app-content.azc-app .azc-license-seats-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+#app-content.azc-app .azc-license-seats-table tbody tr:hover {
+	background: var(--color-background-hover);
+}
+
+#app-content.azc-app .azc-license-seats-table td.actions-cell {
+	text-align: end;
+	white-space: nowrap;
 }
 
 #app-content.azc-app .azc-license-user-id {

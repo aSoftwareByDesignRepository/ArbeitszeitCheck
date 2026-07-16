@@ -293,11 +293,9 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 			<p id="azc-seat-count" class="azc-license-seat-count" aria-live="polite">
 				<?php p($l->t('%1$d of %2$d seats assigned', [$mobileUsed, $mobileLimit])); ?>
 			</p>
-			<?php if ($mobileFull): ?>
-			<p class="azc-field__hint azc-license-seats-full-hint" role="status">
+			<p id="azc-seats-full-hint" class="azc-field__hint azc-license-seats-full-hint" role="status" <?php echo $mobileFull ? '' : 'hidden'; ?>>
 				<?php p($l->t('All mobile seats are assigned. Remove a user or upgrade your license.')); ?>
 			</p>
-			<?php endif; ?>
 		</div>
 
 		<div class="table-container azc-license-seats-table-wrap">
