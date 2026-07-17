@@ -61,3 +61,6 @@ if (!class_exists(\Test\TestCase::class)) {
 		require_once $shim;
 	}
 }
+
+// Production default is the real vendor key; PHPUnit fixtures use the deterministic test key.
+putenv('AZC_VENDOR_PUBLIC_KEY_B64=' . \OCA\ArbeitszeitCheck\Config\VendorPublicKey::TEST_PUBLIC_KEY_B64);

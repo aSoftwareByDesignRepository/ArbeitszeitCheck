@@ -11,12 +11,18 @@ final class VendorPublicKeyTest extends TestCase
 {
 	protected function tearDown(): void
 	{
-		putenv('AZC_VENDOR_PUBLIC_KEY_B64');
+		// Restore PHPUnit fixture key used by other license tests.
+		putenv('AZC_VENDOR_PUBLIC_KEY_B64=' . VendorPublicKey::TEST_PUBLIC_KEY_B64);
 		parent::tearDown();
 	}
 
-	public function testDefaultPublicKeyMatchesFixture(): void
+	public function testDefaultPublicKeyIsProductionVendorKey(): void
 	{
+		putenv('AZC_VENDOR_PUBLIC_KEY_B64');
+		self::assertSame(
+			'naLgi4THUgwJCRoUehq20QU4uJsLVHzuKV04NhkITn8',
+			VendorPublicKey::DEFAULT_PUBLIC_KEY_B64,
+		);
 		self::assertSame(VendorPublicKey::DEFAULT_PUBLIC_KEY_B64, VendorPublicKey::publicKeyB64());
 		self::assertSame(32, strlen(VendorPublicKey::bytes()));
 	}
@@ -36,8 +42,9 @@ final class VendorPublicKeyTest extends TestCase
 		mkdir($tmpdir);
 		$seedPath = $tmpdir . '/seed';
 		file_put_contents($seedPath, bin2hex(hash('sha256', 'arbeitszeitcheck-azc2-test-signing-v1', true)));
+		self::assertSame(VendorPublicKey::TEST_PUBLIC_KEY_B64, (string)$fixture['publicKeyB64']);
 		self::assertSame(
-			(string)$fixture['publicKeyB64'],
+			VendorPublicKey::TEST_PUBLIC_KEY_B64,
 			VendorPublicKey::publicKeyB64FromSeedFile($seedPath),
 		);
 	}

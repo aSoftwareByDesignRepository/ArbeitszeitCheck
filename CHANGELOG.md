@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.5 - 2026-07-18
+
+### Changed
+
+- **Vendor public key baked into the app:** AZC2 license verification now uses the production Ed25519 vendor public key by default. Customer servers no longer need `AZC_VENDOR_PUBLIC_KEY_B64` for real licenses from SbdLicenseOps to verify. The env var remains an optional override (tests / experiments only).
+- **Clearer signature-mismatch warning:** the admin license page no longer tells admins to configure `AZC_VENDOR_PUBLIC_KEY_B64` as the primary fix.
+
 ## 1.5.4 - 2026-07-17
 
 ### Changed

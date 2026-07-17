@@ -7,16 +7,26 @@ namespace OCA\ArbeitszeitCheck\Config;
 /**
  * Embedded vendor Ed25519 public key (32 bytes) for AZC2 verification.
  *
- * Default matches tests/fixtures/license_azc2.json and @arbeitszeitcheck/licensing dev key.
+ * The default is the production vendor public key (matches SbdLicenseOps /
+ * ~/ops/azc/.azc-signing-key). Customer servers and stock app builds need no
+ * env configuration — licenses just verify.
  *
- * Production: set environment variable AZC_VENDOR_PUBLIC_KEY_B64 on the PHP process
- * (Docker, php-fpm pool, or occ) to the public key from ~/ops/azc/.azc-signing-key.
- * Run: php scripts/print-azc-vendor-public-key.php ~/ops/azc/.azc-signing-key
+ * Optional override: AZC_VENDOR_PUBLIC_KEY_B64 (PHPUnit fixture key, local
+ * experiments). Mobile uses the same default via @arbeitszeitcheck/licensing.
  */
 final class VendorPublicKey
 {
-	/** Dev/CI default — same bytes in native apps and PHPUnit fixture. */
-	public const DEFAULT_PUBLIC_KEY_B64 = '-WT78_07UKj8JKtoVuwzRr3Y30fDXnlb0CBi_1sMdIc';
+	/**
+	 * Production vendor public key — verifies licenses signed by SbdLicenseOps.
+	 * Derived from ~/ops/azc/.azc-signing-key (see scripts/print-azc-vendor-public-key.php).
+	 */
+	public const DEFAULT_PUBLIC_KEY_B64 = 'naLgi4THUgwJCRoUehq20QU4uJsLVHzuKV04NhkITn8';
+
+	/**
+	 * Deterministic key for PHPUnit / mobile fixtures (license_azc2.json).
+	 * Seed: sha256("arbeitszeitcheck-azc2-test-signing-v1").
+	 */
+	public const TEST_PUBLIC_KEY_B64 = '-WT78_07UKj8JKtoVuwzRr3Y30fDXnlb0CBi_1sMdIc';
 
 	/** @deprecated use publicKeyB64() */
 	public const PUBLIC_KEY_B64 = self::DEFAULT_PUBLIC_KEY_B64;

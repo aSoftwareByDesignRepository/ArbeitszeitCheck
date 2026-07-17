@@ -20,7 +20,7 @@ release:
 	@staging=$$(mktemp -d) && \
 		mkdir -p "$$staging/$(app_name)" && \
 		rsync -a --exclude='.git' --exclude='$(build_dir)' --exclude='.github' \
-			--exclude='node_modules' --exclude='tests' --exclude='.phpunit.result.cache' \
+			--exclude='node_modules' --exclude='node_modules.broken-*' --exclude='tests' --exclude='.phpunit.result.cache' \
 			--exclude='test-results' --exclude='scripts' --exclude='release/*.tar.gz' --exclude='release/*.asc' \
 			--exclude='appinfo/signature.json' \
 			./ "$$staging/$(app_name)/" && \
@@ -30,9 +30,9 @@ release:
 
 verify-release:
 	@test -f $(archive_path) || (echo "Error: Run 'make release' first"; exit 1)
-	@if tar -tzf $(archive_path) | grep -Eq '/(\.git/|node_modules/|build/|tests/|test-results/|scripts/)'; then \
+	@if tar -tzf $(archive_path) | grep -Eq '/(\.git/|node_modules(/|\.broken-)|build/|tests/|test-results/|scripts/)'; then \
 		echo "Error: release archive contains forbidden development paths"; \
-		tar -tzf $(archive_path) | grep -E '/(\.git/|node_modules/|build/|tests/|test-results/|scripts/)' || true; \
+		tar -tzf $(archive_path) | grep -E '/(\.git/|node_modules(/|\.broken-)|build/|tests/|test-results/|scripts/)' || true; \
 		exit 1; \
 	fi
 	@echo "Release archive layout looks clean."

@@ -105,7 +105,7 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 		$calloutId = 'azc-license-crypto-callout';
 		$calloutTitleId = 'azc-license-crypto-title';
 		$calloutTitle = $l->t('License signature cannot be verified');
-		$calloutText = $l->t('A license key is stored, but this server cannot verify its signature with the configured vendor public key (AZC_VENDOR_PUBLIC_KEY_B64). Mobile and Terminal apps will reject the license until the key matches the one used to sign the license. Re-apply the license after fixing the server key, or generate a new key signed with this server\'s public key.');
+		$calloutText = $l->t('A license key is stored, but this server cannot verify its signature with the vendor public key. Mobile and Terminal apps will reject the license until the key was signed with the matching vendor signing key. Re-apply a correctly signed license, or contact support if this persists after an app update.');
 		$calloutExtraClass = 'azc-license-crypto-callout';
 		include __DIR__ . '/common/alert-callout.php';
 		?>
