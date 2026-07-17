@@ -7,19 +7,22 @@ namespace OCA\ArbeitszeitCheck\Service\Kiosk;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\KioskTerminal;
 use OCA\ArbeitszeitCheck\Db\KioskTerminalMapper;
-use OCA\ArbeitszeitCheck\Db\TerminalDevice;
 use OCA\ArbeitszeitCheck\Kiosk\KioskCrypto;
 use OCA\ArbeitszeitCheck\Service\LicenseService;
 use OCA\ArbeitszeitCheck\Service\TerminalDeviceService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Lock\ILockingProvider;
 
 class KioskTerminalService
 {
+	private const PAIR_LOCK = 'arbeitszeitcheck/kiosk_pair';
+
 	public function __construct(
 		private readonly KioskTerminalMapper $terminalMapper,
 		private readonly TerminalDeviceService $terminalDeviceService,
 		private readonly LicenseService $licenseService,
 		private readonly ITimeFactory $timeFactory,
+		private readonly ILockingProvider $lockingProvider,
 	) {
 	}
 
@@ -77,44 +80,58 @@ class KioskTerminalService
 			throw new KioskException('TERMINAL_LICENSE_REQUIRED');
 		}
 
-		$now = $this->timeFactory->getDateTime();
-		$pending = $this->findPendingByPairingCode($pairingCode, $now);
-		if ($pending === null) {
-			throw new KioskException('PAIRING_CODE_INVALID');
-		}
-
-		$existingDevice = $this->terminalDeviceService->findByKioskTerminalId($pending->getTerminalId());
-		$reservedDevice = $existingDevice;
-		if ($reservedDevice === null) {
-			$reservedDevice = $this->terminalDeviceService->reserveSlot($pending->getLabel());
-		}
-
-		$terminalToken = KioskCrypto::generateToken();
+		$this->lockingProvider->acquireLock(self::PAIR_LOCK, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk terminal pairing');
 		try {
-			$pending->setTokenHash(KioskCrypto::hashSecret($terminalToken));
-			$pending->setPairingCodeHash(null);
-			$pending->setPairingExpiresAt(null);
-			$pending->setStatus('active');
-			if ($label !== '') {
-				$pending->setLabel($label);
+			$now = $this->timeFactory->getDateTime();
+			$pending = $this->findPendingByPairingCode($pairingCode, $now);
+			if ($pending === null) {
+				throw new KioskException('PAIRING_CODE_INVALID');
 			}
-			$this->terminalMapper->update($pending);
 
+			$terminalId = $pending->getTerminalId();
+			$existingDevice = $this->terminalDeviceService->findByKioskTerminalId($terminalId);
+			$newlyReserved = null;
 			if ($existingDevice === null) {
-				$this->terminalDeviceService->linkToKioskTerminal($reservedDevice, $pending->getTerminalId());
+				$newlyReserved = $this->terminalDeviceService->reserveSlot($pending->getLabel());
 			}
-		} catch (\Throwable $e) {
-			if ($existingDevice === null && $reservedDevice !== null) {
-				$this->terminalDeviceService->revokeDevice($reservedDevice);
-			}
-			throw $e;
-		}
 
-		return [
-			'terminalId' => $pending->getTerminalId(),
-			'terminalToken' => $terminalToken,
-			'label' => $pending->getLabel(),
-		];
+			$terminalToken = KioskCrypto::generateToken();
+			$claimed = $this->terminalMapper->claimPendingAsActive(
+				$terminalId,
+				KioskCrypto::hashSecret($terminalToken),
+				$now,
+				$label !== '' ? $label : null,
+			);
+			if ($claimed !== 1) {
+				if ($newlyReserved !== null) {
+					$this->terminalDeviceService->revokeDevice($newlyReserved);
+				}
+				throw new KioskException('PAIRING_CODE_INVALID');
+			}
+
+			try {
+				if ($newlyReserved !== null) {
+					$this->terminalDeviceService->linkToKioskTerminal($newlyReserved, $terminalId);
+				}
+			} catch (\Throwable $e) {
+				if ($newlyReserved !== null) {
+					$this->terminalDeviceService->revokeDevice($newlyReserved);
+				}
+				// Pairing code was consumed; revoke the terminal so capacity is not stuck.
+				$this->revoke($terminalId);
+				throw $e;
+			}
+
+			$fresh = $this->terminalMapper->findByTerminalId($terminalId);
+
+			return [
+				'terminalId' => $terminalId,
+				'terminalToken' => $terminalToken,
+				'label' => $fresh !== null ? $fresh->getLabel() : $pending->getLabel(),
+			];
+		} finally {
+			$this->lockingProvider->releaseLock(self::PAIR_LOCK, ILockingProvider::LOCK_EXCLUSIVE);
+		}
 	}
 
 	public function validateTerminalToken(string $terminalId, string $token): ?KioskTerminal

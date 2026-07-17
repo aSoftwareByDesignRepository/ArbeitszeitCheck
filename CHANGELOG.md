@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.4 - 2026-07-17
+
+### Changed
+
+- **Kiosk admin UX overhaul:** clearer three-step flow (find employee → allow access → assign badge/PIN), richer status labels, confirmations, and actionable error messages (including license/slot limits with a link to License administration).
+
+### Fixed
+
+- **Kiosk admin APIs required CSRF again:** removed `NoCSRFRequired` from admin JSON endpoints so state-changing kiosk actions are protected like other admin APIs.
+- **Race conditions in kiosk pairing, enrollment, and PIN lockout:** exclusive locks around terminal pairing, badge enrollment start/scan, and failed-PIN accounting so concurrent requests cannot double-consume license slots or skip lockout.
+- **Badge enrollment only on active terminals:** enrollment now requires a paired (active) terminal instead of accepting pending/revoked ones.
+- **CSV credential import size limit:** imports larger than 1 MB are rejected with a clear error instead of loading unbounded input.
+- **Sensitive kiosk responses are not cached:** pairing codes and one-time PINs are returned with `Cache-Control: no-store`.
+
 ## 1.5.3 - 2026-07-15
 
 ### Added

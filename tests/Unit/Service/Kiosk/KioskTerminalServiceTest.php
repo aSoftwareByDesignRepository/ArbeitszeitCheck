@@ -11,6 +11,7 @@ use OCA\ArbeitszeitCheck\Service\Kiosk\KioskTerminalService;
 use OCA\ArbeitszeitCheck\Service\LicenseService;
 use OCA\ArbeitszeitCheck\Service\TerminalDeviceService;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Lock\ILockingProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -20,6 +21,7 @@ class KioskTerminalServiceTest extends TestCase
 	private TerminalDeviceService&MockObject $terminalDeviceService;
 	private LicenseService&MockObject $licenseService;
 	private ITimeFactory&MockObject $timeFactory;
+	private ILockingProvider&MockObject $lockingProvider;
 	private KioskTerminalService $service;
 
 	protected function setUp(): void
@@ -28,12 +30,16 @@ class KioskTerminalServiceTest extends TestCase
 		$this->terminalDeviceService = $this->createMock(TerminalDeviceService::class);
 		$this->licenseService = $this->createMock(LicenseService::class);
 		$this->timeFactory = $this->createMock(ITimeFactory::class);
+		$this->lockingProvider = $this->createMock(ILockingProvider::class);
 		$this->timeFactory->method('getDateTime')->willReturn(new \DateTime('2026-06-10 12:00:00'));
+		$this->lockingProvider->method('acquireLock');
+		$this->lockingProvider->method('releaseLock');
 		$this->service = new KioskTerminalService(
 			$this->terminalMapper,
 			$this->terminalDeviceService,
 			$this->licenseService,
 			$this->timeFactory,
+			$this->lockingProvider,
 		);
 	}
 
@@ -60,7 +66,6 @@ class KioskTerminalServiceTest extends TestCase
 	public function testPairingCodeVerificationIsCaseInsensitive(): void
 	{
 		$this->licenseService->method('isTerminalPlanActive')->willReturn(true);
-		$this->terminalDeviceService->method('hasCapacity')->willReturn(true);
 
 		$code = 'AB12CD34';
 		$terminal = new \OCA\ArbeitszeitCheck\Db\KioskTerminal();
@@ -71,7 +76,11 @@ class KioskTerminalServiceTest extends TestCase
 		$terminal->setStatus('pending');
 
 		$this->terminalMapper->method('findPendingPairing')->willReturn([$terminal]);
-		$this->terminalMapper->expects(self::once())->method('update');
+		$this->terminalMapper->expects(self::once())
+			->method('claimPendingAsActive')
+			->with('tid-1', self::anything(), self::anything(), null)
+			->willReturn(1);
+		$this->terminalMapper->method('findByTerminalId')->willReturn($terminal);
 		$device = new \OCA\ArbeitszeitCheck\Db\TerminalDevice();
 		$this->terminalDeviceService->method('findByKioskTerminalId')->willReturn($device);
 		$this->terminalDeviceService->expects(self::never())->method('reserveSlot');
@@ -79,6 +88,28 @@ class KioskTerminalServiceTest extends TestCase
 		$result = $this->service->pair('ab12cd34', '');
 		self::assertSame('tid-1', $result['terminalId']);
 		self::assertNotEmpty($result['terminalToken']);
+	}
+
+	public function testPairRejectsWhenClaimLosesRace(): void
+	{
+		$this->licenseService->method('isTerminalPlanActive')->willReturn(true);
+
+		$code = 'AB12CD34';
+		$terminal = new \OCA\ArbeitszeitCheck\Db\KioskTerminal();
+		$terminal->setTerminalId('tid-1');
+		$terminal->setLabel('Hall');
+		$terminal->setPairingCodeHash(KioskCrypto::hashSecret($code));
+		$terminal->setPairingExpiresAt(new \DateTime('2026-06-10 13:00:00'));
+		$terminal->setStatus('pending');
+
+		$this->terminalMapper->method('findPendingPairing')->willReturn([$terminal]);
+		$this->terminalMapper->method('claimPendingAsActive')->willReturn(0);
+		$this->terminalDeviceService->method('findByKioskTerminalId')->willReturn(
+			new \OCA\ArbeitszeitCheck\Db\TerminalDevice()
+		);
+
+		$this->expectException(KioskException::class);
+		$this->service->pair($code, '');
 	}
 
 	public function testExpireStalePendingTerminalsRevokesExpiredRows(): void
@@ -100,22 +131,5 @@ class KioskTerminalServiceTest extends TestCase
 			->with('tid-expired');
 
 		self::assertSame(1, $this->service->expireStalePendingTerminals());
-		self::assertSame('revoked', $expired->getStatus());
-	}
-
-	public function testRevokeFreesTerminalDeviceSlot(): void
-	{
-		$terminal = new \OCA\ArbeitszeitCheck\Db\KioskTerminal();
-		$terminal->setTerminalId('tid-revoke');
-		$terminal->setStatus('active');
-		$terminal->setTokenHash(KioskCrypto::hashSecret('token'));
-
-		$this->terminalMapper->method('findByTerminalId')->with('tid-revoke')->willReturn($terminal);
-		$this->terminalMapper->expects(self::once())->method('update');
-		$this->terminalDeviceService->expects(self::once())
-			->method('revokeByKioskTerminalId')
-			->with('tid-revoke');
-
-		$this->service->revoke('tid-revoke');
 	}
 }

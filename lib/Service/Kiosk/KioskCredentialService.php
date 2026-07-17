@@ -11,15 +11,19 @@ use OCA\ArbeitszeitCheck\Db\KioskCredMapper;
 use OCA\ArbeitszeitCheck\Kiosk\KioskCrypto;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IUserManager;
+use OCP\Lock\ILockingProvider;
 
 class KioskCredentialService
 {
+	private const IMPORT_MAX_BYTES = 1_048_576;
+
 	public function __construct(
 		private readonly KioskCredMapper $credMapper,
 		private readonly KioskSettingsService $settingsService,
 		private readonly IUserManager $userManager,
 		private readonly AuditLogMapper $auditLogMapper,
 		private readonly ITimeFactory $timeFactory,
+		private readonly ILockingProvider $lockingProvider,
 	) {
 	}
 
@@ -138,14 +142,30 @@ class KioskCredentialService
 
 	public function recordFailedAttempt(KioskCred $cred): void
 	{
-		$attempts = $cred->getFailedAttempts() + 1;
-		$cred->setFailedAttempts($attempts);
-		if ($attempts >= Constants::KIOSK_MAX_FAILED_ATTEMPTS) {
-			$locked = (clone $this->timeFactory->getDateTime())
-				->modify('+' . Constants::KIOSK_LOCKOUT_SECONDS . ' seconds');
-			$cred->setLockedUntil($locked);
+		$id = $cred->getId();
+		if ($id === null) {
+			return;
 		}
-		$this->credMapper->update($cred);
+		$lockKey = 'arbeitszeitcheck/kiosk_cred/' . $id;
+		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk PIN lockout');
+		try {
+			$fresh = $this->credMapper->findById($id);
+			if ($fresh === null) {
+				return;
+			}
+			$attempts = $fresh->getFailedAttempts() + 1;
+			$fresh->setFailedAttempts($attempts);
+			if ($attempts >= Constants::KIOSK_MAX_FAILED_ATTEMPTS) {
+				$locked = (clone $this->timeFactory->getDateTime())
+					->modify('+' . Constants::KIOSK_LOCKOUT_SECONDS . ' seconds');
+				$fresh->setLockedUntil($locked);
+			}
+			$this->credMapper->update($fresh);
+			$cred->setFailedAttempts($fresh->getFailedAttempts());
+			$cred->setLockedUntil($fresh->getLockedUntil());
+		} finally {
+			$this->lockingProvider->releaseLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
+		}
 	}
 
 	public function resetFailedAttempts(KioskCred $cred): void
@@ -169,6 +189,9 @@ class KioskCredentialService
 	 */
 	public function importCsv(string $csvContent, string $createdBy): array
 	{
+		if (strlen($csvContent) > self::IMPORT_MAX_BYTES) {
+			throw new KioskException('KIOSK_IMPORT_TOO_LARGE');
+		}
 		$imported = 0;
 		$skipped = 0;
 		$errors = [];

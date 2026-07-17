@@ -11,6 +11,7 @@ use OCA\ArbeitszeitCheck\Db\KioskEnrollmentMapper;
 use OCA\ArbeitszeitCheck\Db\KioskTerminalMapper;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IUserManager;
+use OCP\Lock\ILockingProvider;
 
 class KioskEnrollmentService
 {
@@ -22,6 +23,7 @@ class KioskEnrollmentService
 		private readonly IUserManager $userManager,
 		private readonly AuditLogMapper $auditLogMapper,
 		private readonly ITimeFactory $timeFactory,
+		private readonly ILockingProvider $lockingProvider,
 	) {
 	}
 
@@ -31,37 +33,47 @@ class KioskEnrollmentService
 	public function start(string $userId, string $terminalId, string $createdBy): array
 	{
 		$this->credentialService->assertUserKioskAllowed($userId);
-		if ($this->terminalMapper->findByTerminalId($terminalId) === null) {
+		$terminal = $this->terminalMapper->findByTerminalId($terminalId);
+		if ($terminal === null) {
 			throw new KioskException('KIOSK_TERMINAL_NOT_FOUND');
+		}
+		if ($terminal->getStatus() !== 'active') {
+			throw new KioskException('KIOSK_TERMINAL_NOT_ACTIVE');
 		}
 		$user = $this->userManager->get($userId);
 		if ($user === null) {
 			throw new KioskException('KIOSK_USER_NOT_ALLOWED');
 		}
 
-		$this->enrollmentMapper->cancelForTerminal($terminalId);
-		$now = $this->timeFactory->getDateTime();
-		$expires = (clone $now)->modify('+' . Constants::KIOSK_ENROLLMENT_TTL_SECONDS . ' seconds');
+		$lockKey = 'arbeitszeitcheck/kiosk_enroll/' . $terminalId;
+		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk enrollment start');
+		try {
+			$this->enrollmentMapper->cancelForTerminal($terminalId);
+			$now = $this->timeFactory->getDateTime();
+			$expires = (clone $now)->modify('+' . Constants::KIOSK_ENROLLMENT_TTL_SECONDS . ' seconds');
 
-		$enrollment = new KioskEnrollment();
-		$enrollment->setTerminalId($terminalId);
-		$enrollment->setUserId($userId);
-		$enrollment->setExpiresAt($expires);
-		$enrollment->setCreatedBy($createdBy);
-		$enrollment->setCreatedAt($now);
-		$enrollment = $this->enrollmentMapper->insert($enrollment);
+			$enrollment = new KioskEnrollment();
+			$enrollment->setTerminalId($terminalId);
+			$enrollment->setUserId($userId);
+			$enrollment->setExpiresAt($expires);
+			$enrollment->setCreatedBy($createdBy);
+			$enrollment->setCreatedAt($now);
+			$enrollment = $this->enrollmentMapper->insert($enrollment);
 
-		$this->auditLogMapper->logAction($userId, 'kiosk_enrollment_started', 'kiosk_enrollment', $enrollment->getId(), null, [
-			'terminalId' => $terminalId,
-		], $createdBy);
+			$this->auditLogMapper->logAction($userId, 'kiosk_enrollment_started', 'kiosk_enrollment', $enrollment->getId(), null, [
+				'terminalId' => $terminalId,
+			], $createdBy);
 
-		return [
-			'enrollmentId' => $enrollment->getId(),
-			'terminalId' => $terminalId,
-			'userId' => $userId,
-			'displayName' => $user->getDisplayName(),
-			'expiresAt' => $expires->format('c'),
-		];
+			return [
+				'enrollmentId' => $enrollment->getId(),
+				'terminalId' => $terminalId,
+				'userId' => $userId,
+				'displayName' => $user->getDisplayName(),
+				'expiresAt' => $expires->format('c'),
+			];
+		} finally {
+			$this->lockingProvider->releaseLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
+		}
 	}
 
 	/**
@@ -109,32 +121,52 @@ class KioskEnrollmentService
 	 */
 	public function completeScan(string $terminalId, string $rfidUid, string $actorLabel = 'enroll-scan'): array
 	{
-		$now = $this->timeFactory->getDateTime();
-		$enrollment = $this->enrollmentMapper->findActiveByTerminalId($terminalId, $now);
-		if ($enrollment === null) {
-			throw new KioskException('ENROLLMENT_NOT_ACTIVE');
+		$lockKey = 'arbeitszeitcheck/kiosk_enroll/' . $terminalId;
+		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk enrollment scan');
+		try {
+			$now = $this->timeFactory->getDateTime();
+			$enrollment = $this->enrollmentMapper->findActiveByTerminalId($terminalId, $now);
+			if ($enrollment === null) {
+				throw new KioskException('ENROLLMENT_NOT_ACTIVE');
+			}
+
+			$enrollmentId = $enrollment->getId();
+			if ($enrollmentId === null) {
+				throw new KioskException('ENROLLMENT_NOT_ACTIVE');
+			}
+
+			// Claim first so a second concurrent scan cannot assign a different card.
+			if (!$this->enrollmentMapper->claimComplete($enrollmentId, $now, $now)) {
+				throw new KioskException('ENROLLMENT_NOT_ACTIVE');
+			}
+
+			try {
+				$result = $this->credentialService->assignRfid(
+					$enrollment->getUserId(),
+					$rfidUid,
+					$enrollment->getCreatedBy(),
+				);
+			} catch (\Throwable $e) {
+				// Roll back the claim so the admin can retry enrollment.
+				$enrollment->setCompletedAt(null);
+				$this->enrollmentMapper->update($enrollment);
+				throw $e;
+			}
+
+			$user = $this->userManager->get($enrollment->getUserId());
+			$this->auditLogMapper->logAction($enrollment->getUserId(), 'kiosk_credential_assigned', 'kiosk_cred', $result['id'], null, [
+				'type' => 'rfid',
+				'method' => $actorLabel,
+				'terminalId' => $terminalId,
+			], $enrollment->getCreatedBy());
+
+			return [
+				'displayName' => $user !== null ? $user->getDisplayName() : $enrollment->getUserId(),
+				'message' => 'Ausweis zugeordnet',
+			];
+		} finally {
+			$this->lockingProvider->releaseLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
 		}
-
-		$result = $this->credentialService->assignRfid(
-			$enrollment->getUserId(),
-			$rfidUid,
-			$enrollment->getCreatedBy(),
-		);
-
-		$enrollment->setCompletedAt($now);
-		$this->enrollmentMapper->update($enrollment);
-
-		$user = $this->userManager->get($enrollment->getUserId());
-		$this->auditLogMapper->logAction($enrollment->getUserId(), 'kiosk_credential_assigned', 'kiosk_cred', $result['id'], null, [
-			'type' => 'rfid',
-			'method' => $actorLabel,
-			'terminalId' => $terminalId,
-		], $enrollment->getCreatedBy());
-
-		return [
-			'displayName' => $user !== null ? $user->getDisplayName() : $enrollment->getUserId(),
-			'message' => 'Ausweis zugeordnet',
-		];
 	}
 
 	/** @return array{active: bool, message?: string, expiresAt?: string}|null */

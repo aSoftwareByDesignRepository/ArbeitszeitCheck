@@ -48,4 +48,22 @@ class KioskEnrollmentMapper extends QBMapper
 		$entities = $this->findEntities($qb);
 		return $entities[0] ?? null;
 	}
+
+	/**
+	 * Atomically mark an enrollment completed. Returns true only once under
+	 * concurrent badge scans for the same enrollment.
+	 */
+	public function claimComplete(int $enrollmentId, \DateTimeInterface $completedAt, \DateTimeInterface $now): bool
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('completed_at', $qb->createNamedParameter($completedAt->format('Y-m-d H:i:s')))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($enrollmentId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('completed_at'))
+			->andWhere($qb->expr()->gt(
+				'expires_at',
+				$qb->createNamedParameter($now->format('Y-m-d H:i:s')),
+			));
+		return $qb->executeStatement() === 1;
+	}
 }

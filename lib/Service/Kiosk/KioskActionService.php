@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Service\Kiosk;
 
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
-use OCA\ArbeitszeitCheck\Db\KioskSession;
 use OCA\ArbeitszeitCheck\Db\KioskSessionMapper;
 use OCA\ArbeitszeitCheck\Db\KioskTerminal;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
+use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IL10N;
 
 class KioskActionService
@@ -21,6 +21,7 @@ class KioskActionService
 		private readonly TimeTrackingService $timeTrackingService,
 		private readonly AuditLogMapper $auditLogMapper,
 		private readonly IL10N $l10n,
+		private readonly ITimeFactory $timeFactory,
 	) {
 	}
 
@@ -32,6 +33,13 @@ class KioskActionService
 		$session = $this->authService->validateSession($terminal, $sessionToken);
 		$userId = $session->getUserId();
 		$this->authService->assertUserEligibleForAction($userId);
+
+		// Consume the one-shot session before mutating time entries so a replay
+		// cannot clock in twice even if TimeTrackingService locks are delayed.
+		$now = $this->timeFactory->getDateTime();
+		if (!$this->sessionMapper->claimUnused($session, $now)) {
+			throw new KioskException('KIOSK_SESSION_USED');
+		}
 
 		try {
 			$newStatus = match ($action) {
@@ -47,7 +55,6 @@ class KioskActionService
 			throw new KioskException('KIOSK_ACTION_INVALID');
 		}
 
-		$this->sessionMapper->markUsed($session);
 		$this->auditLogMapper->logAction($userId, 'kiosk_action', 'kiosk_session', $session->getId(), null, [
 			'action' => $action,
 			'terminalId' => $terminal->getTerminalId(),

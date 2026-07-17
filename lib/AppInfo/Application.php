@@ -844,6 +844,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\TerminalDeviceMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\LicenseService::class),
 				$c->query(\OCP\IDBConnection::class),
+				$c->query(\OCP\Lock\ILockingProvider::class),
 			);
 		});
 

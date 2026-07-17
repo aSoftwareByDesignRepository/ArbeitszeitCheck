@@ -86,11 +86,12 @@ class KioskAdminController extends Controller
 
 		$terminals = [];
 		foreach ($this->terminalService->listTerminals() as $terminal) {
+			$lastSeen = $terminal->getLastSeenAt();
 			$terminals[] = [
 				'terminalId' => $terminal->getTerminalId(),
 				'label' => $terminal->getLabel(),
 				'status' => $terminal->getStatus(),
-				'lastSeenAt' => $terminal->getLastSeenAt()?->format('c'),
+				'lastSeenAt' => $lastSeen?->format('c'),
 				'createdAt' => $terminal->getCreatedAt()->format('c'),
 			];
 		}
@@ -106,6 +107,7 @@ class KioskAdminController extends Controller
 				'terminals' => $terminals,
 				'terminalDevicesUsed' => $this->terminalDeviceService->getActiveCount(),
 				'terminalDevicesLimit' => $this->terminalDeviceService->getDeviceLimit(),
+				'licenseAdminUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.license_admin.index'),
 				'apiBase' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.kiosk_admin.listCredentials'),
 				'apiTerminals' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.kiosk_admin.createTerminal'),
 				'apiCredentials' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.kiosk_admin.listCredentials'),
@@ -136,11 +138,15 @@ class KioskAdminController extends Controller
 					'revoke' => $this->l10n->t('Revoke'),
 					'selectEmployeeTerminal' => $this->l10n->t('Select employee and terminal'),
 					'selectEmployee' => $this->l10n->t('Select an employee first'),
+					'enableAccessFirst' => $this->l10n->t('Allow kiosk access for this employee first'),
 					'enrollmentWaiting' => $this->l10n->t('Waiting for badge scan…'),
 					'enrollmentDone' => $this->l10n->t('Badge assigned successfully'),
 					'enrollmentExpired' => $this->l10n->t('Enrollment expired'),
+					'enrollmentCancelled' => $this->l10n->t('Enrollment cancelled'),
 					'credentialRemoved' => $this->l10n->t('Credential removed'),
 					'delete' => $this->l10n->t('Delete'),
+					'deletePin' => $this->l10n->t('Delete PIN'),
+					'deleteBadge' => $this->l10n->t('Delete badge'),
 					'kioskAllowedOn' => $this->l10n->t('Kiosk access enabled'),
 					'kioskAllowedOff' => $this->l10n->t('Kiosk access disabled'),
 					'kioskAllowedLabel' => $this->l10n->t('Allow kiosk access'),
@@ -153,6 +159,16 @@ class KioskAdminController extends Controller
 					'statusActive' => $this->l10n->t('Active'),
 					'statusPending' => $this->l10n->t('Pending pairing'),
 					'statusRevoked' => $this->l10n->t('Revoked'),
+					'typePin' => $this->l10n->t('PIN'),
+					'typeRfid' => $this->l10n->t('Badge'),
+					'noCredentials' => $this->l10n->t('No badges or PINs yet. Select an employee above to get started.'),
+					'neverSeen' => $this->l10n->t('Never'),
+					'cancelEnrollment' => $this->l10n->t('Cancel scan'),
+					'pairingExpires' => $this->l10n->t('Valid until'),
+					'confirmDeleteCred' => $this->l10n->t('Remove this credential? The employee will no longer be able to use it at the kiosk.'),
+					'stepSelect' => $this->l10n->t('1. Find the employee'),
+					'stepAllow' => $this->l10n->t('2. Allow kiosk access'),
+					'stepCredential' => $this->l10n->t('3. Assign a badge or PIN'),
 				],
 			],
 		));
@@ -160,7 +176,6 @@ class KioskAdminController extends Controller
 		return $this->configureCSP($response, 'admin');
 	}
 
-	#[NoCSRFRequired]
 	public function setKioskEnabled(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -169,18 +184,28 @@ class KioskAdminController extends Controller
 		return new JSONResponse(['success' => true, 'enabled' => $enabled]);
 	}
 
-	#[NoCSRFRequired]
 	public function createTerminal(): JSONResponse
 	{
 		$data = $this->readJsonBody();
 		$label = trim((string)($data['label'] ?? ''));
 		if ($label === '') {
-			return new JSONResponse(['success' => false, 'error' => 'label_required'], Http::STATUS_BAD_REQUEST);
+			return new JSONResponse([
+				'success' => false,
+				'error' => 'label_required',
+				'message' => $this->l10n->t('Enter a terminal label'),
+			], Http::STATUS_BAD_REQUEST);
+		}
+		if (mb_strlen($label) > 128) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => 'label_too_long',
+				'message' => $this->l10n->t('Terminal label is too long'),
+			], Http::STATUS_BAD_REQUEST);
 		}
 		$actor = $this->userSession->getUser()?->getUID() ?? '';
 		try {
 			$result = $this->terminalService->createPendingTerminal($label, $actor);
-			return new JSONResponse([
+			$response = new JSONResponse([
 				'success' => true,
 				'data' => [
 					'terminalId' => $result['terminal']->getTerminalId(),
@@ -189,19 +214,18 @@ class KioskAdminController extends Controller
 					'pairingExpiresAt' => $result['pairingExpiresAt'],
 				],
 			], Http::STATUS_CREATED);
+			return $this->noStore($response);
 		} catch (KioskException $e) {
 			return $this->kioskError($e);
 		}
 	}
 
-	#[NoCSRFRequired]
 	public function revokeTerminal(string $terminalId): JSONResponse
 	{
 		$this->terminalService->revoke($terminalId);
 		return new JSONResponse(['success' => true]);
 	}
 
-	#[NoCSRFRequired]
 	public function listCredentials(): JSONResponse
 	{
 		$userId = trim((string)$this->request->getParam('userId', ''));
@@ -223,7 +247,6 @@ class KioskAdminController extends Controller
 		return new JSONResponse(['success' => true, 'data' => ['credentials' => $credentials]]);
 	}
 
-	#[NoCSRFRequired]
 	public function assignRfid(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -239,7 +262,6 @@ class KioskAdminController extends Controller
 		}
 	}
 
-	#[NoCSRFRequired]
 	public function generatePin(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -247,19 +269,19 @@ class KioskAdminController extends Controller
 		$actor = $this->userSession->getUser()?->getUID() ?? '';
 		try {
 			$result = $this->credentialService->generatePin($userId, $actor);
-			return new JSONResponse([
+			$response = new JSONResponse([
 				'success' => true,
 				'data' => [
 					'pin' => $result['pin'],
 					'message' => $this->l10n->t('PIN is shown only once'),
 				],
 			], Http::STATUS_CREATED);
+			return $this->noStore($response);
 		} catch (KioskException $e) {
 			return $this->kioskError($e);
 		}
 	}
 
-	#[NoCSRFRequired]
 	public function deleteCredential(int $id): JSONResponse
 	{
 		$actor = $this->userSession->getUser()?->getUID() ?? '';
@@ -271,28 +293,46 @@ class KioskAdminController extends Controller
 		}
 	}
 
-	#[NoCSRFRequired]
 	public function setUserAllowed(string $userId): JSONResponse
 	{
+		$userId = trim(rawurldecode($userId));
+		if ($userId === '' || $this->userManager->get($userId) === null) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => 'KIOSK_USER_NOT_FOUND',
+				'message' => $this->l10n->t('Employee not found'),
+			], Http::STATUS_BAD_REQUEST);
+		}
 		$data = $this->readJsonBody();
 		$allowed = !empty($data['kioskAllowed']);
 		$this->settingsService->setUserKioskAllowed($userId, $allowed);
 		return new JSONResponse(['success' => true, 'userId' => $userId, 'kioskAllowed' => $allowed]);
 	}
 
-	#[NoCSRFRequired]
 	public function importCredentials(): JSONResponse
 	{
 		$csv = (string)($this->request->getParam('csv') ?? '');
 		if ($csv === '' && isset($_FILES['file']['tmp_name']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
-			$csv = (string)file_get_contents($_FILES['file']['tmp_name']);
+			$tmp = (string)$_FILES['file']['tmp_name'];
+			$size = (int)($_FILES['file']['size'] ?? 0);
+			if ($size > 1_048_576) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => 'KIOSK_IMPORT_TOO_LARGE',
+					'message' => $this->l10n->t('Import file is too large (max 1 MB)'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			$csv = (string)file_get_contents($tmp);
 		}
 		$actor = $this->userSession->getUser()?->getUID() ?? '';
-		$result = $this->credentialService->importCsv($csv, $actor);
-		return new JSONResponse(['success' => true, 'data' => $result]);
+		try {
+			$result = $this->credentialService->importCsv($csv, $actor);
+			return new JSONResponse(['success' => true, 'data' => $result]);
+		} catch (KioskException $e) {
+			return $this->kioskError($e);
+		}
 	}
 
-	#[NoCSRFRequired]
 	public function startEnrollment(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -307,14 +347,12 @@ class KioskAdminController extends Controller
 		}
 	}
 
-	#[NoCSRFRequired]
 	public function enrollmentStatus(): JSONResponse
 	{
 		$terminalId = trim((string)$this->request->getParam('terminalId', ''));
 		return new JSONResponse(['success' => true, 'data' => $this->enrollmentService->getStatus($terminalId)]);
 	}
 
-	#[NoCSRFRequired]
 	public function cancelEnrollment(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -324,14 +362,17 @@ class KioskAdminController extends Controller
 		return new JSONResponse(['success' => true]);
 	}
 
-	#[NoCSRFRequired]
 	public function searchUsers(): JSONResponse
 	{
 		$query = trim((string)$this->request->getParam('q', ''));
 		$result = UserDirectorySearch::searchByIdOrName($this->userManager, $query, 25);
 		$users = [];
 		foreach ($result['users'] as $user) {
-			$users[] = ['userId' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+			$users[] = [
+				'userId' => $user->getUID(),
+				'displayName' => $user->getDisplayName(),
+				'kioskAllowed' => $this->settingsService->isUserKioskAllowed($user->getUID()),
+			];
 		}
 		return new JSONResponse(['success' => true, 'users' => $users]);
 	}
@@ -344,13 +385,36 @@ class KioskAdminController extends Controller
 		return is_array($data) ? $data : $this->request->getParams();
 	}
 
+	private function noStore(JSONResponse $response): JSONResponse
+	{
+		$response->addHeader('Cache-Control', 'no-store, private');
+		$response->addHeader('Pragma', 'no-cache');
+		return $response;
+	}
+
 	private function kioskError(KioskException $e): JSONResponse
 	{
-		$status = match ($e->getErrorCode()) {
+		$code = $e->getErrorCode();
+		$status = match ($code) {
 			'KIOSK_RFID_ALREADY_ASSIGNED' => Http::STATUS_CONFLICT,
 			'KIOSK_USER_NOT_ALLOWED', 'TERMINAL_DEVICE_LIMIT_REACHED', 'TERMINAL_LICENSE_REQUIRED' => Http::STATUS_FORBIDDEN,
 			default => Http::STATUS_BAD_REQUEST,
 		};
-		return new JSONResponse(['success' => false, 'error' => $e->getErrorCode()], $status);
+		$message = match ($code) {
+			'TERMINAL_LICENSE_REQUIRED' => $this->l10n->t('A Terminal license is required. Open License administration to apply a key.'),
+			'TERMINAL_DEVICE_LIMIT_REACHED' => $this->l10n->t('All terminal license slots are in use. Revoke an unused terminal or upgrade the license.'),
+			'PAIRING_CODE_INVALID' => $this->l10n->t('Pairing code is invalid or already used.'),
+			'KIOSK_USER_NOT_ALLOWED' => $this->l10n->t('This employee is not allowed to use the kiosk. Enable access first.'),
+			'KIOSK_RFID_ALREADY_ASSIGNED' => $this->l10n->t('This badge is already assigned to another employee.'),
+			'KIOSK_RFID_INVALID' => $this->l10n->t('Invalid badge identifier.'),
+			'KIOSK_CREDENTIAL_NOT_FOUND' => $this->l10n->t('Credential not found.'),
+			'KIOSK_TERMINAL_NOT_FOUND' => $this->l10n->t('Terminal not found.'),
+			'KIOSK_TERMINAL_NOT_ACTIVE' => $this->l10n->t('Only an active (paired) terminal can enroll badges.'),
+			'ENROLLMENT_NOT_ACTIVE' => $this->l10n->t('No active badge enrollment for this terminal.'),
+			'KIOSK_IMPORT_TOO_LARGE' => $this->l10n->t('Import file is too large (max 1 MB)'),
+			'KIOSK_SESSION_USED' => $this->l10n->t('This kiosk session was already used.'),
+			default => $this->l10n->t('Request failed'),
+		};
+		return new JSONResponse(['success' => false, 'error' => $code, 'message' => $message], $status);
 	}
 }

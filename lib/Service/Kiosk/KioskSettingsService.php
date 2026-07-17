@@ -8,11 +8,15 @@ use OCA\ArbeitszeitCheck\AppInfo\Application;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Kiosk\KioskCrypto;
 use OCP\IConfig;
+use OCP\Lock\ILockingProvider;
 
 class KioskSettingsService
 {
+	private const RFID_SALT_LOCK = 'arbeitszeitcheck/kiosk_rfid_salt';
+
 	public function __construct(
 		private readonly IConfig $config,
+		private readonly ILockingProvider $lockingProvider,
 	) {
 	}
 
@@ -39,14 +43,28 @@ class KioskSettingsService
 		$this->config->setUserValue($userId, Application::APP_ID, Constants::USER_PREF_KIOSK_ALLOWED, $allowed ? '1' : '0');
 	}
 
+	/**
+	 * RFID HMAC salt — created once under an exclusive lock so concurrent first
+	 * assignments cannot hash cards with different salts.
+	 */
 	public function getRfidSalt(): string
 	{
 		$salt = (string)$this->config->getAppValue(Application::APP_ID, Constants::CONFIG_KIOSK_RFID_SALT, '');
-		if ($salt === '') {
-			$salt = bin2hex(random_bytes(32));
-			$this->config->setAppValue(Application::APP_ID, Constants::CONFIG_KIOSK_RFID_SALT, $salt);
+		if ($salt !== '') {
+			return $salt;
 		}
-		return $salt;
+
+		$this->lockingProvider->acquireLock(self::RFID_SALT_LOCK, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk RFID salt bootstrap');
+		try {
+			$salt = (string)$this->config->getAppValue(Application::APP_ID, Constants::CONFIG_KIOSK_RFID_SALT, '');
+			if ($salt === '') {
+				$salt = bin2hex(random_bytes(32));
+				$this->config->setAppValue(Application::APP_ID, Constants::CONFIG_KIOSK_RFID_SALT, $salt);
+			}
+			return $salt;
+		} finally {
+			$this->lockingProvider->releaseLock(self::RFID_SALT_LOCK, ILockingProvider::LOCK_EXCLUSIVE);
+		}
 	}
 
 	public function rfidLookupHash(string $uid): string

@@ -1,38 +1,123 @@
 /**
- * Admin kiosk page styles
+ * Admin kiosk page — clear sections, WCAG 2.1 AA, responsive from 320px.
  *
  * @license AGPL-3.0-or-later
  */
 
-.azc-kiosk-page .azc-kiosk-section {
-	margin-bottom: 1.5rem;
+#app-content.azc-app .azc-kiosk-page {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-5, 1.25rem);
+	max-width: 56rem;
 }
 
-.azc-kiosk-section__header {
-	margin-bottom: 1rem;
+/* Visible feedback banner */
+#app-content.azc-app .azc-kiosk-feedback {
+	margin: 0;
+	padding: var(--azc-space-3, 0.75rem) var(--azc-space-4, 1rem);
+	border-radius: var(--azc-radius-sm, 8px);
+	border: 1px solid var(--color-border);
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: var(--azc-line-base, 1.5);
 }
 
-.azc-kiosk-section__lead {
-	color: var(--color-text-maxcontrast);
-	margin-top: 0.25rem;
-	max-width: 52rem;
-	line-height: 1.5;
+#app-content.azc-app .azc-kiosk-feedback--success {
+	border-color: var(--color-success-text, var(--color-success));
+	background: var(--azc-tint-success, color-mix(in srgb, var(--color-success) 12%, transparent));
+	color: var(--color-main-text);
 }
 
-.azc-kiosk-toggle {
+#app-content.azc-app .azc-kiosk-feedback--error {
+	border-color: var(--color-error-text, var(--color-error));
+	background: var(--azc-tint-danger, color-mix(in srgb, var(--color-error) 12%, transparent));
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-section {
+	padding: var(--azc-space-5, 1.25rem);
+	margin: 0;
+}
+
+#app-content.azc-app .azc-kiosk-section__header {
+	margin-bottom: var(--azc-space-4, 1rem);
+}
+
+#app-content.azc-app .azc-kiosk-section__title {
+	font-size: var(--azc-fs-lg, 1.125rem);
+	font-weight: 600;
+	margin: 0 0 var(--azc-space-2, 0.5rem);
+	color: var(--azc-text, var(--color-main-text));
+	line-height: var(--azc-line-tight, 1.25);
+}
+
+#app-content.azc-app .azc-kiosk-section__lead {
+	margin: 0;
+	max-width: 65ch;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	line-height: var(--azc-line-base, 1.5);
+	font-size: var(--azc-fs-sm, 0.875rem);
+}
+
+#app-content.azc-app .azc-kiosk-toggle {
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
-	margin: 1rem 0;
+	margin: 0.75rem 0;
 	min-height: 2.75rem;
+	cursor: pointer;
 }
 
-.azc-kiosk-toggle input[type='checkbox'] {
+#app-content.azc-app .azc-kiosk-toggle input[type='checkbox'] {
 	width: 1.25rem;
 	height: 1.25rem;
+	flex-shrink: 0;
 }
 
-.azc-kiosk-form {
+#app-content.azc-app .azc-kiosk-capacity {
+	margin-top: var(--azc-space-3, 0.75rem);
+	max-width: 24rem;
+}
+
+#app-content.azc-app .azc-kiosk-capacity__label {
+	margin: 0 0 var(--azc-space-2, 0.5rem);
+	font-size: var(--azc-fs-sm, 0.875rem);
+}
+
+#app-content.azc-app .azc-kiosk-capacity__sep {
+	margin-inline: 0.15em;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app .azc-kiosk-capacity__link {
+	margin: var(--azc-space-2, 0.5rem) 0 0;
+	font-size: var(--azc-fs-sm, 0.875rem);
+}
+
+#app-content.azc-app .azc-kiosk-meter {
+	height: 0.375rem;
+	border-radius: var(--azc-radius-pill, 999px);
+	background: color-mix(in srgb, var(--color-main-text) 8%, transparent);
+	overflow: hidden;
+}
+
+#app-content.azc-app .azc-kiosk-meter__fill {
+	height: 100%;
+	border-radius: inherit;
+	background: var(--color-primary-element, #0082c9);
+	transition: width 0.25s ease;
+}
+
+#app-content.azc-app .azc-kiosk-meter__fill--full {
+	background: var(--color-warning-text, var(--color-warning));
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#app-content.azc-app .azc-kiosk-meter__fill {
+		transition: none;
+	}
+}
+
+#app-content.azc-app .azc-kiosk-form {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.75rem;
@@ -40,38 +125,131 @@
 	margin-bottom: 1rem;
 }
 
-.azc-kiosk-form--grid {
+#app-content.azc-app .azc-kiosk-form__field {
+	flex: 1 1 14rem;
+	min-width: 0;
+}
+
+#app-content.azc-app .azc-kiosk-form--grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 	gap: 1rem;
+	align-items: start;
 }
 
-.azc-kiosk-form__actions {
+#app-content.azc-app .azc-kiosk-form__actions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.75rem;
 	margin-bottom: 1rem;
 }
 
-.azc-kiosk-page .azc-btn {
-	min-height: 2.75rem;
-	min-width: 2.75rem;
+#app-content.azc-app .azc-kiosk-page .azc-btn {
+	min-height: 44px;
+	min-width: 44px;
 	padding: 0.5rem 1rem;
 }
 
-.azc-kiosk-page .azc-btn--small {
-	min-height: 2.75rem;
-	padding: 0.375rem 0.75rem;
+#app-content.azc-app .azc-kiosk-page .azc-btn--small {
+	min-height: 44px;
+	padding: 0.375rem 0.875rem;
+	font-size: var(--azc-fs-sm, 0.875rem);
 }
 
-.azc-kiosk-modal-backdrop {
+#app-content.azc-app .azc-kiosk-page .azc-btn--danger {
+	background: var(--color-error);
+	color: var(--color-primary-text, #fff);
+	border: 2px solid var(--color-error);
+}
+
+#app-content.azc-app .azc-kiosk-page .azc-btn--danger:hover,
+#app-content.azc-app .azc-kiosk-page .azc-btn--danger:focus-visible {
+	filter: brightness(0.92);
+	outline: 3px solid color-mix(in srgb, var(--color-error) 55%, transparent);
+	outline-offset: 2px;
+}
+
+#app-content.azc-app .azc-kiosk-page .azc-btn:disabled,
+#app-content.azc-app .azc-kiosk-page .azc-btn[aria-disabled='true'] {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+#app-content.azc-app .azc-kiosk-steps {
+	margin: 0 0 var(--azc-space-4, 1rem);
+	padding-left: 1.25rem;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.6;
+}
+
+#app-content.azc-app .azc-kiosk-search-wrap {
+	position: relative;
+}
+
+#app-content.azc-app .azc-kiosk-user-results {
+	list-style: none;
+	position: absolute;
+	z-index: 20;
+	left: 0;
+	right: 0;
+	margin: 0.25rem 0 0;
+	padding: 0;
+	border: 2px solid var(--color-border);
+	border-radius: var(--border-radius);
+	max-height: 12rem;
+	overflow-y: auto;
+	background: var(--color-main-background);
+	box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.12);
+}
+
+#app-content.azc-app .azc-kiosk-user-results button {
+	width: 100%;
+	text-align: left;
+	padding: 0.75rem;
+	min-height: 2.75rem;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	color: inherit;
+}
+
+#app-content.azc-app .azc-kiosk-user-results button:hover,
+#app-content.azc-app .azc-kiosk-user-results button:focus-visible,
+#app-content.azc-app .azc-kiosk-user-results [aria-selected='true'] button {
+	background: var(--color-background-hover);
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+}
+
+#app-content.azc-app .azc-kiosk-selected-panel {
+	margin: 0 0 1rem;
+	padding: var(--azc-space-4, 1rem);
+	border: 1px solid var(--azc-border, var(--color-border));
+	border-radius: var(--azc-radius-sm, 8px);
+	background: color-mix(in srgb, var(--color-primary-element) 6%, transparent);
+}
+
+#app-content.azc-app .azc-kiosk-selected-panel__name {
+	margin: 0 0 0.5rem;
+	font-weight: 600;
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-status {
+	min-height: 1.5rem;
+	font-weight: 600;
+	margin: 0 0 0.75rem;
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-modal-backdrop {
 	position: fixed;
 	inset: 0;
 	background: rgba(0, 0, 0, 0.45);
 	z-index: 9998;
 }
 
-.azc-kiosk-modal {
+#app-content.azc-app .azc-kiosk-modal {
 	position: fixed;
 	left: 50%;
 	top: 50%;
@@ -87,13 +265,13 @@
 	box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.2);
 }
 
-.azc-kiosk-modal__hint {
+#app-content.azc-app .azc-kiosk-modal__hint {
 	color: var(--color-text-maxcontrast);
 	margin: 0.5rem 0 1rem;
 	line-height: 1.5;
 }
 
-.azc-kiosk-pairing__code {
+#app-content.azc-app .azc-kiosk-pairing__code {
 	font-family: var(--font-face-monospace, monospace);
 	font-size: clamp(1.25rem, 4vw, 1.75rem);
 	font-weight: 700;
@@ -106,40 +284,72 @@
 	word-break: break-all;
 }
 
-.azc-kiosk-user-results {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	max-height: 12rem;
-	overflow-y: auto;
+body.azc-kiosk-modal-open {
+	overflow: hidden;
 }
 
-.azc-kiosk-user-results button {
-	width: 100%;
-	text-align: left;
-	padding: 0.75rem;
-	min-height: 2.75rem;
-	background: transparent;
-	border: none;
-	cursor: pointer;
-}
-
-.azc-kiosk-user-results button:hover,
-.azc-kiosk-user-results button:focus-visible {
-	background: var(--color-background-hover);
-	outline: 2px solid var(--color-primary-element);
-	outline-offset: -2px;
-}
-
-.azc-kiosk-enrollment-status {
-	min-height: 1.5rem;
+/* Badges */
+#app-content.azc-app .azc-badge {
+	display: inline-block;
+	padding: 0.25rem 0.65rem;
+	border-radius: var(--azc-radius-pill, 999px);
+	font-size: var(--azc-fs-xs, 0.8125rem);
 	font-weight: 600;
-	margin-bottom: 0.5rem;
+	line-height: 1.3;
 }
 
-.azc-kiosk-allowed-toggle {
+#app-content.azc-app .azc-badge--success {
+	background: color-mix(in srgb, var(--color-success) 18%, transparent);
+	color: var(--color-success-text, var(--color-success));
+}
+
+#app-content.azc-app .azc-badge--warning {
+	background: color-mix(in srgb, var(--color-warning) 22%, transparent);
+	color: var(--color-warning-text, var(--color-warning));
+}
+
+#app-content.azc-app .azc-badge--neutral {
+	background: color-mix(in srgb, var(--color-main-text) 10%, transparent);
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app .azc-kiosk-cred-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem;
+}
+
+/* Neutralise Nextcloud core table { white-space: nowrap } + dt quirks */
+#app-content.azc-app .azc-kiosk-table {
+	width: 100%;
+	border-collapse: collapse;
+	white-space: normal;
+}
+
+#app-content.azc-app .azc-kiosk-table th,
+#app-content.azc-app .azc-kiosk-table td {
+	white-space: normal;
+	word-break: break-word;
+	vertical-align: middle;
+	padding: 0.75rem 0.5rem;
+	border-bottom: 1px solid var(--color-border);
+	text-align: start;
+}
+
+#app-content.azc-app .azc-kiosk-table th {
+	font-weight: 600;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app .azc-kiosk-empty-row td,
+#app-content.azc-app .azc-kiosk-empty-cell {
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	font-style: italic;
+	padding: 1rem 0.5rem;
+}
+
+#app-content.azc-app .azc-kiosk-allowed-toggle {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.5rem;
@@ -147,34 +357,76 @@
 	cursor: pointer;
 }
 
-.azc-kiosk-allowed-input {
+#app-content.azc-app .azc-kiosk-allowed-input {
 	width: 1.25rem;
 	height: 1.25rem;
 	margin: 0;
 }
 
-.azc-kiosk-allowed-visual {
-	font-weight: 700;
-	min-width: 1.25rem;
-	text-align: center;
-}
-
-body.azc-kiosk-modal-open {
-	overflow: hidden;
+#app-content.azc-app .azc-kiosk-cred-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
 }
 
 @media (max-width: 768px) {
-	.azc-kiosk-form {
+	#app-content.azc-app .azc-kiosk-form {
 		flex-direction: column;
 		align-items: stretch;
 	}
 
-	.azc-kiosk-form__actions .azc-btn {
+	#app-content.azc-app .azc-kiosk-form__actions .azc-btn {
 		width: 100%;
 	}
 
-	.azc-table-wrap {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
+	#app-content.azc-app .azc-table-wrap {
+		overflow-x: visible;
+	}
+
+	/* Stack table rows as cards on narrow viewports */
+	#app-content.azc-app .azc-kiosk-table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	#app-content.azc-app .azc-kiosk-table,
+	#app-content.azc-app .azc-kiosk-table tbody,
+	#app-content.azc-app .azc-kiosk-table tr,
+	#app-content.azc-app .azc-kiosk-table td {
+		display: block;
+		width: 100%;
+	}
+
+	#app-content.azc-app .azc-kiosk-table tr {
+		margin-bottom: 0.75rem;
+		padding: 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--azc-radius-sm, 8px);
+		background: var(--color-main-background);
+	}
+
+	#app-content.azc-app .azc-kiosk-table td {
+		border: none;
+		padding: 0.35rem 0;
+	}
+
+	#app-content.azc-app .azc-kiosk-table td::before {
+		content: attr(data-label);
+		display: block;
+		font-size: var(--azc-fs-xs, 0.8125rem);
+		font-weight: 600;
+		color: var(--azc-muted, var(--color-text-maxcontrast));
+		margin-bottom: 0.15rem;
+	}
+
+	#app-content.azc-app .azc-kiosk-empty-row td::before {
+		content: none;
 	}
 }
