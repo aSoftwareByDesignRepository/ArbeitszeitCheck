@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.9 - 2026-07-18
+
+### Added
+
+- **Dedicated admin user detail page:** user editing moved off the users list onto its own detail view (route, template, and admin JS), with clearer navigation from the users overview.
+
+### Changed
+
+- **Kiosk admin enrollment UX:** improved enrollment polling, status feedback, and kiosk-facing copy during badge/PIN assignment.
+- **Kiosk error messaging:** clearer, actionable messages for common enrollment and credential failures.
+
+### Fixed
+
+- **Kiosk identify/assign races:** identify and assign flows now take enrollment locks so concurrent admin/kiosk actions cannot corrupt in-flight enrollment state.
+- **Credential assignment under load:** kiosk credential updates are serialized with enrollment so badge/PIN changes stay consistent with the active session.
+
 ## 1.5.8 - 2026-07-18
 
 ### Changed
