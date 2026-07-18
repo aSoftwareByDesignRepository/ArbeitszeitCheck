@@ -125,6 +125,12 @@ class TimeEntryControllerTest extends TestCase
 		$this->timeTrackingService = $this->createMock(TimeTrackingService::class);
 		$this->timeTrackingService->method('calculateAndSetAutomaticBreak');
 		$this->timeTrackingService->method('adjustEndTimeForDailyMaximum');
+		$this->timeTrackingService->method('withUserMutationLock')->willReturnCallback(
+			static function (string $userId, callable $fn) {
+				unset($userId);
+				return $fn();
+			}
+		);
 		$this->teamResolver = $this->createMock(TeamResolverService::class);
 		$this->teamResolver->method('getColleagueIds')->willReturn([]);
 		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(false);

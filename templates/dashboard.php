@@ -97,7 +97,6 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
             $calloutIcon = 'alert-triangle';
             $calloutTitle = $l->t('Some dashboard data could not be loaded.');
             $calloutText = $dashboardError;
-            unset($calloutAriaLive);
             include __DIR__ . '/common/alert-callout.php';
             ?>
         <?php endif; ?>
@@ -267,7 +266,7 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                         <div class="azc-dashboard-punch__timers">
                             <?php if ($statusKeySafe === 'break'): ?>
                                 <div class="break-timer azc-dashboard-punch__timer dashboard-status-card__timer" data-break-start-time="<?php p($status['current_entry']['breakStartTime'] ?? ''); ?>" role="status" aria-live="polite">
-                                    <span class="timer-label"><?php p($l->t('Break Time')); ?></span>
+                                    <span class="timer-label"><?php p($l->t('Break timer')); ?></span>
                                     <span class="timer-value" id="break-timer-value"><?php p($breakDurationFormatted); ?></span>
                                     <?php if ($breakStartTime !== null): ?>
                                         <p class="azc-dashboard-punch__meta dashboard-status-card__meta">
@@ -283,12 +282,7 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                     <?php endif; ?>
                                 </div>
                                 <div class="session-timer azc-dashboard-punch__timer azc-dashboard-punch__timer--secondary dashboard-status-card__timer dashboard-status-card__timer--paused dashboard-status-card__timer--secondary" data-start-time="<?php p($status['current_entry']['startTime'] ?? ''); ?>" role="status" aria-live="polite">
-                                    <span class="timer-label"><?php p($l->t('Working Time')); ?></span>
-                                    <span class="timer-value" id="session-timer-value"><?php p($durationFormatted); ?></span>
-                                </div>
-                            <?php elseif ($statusKeySafe === 'paused'): ?>
-                                <div class="session-timer azc-dashboard-punch__timer dashboard-status-card__timer dashboard-status-card__timer--paused" data-start-time="<?php p($status['current_entry']['startTime'] ?? ''); ?>" role="status" aria-live="polite">
-                                    <span class="timer-label"><?php p($l->t('Working Time')); ?></span>
+                                    <span class="timer-label"><?php p($l->t('Worked so far today')); ?></span>
                                     <span class="timer-value" id="session-timer-value"><?php p($durationFormatted); ?></span>
                                     <?php if ($startedAt !== null): ?>
                                         <p class="azc-dashboard-punch__meta dashboard-status-card__meta"><?php p($l->t('Started at')); ?> <?php p($startedAt); ?></p>

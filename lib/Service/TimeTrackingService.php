@@ -673,16 +673,10 @@ class TimeTrackingService
 	public function getStatus(string $userId): array
 	{
 		try {
-			// Repairs write to at_* tables; subsequent reads in this method would
-			// otherwise trigger "dirty table reads" diagnostics. A transaction keeps
-			// reads on the primary without that noise and preserves consistency.
-			$this->db->beginTransaction();
-			$this->repairStalePausedAutomaticEntries($userId);
-			// Self-healing: if the user has crossed the ArbZG §3 daily maximum,
-			// auto-complete the active entry on read so the frontend timer
-			// observes a consistent state and never enters a reload loop.
-			// This deliberately runs BEFORE we look up the entry below.
-			$this->maybeAutoCompleteAtDailyMaximum($userId);
+			// Side-effect repairs must hold the same exclusive lock as clock mutations
+			// (never write from an unlocked read path). Keep them outside any outer DB
+			// transaction so enforceDailyMaximum can open its own short TX without nesting.
+			$this->runStatusSideEffectsUnderLock($userId);
 
 			$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
 			$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
@@ -710,7 +704,7 @@ class TimeTrackingService
 						);
 						$pausedSummary = ['id' => $pausedEntry->getId(), 'userId' => $userId, 'status' => TimeEntry::STATUS_PAUSED];
 					}
-					$status = $this->appendAutoClockoutNotice($this->withServerClock(
+					return $this->appendAutoClockoutNotice($this->withServerClock(
 						$this->appendArbzgCalendarDayStatusFields([
 							'status' => TimeEntry::STATUS_PAUSED,
 							'current_entry' => $pausedSummary,
@@ -719,11 +713,9 @@ class TimeTrackingService
 						], $userId, $pausedEntry),
 						$nowImmutable,
 					), $userId);
-					$this->db->commit();
-					return $status;
 				}
 
-				$status = $this->appendAutoClockoutNotice($this->withServerClock(
+				return $this->appendAutoClockoutNotice($this->withServerClock(
 					$this->appendArbzgCalendarDayStatusFields([
 						'status' => 'clocked_out',
 						'current_entry' => null,
@@ -732,8 +724,6 @@ class TimeTrackingService
 					], $userId, null),
 					$nowImmutable,
 				), $userId);
-				$this->db->commit();
-				return $status;
 			}
 
 			$sessionStart = $currentEntry->getStartTime();
@@ -771,7 +761,7 @@ class TimeTrackingService
 				];
 			}
 
-			$status = $this->appendAutoClockoutNotice($this->withServerClock(
+			return $this->appendAutoClockoutNotice($this->withServerClock(
 				$this->appendArbzgCalendarDayStatusFields([
 					'status' => $currentEntry->getStatus(),
 					'current_entry' => $entrySummary,
@@ -780,12 +770,7 @@ class TimeTrackingService
 				], $userId, $currentEntry),
 				$nowImmutable,
 			), $userId);
-			$this->db->commit();
-			return $status;
 		} catch (\Throwable $e) {
-			if ($this->db->inTransaction()) {
-				$this->db->rollBack();
-			}
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in getStatus for user ' . $userId . ': ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString(), ["exception" => $e]);
 			// Return a safe default status (still include the server clock so
 			// the client can keep its drift estimate alive even on error).
@@ -798,6 +783,21 @@ class TimeTrackingService
 				], $userId, null),
 				$this->timeZoneService->nowImmutableInStorage(),
 			), $userId);
+		}
+	}
+
+	/**
+	 * Repair stale paused rows and auto-complete at daily max under the user lock.
+	 * Invoked from {@see getStatus()} before read-only status assembly.
+	 */
+	private function runStatusSideEffectsUnderLock(string $userId): void
+	{
+		$lockKey = $this->acquireUserMutationLock($userId);
+		try {
+			$this->repairStalePausedAutomaticEntries($userId);
+			$this->maybeAutoCompleteAtDailyMaximumAlreadyLocked($userId);
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
 		}
 	}
 
@@ -1527,66 +1527,72 @@ class TimeTrackingService
 	{
 		$lockKey = $this->acquireUserMutationLock($userId);
 		try {
-			$this->db->beginTransaction();
-			try {
-				$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
-				$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
-				$currentEntry = $activeEntry ?: $breakEntry;
-				if ($currentEntry === null) {
-					$this->db->commit();
-					return null;
-				}
-
-				$this->monthClosureGuard->assertTimeEntryMutable($currentEntry);
-				$completed = $this->completeEntryIfDailyMaximumReached($currentEntry);
-				if (!$completed) {
-					$this->db->commit();
-					return null;
-				}
-
-				$updated = $this->timeEntryMapper->find($currentEntry->getId());
-				$now = $this->nowForAtEntries();
-				$noticeMessage = $this->l10n->t(
-					'Session was automatically completed at %1$s because the maximum daily working hours were reached (ArbZG §3).',
-					[$this->timeZoneService->formatForDisplay($now, 'd.m.Y H:i', $userId)]
-				);
-				$this->config->setUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', json_encode([
-					'message' => $noticeMessage,
-					'reason' => 'daily_maximum_reached',
-					'at' => $now->format('c'),
-				]));
-				$this->db->commit();
-
-				try {
-					$this->checkComplianceAfterClockOut($updated);
-				} catch (\Throwable $complianceError) {
-					\OCP\Log\logger('arbeitszeitcheck')->warning(
-						'Compliance check after auto daily-maximum clock-out failed: ' . $complianceError->getMessage(),
-						['exception' => $complianceError, 'user_id' => $userId, 'entry_id' => $updated->getId()]
-					);
-				}
-
-				return $updated;
-			} catch (\Throwable $e) {
-				$this->db->rollBack();
-				throw $e;
-			}
+			return $this->enforceDailyMaximumForUserAlreadyLocked($userId);
 		} finally {
 			$this->releaseUserMutationLock($lockKey);
 		}
 	}
 
 	/**
+	 * Same as {@see enforceDailyMaximumForUser()} but the caller must already hold
+	 * {@see acquireUserMutationLock()} for `$userId` (avoids nested exclusive locks).
+	 */
+	private function enforceDailyMaximumForUserAlreadyLocked(string $userId): ?TimeEntry
+	{
+		$this->db->beginTransaction();
+		try {
+			$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
+			$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
+			$currentEntry = $activeEntry ?: $breakEntry;
+			if ($currentEntry === null) {
+				$this->db->commit();
+				return null;
+			}
+
+			$this->monthClosureGuard->assertTimeEntryMutable($currentEntry);
+			$completed = $this->completeEntryIfDailyMaximumReached($currentEntry);
+			if (!$completed) {
+				$this->db->commit();
+				return null;
+			}
+
+			$updated = $this->timeEntryMapper->find($currentEntry->getId());
+			$now = $this->nowForAtEntries();
+			$noticeMessage = $this->l10n->t(
+				'Session was automatically completed at %1$s because the maximum daily working hours were reached (ArbZG §3).',
+				[$this->timeZoneService->formatForDisplay($now, 'd.m.Y H:i', $userId)]
+			);
+			$this->config->setUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', json_encode([
+				'message' => $noticeMessage,
+				'reason' => 'daily_maximum_reached',
+				'at' => $now->format('c'),
+			]));
+			$this->db->commit();
+
+			try {
+				$this->checkComplianceAfterClockOut($updated);
+			} catch (\Throwable $complianceError) {
+				\OCP\Log\logger('arbeitszeitcheck')->warning(
+					'Compliance check after auto daily-maximum clock-out failed: ' . $complianceError->getMessage(),
+					['exception' => $complianceError, 'user_id' => $userId, 'entry_id' => $updated->getId()]
+				);
+			}
+
+			return $updated;
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			throw $e;
+		}
+	}
+
+	/**
 	 * Best-effort auto-completion when the daily maximum has already been crossed.
 	 *
-	 * This is invoked from read-paths like {@see getStatus()} so that the frontend
-	 * never observes a session above the ArbZG §3 ceiling without a corresponding
-	 * completion. It performs a cheap precheck (no lock) and only escalates to the
-	 * locked transactional path when needed. All errors are swallowed and logged –
-	 * the read-path must remain reliable even if enforcement fails (e.g. when the
-	 * containing month has been finalised in the meantime).
+	 * Invoked while holding the user mutation lock from {@see runStatusSideEffectsUnderLock()}.
+	 * All errors are swallowed and logged – the read-path must remain reliable even if
+	 * enforcement fails (e.g. when the containing month has been finalised).
 	 */
-	private function maybeAutoCompleteAtDailyMaximum(string $userId): void
+	private function maybeAutoCompleteAtDailyMaximumAlreadyLocked(string $userId): void
 	{
 		try {
 			$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
@@ -1599,7 +1605,7 @@ class TimeTrackingService
 				return;
 			}
 
-			$this->enforceDailyMaximumForUser($userId);
+			$this->enforceDailyMaximumForUserAlreadyLocked($userId);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->warning(
 				'Self-healing daily-maximum enforcement skipped: ' . $e->getMessage(),
@@ -1715,6 +1721,24 @@ class TimeTrackingService
 			$this->lockingProvider->releaseLock($key, ILockingProvider::LOCK_EXCLUSIVE);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->warning('Failed to release time tracking workflow lock: ' . $e->getMessage(), ['exception' => $e]);
+		}
+	}
+
+	/**
+	 * Run $fn while holding the per-user time-tracking exclusive lock.
+	 * Used by manual entry create/update so overlap checks cannot race clock mutations.
+	 *
+	 * @template T
+	 * @param callable(): T $fn
+	 * @return T
+	 */
+	public function withUserMutationLock(string $userId, callable $fn)
+	{
+		$lockKey = $this->acquireUserMutationLock($userId);
+		try {
+			return $fn();
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
 		}
 	}
 

@@ -692,6 +692,7 @@
         "Your time entry correction for %s has been approved.": "Ihre Zeiteintragskorrektur für %s wurde genehmigt.",
         "Your time entry correction for %s has been rejected.": "Ihre Zeiteintragskorrektur für %s wurde abgelehnt.",
         "Your undertime balance reached red level (%s hours).": "Ihr Minusstundensaldo hat die rote Stufe erreicht (%s Stunden).",
-        "Your undertime balance reached yellow level (%s hours).": "Ihr Minusstundensaldo hat die gelbe Stufe erreicht (%s Stunden)."
+        "Your undertime balance reached yellow level (%s hours).": "Ihr Minusstundensaldo hat die gelbe Stufe erreicht (%s Stunden).",
+        "Minimum %1$d-hour rest period required between shifts (ArbZG §5). Your last shift ended on %2$s at %3$s. You can clock in after %4$s (in %5$.1f hours).": "Mindestens %1$d Stunden Ruhezeit zwischen Schichten erforderlich (ArbZG §5). Ihre letzte Schicht endete am %2$s um %3$s. Sie können nach %4$s wieder einstempeln (in %5$.1f Stunden)."
     }
 }

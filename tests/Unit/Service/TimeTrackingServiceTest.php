@@ -447,12 +447,16 @@ class TimeTrackingServiceTest extends TestCase {
 		$pausedEntry->setCreatedAt(new \DateTime());
 
 		$tz = new \DateTimeZone('Europe/Berlin');
+		$now = new \DateTime('now', $tz);
+		// Fully completed span ending in the past so daily-hours clipping does not shrink it.
+		$end = (clone $now)->modify('-30 minutes');
+		$startHeavy = (clone $end)->modify('-10 hours -30 minutes');
 		$heavy = new TimeEntry();
 		$heavy->setId(1);
 		$heavy->setUserId($userId);
 		$heavy->setStatus(TimeEntry::STATUS_COMPLETED);
-		$heavy->setStartTime(new \DateTime('today 07:00', $tz));
-		$heavy->setEndTime(new \DateTime('today 17:30', $tz));
+		$heavy->setStartTime($startHeavy);
+		$heavy->setEndTime($end);
 		$heavy->setBreaks(json_encode([]));
 		$this->timeEntryMapper->method('findOverlapping')->willReturn([$heavy]);
 

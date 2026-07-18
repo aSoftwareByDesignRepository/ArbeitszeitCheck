@@ -26,6 +26,7 @@ use OCP\IDBConnection;
 use OCP\IConfig;
 use OCP\IL10N;
 use OCP\IUserManager;
+use OCP\Lock\ILockingProvider;
 use Psr\Log\LoggerInterface;
 
 class MonthClosureService
@@ -46,6 +47,8 @@ class MonthClosureService
 	private PermissionService $permissionService;
 	private OvertimeBankService $overtimeBankService;
 	private \OCA\ArbeitszeitCheck\Db\OvertimePayoutMapper $overtimePayoutMapper;
+	private TimeZoneService $timeZoneService;
+	private ILockingProvider $lockingProvider;
 
 	public function __construct(
 		MonthClosureMapper $closureMapper,
@@ -61,6 +64,8 @@ class MonthClosureService
 		PermissionService $permissionService,
 		OvertimeBankService $overtimeBankService,
 		\OCA\ArbeitszeitCheck\Db\OvertimePayoutMapper $overtimePayoutMapper,
+		?TimeZoneService $timeZoneService = null,
+		?\OCP\Lock\ILockingProvider $lockingProvider = null,
 	) {
 		$this->closureMapper = $closureMapper;
 		$this->revisionMapper = $revisionMapper;
@@ -75,6 +80,30 @@ class MonthClosureService
 		$this->permissionService = $permissionService;
 		$this->overtimeBankService = $overtimeBankService;
 		$this->overtimePayoutMapper = $overtimePayoutMapper;
+		$this->timeZoneService = $timeZoneService ?? \OCP\Server::get(TimeZoneService::class);
+		$this->lockingProvider = $lockingProvider ?? \OCP\Server::get(\OCP\Lock\ILockingProvider::class);
+	}
+
+	private function todayInStorage(): \DateTimeImmutable
+	{
+		[$start] = $this->timeZoneService->todayWindowInStorage();
+		return \DateTimeImmutable::createFromMutable($start);
+	}
+
+	private function acquireFinalizeLock(string $userId, int $year, int $month): string
+	{
+		$key = sprintf('arbeitszeitcheck/month-closure/%s/%04d-%02d', $userId, $year, $month);
+		$this->lockingProvider->acquireLock($key, ILockingProvider::LOCK_EXCLUSIVE, 'Month closure finalize lock');
+		return $key;
+	}
+
+	private function releaseFinalizeLock(string $key): void
+	{
+		try {
+			$this->lockingProvider->releaseLock($key, ILockingProvider::LOCK_EXCLUSIVE);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to release month closure lock: ' . $e->getMessage(), ['exception' => $e]);
+		}
 	}
 
 	public function getGraceDaysAfterEndOfMonth(): int
@@ -93,7 +122,8 @@ class MonthClosureService
 		if ($n < 1) {
 			return null;
 		}
-		$d = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+		$tz = $this->timeZoneService->storageTimeZone();
+		$d = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month), $tz);
 		$d = $d->modify('last day of this month');
 		$d = $d->modify('+' . $n . ' days');
 		return $d->setTime(0, 0, 0);
@@ -114,35 +144,33 @@ class MonthClosureService
 	}
 
 	/**
-	 * True if the given calendar month is strictly after the current calendar month (server date).
+	 * True if the given calendar month is strictly after the current calendar month (storage TZ).
 	 * Finalization is not allowed for future months.
 	 */
 	public function isCalendarMonthStrictlyAfterCurrent(int $year, int $month): bool
 	{
-		$today = new \DateTimeImmutable('today');
+		$today = $this->todayInStorage();
 		$curY = (int)$today->format('Y');
 		$curM = (int)$today->format('n');
 		return ($year > $curY) || ($year === $curY && $month > $curM);
 	}
 
 	/**
-	 * True once the calendar month is over (local server date): first day of the next month has begun.
+	 * True once the calendar month is over (organisation storage TZ): first day of the next month has begun.
 	 */
 	public function isCalendarMonthFullyEnded(int $year, int $month): bool
 	{
-		$firstOfNext = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+		$tz = $this->timeZoneService->storageTimeZone();
+		$firstOfNext = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month), $tz);
 		$firstOfNext = $firstOfNext->modify('first day of next month')->setTime(0, 0, 0);
-		$today = new \DateTimeImmutable('today');
+		$today = $this->todayInStorage();
 		return $today >= $firstOfNext;
 	}
 
 	public function hasTimeEntryInCalendarMonth(string $userId, int $year, int $month): bool
 	{
-		$start = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
-		$start->setTime(0, 0, 0);
-		$end = clone $start;
-		$end->modify('last day of this month');
-		$end->setTime(23, 59, 59);
+		[$start, $endExclusive] = $this->timeZoneService->monthWindowInStorage($year, $month);
+		$end = (clone $endExclusive)->modify('-1 second');
 		$entries = $this->timeEntryMapper->findByUserAndDateRange($userId, $start, $end);
 
 		return $entries !== [];
@@ -213,7 +241,7 @@ class MonthClosureService
 		if (!MonthClosureFeature::isEnabledFromIConfig($this->config) || $this->getGraceDaysAfterEndOfMonth() < 1) {
 			return $stats;
 		}
-		$today = $today ?? new \DateTime('today');
+		$today = $today ?? $this->todayInStorage();
 		$this->userManager->callForAllUsers(function (\OCP\IUser $user) use ($today, &$stats): void {
 			if ($user->isEnabled() !== true) {
 				return;
@@ -267,15 +295,21 @@ class MonthClosureService
 		if (!$this->isPastAutoFinalizeDeadline($year, $month, $today)) {
 			return 'skipped';
 		}
-		$existing = $this->closureMapper->findByUserAndMonthOptional($targetUserId, $year, $month);
-		if ($existing !== null && $existing->getStatus() === MonthClosure::STATUS_FINALIZED) {
-			return 'skipped';
+
+		$lockKey = $this->acquireFinalizeLock($targetUserId, $year, $month);
+		try {
+			$existing = $this->closureMapper->findByUserAndMonthOptional($targetUserId, $year, $month);
+			if ($existing !== null && $existing->getStatus() === MonthClosure::STATUS_FINALIZED) {
+				return 'skipped';
+			}
+			if ($this->monthBlocksFinalization($targetUserId, $year, $month)) {
+				return 'pending_correction';
+			}
+			$this->persistFinalizedMonth(self::AUTO_FINALIZE_ACTOR_ID, $targetUserId, $year, $month, $existing, 'month_closure_auto_finalized');
+			return 'finalized';
+		} finally {
+			$this->releaseFinalizeLock($lockKey);
 		}
-		if ($this->monthBlocksFinalization($targetUserId, $year, $month)) {
-			return 'pending_correction';
-		}
-		$this->persistFinalizedMonth(self::AUTO_FINALIZE_ACTOR_ID, $targetUserId, $year, $month, $existing, 'month_closure_auto_finalized');
-		return 'finalized';
 	}
 
 	private function monthHasPendingOvertimePayout(string $targetUserId, int $year, int $month): bool
@@ -543,27 +577,32 @@ class MonthClosureService
 			throw new \RuntimeException('forbidden');
 		}
 
-		$existing = $this->closureMapper->findByUserAndMonthOptional($targetUserId, $year, $month);
-		if ($existing !== null && $existing->getStatus() === MonthClosure::STATUS_FINALIZED) {
-			throw new \RuntimeException('already_finalized');
-		}
+		$lockKey = $this->acquireFinalizeLock($targetUserId, $year, $month);
+		try {
+			$existing = $this->closureMapper->findByUserAndMonthOptional($targetUserId, $year, $month);
+			if ($existing !== null && $existing->getStatus() === MonthClosure::STATUS_FINALIZED) {
+				throw new \RuntimeException('already_finalized');
+			}
 
-		if ($this->isCalendarMonthStrictlyAfterCurrent($year, $month)) {
-			throw new \RuntimeException('future_month');
-		}
-		if (!$this->isCalendarMonthFullyEnded($year, $month)) {
-			throw new \RuntimeException('month_not_ended');
-		}
-		if (!$this->hasTimeEntryInCalendarMonth($targetUserId, $year, $month)) {
-			throw new \RuntimeException('no_time_entries');
-		}
+			if ($this->isCalendarMonthStrictlyAfterCurrent($year, $month)) {
+				throw new \RuntimeException('future_month');
+			}
+			if (!$this->isCalendarMonthFullyEnded($year, $month)) {
+				throw new \RuntimeException('month_not_ended');
+			}
+			if (!$this->hasTimeEntryInCalendarMonth($targetUserId, $year, $month)) {
+				throw new \RuntimeException('no_time_entries');
+			}
 
-		$blockReason = $this->getMonthFinalizeBlockReason($targetUserId, $year, $month);
-		if ($blockReason !== null) {
-			throw new \RuntimeException($blockReason);
-		}
+			$blockReason = $this->getMonthFinalizeBlockReason($targetUserId, $year, $month);
+			if ($blockReason !== null) {
+				throw new \RuntimeException($blockReason);
+			}
 
-		return $this->persistFinalizedMonth($actorUserId, $targetUserId, $year, $month, $existing, 'month_closure_finalized');
+			return $this->persistFinalizedMonth($actorUserId, $targetUserId, $year, $month, $existing, 'month_closure_finalized');
+		} finally {
+			$this->releaseFinalizeLock($lockKey);
+		}
 	}
 
 	/**
@@ -657,40 +696,46 @@ class MonthClosureService
 		if ($reason === '') {
 			throw new \RuntimeException('reason_required');
 		}
-		$existing = $this->closureMapper->findByUserAndMonthOptional($targetUserId, $year, $month);
-		if ($existing === null || $existing->getStatus() !== MonthClosure::STATUS_FINALIZED) {
-			throw new \RuntimeException('not_finalized');
-		}
 
-		$this->db->beginTransaction();
+		$lockKey = $this->acquireFinalizeLock($targetUserId, $year, $month);
 		try {
-			$now = new \DateTime('now', new \DateTimeZone('UTC'));
-			$existing->setStatus(MonthClosure::STATUS_OPEN);
-			$existing->setSnapshotHash(null);
-			$existing->setPrevSnapshotHash(null);
-			$existing->setCanonicalPayload(null);
-			$existing->setFinalizedAt(null);
-			$existing->setFinalizedBy(null);
-			$existing->setReopenedAt($now);
-			$existing->setReopenedBy($adminUserId);
-			$existing->setReopenReason($reason);
-			$u = $this->closureMapper->update($existing);
+			$existing = $this->closureMapper->findByUserAndMonthOptional($targetUserId, $year, $month);
+			if ($existing === null || $existing->getStatus() !== MonthClosure::STATUS_FINALIZED) {
+				throw new \RuntimeException('not_finalized');
+			}
 
-			$this->auditLogMapper->logAction(
-				$targetUserId,
-				'month_closure_reopened',
-				'month_closure',
-				$u->getId(),
-				null,
-				['year' => $year, 'month' => $month, 'reason' => $reason],
-				$adminUserId
-			);
+			$this->db->beginTransaction();
+			try {
+				$now = new \DateTime('now', new \DateTimeZone('UTC'));
+				$existing->setStatus(MonthClosure::STATUS_OPEN);
+				$existing->setSnapshotHash(null);
+				$existing->setPrevSnapshotHash(null);
+				$existing->setCanonicalPayload(null);
+				$existing->setFinalizedAt(null);
+				$existing->setFinalizedBy(null);
+				$existing->setReopenedAt($now);
+				$existing->setReopenedBy($adminUserId);
+				$existing->setReopenReason($reason);
+				$u = $this->closureMapper->update($existing);
 
-			$this->db->commit();
-			return $u;
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
+				$this->auditLogMapper->logAction(
+					$targetUserId,
+					'month_closure_reopened',
+					'month_closure',
+					$u->getId(),
+					null,
+					['year' => $year, 'month' => $month, 'reason' => $reason],
+					$adminUserId
+				);
+
+				$this->db->commit();
+				return $u;
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			$this->releaseFinalizeLock($lockKey);
 		}
 	}
 

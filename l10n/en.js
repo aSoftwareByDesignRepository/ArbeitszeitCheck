@@ -328,6 +328,8 @@ OC.L10N.register(
 	"Break Start" : "Break Start",
 	"Break Start Time" : "Break Start Time",
 	"Break Time" : "Break Time",
+	"Break timer" : "Break timer",
+	"Worked so far today" : "Worked so far today",
 	"Break Time Warning" : "Break Time Warning",
 	"Break end hour" : "Break end hour",
 	"Break end minute" : "Break end minute",

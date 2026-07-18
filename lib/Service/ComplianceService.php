@@ -106,46 +106,13 @@ class ComplianceService
         $issues = [];
 
         // Check rest period (11 hours between shifts) - CRITICAL: Always enforce (ArbZG §5)
-        if (!$this->checkRestPeriod($userId)) {
-            // Resolve last effective end time for the error message (same targeted lookups as checkRestPeriod).
-            $minRest = $this->getMinRestPeriod();
-            $lastCompleted = $this->timeEntryMapper->findLastCompletedByUser($userId);
-            $lastEndTime = $lastCompleted?->getEndTime();
-
-            if ($lastEndTime === null) {
-                $lookbackHours = max(48, (int)ceil($minRest * 2));
-                $lastPaused = $this->timeEntryMapper->findLastPausedWithinHours($userId, $lookbackHours);
-                $lastEndTime = $lastPaused?->getUpdatedAt();
-            }
-            
-            if ($lastEndTime) {
-                $minRest = $this->getMinRestPeriod();
-                $earliestClockIn = clone $lastEndTime;
-                $earliestClockIn->modify('+' . (int)$minRest . ' hours');
-                $now = new \DateTime();
-                $hoursRemaining = ($earliestClockIn->getTimestamp() - $now->getTimestamp()) / 3600;
-                
-                $issues[] = [
-                    'type' => ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
-                    'severity' => ComplianceViolation::SEVERITY_ERROR,
-                    'message' => $this->l10n->t(
-                        'Minimum %1$d-hour rest period required between shifts (ArbZG §5). Your last shift ended at %2$s. You can clock in after %3$s (in %4$.1f hours).',
-                        [
-                            (int)$minRest,
-                            $this->displayClock($lastEndTime, $userId),
-                            $this->displayClock($earliestClockIn, $userId),
-                            max(0.0, $hoursRemaining),
-                        ]
-                    )
-                ];
-            } else {
-                $minRest = (int)$this->getMinRestPeriod();
-                $issues[] = [
-                    'type' => ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
-                    'severity' => ComplianceViolation::SEVERITY_ERROR,
-                    'message' => $this->l10n->t('Minimum %d-hour rest period required between shifts (ArbZG §5)', [$minRest])
-                ];
-            }
+        $restEvaluation = $this->evaluateRestPeriodForClockIn($userId);
+        if (!$restEvaluation['valid']) {
+            $issues[] = [
+                'type' => ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
+                'severity' => ComplianceViolation::SEVERITY_ERROR,
+                'message' => $restEvaluation['message'],
+            ];
         }
 
         // Check daily working hours limit
@@ -571,28 +538,103 @@ class ComplianceService
      */
     private function checkRestPeriod(string $userId): bool
     {
+        return $this->evaluateRestPeriodForClockIn($userId)['valid'];
+    }
+
+    /**
+     * Evaluate ArbZG §5 rest for clock-in at "now" in the organisation storage TZ.
+     *
+     * Critical invariants:
+     *  - "Now" is always {@see TimeZoneService::nowInStorage()} (never PHP default TZ).
+     *  - The rest anchor is the latest completed end_time strictly before now.
+     *    Entries with end_time in the future (bad manual rows / planned days) must
+     *    never block clock-in — they are not an ended shift yet.
+     *  - User-facing times always include the calendar date so "04:00" cannot be
+     *    mistaken for a time that already passed today when it is tomorrow.
+     *
+     * @return array{valid: bool, message: string|null, lastEndTime: ?\DateTime, earliestClockIn: ?\DateTime}
+     */
+    private function evaluateRestPeriodForClockIn(string $userId): array
+    {
+        $now = $this->timeZoneService->nowInStorage();
+        $lastEndTime = $this->resolveRestPeriodAnchor($userId, $now);
         $minRest = $this->getMinRestPeriod();
 
-        // Most-recent completed entry — single indexed query, O(1).
-        $lastCompleted = $this->timeEntryMapper->findLastCompletedByUser($userId);
+        if ($lastEndTime === null) {
+            return [
+                'valid' => true,
+                'message' => null,
+                'lastEndTime' => null,
+                'earliestClockIn' => null,
+            ];
+        }
+
+        $hoursSinceLastEntry = ($now->getTimestamp() - $lastEndTime->getTimestamp()) / 3600.0;
+        if ($hoursSinceLastEntry >= $minRest) {
+            return [
+                'valid' => true,
+                'message' => null,
+                'lastEndTime' => $lastEndTime,
+                'earliestClockIn' => null,
+            ];
+        }
+
+        $earliestClockIn = $this->addRestHours($lastEndTime, $minRest);
+        $hoursRemaining = ($earliestClockIn->getTimestamp() - $now->getTimestamp()) / 3600.0;
+
+        return [
+            'valid' => false,
+            'message' => $this->l10n->t(
+                'Minimum %1$d-hour rest period required between shifts (ArbZG §5). Your last shift ended on %2$s at %3$s. You can clock in after %4$s (in %5$.1f hours).',
+                [
+                    (int)$minRest,
+                    $this->displayDate($lastEndTime, $userId),
+                    $this->displayClock($lastEndTime, $userId),
+                    $this->timeZoneService->formatForDisplay($earliestClockIn, 'd.m.Y H:i', $userId),
+                    max(0.0, $hoursRemaining),
+                ]
+            ),
+            'lastEndTime' => $lastEndTime,
+            'earliestClockIn' => $earliestClockIn,
+        ];
+    }
+
+    /**
+     * Latest shift-end instant that may anchor an ArbZG §5 rest check at $asOf.
+     *
+     * Prefers the newest completed entry with end_time < $asOf (so future-dated
+     * completed rows cannot poison the check). Falls back to a recent paused
+     * entry's updatedAt when it is also not after $asOf.
+     */
+    private function resolveRestPeriodAnchor(string $userId, \DateTime $asOf): ?\DateTime
+    {
+        $lastCompleted = $this->timeEntryMapper->findLastCompletedBeforeTime($userId, $asOf);
         $lastEndTime = $lastCompleted?->getEndTime();
-
-        // If no completed entry, fall back to the most-recent paused entry within the
-        // last 2× rest-period window (no need to scan further back).
-        if ($lastEndTime === null) {
-            $lookbackHours = max(48, (int)ceil($minRest * 2));
-            $lastPaused = $this->timeEntryMapper->findLastPausedWithinHours($userId, $lookbackHours);
-            $lastEndTime = $lastPaused?->getUpdatedAt();
+        if ($lastEndTime !== null) {
+            return $lastEndTime;
         }
 
-        if ($lastEndTime === null) {
-            return true; // No previous entry to check against.
+        $minRest = $this->getMinRestPeriod();
+        $lookbackHours = max(48, (int)ceil($minRest * 2));
+        $lastPaused = $this->timeEntryMapper->findLastPausedWithinHours($userId, $lookbackHours);
+        $pausedAt = $lastPaused?->getUpdatedAt();
+        if ($pausedAt !== null && $pausedAt->getTimestamp() <= $asOf->getTimestamp()) {
+            return $pausedAt;
         }
 
-        $now = new \DateTime();
-        $hoursSinceLastEntry = ($now->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
+        return null;
+    }
 
-        return $hoursSinceLastEntry >= $minRest;
+    /**
+     * Add a fractional rest period to an instant using whole seconds (avoids
+     * truncating e.g. 11.5 h down to 11 h via (int) cast on modify('+N hours')).
+     */
+    private function addRestHours(\DateTime $from, float $hours): \DateTime
+    {
+        $earliest = clone $from;
+        $seconds = (int)round(max(0.0, $hours) * 3600.0);
+        $earliest->modify('+' . $seconds . ' seconds');
+        return $earliest;
     }
 
     /**
@@ -659,8 +701,7 @@ class ComplianceService
             return ['valid' => true, 'message' => null];
         }
         
-        $earliestStartTime = clone $lastEndTime;
-        $earliestStartTime->modify('+' . (int)$minRest . ' hours');
+        $earliestStartTime = $this->addRestHours($lastEndTime, $minRest);
         $hoursStillNeeded = ($earliestStartTime->getTimestamp() - $startTime->getTimestamp()) / 3600;
         
         // Format the user-facing message in the affected user's display TZ so
@@ -704,13 +745,13 @@ class ComplianceService
      */
     private function checkWeeklyWorkingHoursLimit(string $userId): bool
     {
-        $sixMonthsAgo = new \DateTime();
-        $sixMonthsAgo->modify('-6 months');
+        $now = $this->timeZoneService->nowInStorage();
+        $sixMonthsAgo = (clone $now)->modify('-6 months');
 
         $totalHours = $this->timeEntryMapper->getTotalHoursByUserAndDateRange(
             $userId,
             $sixMonthsAgo,
-            new \DateTime()
+            $now
         );
 
         $weeksWorked = 26; // Approximate weeks in 6 months
@@ -1058,18 +1099,6 @@ class ComplianceService
     }
 
     /**
-     * Get the most-recent completed time entry for a user.
-     * Delegates to the mapper's targeted query instead of scanning all entries.
-     *
-     * @param string $userId
-     * @return TimeEntry|null
-     */
-    private function getLastCompletedEntry(string $userId): ?TimeEntry
-    {
-        return $this->timeEntryMapper->findLastCompletedByUser($userId);
-    }
-
-    /**
      * Run daily compliance check for all users
      *
      * This method should be called by a Nextcloud cron job to check all users
@@ -1079,11 +1108,10 @@ class ComplianceService
      */
     public function runDailyComplianceCheck(): array
     {
-        $yesterday = new \DateTime();
-        $yesterday->modify('-1 day');
-        $yesterday->setTime(0, 0, 0);
-        $today = new \DateTime();
-        $today->setTime(0, 0, 0);
+        // Calendar day boundaries in organisation storage TZ (never PHP default / container UTC).
+        [$todayStart] = $this->timeZoneService->todayWindowInStorage();
+        $yesterday = (clone $todayStart)->modify('-1 day');
+        $today = clone $todayStart;
 
         $stats = [
             'users_checked' => 0,

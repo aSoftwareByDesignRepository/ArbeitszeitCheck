@@ -121,6 +121,8 @@ class DashboardWidgetDataService {
 			'weekHoursWorked'        => (float)($weekly['total_hours_worked'] ?? 0.0),
 			'weekHoursRequired'      => (float)($weekly['required_hours'] ?? 0.0),
 			'weeklyContractHours'    => (float)($weekly['weekly_hours'] ?? 40.0),
+			// Contract daily hours (same as employee dashboard “Daily target”).
+			'impliedDailyHours'      => (float)($weekly['implied_daily_hours'] ?? 0.0),
 			'cumulativeBalance'      => (float)($weekly['cumulative_balance'] ?? 0.0),
 			'displayBalance'         => $this->overtimeDisplayService->getYearToDateBalanceForTrafficLight($userId),
 			'overtimeBankEnabled'    => $this->overtimeBankService->isEnabled(),

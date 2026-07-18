@@ -1096,138 +1096,155 @@ class TimeEntryController extends Controller
 			$timeEntry->setCreatedAt($nowAt);
 			$timeEntry->setUpdatedAt(clone $nowAt);
 
-			// Check rest period compliance before saving (ArbZG §5)
-			if ($timeEntry->getStartTime()) {
-				$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($userId, $timeEntry->getStartTime());
-				if (!$restPeriodCheck['valid']) {
-					return new JSONResponse([
-						'success' => false,
-						'error' => $restPeriodCheck['message']
-					], Http::STATUS_BAD_REQUEST);
-				}
-			}
-
-			// CRITICAL: First calculate automatic breaks (ArbZG §4)
-			// This must happen BEFORE adjusting end time, because breaks affect the working duration
-			if ($timeEntry->getEndTime() && $timeEntry->getStartTime()) {
-				// First: Calculate and set automatic break if no break was entered (ArbZG §4)
-				$this->timeTrackingService->calculateAndSetAutomaticBreak($timeEntry);
-				
-				// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
-				// This uses the correct break duration for accurate working time calculation
-				$this->timeTrackingService->adjustEndTimeForDailyMaximum($timeEntry);
-				
-				// After adjustment, breaks might need recalculation if end time changed significantly
-				// But this is rare, so we skip it to avoid infinite loops
-			}
-
-			// Check for overlapping entries before saving
-			if ($timeEntry->getStartTime() && $timeEntry->getEndTime()) {
-				$overlapping = $this->timeEntryMapper->findOverlapping(
+			// Check rest period / overlap / insert under the same exclusive lock as clock mutations
+			// so two parallel saves cannot both pass findOverlapping.
+			try {
+				return $this->timeTrackingService->withUserMutationLock($userId, function () use (
 					$userId,
-					$timeEntry->getStartTime(),
-					$timeEntry->getEndTime()
-				);
-				
-				if (!empty($overlapping)) {
-					$overlapDetails = [];
-					foreach ($overlapping as $overlapEntry) {
-						$overlapStart = $this->displayClock($overlapEntry->getStartTime(), $userId);
-						$overlapEnd = $this->displayClock($overlapEntry->getEndTime(), $userId);
-						$overlapDetails[] = $overlapStart . ' - ' . $overlapEnd;
+					$timeEntry,
+					$manualRequiresApproval,
+					$justificationText
+				) {
+					// Check rest period compliance before saving (ArbZG §5)
+					if ($timeEntry->getStartTime()) {
+						$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($userId, $timeEntry->getStartTime());
+						if (!$restPeriodCheck['valid']) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $restPeriodCheck['message']
+							], Http::STATUS_BAD_REQUEST);
+						}
 					}
-					$overlapMessage = $this->l10n->t('This time entry overlaps with existing entries: %s', [implode(', ', $overlapDetails)]);
+
+					// CRITICAL: First calculate automatic breaks (ArbZG §4)
+					// This must happen BEFORE adjusting end time, because breaks affect the working duration
+					if ($timeEntry->getEndTime() && $timeEntry->getStartTime()) {
+						// First: Calculate and set automatic break if no break was entered (ArbZG §4)
+						$this->timeTrackingService->calculateAndSetAutomaticBreak($timeEntry);
+
+						// Then: Adjust end time to comply with daily maximum working hours (ArbZG §3: max 10 hours per day)
+						// This uses the correct break duration for accurate working time calculation
+						$this->timeTrackingService->adjustEndTimeForDailyMaximum($timeEntry);
+
+						// After adjustment, breaks might need recalculation if end time changed significantly
+						// But this is rare, so we skip it to avoid infinite loops
+					}
+
+					// Check for overlapping entries before saving
+					if ($timeEntry->getStartTime() && $timeEntry->getEndTime()) {
+						$overlapping = $this->timeEntryMapper->findOverlapping(
+							$userId,
+							$timeEntry->getStartTime(),
+							$timeEntry->getEndTime()
+						);
+
+						if (!empty($overlapping)) {
+							$overlapDetails = [];
+							foreach ($overlapping as $overlapEntry) {
+								$overlapStart = $this->displayClock($overlapEntry->getStartTime(), $userId);
+								$overlapEnd = $this->displayClock($overlapEntry->getEndTime(), $userId);
+								$overlapDetails[] = $overlapStart . ' - ' . $overlapEnd;
+							}
+							$overlapMessage = $this->l10n->t('This time entry overlaps with existing entries: %s', [implode(', ', $overlapDetails)]);
+							return new JSONResponse([
+								'success' => false,
+								'error' => $overlapMessage
+							], Http::STATUS_BAD_REQUEST);
+						}
+					}
+
+					// Validate entry before inserting
+					$errors = $timeEntry->validate();
+
+					// Additional compliance validation: check maximum working hours (ArbZG §3)
+					// AUTOMATIC LIMIT: TimeEntry::validate() already automatically adjusts end time to 10h
+					// This ensures compliance - no need for additional validation here
+					// The automatic adjustment in validate() handles it perfectly
+
+					if (!empty($errors)) {
+						// Translate validation errors
+						$translatedErrors = [];
+						foreach ($errors as $field => $message) {
+							$translatedErrors[$field] = $this->l10n->t($message);
+						}
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Validation failed'),
+							'errors' => $translatedErrors
+						], Http::STATUS_BAD_REQUEST);
+					}
+
+					$mc = $this->assertGuardTimeEntry($timeEntry);
+					if ($mc !== null) {
+						return $mc;
+					}
+
+					$complianceBlock = $this->complianceSaveBlockResponse($timeEntry);
+					if ($complianceBlock !== null) {
+						return $complianceBlock;
+					}
+
+					if ($manualRequiresApproval) {
+						$this->correctionService->prepareManualPending($timeEntry, $justificationText);
+					}
+
+					$savedEntry = $this->timeEntryMapper->insert($timeEntry);
+
+					if ($manualRequiresApproval) {
+						try {
+							$this->notificationService->notifyTimeEntryCorrectionRequested(
+								$userId,
+								$savedEntry->getSummary(),
+								$justificationText
+							);
+						} catch (\Throwable $e) {
+							\OCP\Log\logger('arbeitszeitcheck')->warning('Failed to send manual entry approval notification', ['exception' => $e]);
+						}
+						if (!$this->teamResolver->hasAssignableManagerForEmployee($userId)) {
+							$savedEntry = $this->correctionService->autoApprove($savedEntry);
+							$this->auditLogMapper->logAction($userId, 'time_entry_correction_auto_approved', 'time_entry', $savedEntry->getId(), null, ['approved_by' => 'system'], 'system');
+						} else {
+							$this->auditLogMapper->logAction($userId, 'time_entry_manual_create_requested', 'time_entry', $savedEntry->getId(), null, $savedEntry->getSummary());
+						}
+						return new JSONResponse([
+							'success' => true,
+							'entry' => $savedEntry->getSummary(),
+							'message' => $this->l10n->t('Manual time entry submitted for manager approval.')
+						], Http::STATUS_CREATED);
+					}
+
+					$this->syncProjectCheckBillingAfterSave($savedEntry, $userId);
+
+					// Real-time compliance check for completed entries
+					if ($savedEntry->getStatus() === TimeEntry::STATUS_COMPLETED && $savedEntry->getEndTime() !== null) {
+						$this->performRealTimeComplianceCheck($savedEntry);
+					}
+
+					try {
+						$this->auditLogMapper->logAction(
+							$userId,
+							'time_entry_created',
+							'time_entry',
+							$savedEntry->getId(),
+							null,
+							$savedEntry->getSummary()
+						);
+					} catch (\Throwable $e) {
+						\OCP\Log\logger('arbeitszeitcheck')->error('Error creating audit log for time entry create: ' . $e->getMessage(), ['exception' => $e]);
+					}
+
 					return new JSONResponse([
-						'success' => false,
-						'error' => $overlapMessage
-					], Http::STATUS_BAD_REQUEST);
-				}
-			}
-
-			// Validate entry before inserting
-			$errors = $timeEntry->validate();
-
-			// Additional compliance validation: check maximum working hours (ArbZG §3)
-			// AUTOMATIC LIMIT: TimeEntry::validate() already automatically adjusts end time to 10h
-			// This ensures compliance - no need for additional validation here
-			// The automatic adjustment in validate() handles it perfectly
-
-			if (!empty($errors)) {
-				// Translate validation errors
-				$translatedErrors = [];
-				foreach ($errors as $field => $message) {
-					$translatedErrors[$field] = $this->l10n->t($message);
-				}
+						'success' => true,
+						'entry' => $savedEntry->getSummary()
+					], Http::STATUS_CREATED);
+				});
+			} catch (LockedException $e) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Validation failed'),
-					'errors' => $translatedErrors
-				], Http::STATUS_BAD_REQUEST);
+					'error' => $this->l10n->t('Another time-tracking change is in progress. Please try again in a moment.'),
+					'error_code' => 'locked',
+				], Http::STATUS_LOCKED);
 			}
-
-			$mc = $this->assertGuardTimeEntry($timeEntry);
-			if ($mc !== null) {
-				return $mc;
-			}
-
-			$complianceBlock = $this->complianceSaveBlockResponse($timeEntry);
-			if ($complianceBlock !== null) {
-				return $complianceBlock;
-			}
-
-			if ($manualRequiresApproval) {
-				$this->correctionService->prepareManualPending($timeEntry, $justificationText);
-			}
-
-			$savedEntry = $this->timeEntryMapper->insert($timeEntry);
-
-			if ($manualRequiresApproval) {
-				try {
-					$this->notificationService->notifyTimeEntryCorrectionRequested(
-						$userId,
-						$savedEntry->getSummary(),
-						$justificationText
-					);
-				} catch (\Throwable $e) {
-					\OCP\Log\logger('arbeitszeitcheck')->warning('Failed to send manual entry approval notification', ['exception' => $e]);
-				}
-				if (!$this->teamResolver->hasAssignableManagerForEmployee($userId)) {
-					$savedEntry = $this->correctionService->autoApprove($savedEntry);
-					$this->auditLogMapper->logAction($userId, 'time_entry_correction_auto_approved', 'time_entry', $savedEntry->getId(), null, ['approved_by' => 'system'], 'system');
-				} else {
-					$this->auditLogMapper->logAction($userId, 'time_entry_manual_create_requested', 'time_entry', $savedEntry->getId(), null, $savedEntry->getSummary());
-				}
-				return new JSONResponse([
-					'success' => true,
-					'entry' => $savedEntry->getSummary(),
-					'message' => $this->l10n->t('Manual time entry submitted for manager approval.')
-				], Http::STATUS_CREATED);
-			}
-
-			$this->syncProjectCheckBillingAfterSave($savedEntry, $userId);
-
-			// Real-time compliance check for completed entries
-			if ($savedEntry->getStatus() === TimeEntry::STATUS_COMPLETED && $savedEntry->getEndTime() !== null) {
-				$this->performRealTimeComplianceCheck($savedEntry);
-			}
-
-			try {
-				$this->auditLogMapper->logAction(
-					$userId,
-					'time_entry_created',
-					'time_entry',
-					$savedEntry->getId(),
-					null,
-					$savedEntry->getSummary()
-				);
-			} catch (\Throwable $e) {
-				\OCP\Log\logger('arbeitszeitcheck')->error('Error creating audit log for time entry create: ' . $e->getMessage(), ['exception' => $e]);
-			}
-
-			return new JSONResponse([
-				'success' => true,
-				'entry' => $savedEntry->getSummary()
-			], Http::STATUS_CREATED);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeEntryController: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
@@ -1585,115 +1602,126 @@ class TimeEntryController extends Controller
 				}
 			}
 
-			// Check rest period compliance before saving (ArbZG §5)
-			if ($entry->getStartTime()) {
-				$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($userId, $entry->getStartTime(), $id);
-				if (!$restPeriodCheck['valid']) {
-					return new JSONResponse([
-						'success' => false,
-						'error' => $restPeriodCheck['message']
-					], Http::STATUS_BAD_REQUEST);
-				}
-			}
-
-			// CRITICAL: First calculate automatic breaks (ArbZG §4), then adjust for daily maximum (ArbZG §3)
-			if ($entry->getEndTime() && $entry->getStartTime()) {
-				$this->timeTrackingService->calculateAndSetAutomaticBreak($entry);
-				$this->timeTrackingService->adjustEndTimeForDailyMaximum($entry);
-			}
-
-			// Check for overlapping entries before saving (exclude this entry from overlap check)
-			if ($entry->getStartTime() && $entry->getEndTime()) {
-				$overlapping = $this->timeEntryMapper->findOverlapping(
-					$userId,
-					$entry->getStartTime(),
-					$entry->getEndTime(),
-					$id // Exclude this entry from overlap check
-				);
-				
-				if (!empty($overlapping)) {
-					$overlapDetails = [];
-					foreach ($overlapping as $overlapEntry) {
-						$overlapStart = $this->displayClock($overlapEntry->getStartTime(), $userId);
-						$overlapEnd = $this->displayClock($overlapEntry->getEndTime(), $userId);
-						$overlapDetails[] = $overlapStart . ' - ' . $overlapEnd;
+			// Check rest / overlap / update under the same exclusive lock as clock mutations.
+			try {
+				return $this->timeTrackingService->withUserMutationLock($userId, function () use ($userId, $entry, $id) {
+					// Check rest period compliance before saving (ArbZG §5)
+					if ($entry->getStartTime()) {
+						$restPeriodCheck = $this->complianceService->checkRestPeriodForStartTime($userId, $entry->getStartTime(), $id);
+						if (!$restPeriodCheck['valid']) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $restPeriodCheck['message']
+							], Http::STATUS_BAD_REQUEST);
+						}
 					}
-					$overlapMessage = $this->l10n->t('This time entry overlaps with existing entries: %s', [implode(', ', $overlapDetails)]);
+
+					// CRITICAL: First calculate automatic breaks (ArbZG §4), then adjust for daily maximum (ArbZG §3)
+					if ($entry->getEndTime() && $entry->getStartTime()) {
+						$this->timeTrackingService->calculateAndSetAutomaticBreak($entry);
+						$this->timeTrackingService->adjustEndTimeForDailyMaximum($entry);
+					}
+
+					// Check for overlapping entries before saving (exclude this entry from overlap check)
+					if ($entry->getStartTime() && $entry->getEndTime()) {
+						$overlapping = $this->timeEntryMapper->findOverlapping(
+							$userId,
+							$entry->getStartTime(),
+							$entry->getEndTime(),
+							$id // Exclude this entry from overlap check
+						);
+
+						if (!empty($overlapping)) {
+							$overlapDetails = [];
+							foreach ($overlapping as $overlapEntry) {
+								$overlapStart = $this->displayClock($overlapEntry->getStartTime(), $userId);
+								$overlapEnd = $this->displayClock($overlapEntry->getEndTime(), $userId);
+								$overlapDetails[] = $overlapStart . ' - ' . $overlapEnd;
+							}
+							$overlapMessage = $this->l10n->t('This time entry overlaps with existing entries: %s', [implode(', ', $overlapDetails)]);
+							return new JSONResponse([
+								'success' => false,
+								'error' => $overlapMessage
+							], Http::STATUS_BAD_REQUEST);
+						}
+					}
+
+					// Validate entry (automatically adjusts end time to 10h if exceeded)
+					$errors = $entry->validate();
+
+					// Additional compliance validation: check maximum working hours (ArbZG §3)
+					// AUTOMATIC LIMIT: TimeEntry::validate() already automatically adjusts end time to 10h
+					// This ensures compliance - no need for additional validation here
+
+					if (!empty($errors)) {
+						// Translate validation errors
+						$translatedErrors = [];
+						foreach ($errors as $field => $message) {
+							$translatedErrors[$field] = $this->l10n->t($message);
+						}
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Validation failed'),
+							'errors' => $translatedErrors
+						], Http::STATUS_BAD_REQUEST);
+					}
+
+					// Get old values before update
+					$oldSummary = null;
+					try {
+						$oldSummary = $entry->getSummary();
+					} catch (\Throwable $e) {
+						\OCP\Log\logger('arbeitszeitcheck')->error('Error getting old summary for time entry update audit log: ' . $e->getMessage(), ['exception' => $e]);
+					}
+
+					$entry->setUpdatedAt(AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config));
+					$mc1 = $this->assertGuardTimeEntry($entry);
+					if ($mc1 !== null) {
+						return $mc1;
+					}
+
+					$complianceBlock = $this->complianceSaveBlockResponse($entry);
+					if ($complianceBlock !== null) {
+						return $complianceBlock;
+					}
+
+					$updatedEntry = $this->timeEntryMapper->update($entry);
+					$this->syncProjectCheckBillingAfterSave($updatedEntry, $userId);
+
+					// Real-time compliance check if entry is now completed
+					// Check if status changed to COMPLETED or if it was already COMPLETED
+					if ($updatedEntry->getStatus() === TimeEntry::STATUS_COMPLETED && $updatedEntry->getEndTime() !== null) {
+						$this->performRealTimeComplianceCheck($updatedEntry);
+					}
+
+					// Log the action
+					try {
+						$newSummary = $updatedEntry->getSummary();
+						$this->auditLogMapper->logAction(
+							$userId,
+							'time_entry_updated',
+							'time_entry',
+							$id,
+							$oldSummary,
+							$newSummary
+						);
+					} catch (\Throwable $e) {
+						// Log error but don't fail the request
+						\OCP\Log\logger('arbeitszeitcheck')->error('Error creating audit log for time entry update: ' . $e->getMessage(), ['exception' => $e]);
+					}
+
 					return new JSONResponse([
-						'success' => false,
-						'error' => $overlapMessage
-					], Http::STATUS_BAD_REQUEST);
-				}
-			}
-
-			// Validate entry (automatically adjusts end time to 10h if exceeded)
-			$errors = $entry->validate();
-
-			// Additional compliance validation: check maximum working hours (ArbZG §3)
-			// AUTOMATIC LIMIT: TimeEntry::validate() already automatically adjusts end time to 10h
-			// This ensures compliance - no need for additional validation here
-
-			if (!empty($errors)) {
-				// Translate validation errors
-				$translatedErrors = [];
-				foreach ($errors as $field => $message) {
-					$translatedErrors[$field] = $this->l10n->t($message);
-				}
+						'success' => true,
+						'entry' => $updatedEntry->getSummary()
+					]);
+				});
+			} catch (LockedException $e) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Validation failed'),
-					'errors' => $translatedErrors
-				], Http::STATUS_BAD_REQUEST);
+					'error' => $this->l10n->t('Another time-tracking change is in progress. Please try again in a moment.'),
+					'error_code' => 'locked',
+				], Http::STATUS_LOCKED);
 			}
-
-			// Get old values before update
-			$oldSummary = null;
-			try {
-				$oldSummary = $entry->getSummary();
-			} catch (\Throwable $e) {
-				\OCP\Log\logger('arbeitszeitcheck')->error('Error getting old summary for time entry update audit log: ' . $e->getMessage(), ['exception' => $e]);
-			}
-
-			$entry->setUpdatedAt(AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config));
-			$mc1 = $this->assertGuardTimeEntry($entry);
-			if ($mc1 !== null) {
-				return $mc1;
-			}
-
-			$complianceBlock = $this->complianceSaveBlockResponse($entry);
-			if ($complianceBlock !== null) {
-				return $complianceBlock;
-			}
-
-			$updatedEntry = $this->timeEntryMapper->update($entry);
-			$this->syncProjectCheckBillingAfterSave($updatedEntry, $userId);
-
-			// Real-time compliance check if entry is now completed
-			// Check if status changed to COMPLETED or if it was already COMPLETED
-			if ($updatedEntry->getStatus() === TimeEntry::STATUS_COMPLETED && $updatedEntry->getEndTime() !== null) {
-				$this->performRealTimeComplianceCheck($updatedEntry);
-			}
-
-			// Log the action
-			try {
-				$newSummary = $updatedEntry->getSummary();
-				$this->auditLogMapper->logAction(
-					$userId,
-					'time_entry_updated',
-					'time_entry',
-					$id,
-					$oldSummary,
-					$newSummary
-				);
-			} catch (\Throwable $e) {
-				// Log error but don't fail the request
-				\OCP\Log\logger('arbeitszeitcheck')->error('Error creating audit log for time entry update: ' . $e->getMessage(), ['exception' => $e]);
-			}
-
-			return new JSONResponse([
-				'success' => true,
-				'entry' => $updatedEntry->getSummary()
-			]);
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse([
 				'success' => false,

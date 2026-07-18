@@ -107,6 +107,8 @@
         config: window.ArbeitszeitCheck || {},
         timers: {},
         initialized: false,
+        /** Prevents double-submit on clock / break buttons before loading UI disables them. */
+        clockActionInFlight: false,
 
         /**
          * Initialize the application
@@ -1232,21 +1234,33 @@
          * Clock in action
          */
         clockIn: function(projectCheckProjectId = null, description = null) {
+            if (this.clockActionInFlight) {
+                return;
+            }
+            this.clockActionInFlight = true;
             const data = {};
             if (projectCheckProjectId) {
                 data.projectCheckProjectId = projectCheckProjectId;
             }
             if (description) data.description = description;
 
-            this.callApi('/apps/arbeitszeitcheck/api/clock/in', 'POST', data).catch((err) => {
-                this.showError(err && err.message ? err.message : (this.config.l10n?.error || 'An error occurred'));
-            });
+            this.callApi('/apps/arbeitszeitcheck/api/clock/in', 'POST', data)
+                .catch((err) => {
+                    this.showError(err && err.message ? err.message : (this.config.l10n?.error || 'An error occurred'));
+                })
+                .finally(() => {
+                    this.clockActionInFlight = false;
+                });
         },
 
         /**
          * Clock out action
          */
         clockOut: function() {
+            if (this.clockActionInFlight) {
+                return;
+            }
+            this.clockActionInFlight = true;
             // Stop timer immediately when clocking out
             if (this.timers.session) {
                 clearInterval(this.timers.session);
@@ -1259,9 +1273,13 @@
                 this.timers.break = null;
             }
             
-            this.callApi('/apps/arbeitszeitcheck/api/clock/out', 'POST').catch((err) => {
-                this.showError(err && err.message ? err.message : (this.config.l10n?.error || 'An error occurred'));
-            });
+            this.callApi('/apps/arbeitszeitcheck/api/clock/out', 'POST')
+                .catch((err) => {
+                    this.showError(err && err.message ? err.message : (this.config.l10n?.error || 'An error occurred'));
+                })
+                .finally(() => {
+                    this.clockActionInFlight = false;
+                });
         },
 
         /**
@@ -1390,18 +1408,34 @@
          * Start break action
          */
         startBreak: function() {
-            this.callApi('/apps/arbeitszeitcheck/api/break/start', 'POST').catch((err) => {
-                this.showError(err && err.message ? err.message : (this.config.l10n?.error || 'An error occurred'));
-            });
+            if (this.clockActionInFlight) {
+                return;
+            }
+            this.clockActionInFlight = true;
+            this.callApi('/apps/arbeitszeitcheck/api/break/start', 'POST')
+                .catch((err) => {
+                    this.showError(err && err.message ? err.message : (this.config.l10n?.error || 'An error occurred'));
+                })
+                .finally(() => {
+                    this.clockActionInFlight = false;
+                });
         },
 
         /**
          * End break action
          */
         endBreak: function() {
-            this.callApi('/apps/arbeitszeitcheck/api/break/end', 'POST').catch((err) => {
-                this.showError(err && err.message ? err.message : (this.config.l10n?.error || 'An error occurred'));
-            });
+            if (this.clockActionInFlight) {
+                return;
+            }
+            this.clockActionInFlight = true;
+            this.callApi('/apps/arbeitszeitcheck/api/break/end', 'POST')
+                .catch((err) => {
+                    this.showError(err && err.message ? err.message : (this.config.l10n?.error || 'An error occurred'));
+                })
+                .finally(() => {
+                    this.clockActionInFlight = false;
+                });
         },
 
         /**

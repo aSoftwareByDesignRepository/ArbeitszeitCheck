@@ -49,6 +49,7 @@ class AbsenceService
 	private VacationYearBalanceMapper $vacationYearBalanceMapper;
 	private VacationAllocationService $vacationAllocationService;
 	private ?MonthClosureService $monthClosureService;
+	private TimeZoneService $timeZoneService;
 
 	public function __construct(
 		AbsenceMapper $absenceMapper,
@@ -67,7 +68,8 @@ class AbsenceService
 		VacationYearBalanceMapper $vacationYearBalanceMapper,
 		VacationAllocationService $vacationAllocationService,
 		?AbsenceNotificationMailService $absenceNotificationMailService = null,
-		?MonthClosureService $monthClosureService = null
+		?MonthClosureService $monthClosureService = null,
+		?TimeZoneService $timeZoneService = null,
 	) {
 		$this->absenceMapper = $absenceMapper;
 		$this->auditLogMapper = $auditLogMapper;
@@ -86,6 +88,21 @@ class AbsenceService
 		$this->absenceNotificationMailService = $absenceNotificationMailService;
 		$this->vacationAllocationService = $vacationAllocationService;
 		$this->monthClosureService = $monthClosureService;
+		// Optional for BC with older unit-test constructors; production always injects via Application.php.
+		$this->timeZoneService = $timeZoneService ?? \OCP\Server::get(TimeZoneService::class);
+	}
+
+	/** Calendar "today" at 00:00 in organisation storage TZ. */
+	private function todayDateInStorage(): \DateTimeImmutable
+	{
+		[$start] = $this->timeZoneService->todayWindowInStorage();
+		return \DateTimeImmutable::createFromMutable($start);
+	}
+
+	/** Mutable "now" in organisation storage TZ for absence timestamps. */
+	private function nowInStorage(): \DateTime
+	{
+		return $this->timeZoneService->nowInStorage();
 	}
 
 	/**
@@ -116,7 +133,8 @@ class AbsenceService
 			 * elapsed. We discard any submitted substitute_user_id rather than
 			 * persisting a stale reference, and route directly into PENDING
 			 * (auto-approval may then take over below if no approver exists). */
-			$todayForSubstitute = new \DateTime('today');
+			$todayForSubstitute = $this->nowInStorage();
+			$todayForSubstitute->setTime(0, 0, 0);
 			$absenceFullyInPast = $absence->getEndDate() < $todayForSubstitute;
 			if ($absenceFullyInPast) {
 				$substituteUserId = null;
@@ -476,29 +494,40 @@ class AbsenceService
 		if (!$absence) {
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
-		// Check if absence can be deleted (pending, substitute_pending, or substitute_declined can be deleted by owner)
-		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_SUBSTITUTE_DECLINED], true)) {
-			throw new \Exception($this->l10n->t('Only pending absences can be deleted'));
-		}
-		$this->assertAbsenceMutable($absence);
 
-		$this->db->beginTransaction();
+		$lockKey = $this->acquireUserMutationLock($absence->getUserId());
 		try {
-			$this->absenceMapper->delete($absence);
+			// Re-read under lock so concurrent approve cannot race a delete.
+			$absence = $this->absenceMapper->find($id);
+			if ($absence->getUserId() !== $userId) {
+				throw new \Exception($this->l10n->t('Absence not found'));
+			}
+			// Check if absence can be deleted (pending, substitute_pending, or substitute_declined can be deleted by owner)
+			if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_SUBSTITUTE_DECLINED], true)) {
+				throw new \Exception($this->l10n->t('Only pending absences can be deleted'));
+			}
+			$this->assertAbsenceMutable($absence);
 
-			$this->auditLogMapper->logAction(
-				$userId,
-				'absence_deleted',
-				'absence',
-				$id,
-				$absence->getSummary(),
-				null
-			);
+			$this->db->beginTransaction();
+			try {
+				$this->absenceMapper->delete($absence);
 
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
+				$this->auditLogMapper->logAction(
+					$userId,
+					'absence_deleted',
+					'absence',
+					$id,
+					$absence->getSummary(),
+					null
+				);
+
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
 		}
 	}
 
@@ -526,47 +555,56 @@ class AbsenceService
 		if (!$absence) {
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
-		$status = $absence->getStatus();
-		if (!in_array($status, [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_APPROVED], true)) {
-			throw new \Exception($this->l10n->t('This absence cannot be cancelled.'));
-		}
 
-		$startDate = $absence->getStartDate();
-		if (!$startDate) {
-			throw new \Exception($this->l10n->t('Start date is missing for this absence.'));
-		}
-
-		$today = new \DateTimeImmutable('today');
-		// Only allow cancellation before the first day of the absence
-		if ($startDate <= $today) {
-			throw new \Exception($this->l10n->t('You can only cancel absences that have not started yet.'));
-		}
-		$this->assertAbsenceMutable($absence);
-
-		$oldData = $absence->getSummary();
-
-		$absence->setStatus(Absence::STATUS_CANCELLED);
-		$absence->setUpdatedAt(new \DateTime());
-
+		$lockKey = $this->acquireUserMutationLock($absence->getUserId());
 		$updatedAbsence = null;
-
-		$this->db->beginTransaction();
 		try {
-			$updatedAbsence = $this->absenceMapper->update($absence);
+			$absence = $this->absenceMapper->find($id);
+			if ($absence->getUserId() !== $userId) {
+				throw new \Exception($this->l10n->t('Absence not found'));
+			}
+			$status = $absence->getStatus();
+			if (!in_array($status, [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_APPROVED], true)) {
+				throw new \Exception($this->l10n->t('This absence cannot be cancelled.'));
+			}
 
-			$this->auditLogMapper->logAction(
-				$userId,
-				'absence_cancelled',
-				'absence',
-				$updatedAbsence->getId(),
-				$oldData,
-				$updatedAbsence->getSummary()
-			);
+			$startDate = $absence->getStartDate();
+			if (!$startDate) {
+				throw new \Exception($this->l10n->t('Start date is missing for this absence.'));
+			}
 
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
+			$today = $this->todayDateInStorage();
+			// Only allow cancellation before the first day of the absence
+			if ($startDate <= $today) {
+				throw new \Exception($this->l10n->t('You can only cancel absences that have not started yet.'));
+			}
+			$this->assertAbsenceMutable($absence);
+
+			$oldData = $absence->getSummary();
+
+			$absence->setStatus(Absence::STATUS_CANCELLED);
+			$absence->setUpdatedAt($this->nowInStorage());
+
+			$this->db->beginTransaction();
+			try {
+				$updatedAbsence = $this->absenceMapper->update($absence);
+
+				$this->auditLogMapper->logAction(
+					$userId,
+					'absence_cancelled',
+					'absence',
+					$updatedAbsence->getId(),
+					$oldData,
+					$updatedAbsence->getSummary()
+				);
+
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
 		}
 
 		if ($this->absenceNotificationMailService) {
@@ -601,70 +639,79 @@ class AbsenceService
 		if (!$absence) {
 			throw new \Exception($this->l10n->t('Absence not found'));
 		}
-		if ($absence->getStatus() !== Absence::STATUS_APPROVED) {
-			throw new \Exception($this->l10n->t('Only approved absences can be shortened.'));
-		}
 
-		$startDate = $absence->getStartDate();
-		$originalEndDate = $absence->getEndDate();
-		if (!$startDate || !$originalEndDate) {
-			throw new \Exception($this->l10n->t('Start date or end date is missing for this absence.'));
-		}
-		$this->assertAbsenceMutable($absence);
-
-		$today = new \DateTimeImmutable('today');
-		if ($startDate > $today) {
-			throw new \Exception($this->l10n->t('You can only shorten absences that have already started.'));
-		}
-		if ($originalEndDate <= $today) {
-			throw new \Exception($this->l10n->t('This absence has already ended. It cannot be shortened.'));
-		}
-
-		$newEnd = $this->parseDate($newEndDate);
-		$newEnd->setTime(0, 0, 0);
-
-		if ($this->monthClosureService !== null) {
-			$newEndWithDayEnd = clone $newEnd;
-			$newEndWithDayEnd->setTime(23, 59, 59);
-			$this->monthClosureService->assertDateRangeMutable($userId, $startDate, $newEndWithDayEnd);
-		}
-
-		if ($newEnd < $startDate) {
-			throw new \Exception($this->l10n->t('The new end date cannot be before the start date.'));
-		}
-		if ($newEnd >= $originalEndDate) {
-			throw new \Exception($this->l10n->t('The new end date must be earlier than the original end date.'));
-		}
-
-		$oldData = $absence->getSummary();
-
-		$absence->setEndDate($newEnd);
-		$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $newEnd);
-		$absence->setDays($workingDays);
-		$absence->setUpdatedAt(new \DateTime());
-
+		$lockKey = $this->acquireUserMutationLock($absence->getUserId());
 		$updatedAbsence = null;
-
-		$this->db->beginTransaction();
 		try {
-			$updatedAbsence = $this->absenceMapper->update($absence);
+			$absence = $this->absenceMapper->find($id);
+			if ($absence->getUserId() !== $userId) {
+				throw new \Exception($this->l10n->t('Absence not found'));
+			}
+			if ($absence->getStatus() !== Absence::STATUS_APPROVED) {
+				throw new \Exception($this->l10n->t('Only approved absences can be shortened.'));
+			}
 
-			$this->auditLogMapper->logAction(
-				$userId,
-				'absence_shortened',
-				'absence',
-				$updatedAbsence->getId(),
-				$oldData,
-				$updatedAbsence->getSummary()
-			);
+			$startDate = $absence->getStartDate();
+			$originalEndDate = $absence->getEndDate();
+			if (!$startDate || !$originalEndDate) {
+				throw new \Exception($this->l10n->t('Start date or end date is missing for this absence.'));
+			}
+			$this->assertAbsenceMutable($absence);
 
-			$this->db->commit();
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
+			$today = $this->todayDateInStorage();
+			if ($startDate > $today) {
+				throw new \Exception($this->l10n->t('You can only shorten absences that have already started.'));
+			}
+			if ($originalEndDate <= $today) {
+				throw new \Exception($this->l10n->t('This absence has already ended. It cannot be shortened.'));
+			}
+
+			$newEnd = $this->parseDate($newEndDate);
+			$newEnd->setTime(0, 0, 0);
+
+			if ($this->monthClosureService !== null) {
+				$newEndWithDayEnd = clone $newEnd;
+				$newEndWithDayEnd->setTime(23, 59, 59);
+				$this->monthClosureService->assertDateRangeMutable($userId, $startDate, $newEndWithDayEnd);
+			}
+
+			if ($newEnd < $startDate) {
+				throw new \Exception($this->l10n->t('The new end date cannot be before the start date.'));
+			}
+			if ($newEnd >= $originalEndDate) {
+				throw new \Exception($this->l10n->t('The new end date must be earlier than the original end date.'));
+			}
+
+			$oldData = $absence->getSummary();
+
+			$absence->setEndDate($newEnd);
+			$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $newEnd);
+			$absence->setDays($workingDays);
+			$absence->setUpdatedAt($this->nowInStorage());
+
+			$this->db->beginTransaction();
+			try {
+				$updatedAbsence = $this->absenceMapper->update($absence);
+
+				$this->auditLogMapper->logAction(
+					$userId,
+					'absence_shortened',
+					'absence',
+					$updatedAbsence->getId(),
+					$oldData,
+					$updatedAbsence->getSummary()
+				);
+
+				$this->db->commit();
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
+			}
+
+			return $updatedAbsence;
+		} finally {
+			$this->releaseUserMutationLock($lockKey);
 		}
-
-		return $updatedAbsence;
 	}
 
 	/**
@@ -1145,7 +1192,7 @@ class AbsenceService
 		}
 
 		try {
-			$today = new \DateTime('today');
+			$today = \DateTime::createFromImmutable($this->todayDateInStorage());
 			// Read-only: do not persist entitlement snapshots (avoids DB writes/locks on every dashboard/widget poll).
 			$alloc = $this->vacationAllocationService->computeYearAllocation($userId, $year, null, null, null, $today, null, false);
 			$totalEntitlement = (float)$alloc['entitlement'];
@@ -1222,7 +1269,7 @@ class AbsenceService
 				clone $endDate
 			);
 		}
-		$today = new \DateTime('today');
+		$today = \DateTime::createFromImmutable($this->todayDateInStorage());
 		foreach ($requestedWorkingDaysPerYear as $y => $requestedDays) {
 			if ($requestedDays <= 0) {
 				continue;
@@ -1360,7 +1407,7 @@ class AbsenceService
 		 * absence that already happened. The frontend mirrors this and disables
 		 * the Vertretung field for past dates, but we enforce it here too so
 		 * API consumers cannot trip over the same rule. */
-		$todayForSubstitute = new \DateTime('today');
+		$todayForSubstitute = \DateTime::createFromImmutable($this->todayDateInStorage());
 		$absenceFullyInPast = $endDate < $todayForSubstitute;
 
 		if (!$skipSubstituteRules && !$absenceFullyInPast) {

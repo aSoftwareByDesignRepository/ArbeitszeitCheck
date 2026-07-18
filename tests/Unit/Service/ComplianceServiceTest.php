@@ -134,8 +134,8 @@ class ComplianceServiceTest extends TestCase
 		$userId = 'testuser';
 
 		// No previous entry (first clock-in): targeted queries return null.
-		$this->timeEntryMapper->method('findLastCompletedByUser')
-			->with($userId)
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
+			->with($userId, $this->isInstanceOf(\DateTime::class))
 			->willReturn(null);
 		$this->timeEntryMapper->method('findLastPausedWithinHours')
 			->willReturn(null);
@@ -159,7 +159,7 @@ class ComplianceServiceTest extends TestCase
 		$userId = 'testuser';
 
 		// Previous entry ended less than 11 hours ago.
-		$endTime = new \DateTime();
+		$endTime = new \DateTime('now', new \DateTimeZone('Europe/Berlin'));
 		$endTime->modify('-10 hours'); // Only 10 hours ago
 		$lastEntry = new TimeEntry();
 		$lastEntry->setId(1);
@@ -171,9 +171,8 @@ class ComplianceServiceTest extends TestCase
 		$lastEntry->setCreatedAt(new \DateTime());
 		$lastEntry->setUpdatedAt(new \DateTime());
 
-		// checkRestPeriod now calls findLastCompletedByUser (targeted query).
-		$this->timeEntryMapper->method('findLastCompletedByUser')
-			->with($userId)
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
+			->with($userId, $this->isInstanceOf(\DateTime::class))
 			->willReturn($lastEntry);
 
 		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
@@ -187,6 +186,46 @@ class ComplianceServiceTest extends TestCase
 		$this->assertCount(1, $issues);
 		$this->assertEquals(ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD, $issues[0]['type']);
 		$this->assertEquals(ComplianceViolation::SEVERITY_ERROR, $issues[0]['severity']);
+		$this->assertStringContainsString('ended on', $issues[0]['message']);
+	}
+
+	/**
+	 * Future-dated completed rows must not block clock-in (ArbZG §5 anchors on ended shifts only).
+	 */
+	public function testCheckComplianceBeforeClockInIgnoresFutureDatedLastEnd(): void
+	{
+		$userId = 'testuser';
+		$tz = new \DateTimeZone('Europe/Berlin');
+
+		// Real last shift ended 18 hours ago — rest long satisfied.
+		$realEnd = new \DateTime('now', $tz);
+		$realEnd->modify('-18 hours');
+		$realEntry = new TimeEntry();
+		$realEntry->setId(10);
+		$realEntry->setUserId($userId);
+		$realEntry->setStartTime((clone $realEnd)->modify('-7 hours 30 minutes'));
+		$realEntry->setEndTime($realEnd);
+		$realEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		// findLastCompletedBeforeTime(now) skips a future "planned" end and returns the real one.
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
+			->with($userId, $this->isInstanceOf(\DateTime::class))
+			->willReturn($realEntry);
+
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
+		$this->timeEntryMapper->expects($this->once())
+			->method('getTotalHoursByUserAndDateRange')
+			->willReturn(240.0);
+
+		$issues = $this->service->checkComplianceBeforeClockIn($userId);
+
+		foreach ($issues as $issue) {
+			$this->assertNotEquals(
+				ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
+				$issue['type'],
+				'Rest after an ended shift 18h ago must be satisfied; future-dated ends must not poison the check.'
+			);
+		}
 	}
 
 	/**
@@ -197,19 +236,29 @@ class ComplianceServiceTest extends TestCase
 		$userId = 'testuser';
 
 		// No previous completed or paused entry.
-		$this->timeEntryMapper->method('findLastCompletedByUser')
-			->with($userId)
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
+			->with($userId, $this->isInstanceOf(\DateTime::class))
 			->willReturn(null);
 		$this->timeEntryMapper->method('findLastPausedWithinHours')
 			->willReturn(null);
 
 		$tz = new \DateTimeZone('Europe/Berlin');
+		$now = new \DateTime('now', $tz);
+		$dayStart = (clone $now)->setTime(0, 0, 0);
+		$hoursSinceMidnight = ($now->getTimestamp() - $dayStart->getTimestamp()) / 3600.0;
+		if ($hoursSinceMidnight < 10.2) {
+			$this->markTestSkipped('Need enough of the calendar day elapsed to build a >10h completed block ending in the past.');
+		}
+
+		// End in the past: future ends are clipped to "now" for §3 totals.
+		$end = (clone $now)->modify('-5 minutes');
+		$start = (clone $end)->modify('-10 hours -12 minutes');
 		$heavy = new TimeEntry();
 		$heavy->setId(99);
 		$heavy->setUserId($userId);
 		$heavy->setStatus(TimeEntry::STATUS_COMPLETED);
-		$heavy->setStartTime(new \DateTime('today 07:00', $tz));
-		$heavy->setEndTime(new \DateTime('today 17:30', $tz));
+		$heavy->setStartTime($start);
+		$heavy->setEndTime($end);
 		$heavy->setBreaks(json_encode([]));
 
 		$this->timeEntryMapper->method('findOverlapping')->willReturn([$heavy]);

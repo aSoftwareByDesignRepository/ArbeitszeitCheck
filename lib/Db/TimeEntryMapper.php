@@ -773,7 +773,7 @@ class TimeEntryMapper extends QBMapper
 		$overlapping = [];
 		$newStartTs = $startTime->getTimestamp();
 		$newEndTs = $endTime->getTimestamp();
-		$nowTs = (new \DateTime())->getTimestamp();
+		$nowTs = AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config)->getTimestamp();
 
 		foreach ($allEntries as $entry) {
 			// Exclude the entry being updated if provided
@@ -804,9 +804,9 @@ class TimeEntryMapper extends QBMapper
 			if ($entryEnd !== null) {
 				$effectiveEnd = $entryEnd;
 			} elseif (in_array($status, [TimeEntry::STATUS_ACTIVE, TimeEntry::STATUS_BREAK], true)) {
-				$effectiveEnd = new \DateTime();
+				$effectiveEnd = AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config);
 			} elseif ($status === TimeEntry::STATUS_PAUSED) {
-				$effectiveEnd = $entry->getUpdatedAt() ?? new \DateTime();
+				$effectiveEnd = $entry->getUpdatedAt() ?? AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config);
 			} else {
 				// Unknown / draft state – skip rather than guess.
 				continue;
@@ -843,13 +843,22 @@ class TimeEntryMapper extends QBMapper
 	 */
 	public function findLastCompletedBeforeTime(string $userId, \DateTime $beforeTime, ?int $excludeId = null): ?TimeEntry
 	{
+		// Compare against storage-TZ wall digits — never PHP's default zone.
+		// Using raw format() on a UTC DateTime would shift the bound by the
+		// organisation offset and can pick the wrong "last" shift (classic
+		// ArbZG §5 false positive / false negative near day boundaries).
+		$tz = AppLocalNaiveDateTimeNormalizer::appStorageTimeZoneFromConfig($this->config);
+		$beforeInStorage = clone $beforeTime;
+		$beforeInStorage->setTimezone($tz);
+		$beforeNaive = $beforeInStorage->format('Y-m-d H:i:s');
+
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
 			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_COMPLETED)))
 			->andWhere($qb->expr()->isNotNull('end_time'))
-			->andWhere($qb->expr()->lt('end_time', $qb->createNamedParameter($beforeTime->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lt('end_time', $qb->createNamedParameter($beforeNaive, IQueryBuilder::PARAM_STR)))
 			->orderBy('end_time', 'DESC')
 			->setMaxResults(1);
 
@@ -866,7 +875,11 @@ class TimeEntryMapper extends QBMapper
 
 	/**
 	 * Find the most-recent completed time entry (with an end_time) for a user.
-	 * Used for rest-period checks at clock-in time; much cheaper than findByUser().
+	 *
+	 * Note: this includes rows whose end_time is still in the future (e.g. a
+	 * manual "planned day" saved early). ArbZG §5 clock-in checks must use
+	 * {@see findLastCompletedBeforeTime()} with storage "now" instead, so
+	 * future-dated ends cannot block stamping.
 	 *
 	 * @param string $userId
 	 * @return TimeEntry|null

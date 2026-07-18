@@ -5,11 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.8 - 2026-07-18
+
+### Changed
+
+- **Mobile / widget home payload:** `impliedDailyHours` (contract daily target) is included alongside weekly hours so clients can show “Daily target” like the employee dashboard.
+
+
+- **Session CSRF restored for browser cookie sessions on NoCSRFRequired APIs:** mutating clock/absence/export endpoints that stay `NoCSRFRequired` for mobile Basic auth now re-require a valid request token whenever a Nextcloud session cookie is present. Mobile clients without session cookies are unchanged. Forged `Authorization: Basic …` headers can no longer bypass CSRF while the victim’s session cookie is sent.
+
+### Fixed
+
+- **Absence cancel/delete/shorten race with approve:** those mutations now take the same per-user absence lock and re-read status under the lock.
+- **Status-path stale-pause repair / daily-max auto-complete:** side effects run under the time-tracking user lock without nesting an outer DB transaction around a second lock acquisition.
+- **Manual time entry create/update overlap races:** overlap check + insert/update share the time-tracking user lock with clock mutations.
+- **Month finalize/reopen TOCTOU:** exclusive per-user/month lock around seal and reopen; calendar “today” / month-ended checks use organisation storage timezone.
+- **Compliance cron / weekly average windows:** use storage timezone instead of PHP default/`new DateTime()`.
+- **Absence business-day gates:** “today” for cancel/shorten/substitute rules and vacation allocation reads use storage timezone.
+- **Dashboard load-error callout:** keeps `aria-live="assertive"` for screen readers; clock/break buttons guard double-submit client-side.
+
 ## 1.5.7 - 2026-07-18
 
 ### Added
 
 - **Auto break setting exposed to clients:** the dashboard widget data (and the mobile home dashboard payload built on it) now includes `autoBreakCalculation`, the personal "automatic ArbZG §4 break insertion" setting, so client apps can explain whether the server may insert breaks automatically.
+
+### Fixed
+
+- **ArbZG §5 clock-in rest check no longer poisoned by future end times:** rest anchors on the latest completed `end_time` strictly before storage "now", so a manual/planned row ending later today (e.g. 17:00 while it is still morning) cannot block stamping or claim “in 16h until 04:00”. Messages now include the calendar date of last end and earliest clock-in. Daily “hours today” clips completed work to the evaluation instant so future tails are not counted early.
 
 ## 1.5.6 - 2026-07-18
 

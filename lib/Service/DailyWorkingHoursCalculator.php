@@ -324,12 +324,17 @@ class DailyWorkingHoursCalculator
 		$entryEnd = $entry->getEndTime();
 
 		if ($entryEnd !== null) {
-			$effectiveEndTs = $entryEnd->getTimestamp();
+			// Never attribute work that is still in the future relative to the
+			// evaluation instant. Planned/mistaken completed rows with end_time
+			// later today must not inflate "hours today" or ArbZG §3 totals.
+			// When validating a proposed entry, callers pass that entry's end as
+			// $now so the full proposed span is still counted.
+			$effectiveEndTs = min($entryEnd->getTimestamp(), $now->getTimestamp());
 		} elseif (in_array($status, [TimeEntry::STATUS_ACTIVE, TimeEntry::STATUS_BREAK], true)) {
 			$effectiveEndTs = max($entryStartTs, $now->getTimestamp());
 		} elseif ($status === TimeEntry::STATUS_PAUSED) {
 			$pausedEnd = $entry->getUpdatedAt() ?? $now;
-			$effectiveEndTs = max($entryStartTs, $pausedEnd->getTimestamp());
+			$effectiveEndTs = max($entryStartTs, min($pausedEnd->getTimestamp(), $now->getTimestamp()));
 		} else {
 			return null;
 		}

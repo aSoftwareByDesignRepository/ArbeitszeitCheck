@@ -263,7 +263,9 @@ class AbsenceServiceTest extends TestCase
 	public function testCreateAbsenceTriggersHrRequestCreatedNotification(): void
 	{
 		$userId = 'testuser';
-		$start = (new \DateTime())->modify('+14 days');
+		// Pin to mid-week so the range always includes working days regardless of "today".
+		$start = new \DateTime('next monday');
+		$start->modify('+14 days');
 		$end = (clone $start)->modify('+1 day');
 		$data = [
 			'type' => Absence::TYPE_VACATION,
@@ -900,7 +902,7 @@ class AbsenceServiceTest extends TestCase
 		$absence->setEndDate($end);
 		$absence->setDays(2.0);
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);
@@ -929,7 +931,7 @@ class AbsenceServiceTest extends TestCase
 		$absence->setUserId($userId);
 		$absence->setStatus(Absence::STATUS_APPROVED);
 
-		$this->absenceMapper->expects($this->once())
+		$this->absenceMapper->expects($this->exactly(2))
 			->method('find')
 			->with($absenceId)
 			->willReturn($absence);

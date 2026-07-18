@@ -32,6 +32,7 @@ use OCA\ArbeitszeitCheck\Middleware\AppAccessMiddleware;
 use OCA\ArbeitszeitCheck\Middleware\AppAdminMiddleware;
 use OCA\ArbeitszeitCheck\Middleware\ClientLicenseMiddleware;
 use OCA\ArbeitszeitCheck\Middleware\KioskLicenseMiddleware;
+use OCA\ArbeitszeitCheck\Middleware\SessionCsrfGuardMiddleware;
 use OCA\ArbeitszeitCheck\Notification\Notifier;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
@@ -111,6 +112,15 @@ class Application extends App implements IBootstrap {
 			);
 		});
 		$context->registerMiddleware(ClientLicenseMiddleware::class);
+
+		$context->registerService(SessionCsrfGuardMiddleware::class, function ($c): SessionCsrfGuardMiddleware {
+			return new SessionCsrfGuardMiddleware(
+				$c->query(\OCP\IRequest::class),
+				$c->query(\OCP\AppFramework\Utility\IControllerMethodReflector::class),
+				$c->query(\OCP\IL10N::class),
+			);
+		});
+		$context->registerMiddleware(SessionCsrfGuardMiddleware::class);
 
 		$context->registerService(KioskLicenseMiddleware::class, function ($c): KioskLicenseMiddleware {
 			return new KioskLicenseMiddleware(
@@ -339,6 +349,8 @@ class Application extends App implements IBootstrap {
 				$c->query(PermissionService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\OvertimeBankService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\OvertimePayoutMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\TimeZoneService::class),
+				$c->query(\OCP\Lock\ILockingProvider::class),
 			);
 		});
 
@@ -534,7 +546,8 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class),
 				$c->query(VacationAllocationService::class),
 				$c->query(AbsenceNotificationMailService::class),
-				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class)
+				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\TimeZoneService::class),
 			);
 		});
 

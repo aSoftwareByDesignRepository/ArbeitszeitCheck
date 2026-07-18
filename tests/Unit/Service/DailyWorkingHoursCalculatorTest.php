@@ -245,4 +245,39 @@ class DailyWorkingHoursCalculatorTest extends TestCase
 		$this->assertSame('2026-05-20', $days[0]['date']);
 		$this->assertGreaterThan(10.0, $days[0]['hours']);
 	}
+
+	public function testCompletedEntryWithFutureEndIsClippedToEvaluationInstant(): void
+	{
+		$userId = 'alex';
+		$tz = new \DateTimeZone('Europe/Berlin');
+
+		// Planned/mistaken completed row: today 09:30–17:00 while "now" is 11:45.
+		$planned = new TimeEntry();
+		$planned->setId(42);
+		$planned->setUserId($userId);
+		$planned->setStatus(TimeEntry::STATUS_COMPLETED);
+		$planned->setStartTime(new \DateTime('2026-07-18 09:30:00', $tz));
+		$planned->setEndTime(new \DateTime('2026-07-18 17:00:00', $tz));
+		$planned->setBreaks(json_encode([]));
+
+		$now = new \DateTime('2026-07-18 11:45:00', $tz);
+		[$dayStart, $dayEnd] = $this->timeZoneService->dayWindowInStorage($now);
+
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([$planned]);
+
+		$hours = $this->calculator->getWorkingHoursForCalendarDay(
+			$userId,
+			$dayStart,
+			$dayEnd,
+			null,
+			$now,
+		);
+
+		$this->assertEqualsWithDelta(
+			2.25,
+			$hours,
+			0.05,
+			'Only 09:30–11:45 must count; the future tail until 17:00 must not inflate today hours.'
+		);
+	}
 }
