@@ -8,6 +8,7 @@ use OCA\ArbeitszeitCheck\Config\VendorPublicKey;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskActionService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskAuthService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskEnrollmentService;
+use OCA\ArbeitszeitCheck\Service\Kiosk\KioskErrorMessages;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskException;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskTerminalService;
 use OCA\ArbeitszeitCheck\Service\LicenseService;
@@ -33,6 +34,7 @@ class KioskController extends Controller
 		private readonly KioskAuthService $authService,
 		private readonly KioskActionService $actionService,
 		private readonly KioskEnrollmentService $enrollmentService,
+		private readonly KioskErrorMessages $kioskErrorMessages,
 		private readonly LicenseService $licenseService,
 		private readonly TerminalDeviceService $terminalDeviceService,
 		private readonly TimeZoneService $timeZoneService,
@@ -166,7 +168,7 @@ class KioskController extends Controller
 		$status = match ($code) {
 			'TERMINAL_LICENSE_REQUIRED' => Http::STATUS_PAYMENT_REQUIRED,
 			'TERMINAL_DEVICE_LIMIT_REACHED', 'KIOSK_USER_NOT_ALLOWED' => Http::STATUS_FORBIDDEN,
-			'KIOSK_RFID_ALREADY_ASSIGNED' => Http::STATUS_CONFLICT,
+			'KIOSK_RFID_ALREADY_ASSIGNED', 'ENROLLMENT_ACTIVE', 'KIOSK_BUSY' => Http::STATUS_CONFLICT,
 			'ENROLLMENT_NOT_ACTIVE', 'KIOSK_CREDENTIAL_NOT_FOUND', 'KIOSK_TERMINAL_NOT_FOUND', 'PAIRING_CODE_INVALID', 'KIOSK_CREDENTIAL_UNKNOWN' => Http::STATUS_NOT_FOUND,
 			'PIN_INVALID', 'PIN_LOCKED', 'KIOSK_SESSION_INVALID', 'KIOSK_TERMINAL_UNAUTHORIZED' => Http::STATUS_UNAUTHORIZED,
 			default => Http::STATUS_BAD_REQUEST,
@@ -174,24 +176,7 @@ class KioskController extends Controller
 		return new JSONResponse([
 			'success' => false,
 			'error' => $code,
-			'message' => $this->translateKioskError($code),
+			'message' => $this->kioskErrorMessages->message($code),
 		], $status);
-	}
-
-	private function translateKioskError(string $code): string
-	{
-		return match ($code) {
-			'TERMINAL_LICENSE_REQUIRED' => $this->l10n->t('Terminal license required. Contact your administrator.'),
-			'TERMINAL_DEVICE_LIMIT_REACHED' => $this->l10n->t('All terminal device slots are in use.'),
-			'PAIRING_CODE_INVALID' => $this->l10n->t('Pairing code is invalid or expired.'),
-			'KIOSK_USER_NOT_ALLOWED' => $this->l10n->t('This employee is not allowed to use the kiosk.'),
-			'PIN_INVALID' => $this->l10n->t('PIN is incorrect.'),
-			'PIN_LOCKED' => $this->l10n->t('PIN is temporarily locked. Try again later.'),
-			'KIOSK_SESSION_INVALID' => $this->l10n->t('Session expired. Identify again.'),
-			'KIOSK_ACTION_INVALID' => $this->l10n->t('This action is not allowed in the current state.'),
-			'MONTH_FINALIZED' => $this->l10n->t('This month is finalized. Contact your administrator.'),
-			'KIOSK_DISABLED' => $this->l10n->t('Kiosk mode is disabled.'),
-			default => $this->l10n->t('Request could not be completed.'),
-		};
 	}
 }

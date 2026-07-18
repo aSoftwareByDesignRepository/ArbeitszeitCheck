@@ -47,6 +47,7 @@ $pageIcons = [
 	'admin-overtime-payouts' => 'coins',
 	'admin-overtime-payout-audit' => 'clipboard-list',
 	'admin-users' => 'users',
+	'admin-user-detail' => 'user-check',
 	'admin-working-time-models' => 'briefcase',
 	'admin-tariff-rules' => 'layers',
 	'admin-holidays' => 'calendar-heart',
@@ -54,6 +55,7 @@ $pageIcons = [
 	'admin-vacation-layers' => 'layers',
 	'admin-audit-log' => 'scroll-text',
 	'admin-license' => 'key',
+	'admin-kiosk' => 'tablet',
 	'admin-settings' => 'shield',
 	'access-denied' => 'lock',
 ];

@@ -1,17 +1,20 @@
 /**
- * Admin kiosk page — clear sections, WCAG 2.1 AA, responsive from 320px.
+ * Admin kiosk — full-width, flat sections (one card layer), WCAG 2.1 AA.
  *
  * @license AGPL-3.0-or-later
  */
 
+/* ── Page: use full shell width ──────────────────────────────── */
 #app-content.azc-app .azc-kiosk-page {
 	display: flex;
 	flex-direction: column;
 	gap: var(--azc-space-5, 1.25rem);
-	max-width: 56rem;
+	width: 100%;
+	max-width: none;
+	min-width: 0;
 }
 
-/* Visible feedback banner */
+/* ── Feedback ────────────────────────────────────────────────── */
 #app-content.azc-app .azc-kiosk-feedback {
 	margin: 0;
 	padding: var(--azc-space-3, 0.75rem) var(--azc-space-4, 1rem);
@@ -33,38 +36,231 @@
 	color: var(--color-main-text);
 }
 
-#app-content.azc-app .azc-kiosk-section {
-	padding: var(--azc-space-5, 1.25rem);
+/* ── KPI strip (single layer, no nested chrome) ──────────────── */
+#app-content.azc-app .azc-kiosk-overview {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--azc-space-3, 0.75rem);
 	margin: 0;
+	width: 100%;
 }
 
-#app-content.azc-app .azc-kiosk-section__header {
-	margin-bottom: var(--azc-space-4, 1rem);
-}
-
-#app-content.azc-app .azc-kiosk-section__title {
-	font-size: var(--azc-fs-lg, 1.125rem);
-	font-weight: 600;
-	margin: 0 0 var(--azc-space-2, 0.5rem);
-	color: var(--azc-text, var(--color-main-text));
-	line-height: var(--azc-line-tight, 1.25);
-}
-
-#app-content.azc-app .azc-kiosk-section__lead {
+#app-content.azc-app .azc-kiosk-stat {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	min-height: 0;
+	padding: var(--azc-space-4, 1rem) var(--azc-space-4, 1rem);
 	margin: 0;
-	max-width: 65ch;
+	border: none;
+	border-radius: var(--azc-radius-md, 10px);
+	background: var(--azc-bg-card, var(--color-main-background));
+	box-shadow: none;
+	border-left: 3px solid var(--azc-border, var(--color-border));
+}
+
+#app-content.azc-app .azc-kiosk-stat--on {
+	border-left-color: var(--color-success-text, var(--color-success, #2d7a3e));
+}
+
+#app-content.azc-app .azc-kiosk-stat--off {
+	border-left-color: var(--color-border);
+}
+
+#app-content.azc-app .azc-kiosk-stat--primary {
+	border-left-color: var(--color-primary-element, #0082c9);
+}
+
+#app-content.azc-app .azc-kiosk-stat__label {
+	margin: 0;
+	font-size: var(--azc-fs-xs, 0.8125rem);
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
 	color: var(--azc-muted, var(--color-text-maxcontrast));
-	line-height: var(--azc-line-base, 1.5);
-	font-size: var(--azc-fs-sm, 0.875rem);
 }
 
+#app-content.azc-app .azc-kiosk-stat__value {
+	margin: 0;
+	font-size: clamp(1.25rem, 2vw, 1.6rem);
+	font-weight: 700;
+	line-height: var(--azc-line-tight, 1.2);
+	font-variant-numeric: tabular-nums;
+	color: var(--azc-text, var(--color-main-text));
+}
+
+#app-content.azc-app .azc-kiosk-stat__sep {
+	margin-inline: 0.15em;
+	font-weight: 500;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app .azc-kiosk-stat__meta {
+	margin: 0;
+	font-size: var(--azc-fs-xs, 0.8125rem);
+	line-height: 1.4;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+@media (max-width: 64rem) {
+	#app-content.azc-app .azc-kiosk-overview {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 30rem) {
+	#app-content.azc-app .azc-kiosk-overview {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ── Panels use standard azc-card header/body (no extra padding box) */
+#app-content.azc-app .azc-kiosk-panel.azc-card {
+	padding: 0;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+#app-content.azc-app .azc-kiosk-panel .azc-card__title:focus {
+	outline: none;
+}
+
+#app-content.azc-app .azc-kiosk-panel .azc-card__title:focus-visible {
+	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+
+#app-content.azc-app .azc-kiosk-section__xref {
+	margin: 0.35rem 0 0;
+}
+
+#app-content.azc-app .azc-kiosk-tip {
+	margin: 0.5rem 0 0;
+	padding: 0.35rem 0 0.35rem 0.75rem;
+	border-left: 3px solid var(--color-primary-element, #0082c9);
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.45;
+	max-width: 72ch;
+}
+
+/* ── Shared help / how-to (one pattern everywhere) ───────────── */
+#app-content.azc-app .azc-kiosk-help {
+	margin: var(--azc-space-3, 0.75rem) 0 0;
+	padding: 0;
+	border: none;
+	border-top: 1px solid var(--azc-border, var(--color-border));
+	background: transparent;
+}
+
+#app-content.azc-app .azc-kiosk-help__summary {
+	cursor: pointer;
+	list-style: none;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 2.75rem;
+	padding: 0.75rem 0;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	font-weight: 600;
+	line-height: 1.35;
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-help__summary::-webkit-details-marker {
+	display: none;
+}
+
+#app-content.azc-app .azc-kiosk-help__summary::before {
+	content: '';
+	flex: 0 0 auto;
+	width: 0.45rem;
+	height: 0.45rem;
+	border-right: 2px solid var(--color-primary-element, #0082c9);
+	border-bottom: 2px solid var(--color-primary-element, #0082c9);
+	transform: rotate(-45deg);
+	margin-top: -0.1rem;
+	transition: transform 0.15s ease;
+}
+
+#app-content.azc-app .azc-kiosk-help[open] > .azc-kiosk-help__summary::before {
+	transform: rotate(45deg);
+	margin-top: -0.25rem;
+}
+
+#app-content.azc-app .azc-kiosk-help__summary:focus-visible {
+	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+#app-content.azc-app .azc-kiosk-help__body {
+	padding: 0 0 0.85rem;
+}
+
+#app-content.azc-app .azc-kiosk-help__topics {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--azc-space-5, 1.25rem);
+}
+
+@media (min-width: 40rem) {
+	#app-content.azc-app .azc-kiosk-help__topics {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+#app-content.azc-app .azc-kiosk-help__topic {
+	margin: 0;
+	min-width: 0;
+}
+
+#app-content.azc-app .azc-kiosk-help__topic-title {
+	margin: 0 0 0.5rem;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	font-weight: 700;
+	line-height: 1.35;
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-help__steps {
+	margin: 0;
+	padding-left: 1.25rem;
+	max-width: 72ch;
+	color: var(--color-main-text);
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.55;
+}
+
+#app-content.azc-app .azc-kiosk-help__steps li {
+	margin: 0.3rem 0;
+}
+
+#app-content.azc-app .azc-kiosk-help__note {
+	margin: 0.75rem 0 0;
+	padding: 0.35rem 0 0.35rem 0.75rem;
+	border-left: 3px solid var(--color-primary-element, #0082c9);
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#app-content.azc-app .azc-kiosk-help__summary::before {
+		transition: none;
+	}
+}
+
+/* ── Toggle + capacity ───────────────────────────────────────── */
 #app-content.azc-app .azc-kiosk-toggle {
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
-	margin: 0.75rem 0;
+	margin: 0;
 	min-height: 2.75rem;
 	cursor: pointer;
+	font-weight: 600;
 }
 
 #app-content.azc-app .azc-kiosk-toggle input[type='checkbox'] {
@@ -74,8 +270,8 @@
 }
 
 #app-content.azc-app .azc-kiosk-capacity {
-	margin-top: var(--azc-space-3, 0.75rem);
-	max-width: 24rem;
+	margin-top: var(--azc-space-2, 0.5rem);
+	max-width: 28rem;
 }
 
 #app-content.azc-app .azc-kiosk-capacity__label {
@@ -94,7 +290,7 @@
 }
 
 #app-content.azc-app .azc-kiosk-meter {
-	height: 0.375rem;
+	height: 0.5rem;
 	border-radius: var(--azc-radius-pill, 999px);
 	background: color-mix(in srgb, var(--color-main-text) 8%, transparent);
 	overflow: hidden;
@@ -111,18 +307,13 @@
 	background: var(--color-warning-text, var(--color-warning));
 }
 
-@media (prefers-reduced-motion: reduce) {
-	#app-content.azc-app .azc-kiosk-meter__fill {
-		transition: none;
-	}
-}
-
+/* ── Forms ───────────────────────────────────────────────────── */
 #app-content.azc-app .azc-kiosk-form {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.75rem;
 	align-items: flex-end;
-	margin-bottom: 1rem;
+	margin: 0;
 }
 
 #app-content.azc-app .azc-kiosk-form__field {
@@ -130,20 +321,7 @@
 	min-width: 0;
 }
 
-#app-content.azc-app .azc-kiosk-form--grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 1rem;
-	align-items: start;
-}
-
-#app-content.azc-app .azc-kiosk-form__actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.75rem;
-	margin-bottom: 1rem;
-}
-
+/* ── Buttons ─────────────────────────────────────────────────── */
 #app-content.azc-app .azc-kiosk-page .azc-btn {
 	min-height: 44px;
 	min-width: 44px;
@@ -175,64 +353,287 @@
 	cursor: not-allowed;
 }
 
-#app-content.azc-app .azc-kiosk-steps {
-	margin: 0 0 var(--azc-space-4, 1rem);
-	padding-left: 1.25rem;
-	color: var(--azc-muted, var(--color-text-maxcontrast));
+/* ── Employee flow (find → allow → assign) ───────────────────── */
+#app-content.azc-app .azc-kiosk-flow {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin: 0.25rem 0 0;
+}
+
+#app-content.azc-app .azc-kiosk-flow__block {
+	padding: 1.15rem 0;
+	border-bottom: 1px solid var(--azc-border, var(--color-border));
+	transition: opacity 0.2s ease;
+}
+
+#app-content.azc-app .azc-kiosk-flow__block:last-child {
+	border-bottom: none;
+	padding-bottom: 0.25rem;
+}
+
+#app-content.azc-app .azc-kiosk-flow__block--muted {
+	opacity: 0.5;
+}
+
+#app-content.azc-app .azc-kiosk-flow__label {
+	display: block;
+	margin: 0 0 0.35rem;
 	font-size: var(--azc-fs-sm, 0.875rem);
-	line-height: 1.6;
+	font-weight: 700;
+	line-height: 1.35;
+	color: var(--color-main-text);
 }
 
-#app-content.azc-app .azc-kiosk-search-wrap {
+#app-content.azc-app .azc-kiosk-flow__hint {
+	margin: 0 0 0.75rem;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.45;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	max-width: 56ch;
+}
+
+#app-content.azc-app .azc-kiosk-flow__hint[hidden] {
+	display: none;
+}
+
+/* Search combobox */
+#app-content.azc-app .azc-kiosk-search {
 	position: relative;
+	max-width: 36rem;
+	width: 100%;
 }
 
-#app-content.azc-app .azc-kiosk-user-results {
+#app-content.azc-app .azc-kiosk-search__input {
+	display: block;
+	width: 100%;
+	min-height: 2.75rem;
+	padding: 0.65rem 0.9rem;
+	font-size: 1rem;
+	line-height: 1.4;
+	box-sizing: border-box;
+}
+
+#app-content.azc-app .azc-kiosk-search__input:focus-visible {
+	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline-offset: 2px;
+}
+
+#app-content.azc-app .azc-kiosk-search__results {
 	list-style: none;
 	position: absolute;
-	z-index: 20;
+	z-index: 30;
 	left: 0;
 	right: 0;
-	margin: 0.25rem 0 0;
-	padding: 0;
-	border: 2px solid var(--color-border);
-	border-radius: var(--border-radius);
-	max-height: 12rem;
+	margin: 0.35rem 0 0;
+	padding: 0.25rem 0;
+	max-height: min(14rem, 40vh);
 	overflow-y: auto;
+	border: 1px solid var(--azc-border, var(--color-border));
+	border-radius: var(--azc-radius-sm, 8px);
 	background: var(--color-main-background);
-	box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.12);
+	box-shadow: 0 0.35rem 1.25rem rgba(0, 0, 0, 0.12);
 }
 
-#app-content.azc-app .azc-kiosk-user-results button {
+#app-content.azc-app .azc-kiosk-search__option {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.15rem;
 	width: 100%;
-	text-align: left;
-	padding: 0.75rem;
+	margin: 0;
+	padding: 0.7rem 0.9rem;
 	min-height: 2.75rem;
+	text-align: left;
 	background: transparent;
 	border: none;
 	cursor: pointer;
 	color: inherit;
+	font: inherit;
 }
 
-#app-content.azc-app .azc-kiosk-user-results button:hover,
-#app-content.azc-app .azc-kiosk-user-results button:focus-visible,
-#app-content.azc-app .azc-kiosk-user-results [aria-selected='true'] button {
+#app-content.azc-app .azc-kiosk-search__option-name {
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-search__option-meta {
+	font-size: var(--azc-fs-xs, 0.8125rem);
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	font-variant-numeric: tabular-nums;
+}
+
+#app-content.azc-app .azc-kiosk-search__option:hover,
+#app-content.azc-app .azc-kiosk-search__option:focus-visible,
+#app-content.azc-app .azc-kiosk-search__results [aria-selected='true'] .azc-kiosk-search__option {
 	background: var(--color-background-hover);
-	outline: 2px solid var(--color-primary-element);
+	outline: 2px solid var(--color-primary-element, #0082c9);
 	outline-offset: -2px;
 }
 
-#app-content.azc-app .azc-kiosk-selected-panel {
-	margin: 0 0 1rem;
-	padding: var(--azc-space-4, 1rem);
-	border: 1px solid var(--azc-border, var(--color-border));
+/* Selected person row */
+#app-content.azc-app .azc-kiosk-person {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem 1.25rem;
+	max-width: 36rem;
+	padding: 0.85rem 1rem;
 	border-radius: var(--azc-radius-sm, 8px);
+	background: color-mix(in srgb, var(--color-primary-element) 7%, var(--color-main-background));
+}
+
+#app-content.azc-app .azc-kiosk-person__who {
+	min-width: 0;
+	flex: 1 1 12rem;
+}
+
+#app-content.azc-app .azc-kiosk-person__eyebrow {
+	display: block;
+	margin: 0 0 0.2rem;
+	font-size: var(--azc-fs-xs, 0.8125rem);
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app .azc-kiosk-person__name {
+	margin: 0;
+	font-size: 1.05rem;
+	font-weight: 700;
+	line-height: 1.3;
+	color: var(--color-main-text);
+	word-break: break-word;
+}
+
+#app-content.azc-app .azc-kiosk-person .azc-kiosk-toggle {
+	margin: 0;
+	flex: 0 1 auto;
+}
+
+/* Assign: two columns, soft divider */
+#app-content.azc-app .azc-kiosk-assign-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1.25rem 1.5rem;
+	width: 100%;
+	margin-top: 0.35rem;
+}
+
+@media (max-width: 40rem) {
+	#app-content.azc-app .azc-kiosk-assign-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+#app-content.azc-app .azc-kiosk-assign-card {
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	display: flex;
+	flex-direction: column;
+	gap: 0.65rem;
+	min-height: 100%;
+}
+
+@media (min-width: 40.01rem) {
+	#app-content.azc-app .azc-kiosk-assign-card:first-child {
+		padding-inline-end: 1.5rem;
+		border-inline-end: 1px solid var(--azc-border, var(--color-border));
+	}
+}
+
+#app-content.azc-app .azc-kiosk-assign-card__title {
+	margin: 0;
+	font-size: 0.95rem;
+	font-weight: 700;
+}
+
+#app-content.azc-app .azc-kiosk-assign-card__text {
+	margin: 0;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.45;
+	color: var(--color-main-text);
+	flex: 1 1 auto;
+}
+
+#app-content.azc-app .azc-kiosk-assign-card__warn {
+	margin: 0;
+	padding: 0.5rem 0 0.5rem 0.75rem;
+	border-left: 3px solid var(--color-warning, #a67c00);
+	background: transparent;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.45;
+}
+
+#app-content.azc-app .azc-kiosk-assign-card__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-top: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#app-content.azc-app .azc-kiosk-flow__block {
+		transition: none;
+	}
+}
+
+/* Enrollment status — accent bar, not a heavy framed box */
+#app-content.azc-app .azc-kiosk-enrollment-panel {
+	margin-top: 1rem;
+	padding: 0.85rem 0 0.85rem 1rem;
+	border-radius: 0;
+	border: none;
+	border-left: 3px solid var(--color-primary-element, #0082c9);
 	background: color-mix(in srgb, var(--color-primary-element) 6%, transparent);
 }
 
-#app-content.azc-app .azc-kiosk-selected-panel__name {
+#app-content.azc-app .azc-kiosk-enrollment-panel--waiting {
+	border-left-color: var(--color-primary-element, #0082c9);
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-panel--success {
+	border-left-color: var(--color-success, #2d7a3e);
+	background: color-mix(in srgb, var(--color-success) 8%, transparent);
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-panel--error {
+	border-left-color: var(--color-error, #e9322d);
+	background: color-mix(in srgb, var(--color-error) 8%, transparent);
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-panel__title {
+	margin: 0 0 0.35rem;
+	font-size: 1.05rem;
+	font-weight: 700;
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-panel__body {
 	margin: 0 0 0.5rem;
-	font-weight: 600;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.5;
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-panel__timer {
+	margin: 0 0 0.75rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	font-size: 1rem;
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-panel__steps {
+	margin: 0;
+	padding-left: 1.25rem;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.55;
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-panel__steps li {
+	margin: 0.3rem 0;
 }
 
 #app-content.azc-app .azc-kiosk-enrollment-status {
@@ -242,10 +643,32 @@
 	color: var(--color-main-text);
 }
 
+/* Already assigned */
+#app-content.azc-app .azc-kiosk-creds-list {
+	margin-top: 1.25rem;
+	padding-top: 1.15rem;
+	border-top: 1px solid var(--color-border);
+}
+
+#app-content.azc-app .azc-kiosk-creds-list__title {
+	margin: 0 0 0.35rem;
+	font-size: 1rem;
+	font-weight: 700;
+}
+
+#app-content.azc-app .azc-kiosk-creds-list__lead {
+	margin: 0 0 1rem;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.45;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	max-width: 72ch;
+}
+
+/* ── Modals (header / body / footer) ─────────────────────────── */
 #app-content.azc-app .azc-kiosk-modal-backdrop {
 	position: fixed;
 	inset: 0;
-	background: rgba(0, 0, 0, 0.45);
+	background: color-mix(in srgb, var(--color-main-text, #000) 48%, transparent);
 	z-index: 9998;
 }
 
@@ -255,40 +678,182 @@
 	top: 50%;
 	transform: translate(-50%, -50%);
 	z-index: 9999;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
 	margin: 0;
-	padding: 1.5rem;
-	max-width: min(28rem, calc(100vw - 2rem));
-	width: 100%;
-	border: 2px solid var(--color-primary-element);
-	border-radius: var(--border-radius-large);
-	background: var(--color-main-background);
-	box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.2);
+	padding: 0;
+	width: min(26rem, calc(100vw - 2rem));
+	max-height: min(90vh, calc(100dvh - 2rem));
+	overflow: auto;
+	border: 1px solid var(--azc-border, var(--color-border));
+	border-radius: var(--azc-radius-lg, 12px);
+	background: var(--azc-bg-card, var(--color-main-background));
+	box-shadow:
+		0 0.25rem 0.75rem rgba(0, 0, 0, 0.08),
+		0 1rem 2.5rem rgba(0, 0, 0, 0.16);
+	color: var(--color-main-text);
 }
 
-#app-content.azc-app .azc-kiosk-modal__hint {
-	color: var(--color-text-maxcontrast);
-	margin: 0.5rem 0 1rem;
-	line-height: 1.5;
+#app-content.azc-app .azc-kiosk-modal__header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.75rem;
+	padding: 1.15rem 1.25rem 0.85rem;
+	border-bottom: 1px solid var(--azc-border, var(--color-border));
 }
 
-#app-content.azc-app .azc-kiosk-pairing__code {
-	font-family: var(--font-face-monospace, monospace);
-	font-size: clamp(1.25rem, 4vw, 1.75rem);
+#app-content.azc-app .azc-kiosk-modal__title {
+	margin: 0;
+	padding: 0.2rem 0;
+	font-size: 1.2rem;
 	font-weight: 700;
-	letter-spacing: 0.15em;
+	line-height: 1.3;
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-modal__dismiss {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.75rem;
+	height: 2.75rem;
+	margin: -0.35rem -0.35rem 0 0;
+	padding: 0;
+	border: none;
+	border-radius: var(--azc-radius-sm, 8px);
+	background: transparent;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	font-size: 1.75rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+#app-content.azc-app .azc-kiosk-modal__dismiss:hover {
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-modal__dismiss:focus-visible {
+	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline-offset: 2px;
+}
+
+#app-content.azc-app .azc-kiosk-modal__body {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	padding: 1.15rem 1.25rem;
+}
+
+#app-content.azc-app .azc-kiosk-modal__lead {
+	margin: 0;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.5;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app .azc-kiosk-modal__field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+#app-content.azc-app .azc-kiosk-modal__label {
+	margin: 0;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-modal__input {
+	display: block;
+	width: 100%;
+	min-height: 2.75rem;
+	padding: 0.65rem 0.85rem;
+	font-size: 1rem;
+	box-sizing: border-box;
+}
+
+#app-content.azc-app .azc-kiosk-modal__input:focus-visible {
+	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline-offset: 2px;
+}
+
+#app-content.azc-app .azc-kiosk-modal__secret {
+	margin: 0;
+	padding: 1.1rem 1rem;
+	border-radius: var(--azc-radius-md, 10px);
+	background: color-mix(in srgb, var(--color-primary-element) 8%, var(--color-background-dark, var(--color-main-background)));
+	border: 1px dashed color-mix(in srgb, var(--color-primary-element) 35%, var(--azc-border, var(--color-border)));
+	font-family: var(--font-face-monospace, ui-monospace, monospace);
+	font-size: clamp(1.35rem, 4.5vw, 1.85rem);
+	font-weight: 700;
+	letter-spacing: 0.18em;
 	text-align: center;
-	padding: 1rem;
-	margin: 1rem 0;
-	background: var(--color-background-dark);
-	border-radius: var(--border-radius);
+	line-height: 1.3;
 	word-break: break-all;
+	user-select: all;
+	color: var(--color-main-text);
+}
+
+#app-content.azc-app .azc-kiosk-modal__meta {
+	margin: 0;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.45;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	text-align: center;
+}
+
+#app-content.azc-app .azc-kiosk-modal__footer {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.9rem 1.25rem 1.15rem;
+	border-top: 1px solid var(--azc-border, var(--color-border));
+	background: color-mix(in srgb, var(--color-main-text) 3%, var(--color-main-background));
+}
+
+#app-content.azc-app .azc-kiosk-pin-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 0;
+}
+
+#app-content.azc-app .azc-kiosk-pin-actions .azc-btn {
+	min-height: 2.75rem;
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+#app-content.azc-app .azc-kiosk-pin-share-status {
+	margin: 0;
+	min-height: 1.25rem;
+	font-size: 0.875rem;
+	line-height: 1.4;
+	color: var(--color-text-maxcontrast);
+}
+
+#app-content.azc-app .azc-kiosk-pin-share-status.is-success {
+	color: var(--color-success-text, var(--color-success, #2d7a3e));
+}
+
+#app-content.azc-app .azc-kiosk-pin-share-status.is-error {
+	color: var(--color-error-text, var(--color-error, #e9322d));
 }
 
 body.azc-kiosk-modal-open {
 	overflow: hidden;
 }
 
-/* Badges */
+/* ── Badges & tables ─────────────────────────────────────────── */
 #app-content.azc-app .azc-badge {
 	display: inline-block;
 	padding: 0.25rem 0.65rem;
@@ -319,7 +884,12 @@ body.azc-kiosk-modal-open {
 	gap: 0.35rem;
 }
 
-/* Neutralise Nextcloud core table { white-space: nowrap } + dt quirks */
+#app-content.azc-app .azc-kiosk-cred-row--focus {
+	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline-offset: -2px;
+	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 10%, var(--color-main-background));
+}
+
 #app-content.azc-app .azc-kiosk-table {
 	width: 100%;
 	border-collapse: collapse;
@@ -331,7 +901,7 @@ body.azc-kiosk-modal-open {
 	white-space: normal;
 	word-break: break-word;
 	vertical-align: middle;
-	padding: 0.75rem 0.5rem;
+	padding: 0.75rem 0.65rem;
 	border-bottom: 1px solid var(--color-border);
 	text-align: start;
 }
@@ -369,13 +939,34 @@ body.azc-kiosk-modal-open {
 	gap: 0.5rem;
 }
 
+#app-content.azc-app .azc-kiosk-no-action {
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#app-content.azc-app .azc-kiosk-flow__block,
+	#app-content.azc-app .azc-kiosk-meter__fill {
+		transition: none;
+	}
+}
+
 @media (max-width: 768px) {
 	#app-content.azc-app .azc-kiosk-form {
 		flex-direction: column;
 		align-items: stretch;
 	}
 
-	#app-content.azc-app .azc-kiosk-form__actions .azc-btn {
+	#app-content.azc-app .azc-kiosk-modal__footer .azc-btn,
+	#app-content.azc-app .azc-kiosk-pin-actions .azc-btn {
+		flex: 1 1 auto;
+		justify-content: center;
+	}
+
+	#app-content.azc-app .azc-card__header-actions {
+		width: 100%;
+	}
+
+	#app-content.azc-app .azc-card__header-actions .azc-btn {
 		width: 100%;
 	}
 
@@ -383,7 +974,6 @@ body.azc-kiosk-modal-open {
 		overflow-x: visible;
 	}
 
-	/* Stack table rows as cards on narrow viewports */
 	#app-content.azc-app .azc-kiosk-table thead {
 		position: absolute;
 		width: 1px;
@@ -406,10 +996,11 @@ body.azc-kiosk-modal-open {
 
 	#app-content.azc-app .azc-kiosk-table tr {
 		margin-bottom: 0.75rem;
-		padding: 0.75rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--azc-radius-sm, 8px);
-		background: var(--color-main-background);
+		padding: 0.75rem 0;
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: 0;
+		background: transparent;
 	}
 
 	#app-content.azc-app .azc-kiosk-table td {

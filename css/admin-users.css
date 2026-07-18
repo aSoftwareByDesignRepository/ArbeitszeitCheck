@@ -1,5 +1,5 @@
 /**
- * Admin Users – Edit user modal, history modal, Manage Employees styles
+ * Admin Users – employee list + employee detail page
  * WCAG 2.1 AA compliant, responsive
  *
  * @copyright Copyright (c) 2024, Nextcloud GmbH
@@ -8,7 +8,6 @@
 
 /* ===== EMPLOYEE LIST TOOLBAR & PAGINATION ===== */
 
-/* Search + action on one row (input aligned with button); label + help full width */
 .admin-users-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -104,87 +103,296 @@
   }
 }
 
-/* ===== HISTORY MODAL ===== */
+/* ===== EMPLOYEE DETAIL PAGE ===== */
 
-.history-modal__loading,
-.history-modal__empty {
+.admin-user-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1rem);
+  max-width: 52rem;
+}
+
+.admin-user-detail__back {
   margin: 0;
+}
+
+.admin-user-detail__back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 0.5rem);
+  min-height: 2.75rem;
+  padding: var(--space-2, 0.5rem) 0;
+  color: var(--color-primary-element, #0082c9);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: var(--border-radius, 4px);
+}
+
+.admin-user-detail__back-link:hover {
+  text-decoration: underline;
+}
+
+.admin-user-detail__back-link:focus-visible {
+  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline-offset: 2px;
+}
+
+.admin-user-detail__identity {
   padding: var(--space-4, 1rem);
-  color: var(--color-text-maxcontrast);
+  border: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
+  border-radius: var(--border-radius-large, 10px);
+  background: color-mix(in srgb, var(--color-main-background) 92%, var(--color-primary-element) 8%);
+}
+
+.admin-user-detail__name {
+  margin: 0 0 var(--space-3, 0.75rem);
+  font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+  line-height: 1.3;
+  color: var(--color-main-text);
+}
+
+.admin-user-detail__meta {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+  margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.admin-user-detail__meta-item {
+  margin: 0;
+  min-width: 0;
+}
+
+.admin-user-detail__meta-item dt {
+  margin: 0 0 var(--space-1, 0.25rem);
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+  color: var(--color-text-maxcontrast);
+  font-weight: 600;
 }
 
-.history-modal__content .table-container {
+.admin-user-detail__meta-item dd {
+  margin: 0;
+  color: var(--color-main-text);
+  word-break: break-word;
+}
+
+.admin-user-detail__meta-item code {
+  font-family: var(--font-face-monospace, ui-monospace, monospace);
+  font-size: 0.9em;
+}
+
+.admin-user-detail__howto {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--border-radius-large, 10px);
+  background: var(--color-main-background);
+  padding: 0;
+}
+
+.admin-user-detail__howto-summary {
+  cursor: pointer;
+  list-style-position: outside;
+  padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+  font-weight: 600;
+  color: var(--color-main-text);
+  min-height: 2.75rem;
+}
+
+.admin-user-detail__howto-summary:focus-visible {
+  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline-offset: 2px;
+  border-radius: var(--border-radius, 4px);
+}
+
+.admin-user-detail__howto-body {
+  padding: 0 var(--space-4, 1rem) var(--space-4, 1rem);
+}
+
+.admin-user-detail__howto-body p {
+  margin: 0 0 var(--space-2, 0.5rem);
+  line-height: 1.5;
+}
+
+.admin-user-detail__howto-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: var(--space-1, 0.25rem);
+  line-height: 1.5;
+}
+
+.admin-user-detail__toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 0.5rem);
+  padding: var(--space-3, 0.75rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-large, 10px);
+  background: var(--color-main-background);
+}
+
+.admin-user-detail__toc-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--border-radius-pill, 999px);
+  border: 1px solid var(--color-border);
+  color: var(--color-main-text);
+  text-decoration: none;
+  font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+  line-height: 1.3;
+  background: var(--color-main-background);
+}
+
+.admin-user-detail__toc-link:hover {
+  border-color: var(--color-primary-element, #0082c9);
+  color: var(--color-primary-element, #0082c9);
+}
+
+.admin-user-detail__toc-link:focus-visible {
+  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline-offset: 2px;
+}
+
+.admin-user-detail__status {
+  padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+  border-radius: var(--border-radius-large, 10px);
+  border: 1px solid var(--color-border);
+  background: var(--color-main-background);
+}
+
+.admin-user-detail__status--error {
+  border-color: var(--color-error, #e9322d);
+  background: color-mix(in srgb, var(--color-error, #e9322d) 8%, var(--color-main-background));
+}
+
+.admin-user-detail__status-text {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.admin-user-detail__kiosk-xref {
   margin-top: var(--space-2, 0.5rem);
+  padding: var(--space-4, 1rem);
+  border: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
+  border-radius: var(--border-radius-large, 10px);
+  background: color-mix(in srgb, var(--color-main-background) 92%, var(--color-primary-element) 8%);
 }
 
-/* ===== EDIT USER MODAL – FORM USABILITY & THEME-SAFE SELECT ===== */
+.admin-user-detail__kiosk-xref-title {
+  margin: 0 0 var(--space-2, 0.5rem);
+  font-size: var(--arbeitszeitcheck-font-size-base, 1rem);
+  color: var(--color-main-text);
+}
 
-/* Ensure the edit-user form is clearly structured and readable on all screens */
-#edit-user-modal .form {
+.admin-user-detail__kiosk-xref-text {
+  margin: 0 0 var(--space-3, 0.75rem);
+  line-height: 1.5;
+  color: var(--color-main-text);
+}
+
+.admin-user-detail__kiosk-xref-actions {
+  margin: 0;
+}
+
+.admin-user-detail__kiosk-xref-actions .btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+}
+
+
+.admin-user-detail__missing-id {
+  margin: 0 0 var(--space-4, 1rem);
+}
+
+.admin-user-detail__missing-id .form-label {
+  display: block;
+  margin-bottom: var(--space-1, 0.25rem);
+}
+
+.admin-user-detail__root {
+  display: block;
+}
+
+.admin-user-detail__form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4, 1rem);
 }
 
-#edit-user-modal .form-group {
-  margin-bottom: 0;
-}
+/* ===== DETAIL FORM SECTIONS (collapsible) ===== */
 
-#edit-user-modal .user-edit-section {
-  padding: var(--space-4, 1rem);
+.admin-user-detail .user-edit-section,
+.admin-user-detail__form .user-edit-section {
+  margin: 0;
+  padding: 0;
   border: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
   border-radius: var(--border-radius-large, 10px);
   background: var(--color-main-background, #fff);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3, 0.75rem);
+  overflow: clip;
 }
 
-#edit-user-modal .user-edit-section__heading {
+.admin-user-detail .user-edit-section__summary {
+  cursor: pointer;
+  list-style-position: outside;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 0.5rem);
+  min-height: 3rem;
+  padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+  font-weight: 600;
+  color: var(--color-main-text);
+  background: color-mix(in srgb, var(--color-main-background) 94%, var(--color-text-maxcontrast) 6%);
+}
+
+.admin-user-detail .user-edit-section__summary:focus-visible {
+  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline-offset: -2px;
+}
+
+.admin-user-detail .user-edit-section__heading {
   margin: 0;
   font-size: var(--arbeitszeitcheck-font-size-base, 1rem);
   color: var(--color-main-text, var(--arbeitszeitcheck-color-text));
 }
 
-#edit-user-modal .user-edit-steps {
+.admin-user-detail .user-edit-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 0.75rem);
   padding: var(--space-4, 1rem);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--border-radius-large, 10px);
-  background: color-mix(in srgb, var(--color-main-background) 92%, var(--color-primary-element) 8%);
+  border-top: 1px solid var(--color-border);
 }
 
-#edit-user-modal .user-edit-steps__title {
-  margin: 0 0 var(--space-2, 0.5rem) 0;
-  font-weight: 600;
-}
-
-#edit-user-modal .user-edit-steps__list {
+.admin-user-detail .user-edit-section__guide {
   margin: 0;
-  padding-left: 1.25rem;
-  display: grid;
-  gap: var(--space-1, 0.25rem);
 }
 
-#edit-user-modal .entitlement-preview {
+.admin-user-detail .form-group {
+  margin-bottom: 0;
+}
+
+.admin-user-detail .entitlement-preview {
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-large, 10px);
   padding: var(--space-3, 0.75rem);
   background: var(--color-main-background);
 }
 
-#edit-user-modal .entitlement-preview__value {
+.admin-user-detail .entitlement-preview__value {
   margin: 0;
   font-weight: 700;
   color: var(--color-text-maxcontrast);
 }
 
-#edit-user-modal .entitlement-preview__meta {
+.admin-user-detail .entitlement-preview__meta {
   margin: var(--space-1, 0.25rem) 0 0;
   color: var(--color-text-lighter);
 }
 
-#edit-user-modal .entitlement-preview__proration {
+.admin-user-detail .entitlement-preview__proration {
   margin: var(--space-2, 0.5rem) 0 0;
   padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
   border-radius: var(--border-radius, 6px);
@@ -195,14 +403,14 @@
   line-height: 1.5;
 }
 
-#edit-user-modal .entitlement-preview__summary {
+.admin-user-detail .entitlement-preview__summary {
   margin: var(--space-2, 0.5rem) 0 0;
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
   line-height: 1.5;
   color: var(--color-main-text);
 }
 
-#edit-user-modal .entitlement-preview__details {
+.admin-user-detail .entitlement-preview__details {
   margin-top: var(--space-3, 0.75rem);
   border: 1px solid var(--color-border);
   border-radius: var(--border-radius-large, 10px);
@@ -210,11 +418,11 @@
   background: color-mix(in srgb, var(--color-main-background) 96%, var(--color-text-maxcontrast) 4%);
 }
 
-#edit-user-modal .entitlement-preview__details[hidden] {
+.admin-user-detail .entitlement-preview__details[hidden] {
   display: none;
 }
 
-#edit-user-modal .entitlement-preview__details > summary {
+.admin-user-detail .entitlement-preview__details > summary {
   cursor: pointer;
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
   font-weight: 600;
@@ -222,13 +430,13 @@
   list-style-position: outside;
 }
 
-#edit-user-modal .entitlement-preview__details > summary:focus-visible {
+.admin-user-detail .entitlement-preview__details > summary:focus-visible {
   outline: 2px solid var(--color-primary-element, #0082c9);
   outline-offset: 2px;
   border-radius: var(--border-radius, 4px);
 }
 
-#edit-user-modal .entitlement-preview__technical {
+.admin-user-detail .entitlement-preview__technical {
   margin: var(--space-3, 0.75rem) 0 0;
   padding: var(--space-3, 0.75rem);
   max-height: 12rem;
@@ -241,53 +449,52 @@
   border: 1px solid var(--color-border);
 }
 
-#edit-user-modal .entitlement-preview__technical code {
+.admin-user-detail .entitlement-preview__technical code {
   font-family: var(--font-face-monospace, ui-monospace, monospace);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* Stichtag + validity dates: same picker affordance as other admin date fields */
-#edit-user-modal .form-input.datepicker-input {
+.admin-user-detail .form-input.datepicker-input {
   width: 100%;
   max-width: 100%;
 }
 
-#edit-user-modal .form-label {
+.admin-user-detail .form-label {
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
 }
 
-#edit-user-modal .form-help {
+.admin-user-detail .form-help {
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
 }
 
-#edit-user-modal .form-group.is-disabled {
+.admin-user-detail .form-group.is-disabled {
   opacity: 0.65;
 }
 
-#edit-user-modal .form-group.is-disabled .form-input,
-#edit-user-modal .form-group.is-disabled .form-select,
-#edit-user-modal .form-group.is-disabled .form-textarea {
+.admin-user-detail .form-group.is-disabled .form-input,
+.admin-user-detail .form-group.is-disabled .form-select,
+.admin-user-detail .form-group.is-disabled .form-textarea {
   pointer-events: none;
 }
 
-#edit-user-modal .user-edit-capture__intro {
+.admin-user-detail .user-edit-capture__intro {
   margin: 0;
 }
 
-#edit-user-modal .user-edit-capture__grid {
+.admin-user-detail .user-edit-capture__grid {
   display: grid;
   gap: var(--space-3, 0.75rem);
   grid-template-columns: 1fr;
 }
 
 @media (min-width: 520px) {
-  #edit-user-modal .user-edit-capture__grid {
+  .admin-user-detail .user-edit-capture__grid {
     grid-template-columns: 1fr 1fr;
   }
 }
 
-#edit-user-modal .user-edit-capture__card {
+.admin-user-detail .user-edit-capture__card {
   display: flex;
   gap: var(--space-3, 0.75rem);
   align-items: flex-start;
@@ -299,17 +506,17 @@
   min-height: 5.5rem;
 }
 
-#edit-user-modal .user-edit-capture__card:has(.user-edit-capture__checkbox:checked) {
+.admin-user-detail .user-edit-capture__card:has(.user-edit-capture__checkbox:checked) {
   border-color: var(--color-primary-element, #0082c9);
   background: color-mix(in srgb, var(--color-main-background) 90%, var(--color-primary-element) 10%);
 }
 
-#edit-user-modal .user-edit-capture__card:has(.user-edit-capture__checkbox:focus-visible) {
+.admin-user-detail .user-edit-capture__card:has(.user-edit-capture__checkbox:focus-visible) {
   outline: 2px solid var(--color-primary-element, #0082c9);
   outline-offset: 2px;
 }
 
-#edit-user-modal .user-edit-capture__checkbox {
+.admin-user-detail .user-edit-capture__checkbox {
   width: 1.25rem;
   height: 1.25rem;
   margin-top: 0.15rem;
@@ -317,107 +524,129 @@
   accent-color: var(--color-primary-element, #0082c9);
 }
 
-#edit-user-modal .user-edit-capture__card-body {
+.admin-user-detail .user-edit-capture__card-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-1, 0.25rem);
 }
 
-#edit-user-modal .user-edit-capture__card-title {
+.admin-user-detail .user-edit-capture__card-title {
   font-weight: 600;
   color: var(--color-main-text);
   line-height: 1.35;
 }
 
-#edit-user-modal .user-edit-capture__card-text {
+.admin-user-detail .user-edit-capture__card-text {
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
   color: var(--color-text-maxcontrast);
   line-height: 1.45;
 }
 
-#edit-user-modal .user-edit-capture__error {
+.admin-user-detail .user-edit-capture__error {
   margin: 0;
 }
 
-#edit-user-modal .user-edit-capture__card--locked {
+.admin-user-detail .user-edit-capture__card--locked {
   opacity: 0.65;
   cursor: not-allowed;
 }
 
-#edit-user-modal .user-edit-capture__org-note {
+.admin-user-detail .user-edit-capture__org-note {
   margin-top: 0;
 }
 
-/* Strong, theme-independent colors for the work schedule dropdown */
-#edit-user-modal .form-select {
+.admin-user-detail .form-select {
   background-color: var(--color-main-background);
   color: var(--color-main-text);
   border-color: var(--color-border);
 }
 
-#edit-user-modal .form-select option {
+.admin-user-detail .form-select option {
   background-color: var(--color-main-background);
   color: var(--color-main-text);
 }
 
-/* In dark / high-contrast themes, rely on core Nextcloud variables */
-html[data-theme="dark"] #edit-user-modal .form-select,
-html[data-theme="dark"] #edit-user-modal .form-select option,
-body[data-theme-dark] #edit-user-modal .form-select,
-body[data-theme-dark] #edit-user-modal .form-select option,
-body[data-theme-dark-highcontrast] #edit-user-modal .form-select,
-body[data-theme-dark-highcontrast] #edit-user-modal .form-select option {
+html[data-theme="dark"] .admin-user-detail .form-select,
+html[data-theme="dark"] .admin-user-detail .form-select option,
+body[data-theme-dark] .admin-user-detail .form-select,
+body[data-theme-dark] .admin-user-detail .form-select option,
+body[data-theme-dark-highcontrast] .admin-user-detail .form-select,
+body[data-theme-dark-highcontrast] .admin-user-detail .form-select option {
   background-color: var(--color-main-background);
   color: var(--color-main-text);
 }
 
-/* Modal footer: sticky, high-contrast primary vs secondary (WCAG 2.1 AA) */
-#edit-user-modal .form-actions {
+/* Sticky save bar */
+.admin-user-detail .form-actions,
+.admin-user-detail__actions {
   display: flex;
   flex-direction: row-reverse;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3, 0.75rem);
-  margin-top: var(--space-4, 1rem);
-  padding: var(--space-4, 1rem) 0 0;
-  border-top: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
+  margin-top: var(--space-2, 0.5rem);
+  padding: var(--space-4, 1rem);
+  border: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
+  border-radius: var(--border-radius-large, 10px);
   position: sticky;
-  bottom: 0;
+  bottom: 0.5rem;
   z-index: 2;
   background: var(--color-main-background, #fff);
   box-shadow: 0 -4px 12px color-mix(in srgb, var(--color-box-shadow, #000) 8%, transparent);
 }
 
-#edit-user-modal .form-actions .btn--primary {
+.admin-user-detail .form-actions .btn--primary {
   min-width: 9rem;
   font-weight: 600;
   order: 1;
 }
 
-#edit-user-modal .form-actions .btn--secondary {
+.admin-user-detail .form-actions .btn--secondary {
   min-width: 7rem;
   order: 2;
+  text-align: center;
+  text-decoration: none;
 }
 
-#edit-user-modal .form-actions .btn--primary:focus-visible,
-#edit-user-modal .form-actions .btn--secondary:focus-visible {
+.admin-user-detail .form-actions .btn--primary:focus-visible,
+.admin-user-detail .form-actions .btn--secondary:focus-visible {
   outline: 2px solid var(--color-primary-element, #0082c9);
   outline-offset: 2px;
 }
 
+/* History panel (inline, not modal) */
+.history-panel__loading,
+.history-panel__empty {
+  margin: 0;
+  padding: var(--space-2, 0.5rem) 0;
+  color: var(--color-text-maxcontrast);
+  font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+}
+
+.history-panel .table-container {
+  margin-top: var(--space-2, 0.5rem);
+}
+
 @media (max-width: 768px) {
-  #edit-user-modal .user-edit-section,
-  #edit-user-modal .user-edit-steps {
+  .admin-user-detail .user-edit-section__body,
+  .admin-user-detail__identity,
+  .admin-user-detail__howto-body {
     padding: var(--space-3, 0.75rem);
   }
 
-  #edit-user-modal .form-actions {
+  .admin-user-detail .form-actions {
     flex-direction: column;
+    bottom: 0;
+    border-radius: var(--border-radius-large, 10px) var(--border-radius-large, 10px) 0 0;
   }
 
-  #edit-user-modal .form-actions .btn {
+  .admin-user-detail .form-actions .btn {
     width: 100%;
   }
-}
 
+  .admin-user-detail__toc-link {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}

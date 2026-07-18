@@ -163,6 +163,7 @@ return [
 		// Admin routes
 		['name' => 'admin#dashboard', 'url' => '/admin', 'verb' => 'GET'],
 		['name' => 'admin#users', 'url' => '/admin/users', 'verb' => 'GET'],
+		['name' => 'admin#userDetail', 'url' => '/admin/users/{userId}', 'verb' => 'GET'],
 		['name' => 'admin#settings', 'url' => '/admin/settings', 'verb' => 'GET'],
 		['name' => 'license_admin#index', 'url' => '/admin/license', 'verb' => 'GET'],
 		['name' => 'license_admin#applyLicense', 'url' => '/api/admin/license', 'verb' => 'POST'],

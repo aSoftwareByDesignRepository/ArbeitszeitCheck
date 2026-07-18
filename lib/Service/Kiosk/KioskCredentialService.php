@@ -40,67 +40,122 @@ class KioskCredentialService
 	/**
 	 * @return array{id: int, userId: string, type: string}
 	 */
-	public function assignRfid(string $userId, string $rfidUid, string $createdBy, ?string $label = null): array
-	{
+	public function assignRfid(
+		string $userId,
+		string $rfidUid,
+		string $createdBy,
+		?string $label = null,
+		string $auditMethod = 'manual',
+		bool $writeAudit = true,
+	): array {
 		$this->assertUserKioskAllowed($userId);
 		$normalized = KioskCrypto::normalizeRfidUid($rfidUid);
-		if ($normalized === '') {
+		// Match client parseBadgeUid minimum — reject empty / trivia UIDs.
+		if ($normalized === '' || strlen($normalized) < 4) {
 			throw new KioskException('KIOSK_RFID_INVALID');
 		}
-		$lookup = $this->settingsService->rfidLookupHash($normalized);
-		if ($this->credMapper->findByLookupHash($lookup) !== null) {
-			throw new KioskException('KIOSK_RFID_ALREADY_ASSIGNED');
+
+		// Serialize per user so concurrent enrollments / admin assign cannot race
+		// unique(lookup_hash) or unique(user_id, type) into an unmapped 500.
+		$lockKey = 'arbeitszeitcheck/kiosk_rfid_assign/' . hash('sha256', $userId);
+		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk RFID assign');
+		try {
+			$lookup = $this->settingsService->rfidLookupHash($normalized);
+			$existingByHash = $this->credMapper->findByLookupHash($lookup);
+			if ($existingByHash !== null) {
+				// Idempotent re-scan of the same employee's own badge during enrollment.
+				if ($existingByHash->getUserId() === $userId && $existingByHash->getType() === 'rfid') {
+					return [
+						'id' => (int)$existingByHash->getId(),
+						'userId' => $userId,
+						'type' => 'rfid',
+					];
+				}
+				throw new KioskException('KIOSK_RFID_ALREADY_ASSIGNED');
+			}
+
+			$now = $this->timeFactory->getDateTime();
+			$cred = $this->credMapper->findByUserAndType($userId, 'rfid');
+			if ($cred === null) {
+				$cred = new KioskCred();
+				$cred->setUserId($userId);
+				$cred->setType('rfid');
+				$cred->setCreatedBy($createdBy);
+				$cred->setCreatedAt($now);
+			}
+			$cred->setLookupHash($lookup);
+			$cred->setSecretHash(null);
+			$cred->setLabel($label);
+			$cred->setFailedAttempts(0);
+			$cred->setLockedUntil(null);
+
+			try {
+				$cred = $cred->getId() === null ? $this->credMapper->insert($cred) : $this->credMapper->update($cred);
+			} catch (\Throwable $e) {
+				if ($this->isUniqueConstraintViolation($e)) {
+					throw new KioskException('KIOSK_RFID_ALREADY_ASSIGNED');
+				}
+				throw $e;
+			}
+
+			if ($writeAudit) {
+				$this->auditLogMapper->logAction($userId, 'kiosk_credential_assigned', 'kiosk_cred', $cred->getId(), null, [
+					'type' => 'rfid',
+					'method' => $auditMethod,
+				], $createdBy);
+			}
+
+			return ['id' => (int)$cred->getId(), 'userId' => $userId, 'type' => 'rfid'];
+		} finally {
+			$this->lockingProvider->releaseLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
 		}
+	}
 
-		$now = $this->timeFactory->getDateTime();
-		$cred = $this->credMapper->findByUserAndType($userId, 'rfid');
-		if ($cred === null) {
-			$cred = new KioskCred();
-			$cred->setUserId($userId);
-			$cred->setType('rfid');
-			$cred->setCreatedBy($createdBy);
-			$cred->setCreatedAt($now);
+	private function isUniqueConstraintViolation(\Throwable $e): bool
+	{
+		if ($e instanceof \Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+			return true;
 		}
-		$cred->setLookupHash($lookup);
-		$cred->setSecretHash(null);
-		$cred->setLabel($label);
-		$cred->setFailedAttempts(0);
-		$cred->setLockedUntil(null);
-		$cred = $cred->getId() === null ? $this->credMapper->insert($cred) : $this->credMapper->update($cred);
-
-		$this->auditLogMapper->logAction($userId, 'kiosk_credential_assigned', 'kiosk_cred', $cred->getId(), null, [
-			'type' => 'rfid',
-			'method' => 'manual',
-		], $createdBy);
-
-		return ['id' => $cred->getId(), 'userId' => $userId, 'type' => 'rfid'];
+		$previous = $e->getPrevious();
+		return $previous instanceof \Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 	}
 
 	/**
+	 * Create or replace a user's kiosk PIN.
+	 *
+	 * Serialized per user so concurrent admin clicks cannot insert two PIN
+	 * rows (unique on user_id+type) or race the one-time plaintext reveal.
+	 *
 	 * @return array{pin: string, id: int}
 	 */
 	public function generatePin(string $userId, string $createdBy): array
 	{
 		$this->assertUserKioskAllowed($userId);
-		$pin = KioskCrypto::generatePin();
-		$now = $this->timeFactory->getDateTime();
-		$cred = $this->credMapper->findByUserAndType($userId, 'pin');
-		if ($cred === null) {
-			$cred = new KioskCred();
-			$cred->setUserId($userId);
-			$cred->setType('pin');
-			$cred->setCreatedBy($createdBy);
-			$cred->setCreatedAt($now);
+		$lockKey = 'arbeitszeitcheck/kiosk_pin_gen/' . hash('sha256', $userId);
+		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk PIN generate');
+		try {
+			$pin = KioskCrypto::generatePin();
+			$now = $this->timeFactory->getDateTime();
+			$cred = $this->credMapper->findByUserAndType($userId, 'pin');
+			if ($cred === null) {
+				$cred = new KioskCred();
+				$cred->setUserId($userId);
+				$cred->setType('pin');
+				$cred->setCreatedBy($createdBy);
+				$cred->setCreatedAt($now);
+			}
+			$cred->setSecretHash(KioskCrypto::hashSecret($pin));
+			$cred->setLookupHash(null);
+			$cred->setFailedAttempts(0);
+			$cred->setLockedUntil(null);
+			$cred = $cred->getId() === null ? $this->credMapper->insert($cred) : $this->credMapper->update($cred);
+
+			$this->auditLogMapper->logAction($userId, 'kiosk_pin_generated', 'kiosk_cred', $cred->getId(), null, null, $createdBy);
+
+			return ['pin' => $pin, 'id' => $cred->getId()];
+		} finally {
+			$this->lockingProvider->releaseLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
 		}
-		$cred->setSecretHash(KioskCrypto::hashSecret($pin));
-		$cred->setLookupHash(null);
-		$cred->setFailedAttempts(0);
-		$cred->setLockedUntil(null);
-		$cred = $cred->getId() === null ? $this->credMapper->insert($cred) : $this->credMapper->update($cred);
-
-		$this->auditLogMapper->logAction($userId, 'kiosk_pin_generated', 'kiosk_cred', $cred->getId(), null, null, $createdBy);
-
-		return ['pin' => $pin, 'id' => $cred->getId()];
 	}
 
 	public function revoke(int $credId, string $actorUserId): void

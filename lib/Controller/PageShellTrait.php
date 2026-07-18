@@ -29,6 +29,7 @@ trait PageShellTrait
 	/** Page IDs that keep a readable max width (forms, preferences). */
 	private const CONSTRAINED_SHELL_PAGE_IDS = [
 		'settings',
+		'admin-user-detail',
 	];
 
 	/** Page IDs that use full-width shell (tables, dashboards, dense admin/manager lists). */
@@ -60,6 +61,7 @@ trait PageShellTrait
 		'admin-holidays',
 		'admin-audit-log',
 		'admin-working-time-models',
+		'admin-kiosk',
 	];
 
 	/**

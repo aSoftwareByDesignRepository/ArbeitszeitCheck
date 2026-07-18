@@ -22,6 +22,7 @@ class KioskEnrollmentMapper extends QBMapper
 			->where($qb->expr()->eq('terminal_id', $qb->createNamedParameter($terminalId)))
 			->andWhere($qb->expr()->isNull('completed_at'))
 			->andWhere($qb->expr()->gt('expires_at', $qb->createNamedParameter($now->format('Y-m-d H:i:s'))))
+			->orderBy('id', 'DESC')
 			->setMaxResults(1);
 		$entities = $this->findEntities($qb);
 		return $entities[0] ?? null;

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskCredentialService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskEnrollmentService;
+use OCA\ArbeitszeitCheck\Service\Kiosk\KioskErrorMessages;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskException;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskSettingsService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskTerminalService;
@@ -45,6 +47,7 @@ class KioskAdminController extends Controller
 		private readonly KioskEnrollmentService $enrollmentService,
 		private readonly KioskSettingsService $settingsService,
 		private readonly TerminalDeviceService $terminalDeviceService,
+		private readonly KioskErrorMessages $kioskErrorMessages,
 		private readonly IUserManager $userManager,
 		PermissionService $permissionService,
 		IUserSession $userSession,
@@ -108,6 +111,7 @@ class KioskAdminController extends Controller
 				'terminalDevicesUsed' => $this->terminalDeviceService->getActiveCount(),
 				'terminalDevicesLimit' => $this->terminalDeviceService->getDeviceLimit(),
 				'licenseAdminUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.license_admin.index'),
+				'enrollmentTtlSeconds' => Constants::KIOSK_ENROLLMENT_TTL_SECONDS,
 				'apiBase' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.kiosk_admin.listCredentials'),
 				'apiTerminals' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.kiosk_admin.createTerminal'),
 				'apiCredentials' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.kiosk_admin.listCredentials'),
@@ -136,22 +140,59 @@ class KioskAdminController extends Controller
 					'terminalRevoked' => $this->l10n->t('Terminal revoked'),
 					'confirmRevoke' => $this->l10n->t('Revoke this terminal? The tablet will need to be paired again.'),
 					'revoke' => $this->l10n->t('Revoke'),
-					'selectEmployeeTerminal' => $this->l10n->t('Select employee and terminal'),
+					'selectEmployeeTerminal' => $this->l10n->t('Select an employee and a tablet first'),
 					'selectEmployee' => $this->l10n->t('Select an employee first'),
+					'selectTerminal' => $this->l10n->t('Select a tablet for the scan'),
 					'enableAccessFirst' => $this->l10n->t('Allow kiosk access for this employee first'),
-					'enrollmentWaiting' => $this->l10n->t('Waiting for badge scan…'),
+					'enrollmentWaiting' => $this->l10n->t('Waiting for badge scan on the tablet…'),
+					'enrollmentWaitingTitle' => $this->l10n->t('Scan in progress'),
+					'enrollmentWaitingBody' => $this->l10n->t('Go to “{terminal}” and hold the badge on the reader. This page updates by itself.'),
+					'enrollmentTimer' => $this->l10n->t('Time left: {time}'),
 					'enrollmentDone' => $this->l10n->t('Badge assigned successfully'),
-					'enrollmentExpired' => $this->l10n->t('Enrollment expired'),
-					'enrollmentCancelled' => $this->l10n->t('Enrollment cancelled'),
+					'enrollmentDoneTitle' => $this->l10n->t('Badge saved'),
+					'enrollmentExpired' => $this->l10n->t('Scan timed out. Click “Scan badge at tablet” to try again.'),
+					'enrollmentExpiredTitle' => $this->l10n->t('Scan expired'),
+					'enrollmentCancelled' => $this->l10n->t('Scan cancelled'),
+					'enrollmentCancelledTitle' => $this->l10n->t('Cancelled'),
+					'enrollmentBusy' => $this->l10n->t('A badge scan is already running. Cancel it first or wait.'),
+					'enrollmentNoTerminal' => $this->l10n->t('No active tablet yet. Pair a terminal first.'),
+					'enrollmentScanProblem' => $this->l10n->t('Problem while scanning'),
+					'enrollmentScanRetryHint' => $this->l10n->t('The scan is still open — hold the badge again, or cancel and restart.'),
+					'networkFailed' => $this->l10n->t('No connection to the server. Check your network and try again.'),
+					'requestFailedDetail' => $this->l10n->t('The request failed (HTTP {status}). Refresh the page and try again.'),
+					'errTerminalNotFound' => $this->l10n->t('Terminal not found. Refresh the page and select an active tablet.'),
+					'errTerminalNotActive' => $this->l10n->t('Only a paired (active) tablet can enroll badges. Finish pairing first.'),
+					'errBadgeAssigned' => $this->l10n->t('This badge is already assigned to another employee. Remove it there first, or use a different badge.'),
+					'errBadgeInvalid' => $this->l10n->t('The badge could not be read. Hold it flat on the reader for 1–2 seconds and try again.'),
+					'errEnrollmentInactive' => $this->l10n->t('No badge scan is waiting on this tablet. Click “Scan badge at tablet” again, then hold the badge.'),
+					'errKioskBusy' => $this->l10n->t('Another badge operation is already running. Wait a few seconds and try again.'),
+					'errScanFailed' => $this->l10n->t('Badge could not be saved. Check tablet online status and kiosk access, then start the scan again.'),
+					'errLicenseRequired' => $this->l10n->t('A Terminal license is required. Open License administration to apply a key.'),
+					'errDeviceLimit' => $this->l10n->t('All terminal license slots are in use. Revoke an unused terminal or upgrade the license.'),
+					'stepAllowHintReady' => $this->l10n->t('Turn on “Allow kiosk access” for this person, then continue with step 3.'),
+					'stepAssignHintReady' => $this->l10n->t('Create a PIN or start a badge scan. You only need one method — or both.'),
+					'stepAssignHintBlocked' => $this->l10n->t('Allow kiosk access for this employee first, then choose PIN or badge scan.'),
 					'credentialRemoved' => $this->l10n->t('Credential removed'),
 					'delete' => $this->l10n->t('Delete'),
 					'deletePin' => $this->l10n->t('Delete PIN'),
 					'deleteBadge' => $this->l10n->t('Delete badge'),
+					'generatePin' => $this->l10n->t('Generate PIN'),
+					'newPin' => $this->l10n->t('New PIN'),
+					'confirmNewPin' => $this->l10n->t('Generate a new PIN for {name}? The previous PIN will stop working immediately.'),
 					'kioskAllowedOn' => $this->l10n->t('Kiosk access enabled'),
 					'kioskAllowedOff' => $this->l10n->t('Kiosk access disabled'),
 					'kioskAllowedLabel' => $this->l10n->t('Allow kiosk access'),
 					'pinTitle' => $this->l10n->t('PIN generated'),
 					'pinHint' => $this->l10n->t('PIN is shown only once. Share it securely with the employee.'),
+					'copyPin' => $this->l10n->t('Copy PIN'),
+					'pinCopied' => $this->l10n->t('PIN copied'),
+					'copyFailed' => $this->l10n->t('Could not copy. Please select the PIN and copy it manually.'),
+					'shareFailed' => $this->l10n->t('Could not share. Please copy the PIN instead.'),
+					'sharePin' => $this->l10n->t('Share…'),
+					'sendByEmail' => $this->l10n->t('Send by email'),
+					'sharePinSubject' => $this->l10n->t('Your ArbeitszeitCheck kiosk PIN'),
+					'sharePinBody' => $this->l10n->t("Hello{nameSuffix},\n\nYour kiosk PIN for ArbeitszeitCheck is: {pin}\n\nKeep this PIN private. You can change it only by asking an administrator to generate a new one.\n"),
+					'pinBusy' => $this->l10n->t('A PIN is already being generated. Please wait.'),
 					'close' => $this->l10n->t('Close'),
 					'requestFailed' => $this->l10n->t('Request failed'),
 					'yes' => $this->l10n->t('Yes'),
@@ -163,9 +204,14 @@ class KioskAdminController extends Controller
 					'typeRfid' => $this->l10n->t('Badge'),
 					'noCredentials' => $this->l10n->t('No badges or PINs yet. Select an employee above to get started.'),
 					'neverSeen' => $this->l10n->t('Never'),
+					'overviewOn' => $this->l10n->t('On'),
+					'overviewOff' => $this->l10n->t('Off'),
 					'cancelEnrollment' => $this->l10n->t('Cancel scan'),
 					'pairingExpires' => $this->l10n->t('Valid until'),
 					'confirmDeleteCred' => $this->l10n->t('Remove this credential? The employee will no longer be able to use it at the kiosk.'),
+					'employee' => $this->l10n->t('Employee'),
+					'credentials' => $this->l10n->t('Credentials'),
+					'actions' => $this->l10n->t('Actions'),
 					'stepSelect' => $this->l10n->t('1. Find the employee'),
 					'stepAllow' => $this->l10n->t('2. Allow kiosk access'),
 					'stepCredential' => $this->l10n->t('3. Assign a badge or PIN'),
@@ -367,11 +413,33 @@ class KioskAdminController extends Controller
 		$query = trim((string)$this->request->getParam('q', ''));
 		$result = UserDirectorySearch::searchByIdOrName($this->userManager, $query, 25);
 		$users = [];
-		foreach ($result['users'] as $user) {
+		$seen = [];
+
+		// Exact UID first so employee-profile deep-links always resolve, even when
+		// fuzzy search pages omit the match (short UIDs, backend caps, etc.).
+		$exact = $query !== '' ? $this->userManager->get($query) : null;
+		if ($exact !== null && $exact->isEnabled()) {
+			$uid = $exact->getUID();
+			$seen[$uid] = true;
 			$users[] = [
-				'userId' => $user->getUID(),
+				'userId' => $uid,
+				'displayName' => $exact->getDisplayName(),
+				'email' => (string)($exact->getEMailAddress() ?? ''),
+				'kioskAllowed' => $this->settingsService->isUserKioskAllowed($uid),
+			];
+		}
+
+		foreach ($result['users'] as $user) {
+			$uid = $user->getUID();
+			if (isset($seen[$uid])) {
+				continue;
+			}
+			$seen[$uid] = true;
+			$users[] = [
+				'userId' => $uid,
 				'displayName' => $user->getDisplayName(),
-				'kioskAllowed' => $this->settingsService->isUserKioskAllowed($user->getUID()),
+				'email' => (string)($user->getEMailAddress() ?? ''),
+				'kioskAllowed' => $this->settingsService->isUserKioskAllowed($uid),
 			];
 		}
 		return new JSONResponse(['success' => true, 'users' => $users]);
@@ -397,24 +465,14 @@ class KioskAdminController extends Controller
 		$code = $e->getErrorCode();
 		$status = match ($code) {
 			'KIOSK_RFID_ALREADY_ASSIGNED' => Http::STATUS_CONFLICT,
+			'KIOSK_BUSY' => Http::STATUS_CONFLICT,
 			'KIOSK_USER_NOT_ALLOWED', 'TERMINAL_DEVICE_LIMIT_REACHED', 'TERMINAL_LICENSE_REQUIRED' => Http::STATUS_FORBIDDEN,
 			default => Http::STATUS_BAD_REQUEST,
 		};
-		$message = match ($code) {
-			'TERMINAL_LICENSE_REQUIRED' => $this->l10n->t('A Terminal license is required. Open License administration to apply a key.'),
-			'TERMINAL_DEVICE_LIMIT_REACHED' => $this->l10n->t('All terminal license slots are in use. Revoke an unused terminal or upgrade the license.'),
-			'PAIRING_CODE_INVALID' => $this->l10n->t('Pairing code is invalid or already used.'),
-			'KIOSK_USER_NOT_ALLOWED' => $this->l10n->t('This employee is not allowed to use the kiosk. Enable access first.'),
-			'KIOSK_RFID_ALREADY_ASSIGNED' => $this->l10n->t('This badge is already assigned to another employee.'),
-			'KIOSK_RFID_INVALID' => $this->l10n->t('Invalid badge identifier.'),
-			'KIOSK_CREDENTIAL_NOT_FOUND' => $this->l10n->t('Credential not found.'),
-			'KIOSK_TERMINAL_NOT_FOUND' => $this->l10n->t('Terminal not found.'),
-			'KIOSK_TERMINAL_NOT_ACTIVE' => $this->l10n->t('Only an active (paired) terminal can enroll badges.'),
-			'ENROLLMENT_NOT_ACTIVE' => $this->l10n->t('No active badge enrollment for this terminal.'),
-			'KIOSK_IMPORT_TOO_LARGE' => $this->l10n->t('Import file is too large (max 1 MB)'),
-			'KIOSK_SESSION_USED' => $this->l10n->t('This kiosk session was already used.'),
-			default => $this->l10n->t('Request failed'),
-		};
-		return new JSONResponse(['success' => false, 'error' => $code, 'message' => $message], $status);
+		return new JSONResponse([
+			'success' => false,
+			'error' => $code,
+			'message' => $this->kioskErrorMessages->message($code),
+		], $status);
 	}
 }

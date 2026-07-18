@@ -8,6 +8,7 @@ use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\KioskCred;
 use OCA\ArbeitszeitCheck\Db\KioskCredMapper;
+use OCA\ArbeitszeitCheck\Db\KioskEnrollmentMapper;
 use OCA\ArbeitszeitCheck\Db\KioskSession;
 use OCA\ArbeitszeitCheck\Db\KioskSessionMapper;
 use OCA\ArbeitszeitCheck\Db\KioskTerminal;
@@ -18,12 +19,15 @@ use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IUserManager;
+use OCP\Lock\ILockingProvider;
+use OCP\Lock\LockedException;
 
 class KioskAuthService
 {
 	public function __construct(
 		private readonly KioskCredentialService $credentialService,
 		private readonly KioskCredMapper $credMapper,
+		private readonly KioskEnrollmentMapper $enrollmentMapper,
 		private readonly KioskSessionMapper $sessionMapper,
 		private readonly KioskSettingsService $settingsService,
 		private readonly PermissionService $permissionService,
@@ -32,6 +36,7 @@ class KioskAuthService
 		private readonly IUserManager $userManager,
 		private readonly AuditLogMapper $auditLogMapper,
 		private readonly ITimeFactory $timeFactory,
+		private readonly ILockingProvider $lockingProvider,
 	) {
 	}
 
@@ -40,7 +45,13 @@ class KioskAuthService
 	 */
 	public function identify(KioskTerminal $terminal, string $method, ?string $rfidUid, ?string $userId, ?string $pin): array
 	{
-		$this->sessionMapper->deleteExpiredForTerminal($terminal->getTerminalId(), $this->timeFactory->getDateTime());
+		$now = $this->timeFactory->getDateTime();
+		$this->sessionMapper->deleteExpiredForTerminal($terminal->getTerminalId(), $now);
+
+		// Fast path before credential work — tablet can switch to enrollment immediately.
+		if ($method === 'rfid') {
+			$this->assertNoActiveEnrollment($terminal->getTerminalId(), $now);
+		}
 
 		$cred = match ($method) {
 			'rfid' => $this->resolveRfidCredential($rfidUid ?? ''),
@@ -62,7 +73,27 @@ class KioskAuthService
 		$session->setTokenHash(KioskCrypto::hashSecret($sessionToken));
 		$session->setExpiresAt($expires);
 		$session->setCreatedAt($now);
-		$this->sessionMapper->insert($session);
+
+		// Final enrollment gate under the terminal lock closes the TOCTOU with start():
+		// identify must not create a clock session while Admin is assigning a badge here.
+		if ($method === 'rfid') {
+			$this->assertNoActiveEnrollment($terminal->getTerminalId(), $now);
+			$termLock = 'arbeitszeitcheck/kiosk_enroll/' . $terminal->getTerminalId();
+			try {
+				$this->lockingProvider->acquireLock($termLock, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk identify enrollment gate');
+			} catch (LockedException) {
+				throw new KioskException('ENROLLMENT_ACTIVE');
+			}
+			try {
+				$nowGate = $this->timeFactory->getDateTime();
+				$this->assertNoActiveEnrollment($terminal->getTerminalId(), $nowGate);
+				$this->sessionMapper->insert($session);
+			} finally {
+				$this->lockingProvider->releaseLock($termLock, ILockingProvider::LOCK_EXCLUSIVE);
+			}
+		} else {
+			$this->sessionMapper->insert($session);
+		}
 
 		$user = $this->userManager->get($userIdResolved);
 		$statusData = $this->timeTrackingService->getStatus($userIdResolved);
@@ -83,6 +114,13 @@ class KioskAuthService
 			'workedSecondsToday' => $workedSeconds,
 			'allowedActions' => $allowedActions,
 		];
+	}
+
+	private function assertNoActiveEnrollment(string $terminalId, \DateTimeInterface $now): void
+	{
+		if ($this->enrollmentMapper->findActiveByTerminalId($terminalId, $now) !== null) {
+			throw new KioskException('ENROLLMENT_ACTIVE');
+		}
 	}
 
 	public function validateSession(KioskTerminal $terminal, string $sessionToken): KioskSession

@@ -95,21 +95,98 @@
 	}
 
 	async function api(url, options) {
-		const res = await fetch(url, options);
+		let res;
+		try {
+			res = await fetch(url, options);
+		} catch {
+			const err = new Error(t(
+				'networkFailed',
+				'No connection to the server. Check your network and try again.',
+			));
+			err.code = 'NETWORK';
+			throw err;
+		}
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) {
-			const msg = data.message || data.error || t('requestFailed', 'Request failed');
+			const code = data.error || data.code || '';
+			const mapped = mapKioskErrorCode(code);
+			const msg = (data.message && String(data.message).trim())
+				|| mapped
+				|| (code ? String(code) : '')
+				|| t(
+					'requestFailedDetail',
+					'The request failed (HTTP {status}). Refresh the page and try again.',
+				).split('{status}').join(String(res.status));
 			const err = new Error(msg);
-			err.code = data.error;
+			err.code = code || String(res.status);
+			err.status = res.status;
 			throw err;
 		}
 		return data;
+	}
+
+	function mapKioskErrorCode(code) {
+		const messages = {
+			KIOSK_USER_NOT_ALLOWED: t(
+				'enableAccessFirst',
+				'Allow kiosk access for this employee first',
+			),
+			KIOSK_TERMINAL_NOT_FOUND: t(
+				'errTerminalNotFound',
+				'Terminal not found. Refresh the page and select an active tablet.',
+			),
+			KIOSK_TERMINAL_NOT_ACTIVE: t(
+				'errTerminalNotActive',
+				'Only a paired (active) tablet can enroll badges. Finish pairing first.',
+			),
+			KIOSK_RFID_ALREADY_ASSIGNED: t(
+				'errBadgeAssigned',
+				'This badge is already assigned to another employee. Remove it there first, or use a different badge.',
+			),
+			KIOSK_RFID_INVALID: t(
+				'errBadgeInvalid',
+				'The badge could not be read. Hold it flat on the reader for 1–2 seconds and try again.',
+			),
+			ENROLLMENT_NOT_ACTIVE: t(
+				'errEnrollmentInactive',
+				'No badge scan is waiting on this tablet. Click “Scan badge at tablet” again, then hold the badge.',
+			),
+			KIOSK_BUSY: t(
+				'errKioskBusy',
+				'Another badge operation is already running. Wait a few seconds and try again.',
+			),
+			KIOSK_SCAN_FAILED: t(
+				'errScanFailed',
+				'Badge could not be saved. Check tablet online status and kiosk access, then start the scan again.',
+			),
+			TERMINAL_LICENSE_REQUIRED: t(
+				'errLicenseRequired',
+				'A Terminal license is required. Open License administration to apply a key.',
+			),
+			TERMINAL_DEVICE_LIMIT_REACHED: t(
+				'errDeviceLimit',
+				'All terminal license slots are in use. Revoke an unused terminal or upgrade the license.',
+			),
+		};
+		return messages[code] || '';
 	}
 
 	function escapeHtml(s) {
 		const d = document.createElement('div');
 		d.textContent = s;
 		return d.innerHTML;
+	}
+
+	/** Stable HTML id fragment from an arbitrary user id (no entity encoding). */
+	function safeDomId(prefix, raw) {
+		const base = String(raw || '');
+		let encoded = '';
+		try {
+			encoded = btoa(unescape(encodeURIComponent(base))).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+		} catch {
+			encoded = encodeURIComponent(base).replace(/%/g, '_');
+		}
+		return String(prefix || 'azc') + '-' + encoded;
 	}
 
 	function setBusy(el, busy) {
@@ -145,11 +222,32 @@
 
 	let modalReturnFocus = null;
 	let openModalEl = null;
+	/** When PIN modal opened from a credentials row, restore focus by user id after table rebuild. */
+	let pinReturnFocusUserId = '';
+
+	function findRowPinButton(userId) {
+		const uid = String(userId || '');
+		if (!uid) {
+			return null;
+		}
+		const rows = document.querySelectorAll('#azc-kiosk-creds-body tr[data-user-id]');
+		for (let i = 0; i < rows.length; i++) {
+			if (rows[i].getAttribute('data-user-id') === uid) {
+				return rows[i].querySelector('.azc-kiosk-row-pin');
+			}
+		}
+		return null;
+	}
 
 	function getFocusables(modal) {
 		return Array.from(modal.querySelectorAll(
 			'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-		)).filter((el) => el.offsetParent !== null || el === document.activeElement);
+		)).filter((el) => {
+			if (el.hasAttribute('hidden') || el.getAttribute('aria-hidden') === 'true') {
+				return false;
+			}
+			return el.offsetParent !== null || el === document.activeElement;
+		});
 	}
 
 	function openModal(modal, backdrop, returnFocus) {
@@ -173,6 +271,8 @@
 		if (!modal) {
 			return;
 		}
+		const wasPin = modal.id === 'azc-kiosk-pin-modal';
+		const focusUserId = wasPin ? pinReturnFocusUserId : '';
 		modal.hidden = true;
 		if (backdrop) {
 			backdrop.hidden = true;
@@ -181,10 +281,30 @@
 			openModalEl = null;
 		}
 		document.body.classList.remove('azc-kiosk-modal-open');
-		if (modalReturnFocus instanceof HTMLElement) {
+		if (wasPin && typeof clearPinReveal === 'function') {
+			clearPinReveal();
+		}
+		let restored = false;
+		if (wasPin && focusUserId) {
+			const rowBtn = findRowPinButton(focusUserId);
+			if (rowBtn instanceof HTMLElement) {
+				rowBtn.focus();
+				restored = true;
+			}
+		}
+		if (!restored && modalReturnFocus instanceof HTMLElement && document.body.contains(modalReturnFocus)) {
 			modalReturnFocus.focus();
+			restored = true;
+		}
+		if (!restored) {
+			const fallback = document.getElementById('azc-kiosk-generate-pin')
+				|| document.getElementById('azc-kiosk-creds-heading');
+			if (fallback instanceof HTMLElement) {
+				fallback.focus();
+			}
 		}
 		modalReturnFocus = null;
+		pinReturnFocusUserId = '';
 		if (reloadAfter) {
 			window.location.reload();
 		}
@@ -195,9 +315,14 @@
 			return;
 		}
 		const close = () => closeModal(modal, backdrop, !!reloadOnClose);
+		const closers = new Set();
 		if (closeBtn) {
-			closeBtn.addEventListener('click', close);
+			closers.add(closeBtn);
 		}
+		modal.querySelectorAll('[data-azc-modal-close]').forEach((el) => closers.add(el));
+		closers.forEach((btn) => {
+			btn.addEventListener('click', close);
+		});
 		if (backdrop) {
 			backdrop.addEventListener('click', close);
 		}
@@ -209,14 +334,18 @@
 		}
 		if (e.key === 'Escape') {
 			e.preventDefault();
-			const isPairing = openModalEl.id === 'azc-kiosk-pairing-modal';
-			closeModal(
-				openModalEl,
-				openModalEl.id === 'azc-kiosk-pin-modal'
-					? document.getElementById('azc-kiosk-pin-backdrop')
-					: document.getElementById('azc-kiosk-pairing-backdrop'),
-				isPairing,
-			);
+			const modalId = openModalEl.id;
+			let backdrop = null;
+			let reloadAfter = false;
+			if (modalId === 'azc-kiosk-pairing-modal') {
+				backdrop = document.getElementById('azc-kiosk-pairing-backdrop');
+				reloadAfter = true;
+			} else if (modalId === 'azc-kiosk-pin-modal') {
+				backdrop = document.getElementById('azc-kiosk-pin-backdrop');
+			} else if (modalId === 'azc-kiosk-create-modal') {
+				backdrop = document.getElementById('azc-kiosk-create-backdrop');
+			}
+			closeModal(openModalEl, backdrop, reloadAfter);
 			return;
 		}
 		if (e.key === 'Tab') {
@@ -241,6 +370,25 @@
 	const pairingClose = document.getElementById('azc-kiosk-pairing-close');
 	bindModal(pairingModal, pairingBackdrop, pairingClose, true);
 
+	const createModal = document.getElementById('azc-kiosk-create-modal');
+	const createBackdrop = document.getElementById('azc-kiosk-create-backdrop');
+	const createClose = document.getElementById('azc-kiosk-create-close');
+	const openCreateBtn = document.getElementById('azc-kiosk-open-create');
+	bindModal(createModal, createBackdrop, createClose, false);
+
+	if (openCreateBtn) {
+		openCreateBtn.addEventListener('click', () => {
+			const labelEl = document.getElementById('azc-kiosk-terminal-label');
+			if (labelEl) {
+				labelEl.value = '';
+			}
+			openModal(createModal, createBackdrop, openCreateBtn);
+			if (labelEl instanceof HTMLElement) {
+				window.setTimeout(() => labelEl.focus(), 0);
+			}
+		});
+	}
+
 	const pinModal = document.getElementById('azc-kiosk-pin-modal');
 	const pinBackdrop = document.getElementById('azc-kiosk-pin-backdrop');
 	const pinClose = document.getElementById('azc-kiosk-pin-close');
@@ -258,6 +406,16 @@
 	let searchAbort = null;
 	let searchTimer = null;
 	let searchActiveIndex = -1;
+	let credentialsLoadSeq = 0;
+	let pinGenerateInFlight = false;
+	let enrollmentInFlight = false;
+	let enrollmentCountdownTimer = null;
+	let lastPinEmployeeEmail = '';
+
+	/** Filled once PIN modal helpers exist; used by table row buttons. */
+	const pinWorkflow = {
+		generateForUser: null,
+	};
 
 	function colLabels() {
 		return {
@@ -301,7 +459,11 @@
 		if (!tbody) {
 			return;
 		}
+		const seq = ++credentialsLoadSeq;
 		const data = await api(page.dataset.apiCredentials || '', { headers: headers() });
+		if (seq !== credentialsLoadSeq) {
+			return;
+		}
 		const creds = (data.data && data.data.credentials) || [];
 		const groups = groupCredentials(creds);
 		const labels = colLabels();
@@ -315,17 +477,34 @@
 		}
 
 		tbody.innerHTML = groups.map((g) => {
-			const toggleId = 'azc-kiosk-allowed-user-' + escapeHtml(g.userId);
+			const toggleId = safeDomId('azc-kiosk-allowed-user', g.userId);
+			const hasPin = g.items.some((c) => c.type === 'pin');
 			const tags = g.items.map((c) =>
 				'<span class="azc-badge azc-badge--neutral">' + escapeHtml(typeLabel(c.type)) + '</span>'
 			).join('');
-			const actions = g.items.map((c) => {
+			const deleteActions = g.items.map((c) => {
 				const btnLabel = c.type === 'pin'
 					? t('deletePin', 'Delete PIN')
 					: t('deleteBadge', 'Delete badge');
 				return '<button type="button" class="azc-btn azc-btn--small azc-btn--danger azc-kiosk-delete-cred" data-id="'
 					+ escapeHtml(String(c.id)) + '">' + escapeHtml(btnLabel) + '</button>';
 			}).join('');
+			const pinBtnLabel = hasPin
+				? t('newPin', 'New PIN')
+				: t('generatePin', 'Generate PIN');
+			const pinDisabled = (g.kioskAllowed && !pinGenerateInFlight) ? '' : ' disabled aria-disabled="true"';
+			const pinTitle = g.kioskAllowed
+				? ''
+				: ' title="' + escapeHtml(t('enableAccessFirst', 'Allow kiosk access for this employee first')) + '"';
+			const pinAction = '<button type="button" class="azc-btn azc-btn--small azc-kiosk-row-pin"'
+				+ ' data-user-id="' + escapeHtml(g.userId) + '"'
+				+ ' data-display-name="' + escapeHtml(g.displayName || g.userId) + '"'
+				+ ' data-has-pin="' + (hasPin ? '1' : '0') + '"'
+				+ ' data-kiosk-allowed="' + (g.kioskAllowed ? '1' : '0') + '"'
+				+ pinDisabled + pinTitle
+				+ ' aria-label="' + escapeHtml(pinBtnLabel + ': ' + (g.displayName || g.userId)) + '">'
+				+ escapeHtml(pinBtnLabel) + '</button>';
+			const actions = pinAction + deleteActions;
 			return '<tr data-user-id="' + escapeHtml(g.userId) + '">'
 				+ '<td data-label="' + escapeHtml(labels.employee) + '">'
 				+ escapeHtml(g.displayName) + ' <small>(' + escapeHtml(g.userId) + ')</small></td>'
@@ -339,6 +518,23 @@
 				+ '<td data-label="' + escapeHtml(labels.actions) + '"><div class="azc-kiosk-cred-actions">' + actions + '</div></td>'
 				+ '</tr>';
 		}).join('');
+
+		tbody.querySelectorAll('.azc-kiosk-row-pin').forEach((btn) => {
+			btn.addEventListener('click', async () => {
+				if (typeof pinWorkflow.generateForUser !== 'function') {
+					return;
+				}
+				const userId = btn.getAttribute('data-user-id') || '';
+				const displayName = btn.getAttribute('data-display-name') || userId;
+				const hasPin = btn.getAttribute('data-has-pin') === '1';
+				const kioskAllowed = btn.getAttribute('data-kiosk-allowed') === '1';
+				await pinWorkflow.generateForUser(userId, displayName, {
+					hasPin,
+					kioskAllowed,
+					triggerBtn: btn,
+				});
+			});
+		});
 
 		tbody.querySelectorAll('.azc-kiosk-delete-cred').forEach((btn) => {
 			btn.addEventListener('click', async () => {
@@ -375,6 +571,21 @@
 					);
 					if (selectedUser && selectedUser.value === userId && selectedAllowed) {
 						selectedAllowed.checked = allowed;
+					}
+					const row = input.closest('tr');
+					const rowPinBtn = row ? row.querySelector('.azc-kiosk-row-pin') : null;
+					if (rowPinBtn) {
+						rowPinBtn.setAttribute('data-kiosk-allowed', allowed ? '1' : '0');
+						rowPinBtn.disabled = !allowed || pinGenerateInFlight;
+						rowPinBtn.setAttribute('aria-disabled', (!allowed || pinGenerateInFlight) ? 'true' : 'false');
+						if (allowed) {
+							rowPinBtn.removeAttribute('title');
+						} else {
+							rowPinBtn.setAttribute(
+								'title',
+								t('enableAccessFirst', 'Allow kiosk access for this employee first'),
+							);
+						}
 					}
 				} catch (e) {
 					input.checked = !allowed;
@@ -416,6 +627,18 @@
 		});
 	}
 
+	function syncOverviewMode(enabled) {
+		const modeEl = document.getElementById('azc-kiosk-overview-mode');
+		const statEl = document.getElementById('azc-kiosk-stat-mode');
+		if (modeEl) {
+			modeEl.textContent = enabled ? t('overviewOn', 'On') : t('overviewOff', 'Off');
+		}
+		if (statEl) {
+			statEl.classList.toggle('azc-kiosk-stat--on', enabled);
+			statEl.classList.toggle('azc-kiosk-stat--off', !enabled);
+		}
+	}
+
 	const enabledToggle = document.getElementById('azc-kiosk-enabled');
 	if (enabledToggle) {
 		enabledToggle.addEventListener('change', async () => {
@@ -427,6 +650,7 @@
 					headers: headers(),
 					body: JSON.stringify({ enabled: wanted }),
 				});
+				syncOverviewMode(wanted);
 				showFeedback(
 					wanted ? t('kioskEnabled', 'Kiosk enabled') : t('kioskDisabled', 'Kiosk disabled'),
 					'success',
@@ -442,7 +666,7 @@
 
 	const createBtn = document.getElementById('azc-kiosk-create-terminal');
 	if (createBtn) {
-		createBtn.addEventListener('click', async () => {
+		const submitCreate = async () => {
 			const labelEl = document.getElementById('azc-kiosk-terminal-label');
 			const label = labelEl ? labelEl.value.trim() : '';
 			if (!label) {
@@ -469,43 +693,120 @@
 					expiresEl.textContent = t('pairingExpires', 'Valid until') + ': '
 						+ formatDateTime(data.data.pairingExpiresAt);
 				}
-				openModal(pairingModal, pairingBackdrop, createBtn);
-				showFeedback(t('terminalCreated', 'Terminal created — save the pairing code'), 'success');
 				if (labelEl) {
 					labelEl.value = '';
 				}
+				closeModal(createModal, createBackdrop, false);
+				openModal(pairingModal, pairingBackdrop, openCreateBtn || createBtn);
+				showFeedback(t('terminalCreated', 'Terminal created — save the pairing code'), 'success');
 			} catch (e) {
 				showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
 			} finally {
 				setBusy(createBtn, false);
 			}
+		};
+
+		createBtn.addEventListener('click', () => {
+			void submitCreate();
 		});
+
+		const labelInput = document.getElementById('azc-kiosk-terminal-label');
+		if (labelInput) {
+			labelInput.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					void submitCreate();
+				}
+			});
+		}
 	}
 
-	function selectEmployee(userId, displayName, kioskAllowed) {
+	function selectEmployee(userId, displayName, kioskAllowed, email) {
 		if (selectedUser) {
 			selectedUser.value = userId;
 		}
 		if (userSearch) {
 			userSearch.value = displayName;
+			userSearch.setAttribute('aria-expanded', 'false');
+			userSearch.removeAttribute('aria-activedescendant');
 		}
 		if (userResults) {
 			userResults.hidden = true;
 			userResults.innerHTML = '';
 		}
-		if (userSearch) {
-			userSearch.setAttribute('aria-expanded', 'false');
-			userSearch.removeAttribute('aria-activedescendant');
-		}
 		searchActiveIndex = -1;
 		if (selectedPanel) {
-			selectedPanel.hidden = false;
+			selectedPanel.hidden = !userId;
 		}
 		if (selectedName) {
-			selectedName.textContent = displayName + ' (' + userId + ')';
+			selectedName.textContent = displayName + (userId ? ' (' + userId + ')' : '');
 		}
 		if (selectedAllowed) {
 			selectedAllowed.checked = !!kioskAllowed;
+			selectedAllowed.disabled = !userId;
+		}
+		lastPinEmployeeEmail = String(email || '').trim();
+		updateWizardUi();
+	}
+
+	function setStepActive(stepEl, active) {
+		if (!stepEl) {
+			return;
+		}
+		stepEl.classList.toggle('azc-kiosk-flow__block--muted', !active);
+		stepEl.classList.toggle('azc-kiosk-wizard__step--muted', !active); // legacy class if present
+		stepEl.setAttribute('aria-disabled', active ? 'false' : 'true');
+	}
+
+	function updateWizardUi() {
+		const userId = selectedUser ? String(selectedUser.value || '').trim() : '';
+		const allowed = !!(selectedAllowed && selectedAllowed.checked);
+		const stepAllow = document.getElementById('azc-kiosk-step-allow');
+		const stepAssign = document.getElementById('azc-kiosk-step-assign');
+		const assignGrid = document.getElementById('azc-kiosk-assign-grid');
+		const allowHint = document.getElementById('azc-kiosk-step-allow-hint');
+		const assignHint = document.getElementById('azc-kiosk-step-assign-hint');
+		const pinBtnEl = document.getElementById('azc-kiosk-generate-pin');
+		const enrollBtnEl = document.getElementById('azc-kiosk-start-enrollment');
+		const terminalSelect = document.getElementById('azc-kiosk-enroll-terminal');
+
+		setStepActive(stepAllow, !!userId);
+		setStepActive(stepAssign, !!userId && allowed);
+
+		if (allowHint) {
+			if (userId) {
+				allowHint.hidden = true;
+				allowHint.textContent = '';
+			} else {
+				allowHint.hidden = false;
+				allowHint.textContent = t('selectEmployee', 'Select an employee first');
+			}
+		}
+		if (assignHint) {
+			if (!userId) {
+				assignHint.textContent = t('selectEmployee', 'Select an employee first');
+			} else if (!allowed) {
+				assignHint.textContent = t('stepAssignHintBlocked', 'Allow kiosk access for this employee first, then choose PIN or badge scan.');
+			} else {
+				assignHint.textContent = t('stepAssignHintReady', 'Create a PIN or start a badge scan. You only need one method — or both.');
+			}
+		}
+		if (assignGrid) {
+			assignGrid.hidden = !(userId && allowed);
+		}
+
+		const canAct = !!userId && allowed && !enrollmentInFlight && !pinGenerateInFlight;
+		if (pinBtnEl) {
+			pinBtnEl.disabled = !canAct;
+			pinBtnEl.setAttribute('aria-disabled', canAct ? 'false' : 'true');
+		}
+		if (enrollBtnEl) {
+			const hasTerminal = terminalSelect
+				? String(terminalSelect.value || '').trim() !== ''
+				: false;
+			const canScan = canAct && hasTerminal && !enrollmentInFlight;
+			enrollBtnEl.disabled = !canScan;
+			enrollBtnEl.setAttribute('aria-disabled', canScan ? 'false' : 'true');
 		}
 	}
 
@@ -524,15 +825,19 @@
 		}
 		userResults.innerHTML = users.map((u, idx) =>
 			'<li role="option" id="azc-kiosk-user-opt-' + idx + '" data-id="' + escapeHtml(u.userId)
-			+ '" data-allowed="' + (u.kioskAllowed ? '1' : '0') + '">'
-			+ '<button type="button" class="azc-kiosk-user-pick" tabindex="-1">'
-			+ escapeHtml(u.displayName) + '</button></li>'
+			+ '" data-allowed="' + (u.kioskAllowed ? '1' : '0') + '"'
+			+ ' data-email="' + escapeHtml(u.email || '') + '"'
+			+ ' data-name="' + escapeHtml(u.displayName || '') + '">'
+			+ '<button type="button" class="azc-kiosk-search__option" tabindex="-1">'
+			+ '<span class="azc-kiosk-search__option-name">' + escapeHtml(u.displayName) + '</span>'
+			+ '<span class="azc-kiosk-search__option-meta">' + escapeHtml(u.userId) + '</span>'
+			+ '</button></li>'
 		).join('');
 		userResults.hidden = false;
 		if (userSearch) {
 			userSearch.setAttribute('aria-expanded', 'true');
 		}
-		userResults.querySelectorAll('.azc-kiosk-user-pick').forEach((btn) => {
+		userResults.querySelectorAll('.azc-kiosk-search__option').forEach((btn) => {
 			btn.addEventListener('mousedown', (e) => {
 				e.preventDefault();
 				const li = btn.closest('li');
@@ -541,8 +846,9 @@
 				}
 				selectEmployee(
 					li.getAttribute('data-id') || '',
-					btn.textContent || '',
+					li.getAttribute('data-name') || '',
 					li.getAttribute('data-allowed') === '1',
+					li.getAttribute('data-email') || '',
 				);
 			});
 		});
@@ -575,6 +881,7 @@
 			if (selectedPanel) {
 				selectedPanel.hidden = true;
 			}
+			updateWizardUi();
 			clearTimeout(searchTimer);
 			searchTimer = setTimeout(async () => {
 				const q = userSearch.value.trim();
@@ -615,11 +922,11 @@
 					const opt = userResults.querySelectorAll('[role="option"]')[searchActiveIndex];
 					if (opt) {
 						e.preventDefault();
-						const btn = opt.querySelector('button');
 						selectEmployee(
 							opt.getAttribute('data-id') || '',
-							btn ? btn.textContent || '' : '',
+							opt.getAttribute('data-name') || '',
 							opt.getAttribute('data-allowed') === '1',
+							opt.getAttribute('data-email') || '',
 						);
 					}
 				}
@@ -636,9 +943,11 @@
 			if (!userId) {
 				selectedAllowed.checked = false;
 				showFeedback(t('selectEmployee', 'Select an employee first'), 'error');
+				updateWizardUi();
 				return;
 			}
 			const allowed = selectedAllowed.checked;
+			updateWizardUi();
 			selectedAllowed.disabled = true;
 			try {
 				await api(apiUrl(page.dataset.apiUserAllowed || '', userId), {
@@ -656,32 +965,140 @@
 				showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
 			} finally {
 				selectedAllowed.disabled = false;
+				updateWizardUi();
 			}
 		});
+	}
+
+	function stopEnrollmentCountdown() {
+		if (enrollmentCountdownTimer) {
+			window.clearInterval(enrollmentCountdownTimer);
+			enrollmentCountdownTimer = null;
+		}
+		const timerEl = document.getElementById('azc-kiosk-enrollment-timer');
+		if (timerEl) {
+			timerEl.hidden = true;
+			timerEl.textContent = '';
+		}
+	}
+
+	function formatRemaining(ms) {
+		const totalSec = Math.max(0, Math.ceil(ms / 1000));
+		const m = Math.floor(totalSec / 60);
+		const s = totalSec % 60;
+		return m + ':' + String(s).padStart(2, '0');
+	}
+
+	function startEnrollmentCountdown(expiresAtIso) {
+		stopEnrollmentCountdown();
+		const timerEl = document.getElementById('azc-kiosk-enrollment-timer');
+		if (!timerEl || !expiresAtIso) {
+			return;
+		}
+		const ends = Date.parse(expiresAtIso);
+		if (Number.isNaN(ends)) {
+			return;
+		}
+		const tick = () => {
+			const left = ends - Date.now();
+			timerEl.hidden = false;
+			timerEl.textContent = String(t('enrollmentTimer', 'Time left: {time}'))
+				.split('{time}').join(formatRemaining(left));
+			if (left <= 0) {
+				stopEnrollmentCountdown();
+			}
+		};
+		tick();
+		enrollmentCountdownTimer = window.setInterval(tick, 1000);
+	}
+
+	/**
+	 * @param {'waiting'|'success'|'error'|'idle'} kind
+	 * @param {string} title
+	 * @param {string} body
+	 * @param {{ showSteps?: boolean, expiresAt?: string }} [opts]
+	 */
+	function setEnrollmentPanel(kind, title, body, opts) {
+		const panel = document.getElementById('azc-kiosk-enrollment-panel');
+		const titleEl = document.getElementById('azc-kiosk-enrollment-title');
+		const statusEl = document.getElementById('azc-kiosk-enrollment-status');
+		const stepsEl = document.getElementById('azc-kiosk-enrollment-steps');
+		if (!panel) {
+			return;
+		}
+		const options = opts || {};
+		if (kind === 'idle') {
+			panel.hidden = true;
+			panel.className = 'azc-kiosk-enrollment-panel';
+			stopEnrollmentCountdown();
+			if (stepsEl) {
+				stepsEl.hidden = true;
+			}
+			if (titleEl) {
+				titleEl.textContent = '';
+			}
+			if (statusEl) {
+				statusEl.textContent = '';
+			}
+			return;
+		}
+		panel.hidden = false;
+		panel.className = 'azc-kiosk-enrollment-panel azc-kiosk-enrollment-panel--' + kind;
+		if (titleEl) {
+			titleEl.textContent = title || '';
+		}
+		if (statusEl) {
+			statusEl.textContent = body || '';
+		}
+		if (stepsEl) {
+			stepsEl.hidden = !options.showSteps;
+		}
+		if (kind === 'waiting' && options.expiresAt) {
+			startEnrollmentCountdown(options.expiresAt);
+		} else if (kind !== 'waiting') {
+			stopEnrollmentCountdown();
+		}
 	}
 
 	function stopEnrollmentPoll() {
 		enrollmentPollToken += 1;
 		enrollmentTerminalId = '';
+		enrollmentInFlight = false;
 		const cancelBtn = document.getElementById('azc-kiosk-cancel-enrollment');
 		if (cancelBtn) {
 			cancelBtn.hidden = true;
 		}
+		const enrollBtnEl = document.getElementById('azc-kiosk-start-enrollment');
+		if (enrollBtnEl) {
+			setBusy(enrollBtnEl, false);
+		}
+		updateWizardUi();
 	}
 
 	async function pollEnrollment(terminalId) {
 		const myToken = ++enrollmentPollToken;
 		enrollmentTerminalId = terminalId;
-		const statusEl = document.getElementById('azc-kiosk-enrollment-status');
+		enrollmentInFlight = true;
 		const cancelBtn = document.getElementById('azc-kiosk-cancel-enrollment');
 		if (cancelBtn) {
 			cancelBtn.hidden = false;
 		}
-		for (let i = 0; i < 60; i++) {
+		updateWizardUi();
+
+		// Server TTL is 300s. Poll slightly longer so Admin never expires early.
+		const intervalMs = 2000;
+		const deadline = Date.now() + 310000;
+		let first = true;
+		while (Date.now() < deadline) {
 			if (myToken !== enrollmentPollToken) {
 				return;
 			}
-			await new Promise((r) => setTimeout(r, 3000));
+			if (!first) {
+				await new Promise((r) => setTimeout(r, intervalMs));
+			} else {
+				await new Promise((r) => setTimeout(r, 800));
+			}
+			first = false;
 			if (myToken !== enrollmentPollToken) {
 				return;
 			}
@@ -691,34 +1108,62 @@
 					{ headers: headers() },
 				);
 				const st = (data.data && data.data.status) || '';
+				const lastErrMsg = (data.data && data.data.lastErrorMessage)
+					? String(data.data.lastErrorMessage)
+					: '';
+				if (lastErrMsg && st === 'pending') {
+					setEnrollmentPanel(
+						'error',
+						t('enrollmentScanProblem', 'Problem while scanning'),
+						lastErrMsg + ' '
+							+ t('enrollmentScanRetryHint', 'The scan is still open — hold the badge again, or cancel and restart.'),
+						{ showSteps: true, expiresAt: data.data.expiresAt || '' },
+					);
+					// Keep polling; a successful retry on the tablet can still complete.
+				}
 				if (st === 'completed') {
-					if (statusEl) {
-						statusEl.textContent = t('enrollmentDone', 'Badge assigned successfully');
-					}
+					setEnrollmentPanel(
+						'success',
+						t('enrollmentDoneTitle', 'Badge saved'),
+						t('enrollmentDone', 'Badge assigned successfully'),
+					);
 					showFeedback(t('enrollmentDone', 'Badge assigned successfully'), 'success');
 					stopEnrollmentPoll();
 					await loadCredentials();
 					return;
 				}
 				if (st === 'expired') {
-					if (statusEl) {
-						statusEl.textContent = t('enrollmentExpired', 'Enrollment expired');
-					}
-					showFeedback(t('enrollmentExpired', 'Enrollment expired'), 'error');
+					setEnrollmentPanel(
+						'error',
+						t('enrollmentExpiredTitle', 'Scan expired'),
+						t('enrollmentExpired', 'Scan timed out. Click “Scan badge at tablet” to try again.'),
+					);
+					showFeedback(
+						t('enrollmentExpired', 'Scan timed out. Click “Scan badge at tablet” to try again.'),
+						'error',
+					);
 					stopEnrollmentPoll();
 					return;
 				}
+				if (st === 'pending' && data.data && data.data.expiresAt) {
+					startEnrollmentCountdown(data.data.expiresAt);
+				}
 			} catch (e) {
-				if (i === 59) {
-					showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
+				if (Date.now() + intervalMs >= deadline) {
+					const msg = e instanceof Error ? e.message : t('requestFailed', 'Request failed');
+					setEnrollmentPanel('error', t('requestFailed', 'Request failed'), msg);
+					showFeedback(msg, 'error');
 					stopEnrollmentPoll();
+					return;
 				}
 			}
 		}
 		if (myToken === enrollmentPollToken) {
-			if (statusEl) {
-				statusEl.textContent = t('enrollmentExpired', 'Enrollment expired');
-			}
+			setEnrollmentPanel(
+				'error',
+				t('enrollmentExpiredTitle', 'Scan expired'),
+				t('enrollmentExpired', 'Scan timed out. Click “Scan badge at tablet” to try again.'),
+			);
 			stopEnrollmentPoll();
 		}
 	}
@@ -728,31 +1173,70 @@
 		enrollBtn.addEventListener('click', async () => {
 			const userId = selectedUser ? selectedUser.value : '';
 			const terminalSelect = document.getElementById('azc-kiosk-enroll-terminal');
-			const terminalId = terminalSelect ? terminalSelect.value : '';
-			if (!userId || !terminalId) {
-				showFeedback(t('selectEmployeeTerminal', 'Select employee and terminal'), 'error');
+			const terminalId = terminalSelect ? String(terminalSelect.value || '').trim() : '';
+			const terminalLabel = terminalSelect && terminalSelect.selectedIndex >= 0
+				? String(terminalSelect.options[terminalSelect.selectedIndex].text || '').trim()
+				: '';
+
+			if (enrollmentInFlight) {
+				showFeedback(t('enrollmentBusy', 'A badge scan is already running. Cancel it first or wait.'), 'error');
+				return;
+			}
+			if (!userId) {
+				showFeedback(t('selectEmployee', 'Select an employee first'), 'error');
+				if (userSearch) {
+					userSearch.focus();
+				}
 				return;
 			}
 			if (selectedAllowed && !selectedAllowed.checked) {
 				showFeedback(t('enableAccessFirst', 'Allow kiosk access for this employee first'), 'error');
+				if (selectedAllowed) {
+					selectedAllowed.focus();
+				}
 				return;
 			}
+			if (!terminalSelect) {
+				showFeedback(t('enrollmentNoTerminal', 'No active tablet yet. Pair a terminal first.'), 'error');
+				return;
+			}
+			if (!terminalId) {
+				showFeedback(t('selectTerminal', 'Select a tablet for the scan'), 'error');
+				terminalSelect.focus();
+				return;
+			}
+
 			setBusy(enrollBtn, true);
+			enrollmentInFlight = true;
 			try {
-				await api(page.dataset.apiEnrollmentStart || '', {
+				const data = await api(page.dataset.apiEnrollmentStart || '', {
 					method: 'POST',
 					headers: headers(),
 					body: JSON.stringify({ userId, terminalId }),
 				});
-				const statusEl = document.getElementById('azc-kiosk-enrollment-status');
-				if (statusEl) {
-					statusEl.textContent = t('enrollmentWaiting', 'Waiting for badge scan…');
-				}
+				const expiresAt = data.data && data.data.expiresAt
+					? String(data.data.expiresAt)
+					: '';
+				const bodyTpl = t(
+					'enrollmentWaitingBody',
+					'Go to “{terminal}” and hold the badge on the reader. This page updates by itself.',
+				);
+				const body = String(bodyTpl).split('{terminal}').join(terminalLabel || terminalId);
+				setEnrollmentPanel(
+					'waiting',
+					t('enrollmentWaitingTitle', 'Scan in progress'),
+					body,
+					{ showSteps: true, expiresAt: expiresAt },
+				);
+				showFeedback(t('enrollmentWaiting', 'Waiting for badge scan on the tablet…'), 'success');
 				pollEnrollment(terminalId);
 			} catch (e) {
-				showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
-			} finally {
+				enrollmentInFlight = false;
 				setBusy(enrollBtn, false);
+				const msg = e instanceof Error ? e.message : t('requestFailed', 'Request failed');
+				setEnrollmentPanel('error', t('requestFailed', 'Request failed'), msg);
+				showFeedback(msg, 'error');
+				updateWizardUi();
 			}
 		});
 	}
@@ -765,6 +1249,7 @@
 				|| '';
 			if (!terminalId) {
 				stopEnrollmentPoll();
+				setEnrollmentPanel('idle', '', '');
 				return;
 			}
 			setBusy(cancelEnrollBtn, true);
@@ -774,11 +1259,8 @@
 					headers: headers(),
 					body: JSON.stringify({ terminalId }),
 				});
-				const statusEl = document.getElementById('azc-kiosk-enrollment-status');
-				if (statusEl) {
-					statusEl.textContent = t('enrollmentCancelled', 'Enrollment cancelled');
-				}
-				showFeedback(t('enrollmentCancelled', 'Enrollment cancelled'), 'success');
+				setEnrollmentPanel('idle', '', '');
+				showFeedback(t('enrollmentCancelled', 'Scan cancelled'), 'success');
 				stopEnrollmentPoll();
 			} catch (e) {
 				showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
@@ -789,6 +1271,249 @@
 	}
 
 	const pinBtn = document.getElementById('azc-kiosk-generate-pin');
+	const pinCopyBtn = document.getElementById('azc-kiosk-pin-copy');
+	const pinShareBtn = document.getElementById('azc-kiosk-pin-share');
+	const pinEmailLink = document.getElementById('azc-kiosk-pin-email');
+	const pinShareStatus = document.getElementById('azc-kiosk-pin-share-status');
+	let lastGeneratedPin = '';
+	let lastPinEmployeeLabel = '';
+
+	function clearPinReveal() {
+		lastGeneratedPin = '';
+		lastPinEmployeeLabel = '';
+		const codeEl = document.getElementById('azc-kiosk-pin-code');
+		if (codeEl) {
+			codeEl.textContent = '';
+		}
+		setPinShareStatus('', '');
+		if (pinEmailLink) {
+			pinEmailLink.hidden = true;
+			pinEmailLink.setAttribute('href', '#');
+			pinEmailLink.removeAttribute('aria-disabled');
+		}
+		if (pinShareBtn) {
+			pinShareBtn.hidden = true;
+		}
+		if (pinCopyBtn) {
+			pinCopyBtn.textContent = t('copyPin', 'Copy PIN');
+		}
+	}
+
+	function setPinShareStatus(message, kind) {
+		if (!pinShareStatus) {
+			return;
+		}
+		pinShareStatus.textContent = message || '';
+		pinShareStatus.classList.toggle('is-success', kind === 'success');
+		pinShareStatus.classList.toggle('is-error', kind === 'error');
+	}
+
+	function buildPinShareText(pin) {
+		const rawName = String(lastPinEmployeeLabel || '').trim();
+		// Strip trailing " (userId)" from the selected-panel label when present.
+		const name = rawName.replace(/\s*\([^)]*\)\s*$/, '').trim();
+		const nameSuffix = name ? (' ' + name) : '';
+		const body = t(
+			'sharePinBody',
+			"Hello{nameSuffix},\n\nYour kiosk PIN for ArbeitszeitCheck is: {pin}\n\nKeep this PIN private. You can change it only by asking an administrator to generate a new one.\n",
+		);
+		return String(body)
+			.split('{nameSuffix}').join(nameSuffix)
+			.split('{pin}').join(String(pin || ''));
+	}
+
+	function buildPinMailtoHref(pin) {
+		const subject = t('sharePinSubject', 'Your ArbeitszeitCheck kiosk PIN');
+		const body = buildPinShareText(pin);
+		const to = String(lastPinEmployeeEmail || '').trim();
+		const addr = to ? encodeURIComponent(to) : '';
+		return 'mailto:' + addr + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+	}
+
+	async function copyPinToClipboard(pin) {
+		const value = String(pin || '').trim();
+		if (!value) {
+			return false;
+		}
+		try {
+			if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+				await navigator.clipboard.writeText(value);
+				return true;
+			}
+		} catch {
+			// fall through to legacy path
+		}
+		try {
+			const ta = document.createElement('textarea');
+			ta.value = value;
+			ta.setAttribute('readonly', '');
+			ta.style.position = 'fixed';
+			ta.style.left = '-9999px';
+			document.body.appendChild(ta);
+			ta.select();
+			const ok = document.execCommand('copy');
+			document.body.removeChild(ta);
+			return !!ok;
+		} catch {
+			return false;
+		}
+	}
+
+	function preparePinShareUi(pin, employeeLabel) {
+		lastGeneratedPin = String(pin || '');
+		lastPinEmployeeLabel = String(employeeLabel || '');
+		setPinShareStatus('', '');
+		if (pinEmailLink) {
+			pinEmailLink.hidden = !lastGeneratedPin;
+			pinEmailLink.setAttribute('href', lastGeneratedPin ? buildPinMailtoHref(lastGeneratedPin) : '#');
+			if (lastGeneratedPin) {
+				pinEmailLink.removeAttribute('aria-disabled');
+			} else {
+				pinEmailLink.setAttribute('aria-disabled', 'true');
+			}
+		}
+		if (pinShareBtn) {
+			const canShare = !!(navigator.share && typeof navigator.share === 'function' && lastGeneratedPin);
+			pinShareBtn.hidden = !canShare;
+		}
+		if (pinCopyBtn) {
+			pinCopyBtn.textContent = t('copyPin', 'Copy PIN');
+		}
+	}
+
+	function setPinGenerateBusy(busy) {
+		pinGenerateInFlight = !!busy;
+		if (pinBtn) {
+			setBusy(pinBtn, busy);
+		}
+		document.querySelectorAll('#azc-kiosk-creds-body .azc-kiosk-row-pin').forEach((btn) => {
+			const allowed = btn.getAttribute('data-kiosk-allowed') === '1';
+			btn.disabled = busy || !allowed;
+			btn.setAttribute('aria-disabled', (busy || !allowed) ? 'true' : 'false');
+		});
+		updateWizardUi();
+	}
+
+	if (pinCopyBtn) {
+		pinCopyBtn.addEventListener('click', async () => {
+			const pin = lastGeneratedPin
+				|| (document.getElementById('azc-kiosk-pin-code') || {}).textContent
+				|| '';
+			const ok = await copyPinToClipboard(pin);
+			if (ok) {
+				setPinShareStatus(t('pinCopied', 'PIN copied'), 'success');
+				pinCopyBtn.textContent = t('pinCopied', 'PIN copied');
+				window.setTimeout(() => {
+					if (pinCopyBtn && lastGeneratedPin) {
+						pinCopyBtn.textContent = t('copyPin', 'Copy PIN');
+					}
+				}, 2000);
+			} else {
+				setPinShareStatus(
+					t('copyFailed', 'Could not copy. Please select the PIN and copy it manually.'),
+					'error',
+				);
+			}
+		});
+	}
+
+	if (pinShareBtn) {
+		pinShareBtn.addEventListener('click', async () => {
+			if (!lastGeneratedPin || !navigator.share) {
+				return;
+			}
+			try {
+				await navigator.share({
+					title: t('sharePinSubject', 'Your ArbeitszeitCheck kiosk PIN'),
+					text: buildPinShareText(lastGeneratedPin),
+				});
+			} catch (e) {
+				// User cancelled share sheet — not an error.
+				if (e && e.name === 'AbortError') {
+					return;
+				}
+				setPinShareStatus(
+					t('shareFailed', 'Could not share. Please copy the PIN instead.'),
+					'error',
+				);
+			}
+		});
+	}
+
+	if (pinEmailLink) {
+		pinEmailLink.addEventListener('click', (e) => {
+			if (!lastGeneratedPin) {
+				e.preventDefault();
+			}
+		});
+	}
+
+	/**
+	 * Create or replace a kiosk PIN, then open the one-time reveal modal.
+	 *
+	 * @param {string} userId
+	 * @param {string} displayName
+	 * @param {{ hasPin?: boolean, kioskAllowed?: boolean, triggerBtn?: HTMLElement|null }} [options]
+	 */
+	pinWorkflow.generateForUser = async function generatePinForUser(userId, displayName, options) {
+		const opts = options || {};
+		const uid = String(userId || '').trim();
+		if (!uid) {
+			showFeedback(t('selectEmployee', 'Select an employee first'), 'error');
+			return;
+		}
+		if (pinGenerateInFlight) {
+			showFeedback(t('pinBusy', 'A PIN is already being generated. Please wait.'), 'error');
+			return;
+		}
+		if (opts.kioskAllowed === false) {
+			showFeedback(t('enableAccessFirst', 'Allow kiosk access for this employee first'), 'error');
+			return;
+		}
+		if (opts.hasPin) {
+			const confirmTpl = t(
+				'confirmNewPin',
+				'Generate a new PIN for {name}? The previous PIN will stop working immediately.',
+			);
+			const msg = String(confirmTpl).split('{name}').join(displayName || uid);
+			if (!window.confirm(msg)) {
+				return;
+			}
+		}
+		pinReturnFocusUserId = uid;
+		setPinGenerateBusy(true);
+		try {
+			const data = await api(page.dataset.apiPin || '', {
+				method: 'POST',
+				headers: headers(),
+				body: JSON.stringify({ userId: uid }),
+			});
+			const pin = data.data && data.data.pin;
+			if (!pin) {
+				throw new Error(t('requestFailed', 'Request failed'));
+			}
+			const codeEl = document.getElementById('azc-kiosk-pin-code');
+			if (codeEl) {
+				codeEl.textContent = String(pin);
+			}
+			preparePinShareUi(pin, displayName || uid);
+			// Refresh table first so return-focus can target the new row button.
+			await loadCredentials();
+			const returnEl = findRowPinButton(uid)
+				|| pinBtn
+				|| document.getElementById('azc-kiosk-creds-heading');
+			openModal(pinModal, pinBackdrop, returnEl);
+			if (pinCopyBtn) {
+				pinCopyBtn.focus();
+			}
+		} catch (e) {
+			pinReturnFocusUserId = '';
+			showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
+		} finally {
+			setPinGenerateBusy(false);
+		}
+	};
+
 	if (pinBtn) {
 		pinBtn.addEventListener('click', async () => {
 			const userId = selectedUser ? selectedUser.value : '';
@@ -799,34 +1524,90 @@
 				}
 				return;
 			}
-			if (selectedAllowed && !selectedAllowed.checked) {
-				showFeedback(t('enableAccessFirst', 'Allow kiosk access for this employee first'), 'error');
-				return;
-			}
-			setBusy(pinBtn, true);
-			try {
-				const data = await api(page.dataset.apiPin || '', {
-					method: 'POST',
-					headers: headers(),
-					body: JSON.stringify({ userId }),
-				});
-				const pin = data.data && data.data.pin;
-				const codeEl = document.getElementById('azc-kiosk-pin-code');
-				if (codeEl) {
-					codeEl.textContent = pin ? String(pin) : '';
+			let alreadyHasPin = false;
+			document.querySelectorAll('#azc-kiosk-creds-body tr[data-user-id]').forEach((row) => {
+				if (row.getAttribute('data-user-id') === userId) {
+					const rowPinBtn = row.querySelector('.azc-kiosk-row-pin');
+					alreadyHasPin = !!(rowPinBtn && rowPinBtn.getAttribute('data-has-pin') === '1');
 				}
-				openModal(pinModal, pinBackdrop, pinBtn);
-				await loadCredentials();
-			} catch (e) {
-				showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
-			} finally {
-				setBusy(pinBtn, false);
-			}
+			});
+			const employeeLabel = (selectedName && selectedName.textContent)
+				|| (userSearch && userSearch.value)
+				|| userId;
+			await pinWorkflow.generateForUser(userId, employeeLabel, {
+				hasPin: alreadyHasPin,
+				kioskAllowed: !(selectedAllowed && !selectedAllowed.checked),
+				triggerBtn: pinBtn,
+			});
 		});
 	}
 
 	bindRevokeButtons();
-	loadCredentials().catch((e) => {
-		showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
-	});
+
+	const enrollTerminalSelect = document.getElementById('azc-kiosk-enroll-terminal');
+	if (enrollTerminalSelect) {
+		enrollTerminalSelect.addEventListener('change', updateWizardUi);
+	}
+	updateWizardUi();
+
+	/**
+	 * Deep-link from employee profile: /admin/kiosk?user=<uid>#azc-kiosk-creds-heading
+	 * Pre-selects that employee in the Badges & PIN form.
+	 */
+	async function applyUserDeepLink() {
+		let userId = '';
+		try {
+			userId = String(new URLSearchParams(window.location.search).get('user') || '').trim();
+		} catch {
+			userId = '';
+		}
+		if (!userId || !userSearch) {
+			return;
+		}
+		try {
+			const data = await api(
+				(page.dataset.apiSearchUsers || '') + '?q=' + encodeURIComponent(userId),
+				{ headers: headers() },
+			);
+			const users = Array.isArray(data.users) ? data.users : [];
+			const match = users.find((u) => String(u.userId) === userId) || users[0];
+			if (match && String(match.userId) === userId) {
+				selectEmployee(
+					match.userId,
+					match.displayName || match.userId,
+					!!match.kioskAllowed,
+					match.email || '',
+				);
+			} else {
+				// Should be rare after exact-UID server resolve; still prefill safely.
+				selectEmployee(userId, userId, false, '');
+			}
+		} catch {
+			selectEmployee(userId, userId, false, '');
+		}
+		const scrollBehavior = prefersReducedMotion() ? 'auto' : 'smooth';
+		const target = document.getElementById('azc-kiosk-creds-heading');
+		if (target && typeof target.scrollIntoView === 'function') {
+			target.scrollIntoView({ behavior: scrollBehavior, block: 'start' });
+		}
+		const tbody = document.getElementById('azc-kiosk-creds-body');
+		if (!tbody) {
+			return;
+		}
+		const rows = tbody.querySelectorAll('tr[data-user-id]');
+		for (let i = 0; i < rows.length; i++) {
+			if (rows[i].getAttribute('data-user-id') === userId) {
+				rows[i].classList.add('azc-kiosk-cred-row--focus');
+				rows[i].scrollIntoView({ behavior: scrollBehavior, block: 'nearest' });
+				break;
+			}
+		}
+	}
+
+	loadCredentials()
+		.then(() => applyUserDeepLink())
+		.catch((e) => {
+			showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
+			applyUserDeepLink().catch(() => { /* non-fatal */ });
+		});
 })();

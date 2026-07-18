@@ -38,6 +38,8 @@ final class IconCatalog
 		'layers' => '<path d="m12.83 2.18 8.49 4.92a1 1 0 0 1 0 1.74l-8.49 4.92a2 2 0 0 1-2 0L2.34 8.84a1 1 0 0 1 0-1.74l8.49-4.92a2 2 0 0 1 2 0Z"/><path d="m2.34 12.34 8.49 4.92a2 2 0 0 0 2 0l8.49-4.92"/><path d="m2.34 16.34 8.49 4.92a2 2 0 0 0 2 0l8.49-4.92"/>',
 		'scroll-text' => '<path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M15 8h-5M15 12h-5"/>',
 		'lock' => '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+		'tablet' => '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M12 18h.01"/>',
+		'key' => '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 1 0 1.4L12 17H9v-3l5.1-5.1a1 1 0 0 1 1.4 0Z"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="2.5"/>',
 		'home' => '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
 		'plus' => '<path d="M12 5v14M5 12h14"/>',
 		'filter' => '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',

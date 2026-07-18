@@ -20,6 +20,7 @@ class PageShellLayoutTest extends TestCase
 
 		foreach ([
 			'admin-users',
+			'admin-kiosk',
 			'time-entries',
 			'absences',
 			'manager-time-entries',
@@ -51,6 +52,14 @@ class PageShellLayoutTest extends TestCase
 		$constant = $controller->getConstant('CONSTRAINED_SHELL_PAGE_IDS');
 		$this->assertIsArray($constant);
 		$this->assertContains('settings', $constant);
+		$this->assertContains('admin-user-detail', $constant);
+	}
+
+	public function testAdminUserDetailControllerMergesShellParams(): void
+	{
+		$content = (string)file_get_contents(__DIR__ . '/../../lib/Controller/AdminController.php');
+		$this->assertStringContainsString("'admin-user-detail'", $content);
+		$this->assertStringContainsString('function userDetail(string $userId)', $content);
 	}
 
 	public function testManagerScopePagesUseFullWidthLayout(): void
@@ -58,5 +67,18 @@ class PageShellLayoutTest extends TestCase
 		$content = (string)file_get_contents(__DIR__ . '/../../css/manager-time-entries.css');
 		$this->assertStringContainsString('.manager-scope-page', $content);
 		$this->assertStringNotContainsString('max-width: 56rem', $content);
+	}
+
+	public function testAdminKioskUsesFullWidthLayout(): void
+	{
+		$content = (string)file_get_contents(__DIR__ . '/../../css/admin-kiosk.css');
+		$this->assertStringContainsString('.azc-kiosk-page', $content);
+		$this->assertStringContainsString('max-width: none', $content);
+		$this->assertStringNotContainsString('max-width: min(72rem', $content);
+		$this->assertStringContainsString('.azc-kiosk-overview', $content);
+		$this->assertStringContainsString('.azc-kiosk-panel', $content);
+		$template = (string)file_get_contents(__DIR__ . '/../../templates/admin-kiosk.php');
+		$this->assertStringContainsString('azc-kiosk-open-create', $template);
+		$this->assertStringContainsString('azc-kiosk-create-modal', $template);
 	}
 }

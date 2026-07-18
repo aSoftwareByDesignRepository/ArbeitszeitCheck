@@ -680,6 +680,7 @@ class AdminController extends Controller
 				'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
 				'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
 				'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
+				'overtimeTrackingFrom' => $this->userOvertimeSettingsService->getTrackingFrom($userId)?->format('Y-m-d'),
 			];
 		}
 
@@ -702,6 +703,60 @@ class AdminController extends Controller
 				'organizationTimeCapture' => $this->timeCaptureMethodService->getOrganizationDefaults(),
 			],
 		));
+		return $this->configureCSP($response, 'admin');
+	}
+
+	/**
+	 * Dedicated employee profile page (replaces the former edit-user modal).
+	 *
+	 * Security: AppAdminMiddleware gates all AdminController methods. The
+	 * userId path segment is resolved via the Nextcloud user manager; unknown
+	 * accounts render a clear not-found state (no data leakage).
+	 */
+	#[NoCSRFRequired]
+	public function userDetail(string $userId): TemplateResponse
+	{
+		$this->registerFrontEndAssets('admin-user-detail', 'admin-users', [], ['common/datepicker']);
+
+		$userId = trim($userId);
+		$user = $userId !== '' ? $this->userManager->get($userId) : null;
+		$found = $user !== null;
+		$displayName = $found ? (string)$user->getDisplayName() : $userId;
+		$pageTitle = $found
+			? $displayName
+			: $this->l10n->t('Employee not found');
+		$pageHelp = $found
+			? $this->l10n->t('Review and update this employee’s work schedule, vacation, overtime, and time recording settings.')
+			: $this->l10n->t('The requested employee account could not be found.');
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-user-detail', array_merge(
+			$this->buildAdminShellParams(
+				'admin-user-detail',
+				$pageTitle,
+				$pageHelp,
+			),
+			[
+				'detailUserId' => $userId,
+				'detailUserFound' => $found,
+				'detailDisplayName' => $displayName,
+				'detailEmail' => $found ? ($user->getEMailAddress() ?? '') : '',
+				'detailEnabled' => $found ? $user->isEnabled() : false,
+				'employeesListUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.users'),
+				// Deep-link into Kiosk → Badges & PIN with this employee pre-selected.
+				'kioskCredentialsUrl' => $found
+					? $this->urlGenerator->linkToRoute(
+						'arbeitszeitcheck.kiosk_admin.index',
+						['user' => $userId],
+					) . '#azc-kiosk-creds-heading'
+					: $this->urlGenerator->linkToRoute('arbeitszeitcheck.kiosk_admin.index'),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
+				'organizationTimeCapture' => $this->timeCaptureMethodService->getOrganizationDefaults(),
+			],
+		));
+		if (!$found) {
+			$response->setStatus(Http::STATUS_NOT_FOUND);
+		}
 		return $this->configureCSP($response, 'admin');
 	}
 
