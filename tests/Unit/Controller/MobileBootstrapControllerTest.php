@@ -87,6 +87,50 @@ class MobileBootstrapControllerTest extends TestCase {
 		$this->assertSame('clocked_out', $data['data']['employee']['status']);
 	}
 
+	public function testDashboardReturnsFullEmployeeWidgetData(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('alice');
+
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$widget = $this->createMock(DashboardWidgetDataService::class);
+		$widget->expects($this->once())
+			->method('getEmployeeWidgetData')
+			->with('alice')
+			->willReturn([
+				'status' => 'clocked_out',
+				'vacationRemaining' => 12.0,
+				'vacationEntitlement' => 30.0,
+				'weekHoursWorked' => 8.0,
+			]);
+
+		$controller = new MobileBootstrapController(
+			'arbeitszeitcheck',
+			$this->createMock(IRequest::class),
+			$userSession,
+			$widget,
+			$this->createMock(PermissionService::class),
+			$this->createMock(OvertimeBankService::class),
+			$this->createMock(IAppManager::class),
+			$this->createMock(IConfig::class),
+			$this->createMock(IAppConfig::class),
+			$this->createMock(L10NFactory::class),
+			$this->createMock(Capabilities::class),
+			$this->createMock(LicenseService::class),
+			$this->createMock(MobileSeatService::class),
+		);
+
+		$response = $controller->dashboard();
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertSame('clocked_out', $data['data']['status']);
+		$this->assertSame(12.0, $data['data']['vacationRemaining']);
+		$this->assertSame(30.0, $data['data']['vacationEntitlement']);
+		$this->assertSame(8.0, $data['data']['weekHoursWorked']);
+	}
+
 	public function testBootstrapReturnsEnvelopeWhenPlanActiveButUserHasNoSeat(): void {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('bob');

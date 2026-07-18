@@ -39,8 +39,9 @@ return [
 		['name' => 'dashboard_widget#endBreak', 'url' => '/api/dashboard-widget/break/end', 'verb' => 'POST'],
 		['name' => 'dashboard_widget#clockOut', 'url' => '/api/dashboard-widget/clock/out', 'verb' => 'POST'],
 
-		// Mobile cold-start (proprietary employee app)
+		// Mobile cold-start + home dashboard (proprietary employee app)
 		['name' => 'mobile_bootstrap#bootstrap', 'url' => '/api/mobile/bootstrap', 'verb' => 'GET'],
+		['name' => 'mobile_bootstrap#dashboard', 'url' => '/api/mobile/dashboard', 'verb' => 'GET'],
 
 		// Time entry management routes
 		['name' => 'time_entry#index_api', 'url' => '/api/time-entries-legacy', 'verb' => 'GET'],

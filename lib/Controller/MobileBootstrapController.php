@@ -106,4 +106,28 @@ class MobileBootstrapController extends Controller {
 			],
 		]);
 	}
+
+	/**
+	 * Full employee home payload for the proprietary mobile app.
+	 *
+	 * Do NOT use /api/dashboard-widget/employee here — that route returns the lean
+	 * desklet summary (no vacation/week/balance fields) and will crash mobile UI
+	 * that formats those numbers.
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function dashboard(): JSONResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => 'User not authenticated',
+			], Http::STATUS_UNAUTHORIZED);
+		}
+
+		return new JSONResponse([
+			'success' => true,
+			'data' => $this->widgetDataService->getEmployeeWidgetData($user->getUID()),
+		]);
+	}
 }

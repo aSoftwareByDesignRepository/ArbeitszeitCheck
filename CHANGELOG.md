@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.6 - 2026-07-18
+
+### Added
+
+- **Mobile home dashboard endpoint:** new `GET /api/mobile/dashboard` returns the full employee home payload (status, vacation entitlement/remaining, week hours, balance) for the proprietary employee mobile app, instead of the lean desklet summary.
+
+### Changed
+
+- **Time-tracking status endpoint usable from the mobile app:** `GET` status no longer requires a CSRF token, matching the other read-only mobile endpoints (still requires an authenticated session or app password).
+
 ## 1.5.5 - 2026-07-18
 
 ### Changed

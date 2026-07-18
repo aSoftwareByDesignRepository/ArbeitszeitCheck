@@ -186,6 +186,7 @@ class TimeTrackingController extends Controller
 	 * Get current status endpoint
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function getStatus(): JSONResponse
 	{
 		try {
