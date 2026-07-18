@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.7 - 2026-07-18
+
+### Added
+
+- **Auto break setting exposed to clients:** the dashboard widget data (and the mobile home dashboard payload built on it) now includes `autoBreakCalculation`, the personal "automatic ArbZG §4 break insertion" setting, so client apps can explain whether the server may insert breaks automatically.
+
 ## 1.5.6 - 2026-07-18
 
 ### Added
