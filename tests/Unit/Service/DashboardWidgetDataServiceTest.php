@@ -89,6 +89,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			],
 		]);
 		$timeTrackingService->method('getBreakStatus')->willReturn([]);
+		$timeTrackingService->method('isAutoBreakCalculationEnabled')->willReturn(true);
 
 		$overtime = $this->createMock(OvertimeService::class);
 		$overtime->method('getWeeklyOvertime')->willReturn([]);
@@ -118,6 +119,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 		$data = $service->getEmployeeWidgetData('u1');
 		$this->assertSame('08:30', $data['sessionStartFormatted']);
+		$this->assertTrue($data['autoBreakCalculation']);
 	}
 
 	public function testEmployeeStatusSummaryReturnsLeanPayloadWithoutHeavyQueries(): void {
@@ -182,6 +184,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			],
 		]);
 		$timeTrackingService->method('getBreakStatus')->willReturn([]);
+		$timeTrackingService->method('isAutoBreakCalculationEnabled')->willReturn(true);
 
 		$overtime = $this->createMock(OvertimeService::class);
 		$overtime->method('getWeeklyOvertime')->willReturn([]);
@@ -219,6 +222,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			'server_timezone' => 'Europe/Berlin',
 		]);
 		$timeTrackingService->method('getBreakStatus')->willReturn([]);
+		$timeTrackingService->method('isAutoBreakCalculationEnabled')->willReturn(false);
 
 		$overtime = $this->createMock(OvertimeService::class);
 		$overtime->method('getWeeklyOvertime')->willReturn([]);
@@ -247,6 +251,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		$data = $service->getEmployeeWidgetData('u1');
 		$this->assertSame('2026-01-15T10:00:00+01:00', $data['serverNow']);
 		$this->assertSame('Europe/Berlin', $data['serverTimezone']);
+		$this->assertFalse($data['autoBreakCalculation']);
 	}
 
 	public function testEmployeeWidgetDataUsesTimeTrackingStatus(): void {
@@ -256,6 +261,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			'working_today_hours' => 4.5,
 			'current_session_duration' => 1234,
 		]);
+		$timeTrackingService->method('getBreakStatus')->willReturn([]);
+		$timeTrackingService->method('isAutoBreakCalculationEnabled')->willReturn(true);
 
 		$service = $this->createService(
 			$timeTrackingService,
@@ -266,6 +273,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		$data = $service->getEmployeeWidgetData('u1');
 		$this->assertSame('active', $data['status']);
 		$this->assertSame(4.5, $data['workingTodayHours']);
+		$this->assertTrue($data['autoBreakCalculation']);
 	}
 
 	public function testManagerWidgetDataDeniesUnauthorizedUsers(): void {

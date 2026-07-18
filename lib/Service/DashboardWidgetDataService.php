@@ -128,6 +128,8 @@ class DashboardWidgetDataService {
 			'breakRequired'          => (bool)($breakStatus['break_required'] ?? false),
 			'remainingBreakMinutes'  => (int)round((float)($breakStatus['remaining_break_minutes'] ?? 0)),
 			'breakWarningLevel'      => (string)($breakStatus['warning_level'] ?? 'none'),
+			// Personal setting: server may insert ArbZG §4 breaks when none were recorded.
+			'autoBreakCalculation'   => $this->timeTrackingService->isAutoBreakCalculationEnabled($userId),
 			'vacationYear'           => (int)($vacationStats['year'] ?? $vacationYear),
 			'vacationRemaining'      => (float)($vacationStats['remaining'] ?? 0.0),
 			'vacationEntitlement'    => (float)($vacationStats['entitlement'] ?? 0.0),

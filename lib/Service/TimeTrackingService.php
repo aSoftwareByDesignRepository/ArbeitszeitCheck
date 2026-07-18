@@ -1015,6 +1015,15 @@ class TimeTrackingService
 	}
 
 	/**
+	 * Whether ArbZG §4 automatic break insertion is enabled for this user.
+	 * Default is on (matches personal settings / historical behaviour).
+	 */
+	public function isAutoBreakCalculationEnabled(string $userId): bool
+	{
+		return $this->userSettingsMapper->getStringSetting($userId, 'auto_break_calculation', '1') === '1';
+	}
+
+	/**
 	 * Calculate and set automatic break if no break was entered and break is legally required
 	 * 
 	 * Automatically calculates the legally required break time (ArbZG §4) and adds it to the time entry
@@ -1026,7 +1035,7 @@ class TimeTrackingService
 	public function calculateAndSetAutomaticBreak(TimeEntry $timeEntry): bool
 	{
 		$userId = $timeEntry->getUserId();
-		if ($this->userSettingsMapper->getStringSetting($userId, 'auto_break_calculation', '1') !== '1') {
+		if (!$this->isAutoBreakCalculationEnabled($userId)) {
 			return false;
 		}
 
