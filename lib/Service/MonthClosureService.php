@@ -92,7 +92,7 @@ class MonthClosureService
 
 	private function acquireFinalizeLock(string $userId, int $year, int $month): string
 	{
-		$key = sprintf('arbeitszeitcheck/month-closure/%s/%04d-%02d', $userId, $year, $month);
+		$key = DbLockKeys::monthClosure($userId, $year, $month);
 		$this->lockingProvider->acquireLock($key, ILockingProvider::LOCK_EXCLUSIVE, 'Month closure finalize lock');
 		return $key;
 	}

@@ -154,7 +154,11 @@ class KioskAdminController extends Controller
 					'enrollmentExpiredTitle' => $this->l10n->t('Scan expired'),
 					'enrollmentCancelled' => $this->l10n->t('Scan cancelled'),
 					'enrollmentCancelledTitle' => $this->l10n->t('Cancelled'),
-					'enrollmentBusy' => $this->l10n->t('A badge scan is already running. Cancel it first or wait.'),
+					'enrollmentCancelledBody' => $this->l10n->t('The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.'),
+					'enrollmentAlreadyDone' => $this->l10n->t('The badge was already saved on the tablet before cancel finished.'),
+					'enrollmentAlreadyDoneTitle' => $this->l10n->t('Badge already saved'),
+					'enrollmentBusy' => $this->l10n->t('A badge scan is already open for this tablet. Click “Cancel scan” first, then start again.'),
+					'enrollmentCancelling' => $this->l10n->t('Stopping the scan…'),
 					'enrollmentNoTerminal' => $this->l10n->t('No active tablet yet. Pair a terminal first.'),
 					'enrollmentScanProblem' => $this->l10n->t('Problem while scanning'),
 					'enrollmentScanRetryHint' => $this->l10n->t('The scan is still open — hold the badge again, or cancel and restart.'),
@@ -165,7 +169,7 @@ class KioskAdminController extends Controller
 					'errBadgeAssigned' => $this->l10n->t('This badge is already assigned to another employee. Remove it there first, or use a different badge.'),
 					'errBadgeInvalid' => $this->l10n->t('The badge could not be read. Hold it flat on the reader for 1–2 seconds and try again.'),
 					'errEnrollmentInactive' => $this->l10n->t('No badge scan is waiting on this tablet. Click “Scan badge at tablet” again, then hold the badge.'),
-					'errKioskBusy' => $this->l10n->t('Another badge operation is already running. Wait a few seconds and try again.'),
+					'errKioskBusy' => $this->l10n->t('Another PIN or badge change is still finishing. Wait a few seconds, then try again. If a scan is open, cancel it first.'),
 					'errScanFailed' => $this->l10n->t('Badge could not be saved. Check tablet online status and kiosk access, then start the scan again.'),
 					'errLicenseRequired' => $this->l10n->t('A Terminal license is required. Open License administration to apply a key.'),
 					'errDeviceLimit' => $this->l10n->t('All terminal license slots are in use. Revoke an unused terminal or upgrade the license.'),
@@ -192,7 +196,7 @@ class KioskAdminController extends Controller
 					'sendByEmail' => $this->l10n->t('Send by email'),
 					'sharePinSubject' => $this->l10n->t('Your ArbeitszeitCheck kiosk PIN'),
 					'sharePinBody' => $this->l10n->t("Hello{nameSuffix},\n\nYour kiosk PIN for ArbeitszeitCheck is: {pin}\n\nKeep this PIN private. You can change it only by asking an administrator to generate a new one.\n"),
-					'pinBusy' => $this->l10n->t('A PIN is already being generated. Please wait.'),
+					'pinBusy' => $this->l10n->t('A PIN is already being generated. Please wait a moment.'),
 					'close' => $this->l10n->t('Close'),
 					'requestFailed' => $this->l10n->t('Request failed'),
 					'yes' => $this->l10n->t('Yes'),
@@ -403,9 +407,20 @@ class KioskAdminController extends Controller
 	{
 		$data = $this->readJsonBody();
 		$terminalId = trim((string)($data['terminalId'] ?? ''));
+		if ($terminalId === '') {
+			return new JSONResponse([
+				'success' => false,
+				'error' => 'KIOSK_TERMINAL_NOT_FOUND',
+				'message' => $this->kioskErrorMessages->message('KIOSK_TERMINAL_NOT_FOUND'),
+			], Http::STATUS_BAD_REQUEST);
+		}
 		$actor = $this->userSession->getUser()?->getUID() ?? '';
-		$this->enrollmentService->cancel($terminalId, $actor);
-		return new JSONResponse(['success' => true]);
+		try {
+			$result = $this->enrollmentService->cancel($terminalId, $actor);
+			return new JSONResponse(['success' => true, 'data' => $result]);
+		} catch (KioskException $e) {
+			return $this->kioskError($e);
+		}
 	}
 
 	public function searchUsers(): JSONResponse

@@ -68,7 +68,7 @@ final class KioskErrorMessages
 				'Badge assignment is in progress on this tablet. Hold the new badge on the reader to assign it.',
 			),
 			'KIOSK_BUSY' => $this->l10n->t(
-				'Another badge operation is already running for this tablet or employee. Wait a few seconds and try again.',
+				'Another PIN or badge change is still finishing for this employee or tablet. Wait a few seconds, then try again. If a scan is open, click “Cancel scan” first.',
 			),
 			'KIOSK_SCAN_FAILED' => $this->l10n->t(
 				'Badge could not be saved. Check that the tablet is online, the employee still has kiosk access, then start the scan again.',

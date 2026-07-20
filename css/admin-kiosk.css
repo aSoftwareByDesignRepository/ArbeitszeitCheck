@@ -310,7 +310,9 @@
 }
 
 #app-content.azc-app .azc-kiosk-flow__label {
-	display: block;
+	display: flex;
+	align-items: center;
+	gap: 0.65rem;
 	margin: 0 0 0.35rem;
 	font-size: var(--azc-fs-sm, 0.875rem);
 	font-weight: 700;
@@ -318,8 +320,36 @@
 	color: var(--color-main-text);
 }
 
+#app-content.azc-app .azc-kiosk-flow__label label {
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+
+#app-content.azc-app .azc-kiosk-flow__step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 1.75rem;
+	height: 1.75rem;
+	border-radius: 999px;
+	font-size: 0.85rem;
+	font-weight: 800;
+	line-height: 1;
+	color: var(--color-primary-element-text, #fff);
+	background: var(--color-primary-element, #0082c9);
+}
+
+#app-content.azc-app .azc-kiosk-flow__block--muted .azc-kiosk-flow__step {
+	color: var(--color-main-text);
+	background: var(--azc-surface-2, var(--color-background-dark, #e8e8e8));
+}
+
 #app-content.azc-app .azc-kiosk-flow__hint {
 	margin: 0 0 0.75rem;
+	/* Align hint under the title text, not under the step badge */
+	padding-inline-start: calc(1.75rem + 0.65rem);
 	font-size: var(--azc-fs-sm, 0.875rem);
 	line-height: 1.45;
 	color: var(--azc-muted, var(--color-text-maxcontrast));
@@ -328,6 +358,26 @@
 
 #app-content.azc-app .azc-kiosk-flow__hint[hidden] {
 	display: none;
+}
+
+/* Keep step content aligned under the title (not under the badge) */
+#app-content.azc-app .azc-kiosk-flow__block > .azc-kiosk-search,
+#app-content.azc-app .azc-kiosk-flow__block > .azc-kiosk-person,
+#app-content.azc-app .azc-kiosk-flow__block > .azc-kiosk-assign-grid,
+#app-content.azc-app .azc-kiosk-flow__block > .azc-kiosk-enrollment-panel {
+	margin-inline-start: calc(1.75rem + 0.65rem);
+	max-width: 48rem;
+}
+
+@media (max-width: 30rem) {
+	#app-content.azc-app .azc-kiosk-flow__hint,
+	#app-content.azc-app .azc-kiosk-flow__block > .azc-kiosk-search,
+	#app-content.azc-app .azc-kiosk-flow__block > .azc-kiosk-person,
+	#app-content.azc-app .azc-kiosk-flow__block > .azc-kiosk-assign-grid,
+	#app-content.azc-app .azc-kiosk-flow__block > .azc-kiosk-enrollment-panel {
+		margin-inline-start: 0;
+		padding-inline-start: 0;
+	}
 }
 
 /* Search combobox */
@@ -537,6 +587,11 @@
 #app-content.azc-app .azc-kiosk-enrollment-panel--error {
 	border-left-color: var(--color-error, #e9322d);
 	background: color-mix(in srgb, var(--color-error) 8%, transparent);
+}
+
+#app-content.azc-app .azc-kiosk-enrollment-panel--cancelled {
+	border-left-color: var(--color-text-maxcontrast, #6b6b6b);
+	background: color-mix(in srgb, var(--color-text-maxcontrast) 6%, transparent);
 }
 
 #app-content.azc-app .azc-kiosk-enrollment-panel__title {

@@ -871,7 +871,11 @@
 		"Your time entry was corrected by your manager": "Ihr Zeiteintrag wurde von Ihrer Führungskraft korrigiert",
 		"Your undertime balance reached red level (%s hours).": "Ihr Minusstundensaldo hat die rote Stufe erreicht (%s Stunden).",
 		"Your undertime balance reached yellow level (%s hours).": "Ihr Minusstundensaldo hat die gelbe Stufe erreicht (%s Stunden).",
-		"{count} employees": "{count} Mitarbeitende"
+		"{count} employees": "{count} Mitarbeitende",
+		"The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.": "Die Ausweis-Erfassung wurde gestoppt. Es wurde nichts gespeichert. Sie können jederzeit neu starten.",
+		"The badge was already saved on the tablet before cancel finished.": "Der Ausweis wurde am Tablet bereits gespeichert, bevor der Abbruch fertig war.",
+		"Badge already saved": "Ausweis bereits gespeichert",
+		"Stopping the scan…": "Scan wird gestoppt…"
 	},
 	"translations": {
 		"Selected": "Selected",

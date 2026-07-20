@@ -21,6 +21,7 @@ use OCA\ArbeitszeitCheck\Capabilities;
 use OCA\ArbeitszeitCheck\Repair\BackfillAbsenceDays;
 use OCA\ArbeitszeitCheck\Repair\EnsureArbeitszeitCheckSchema;
 use OCA\ArbeitszeitCheck\Repair\ReleaseStuckPendingAbsences;
+use OCA\ArbeitszeitCheck\Repair\ClearStuckKioskEnrollmentLocks;
 use OCA\ArbeitszeitCheck\Repair\RepairOrphanedPausedEntries;
 use OCA\ArbeitszeitCheck\Repair\UninstallDropTables;
 use OCA\ArbeitszeitCheck\Listener\LoadSidebarScripts;
@@ -392,6 +393,12 @@ class Application extends App implements IBootstrap {
 
 		$context->registerService(RepairOrphanedPausedEntries::class, function ($c): RepairOrphanedPausedEntries {
 			return new RepairOrphanedPausedEntries(
+				$c->query(IDBConnection::class),
+			);
+		});
+
+		$context->registerService(ClearStuckKioskEnrollmentLocks::class, function ($c): ClearStuckKioskEnrollmentLocks {
+			return new ClearStuckKioskEnrollmentLocks(
 				$c->query(IDBConnection::class),
 			);
 		});

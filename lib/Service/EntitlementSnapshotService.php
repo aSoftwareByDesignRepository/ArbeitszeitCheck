@@ -28,7 +28,7 @@ class EntitlementSnapshotService {
 		?string $policyFingerprint = null
 	): EntitlementComputationSnapshot {
 		$asOfDateOnly = new \DateTime($asOfDate->format('Y-m-d'));
-		$lockKey = 'arbeitszeitcheck/entitlement-snapshot/' . $userId . '/' . $year . '/' . $asOfDateOnly->format('Y-m-d');
+		$lockKey = DbLockKeys::entitlementSnapshot($userId, $year, $asOfDateOnly->format('Y-m-d'));
 		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Entitlement snapshot lock ' . $userId . ' ' . $year);
 		try {
 			$snapshot = new EntitlementComputationSnapshot();

@@ -296,7 +296,10 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 
 		<div class="azc-kiosk-flow" id="azc-kiosk-wizard">
 			<div class="azc-kiosk-flow__block" id="azc-kiosk-step-find" data-step="1">
-				<label for="azc-kiosk-user-search" class="azc-kiosk-flow__label"><?php p($l->t('Find employee')); ?></label>
+				<p class="azc-kiosk-flow__label" id="azc-kiosk-find-heading">
+					<span class="azc-kiosk-flow__step" aria-hidden="true">1</span>
+					<label for="azc-kiosk-user-search"><?php p($l->t('Find employee')); ?></label>
+				</p>
 				<p class="azc-kiosk-flow__hint"><?php p($l->t('Type at least 2 letters of the name or user ID, then pick the person from the list.')); ?></p>
 				<div class="azc-kiosk-search" id="azc-kiosk-search">
 					<input type="search" id="azc-kiosk-user-search" class="azc-input azc-kiosk-search__input" autocomplete="off"
@@ -312,6 +315,10 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 			</div>
 
 			<div class="azc-kiosk-flow__block azc-kiosk-flow__block--muted" id="azc-kiosk-step-allow" data-step="2" aria-disabled="true">
+				<p class="azc-kiosk-flow__label">
+					<span class="azc-kiosk-flow__step" aria-hidden="true">2</span>
+					<span><?php p($l->t('Allow kiosk access')); ?></span>
+				</p>
 				<p class="azc-kiosk-flow__hint" id="azc-kiosk-step-allow-hint">
 					<?php p($l->t('Select an employee first. Then switch on access for that person.')); ?>
 				</p>
@@ -328,7 +335,10 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 			</div>
 
 			<div class="azc-kiosk-flow__block azc-kiosk-flow__block--muted" id="azc-kiosk-step-assign" data-step="3" aria-disabled="true">
-				<p class="azc-kiosk-flow__label" id="azc-kiosk-assign-heading"><?php p($l->t('Assign a badge or PIN')); ?></p>
+				<p class="azc-kiosk-flow__label" id="azc-kiosk-assign-heading">
+					<span class="azc-kiosk-flow__step" aria-hidden="true">3</span>
+					<span><?php p($l->t('Assign a badge or PIN')); ?></span>
+				</p>
 				<p class="azc-kiosk-flow__hint" id="azc-kiosk-step-assign-hint">
 					<?php p($l->t('Allow kiosk access in step 2, then choose PIN or badge scan.')); ?>
 				</p>
@@ -368,7 +378,10 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 								<?php echo $activeTerminalCount === 0 ? ' disabled aria-disabled="true"' : ' disabled aria-disabled="true"'; ?>>
 								<?php p($l->t('Scan badge at tablet')); ?>
 							</button>
-							<button type="button" id="azc-kiosk-cancel-enrollment" class="azc-btn" hidden>
+							<button type="button" id="azc-kiosk-cancel-enrollment"
+								class="azc-btn azc-btn--danger"
+								hidden
+								aria-label="<?php p($l->t('Cancel scan')); ?>">
 								<?php p($l->t('Cancel scan')); ?>
 							</button>
 						</div>

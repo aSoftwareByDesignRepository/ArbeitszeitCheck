@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.20 - 2026-07-20
+
+### Fixed
+
+- **DB lock keys truncated at 64 chars:** exclusive locks for time tracking, absences, month closure, entitlement snapshots, and kiosk PIN/RFID/enrollment now use short stable keys (`oc_file_locks.key` is VARCHAR(64)). Over-long keys were truncated on insert so `releaseLock` never matched and mutations stayed stuck with LockedException / KIOSK_BUSY until TTL.
+- **Stuck lock cleanup on upgrade:** post-migration repair `ClearStuckKioskEnrollmentLocks` clears legacy over-long lock rows left behind by older builds.
+- **Kiosk enrollment cancel races:** cancel uses ordered user→terminal locks with short retries, returns stable idle/completed/cancelled outcomes, and no longer deadlocks or leaves Admin on a hard busy failure while a scan finishes.
+
+### Changed
+
+- **Kiosk admin enrollment UX:** numbered wizard steps, clearer assign/cancel controls, and improved enrollment panel feedback during badge scan.
+
 ## 1.5.19 - 2026-07-20
 
 ### Fixed

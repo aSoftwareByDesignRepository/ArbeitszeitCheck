@@ -79,7 +79,7 @@ class KioskAuthService
 		// identify must not create a clock session while Admin is assigning a badge here.
 		if ($method === 'rfid') {
 			$this->assertNoActiveEnrollment($terminal->getTerminalId(), $now);
-			$termLock = 'arbeitszeitcheck/kiosk_enroll/' . $terminal->getTerminalId();
+			$termLock = KioskEnrollmentLockKeys::forTerminal($terminal->getTerminalId());
 			try {
 				$this->lockingProvider->acquireLock($termLock, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk identify enrollment gate');
 			} catch (LockedException) {

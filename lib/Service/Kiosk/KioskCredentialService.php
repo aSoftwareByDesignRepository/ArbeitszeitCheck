@@ -12,6 +12,7 @@ use OCA\ArbeitszeitCheck\Kiosk\KioskCrypto;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IUserManager;
 use OCP\Lock\ILockingProvider;
+use OCP\Lock\LockedException;
 
 class KioskCredentialService
 {
@@ -57,8 +58,8 @@ class KioskCredentialService
 
 		// Serialize per user so concurrent enrollments / admin assign cannot race
 		// unique(lookup_hash) or unique(user_id, type) into an unmapped 500.
-		$lockKey = 'arbeitszeitcheck/kiosk_rfid_assign/' . hash('sha256', $userId);
-		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk RFID assign');
+		$lockKey = KioskCredentialLockKeys::forRfidAssign($userId);
+		$this->acquireExclusive($lockKey, 'Kiosk RFID assign');
 		try {
 			$lookup = $this->settingsService->rfidLookupHash($normalized);
 			$existingByHash = $this->credMapper->findByLookupHash($lookup);
@@ -131,8 +132,8 @@ class KioskCredentialService
 	public function generatePin(string $userId, string $createdBy): array
 	{
 		$this->assertUserKioskAllowed($userId);
-		$lockKey = 'arbeitszeitcheck/kiosk_pin_gen/' . hash('sha256', $userId);
-		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk PIN generate');
+		$lockKey = KioskCredentialLockKeys::forPinGenerate($userId);
+		$this->acquireExclusive($lockKey, 'Kiosk PIN generate');
 		try {
 			$pin = KioskCrypto::generatePin();
 			$now = $this->timeFactory->getDateTime();
@@ -201,8 +202,14 @@ class KioskCredentialService
 		if ($id === null) {
 			return;
 		}
-		$lockKey = 'arbeitszeitcheck/kiosk_cred/' . $id;
-		$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk PIN lockout');
+		$lockKey = KioskCredentialLockKeys::forCredLockout($id);
+		try {
+			$this->acquireExclusive($lockKey, 'Kiosk PIN lockout');
+		} catch (KioskException) {
+			// Lockout accounting must never block identify with KIOSK_BUSY —
+			// best-effort under contention (rare); failed attempt may not persist.
+			return;
+		}
 		try {
 			$fresh = $this->credMapper->findById($id);
 			if ($fresh === null) {
@@ -220,6 +227,15 @@ class KioskCredentialService
 			$cred->setLockedUntil($fresh->getLockedUntil());
 		} finally {
 			$this->lockingProvider->releaseLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
+		}
+	}
+
+	private function acquireExclusive(string $lockKey, string $label): void
+	{
+		try {
+			$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, $label);
+		} catch (LockedException) {
+			throw new KioskException('KIOSK_BUSY');
 		}
 	}
 

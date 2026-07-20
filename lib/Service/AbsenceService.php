@@ -1109,7 +1109,7 @@ class AbsenceService
 
 	private function acquireUserMutationLock(string $userId): string
 	{
-		$key = 'arbeitszeitcheck/absence-user/' . $userId;
+		$key = DbLockKeys::absenceUser($userId);
 		$this->lockingProvider->acquireLock($key, ILockingProvider::LOCK_EXCLUSIVE, 'Absence workflow lock for user ' . $userId);
 		return $key;
 	}

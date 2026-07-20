@@ -4100,3 +4100,7 @@ OC.L10N.register(
 	"Use the arrow keys to move between exports, then press Enter or Space to select." : "Mit den Pfeiltasten zwischen Exporten wechseln, dann Enter oder Leertaste zum Auswählen."
 	}
 );
+	"The badge scan was stopped. Nothing was saved. You can start again whenever you are ready." : "Die Ausweis-Erfassung wurde gestoppt. Es wurde nichts gespeichert. Sie können jederzeit neu starten.",
+	"The badge was already saved on the tablet before cancel finished." : "Der Ausweis wurde am Tablet bereits gespeichert, bevor der Abbruch fertig war.",
+	"Badge already saved" : "Ausweis bereits gespeichert",
+	"Stopping the scan…" : "Scan wird gestoppt…",

@@ -1710,7 +1710,7 @@ class TimeTrackingService
 
 	private function acquireUserMutationLock(string $userId): string
 	{
-		$key = 'arbeitszeitcheck/time-tracking-user/' . $userId;
+		$key = DbLockKeys::timeTrackingUser($userId);
 		$this->lockingProvider->acquireLock($key, ILockingProvider::LOCK_EXCLUSIVE, 'Time tracking workflow lock for user ' . $userId);
 		return $key;
 	}

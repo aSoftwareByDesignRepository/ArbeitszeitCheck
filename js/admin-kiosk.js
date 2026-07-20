@@ -153,7 +153,7 @@
 			),
 			KIOSK_BUSY: t(
 				'errKioskBusy',
-				'Another badge operation is already running. Wait a few seconds and try again.',
+				'Another PIN or badge change is still finishing. Wait a few seconds, then try again. If a scan is open, cancel it first.',
 			),
 			KIOSK_SCAN_FAILED: t(
 				'errScanFailed',
@@ -1013,7 +1013,7 @@
 	}
 
 	/**
-	 * @param {'waiting'|'success'|'error'|'idle'} kind
+	 * @param {'waiting'|'success'|'error'|'cancelled'|'idle'} kind
 	 * @param {string} title
 	 * @param {string} body
 	 * @param {{ showSteps?: boolean, expiresAt?: string }} [opts]
@@ -1179,7 +1179,7 @@
 				: '';
 
 			if (enrollmentInFlight) {
-				showFeedback(t('enrollmentBusy', 'A badge scan is already running. Cancel it first or wait.'), 'error');
+				showFeedback(t('enrollmentBusy', 'A badge scan is already open for this tablet. Click “Cancel scan” first, then start again.'), 'error');
 				return;
 			}
 			if (!userId) {
@@ -1244,26 +1244,103 @@
 	const cancelEnrollBtn = document.getElementById('azc-kiosk-cancel-enrollment');
 	if (cancelEnrollBtn) {
 		cancelEnrollBtn.addEventListener('click', async () => {
-			const terminalId = enrollmentTerminalId
+			const terminalId = String(
+				enrollmentTerminalId
 				|| (document.getElementById('azc-kiosk-enroll-terminal') || {}).value
-				|| '';
+				|| '',
+			).trim();
 			if (!terminalId) {
 				stopEnrollmentPoll();
 				setEnrollmentPanel('idle', '', '');
 				return;
 			}
+
+			// Stop polling first so a late "expired/completed" response cannot fight the cancel UX.
+			const cancelToken = ++enrollmentPollToken;
+			enrollmentInFlight = true;
 			setBusy(cancelEnrollBtn, true);
+			setEnrollmentPanel(
+				'waiting',
+				t('enrollmentCancelling', 'Stopping the scan…'),
+				t('enrollmentCancelling', 'Stopping the scan…'),
+			);
+
+			const maxAttempts = 3;
+			let lastError = null;
 			try {
-				await api(page.dataset.apiEnrollmentCancel || '', {
-					method: 'POST',
-					headers: headers(),
-					body: JSON.stringify({ terminalId }),
-				});
-				setEnrollmentPanel('idle', '', '');
-				showFeedback(t('enrollmentCancelled', 'Scan cancelled'), 'success');
-				stopEnrollmentPoll();
+				for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+					if (cancelToken !== enrollmentPollToken) {
+						return;
+					}
+					try {
+						const data = await api(page.dataset.apiEnrollmentCancel || '', {
+							method: 'POST',
+							headers: headers(),
+							body: JSON.stringify({ terminalId }),
+						});
+						const status = (data.data && data.data.status) || 'cancelled';
+						if (status === 'already_completed') {
+							setEnrollmentPanel(
+								'success',
+								t('enrollmentAlreadyDoneTitle', 'Badge already saved'),
+								t(
+									'enrollmentAlreadyDone',
+									'The badge was already saved on the tablet before cancel finished.',
+								),
+							);
+							showFeedback(
+								t(
+									'enrollmentAlreadyDone',
+									'The badge was already saved on the tablet before cancel finished.',
+								),
+								'success',
+							);
+							stopEnrollmentPoll();
+							await loadCredentials();
+							return;
+						}
+						setEnrollmentPanel(
+							'cancelled',
+							t('enrollmentCancelledTitle', 'Cancelled'),
+							t(
+								'enrollmentCancelledBody',
+								'The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.',
+							),
+						);
+						showFeedback(t('enrollmentCancelled', 'Scan cancelled'), 'success');
+						stopEnrollmentPoll();
+						return;
+					} catch (e) {
+						lastError = e;
+						const code = e && e.code ? String(e.code) : '';
+						const busy = code === 'KIOSK_BUSY' || (e && e.status === 409);
+						if (busy && attempt < maxAttempts) {
+							await new Promise((r) => setTimeout(r, 200 * attempt));
+							continue;
+						}
+						throw e;
+					}
+				}
+				if (lastError) {
+					throw lastError;
+				}
 			} catch (e) {
-				showFeedback(e instanceof Error ? e.message : t('requestFailed', 'Request failed'), 'error');
+				const msg = e instanceof Error ? e.message : t('requestFailed', 'Request failed');
+				setEnrollmentPanel(
+					'error',
+					t('requestFailed', 'Request failed'),
+					msg + ' '
+						+ t(
+							'enrollmentScanRetryHint',
+							'The scan is still open — hold the badge again, or cancel and restart.',
+						),
+					{ showSteps: true },
+				);
+				showFeedback(msg, 'error');
+				// Resume polling so Admin still sees a tablet-side success/expiry.
+				if (cancelToken === enrollmentPollToken) {
+					pollEnrollment(terminalId);
+				}
 			} finally {
 				setBusy(cancelEnrollBtn, false);
 			}
@@ -1463,7 +1540,7 @@
 			return;
 		}
 		if (pinGenerateInFlight) {
-			showFeedback(t('pinBusy', 'A PIN is already being generated. Please wait.'), 'error');
+			showFeedback(t('pinBusy', 'A PIN is already being generated. Please wait a moment.'), 'error');
 			return;
 		}
 		if (opts.kioskAllowed === false) {
