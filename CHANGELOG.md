@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.19 - 2026-07-20
+
+### Fixed
+
+- **Kiosk API JSON errors:** unexpected and rate-limit failures now return stable JSON machine codes so Terminal clients can show actionable messages instead of opaque failures.
+- **Stamp session recovery:** one-shot kiosk session claims are released when a stamp mutation fails, so terminals can recover instead of staying stuck on a claimed session.
+- **PHPUnit full suite:** fixed a fatal from a redeclared template helper so the complete test run no longer aborts mid-suite.
+
 ## 1.5.18 - 2026-07-20
 
 ### Changed
