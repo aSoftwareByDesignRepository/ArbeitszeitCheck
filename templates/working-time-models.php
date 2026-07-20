@@ -22,17 +22,23 @@ $models = $_['models'] ?? [];
 
         <div class="azc-page-stack">
 
-        <div class="section">
-<div class="section-content mb-3">
-                <button type="button" 
-                        id="create-model" 
-                        class="btn btn--primary"
-                        aria-label="<?php p($l->t('Create new working time model')); ?>"
-                        title="<?php p($l->t('Create a new working time model, e.g., full-time (8 hours/day) or part-time (4 hours/day).')); ?>">
-                    <?php p($l->t('New working time model')); ?>
-                </button>
-            </div>
-
+        <section class="azc-card working-time-models-card" aria-labelledby="working-time-models-heading">
+            <header class="azc-card__header">
+                <div class="azc-card__header-text">
+                    <h2 id="working-time-models-heading" class="azc-card__title"><?php p($l->t('Working time models')); ?></h2>
+                    <p class="azc-card__lead"><?php p($l->t('Work schedules you can assign to employees, e.g. full-time (8 hours/day) or part-time (4 hours/day).')); ?></p>
+                </div>
+                <div class="azc-card__header-actions">
+                    <button type="button"
+                            id="create-model"
+                            class="azc-btn azc-btn--primary"
+                            aria-label="<?php p($l->t('Create new working time model')); ?>"
+                            title="<?php p($l->t('Create a new working time model, e.g., full-time (8 hours/day) or part-time (4 hours/day).')); ?>">
+                        <?php p($l->t('New working time model')); ?>
+                    </button>
+                </div>
+            </header>
+            <div class="azc-card__body">
             <!-- Models Table -->
             <div class="table-container" role="region" aria-label="<?php p($l->t('Working time models')); ?>">
                 <table class="table table--hover azc-table--responsive" id="models-table" role="table" aria-label="<?php p($l->t('Working time models')); ?>">
@@ -116,6 +122,8 @@ $models = $_['models'] ?? [];
                 </tbody>
             </table>
             </div>
+            </div><!-- /.azc-card__body -->
+        </section><!-- /.azc-card -->
 <!-- Initialize JavaScript -->
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
     window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};

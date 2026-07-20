@@ -21,73 +21,7 @@
 	margin: 0;
 }
 
-/* Statistics */
-#app-content.azc-app--admin-dashboard .admin-dashboard__stats-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
-	gap: var(--azc-space-4);
-	width: 100%;
-	margin: 0;
-}
-
-#app-content.azc-app--admin-dashboard .admin-dashboard__stats-grid .stat-card {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	justify-content: center;
-	gap: var(--azc-space-1);
-	min-height: 5.5rem;
-	padding: var(--azc-space-4) var(--azc-space-5);
-	margin: 0;
-	border: 1px solid var(--azc-border);
-	border-radius: var(--azc-radius-md);
-	background: var(--azc-bg-card);
-	box-shadow: var(--azc-shadow-sm);
-	text-align: left;
-	transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-#app-content.azc-app--admin-dashboard .stat-card--link,
-#app-content.azc-app--admin-dashboard .stat-card--drilldown {
-	width: 100%;
-	font: inherit;
-	color: inherit;
-	text-decoration: none;
-	cursor: pointer;
-}
-
-#app-content.azc-app--admin-dashboard .stat-card--drilldown:hover,
-#app-content.azc-app--admin-dashboard .stat-card--link:hover {
-	border-color: var(--color-primary-element, #0082c9);
-	box-shadow: var(--azc-shadow-md);
-}
-
-#app-content.azc-app--admin-dashboard .stat-card--drilldown:focus-visible,
-#app-content.azc-app--admin-dashboard .stat-card--link:focus-visible {
-	outline: 3px solid color-mix(in srgb, var(--color-primary-element, #0082c9) 55%, transparent);
-	outline-offset: 2px;
-}
-
-#app-content.azc-app--admin-dashboard .stat-card .stat-number {
-	display: block;
-	margin: 0;
-	font-size: var(--azc-fs-2xl);
-	font-weight: 700;
-	line-height: var(--azc-line-tight);
-	color: var(--azc-text);
-	font-variant-numeric: var(--azc-tab-num);
-}
-
-#app-content.azc-app--admin-dashboard .stat-card .stat-label {
-	display: block;
-	margin: 0;
-	font-size: var(--azc-fs-sm);
-	font-weight: 500;
-	line-height: var(--azc-line-base);
-	color: var(--azc-muted);
-	text-transform: none;
-	letter-spacing: normal;
-}
+/* Statistics: shared KPI tile pattern (common/stat-tiles.css) */
 
 /* Employee drilldown modal toolbar */
 #app-content.azc-app--admin-dashboard .admin-drilldown-toolbar {
@@ -143,18 +77,3 @@
 	border-top: 1px solid var(--azc-border);
 }
 
-@media (max-width: 767px) {
-	#app-content.azc-app--admin-dashboard .admin-dashboard__stats-grid {
-		grid-template-columns: 1fr;
-	}
-
-	#app-content.azc-app--admin-dashboard .stat-card .stat-number {
-		font-size: var(--azc-fs-xl);
-	}
-}
-
-@media (forced-colors: active) {
-	#app-content.azc-app--admin-dashboard .stat-card {
-		border: 1px solid CanvasText;
-	}
-}

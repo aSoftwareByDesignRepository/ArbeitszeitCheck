@@ -38,6 +38,59 @@
 
 /* Jump nav, layout grid, and section cards: see css/app.css (.azc-jump-nav, .azc-settings-layout). */
 
+/* ===== CARD HEADER/BODY IN THE NEXTCLOUD ADMIN SHELL =====
+   The same template renders inside Settings → Administration
+   (.azc-nc-admin-settings) where the #app-content.azc-app scoped
+   card rules from app.css do not apply. Mirror them here. */
+.azc-nc-admin-settings .admin-settings-section.azc-card {
+  padding: 0;
+}
+
+.azc-nc-admin-settings .azc-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--azc-space-3, 0.75rem) var(--azc-space-4, 1rem);
+  padding: var(--azc-space-5, 1.25rem);
+  border-bottom: 1px solid var(--azc-border, var(--color-border));
+  background: var(--azc-bg-soft, var(--color-background-hover));
+}
+
+.azc-nc-admin-settings .azc-card__header-text {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.azc-nc-admin-settings .azc-card__title {
+  margin: 0;
+  font-size: var(--azc-fs-lg, 1.125rem);
+  font-weight: 600;
+  line-height: var(--azc-line-tight, 1.25);
+  color: var(--azc-text, var(--color-main-text));
+}
+
+.azc-nc-admin-settings .azc-card__lead {
+  margin: var(--azc-space-2, 0.5rem) 0 0;
+  max-width: 52rem;
+  font-size: var(--azc-fs-sm, 0.875rem);
+  line-height: var(--azc-line-base, 1.5);
+  color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+.azc-nc-admin-settings .azc-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--azc-space-4, 1rem);
+  padding: var(--azc-space-5, 1.25rem);
+}
+
+/* Jump-nav anchors target the headings — keep them clear of any sticky chrome */
+.admin-settings-section .azc-card__title,
+.admin-settings-section .admin-settings-subsection__title {
+  scroll-margin-top: calc(var(--azc-space-6, 1.5rem) + 3rem);
+}
+
 .admin-settings-subsection__title {
   font-size: 1rem;
   font-weight: 600;

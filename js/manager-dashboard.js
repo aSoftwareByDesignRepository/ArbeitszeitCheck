@@ -34,6 +34,15 @@
         return (typeof window.t === 'function' ? window.t('arbeitszeitcheck', fallback || key) : fallback || key);
     }
 
+    /** Plural-aware translate (Nextcloud window.n replaces %n). */
+    function tn(singular, plural, count) {
+        const n = typeof count === 'number' ? count : parseInt(String(count), 10) || 0;
+        if (typeof window.n === 'function') {
+            return window.n('arbeitszeitcheck', singular, plural, n);
+        }
+        return n === 1 ? singular : String(plural).replace(/%n/g, String(n));
+    }
+
     function escapeHtml(str) {
         if (str == null) return '';
         const div = document.createElement('div');
@@ -584,9 +593,11 @@
                         + '</li>';
                 }).join('');
 
-                const countMsg = members.length === 1
-                    ? t('1 employee needs attention', '1 employee needs attention')
-                    : t('%n employees need attention', '%n employees need attention').replace('%n', String(members.length));
+                const countMsg = tn(
+                    '1 employee needs attention',
+                    '%n employees need attention',
+                    members.length
+                );
                 summaryEl.innerHTML = '<p class="team-overtime-count" role="status">'
                     + escapeHtml(countMsg)
                     + '</p><ul class="team-overtime-list">' + rows + '</ul>';
@@ -636,21 +647,22 @@
 
     let lastComplianceMembers = [];
 
-    function complianceStatCard(bucket, value, label, extraClass) {
-        const clickable = value > 0 ? ' team-compliance-stat--clickable' : '';
-        const disabled = value > 0 ? '' : ' disabled';
+    function complianceStatCard(bucket, value, label, tileVariant) {
+        const clickable = value > 0;
+        const variant = tileVariant ? (' azc-stat-tile--' + tileVariant) : '';
         return (
-            '<button type="button" class="team-compliance-stat team-compliance-stat--' + bucket + extraClass + clickable + '"'
-            + ' data-compliance-bucket="' + escapeHtml(bucket) + '"' + disabled
+            '<button type="button" class="azc-stat-tile' + variant + (clickable ? ' team-compliance-stat--clickable' : '') + '"'
+            + ' data-compliance-bucket="' + escapeHtml(bucket) + '"'
+            + (clickable ? '' : ' disabled')
             + ' aria-label="' + escapeHtml(label + ': ' + value) + '">'
-            + '<span class="team-compliance-stat__value">' + escapeHtml(String(value)) + '</span>'
-            + '<span class="team-compliance-stat__label">' + escapeHtml(label) + '</span>'
+            + '<span class="azc-stat-tile__label">' + escapeHtml(label) + '</span>'
+            + '<span class="azc-stat-tile__value">' + escapeHtml(String(value)) + '</span>'
             + '</button>'
         );
     }
 
     function bindComplianceStatClicks() {
-        document.querySelectorAll('.team-compliance-stat--clickable').forEach((btn) => {
+        document.querySelectorAll('.team-compliance-stat--clickable[data-compliance-bucket]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const bucket = btn.getAttribute('data-compliance-bucket');
                 openComplianceMemberList(bucket);
@@ -698,7 +710,7 @@
                 return '<li class="team-compliance-member-list__item">'
                     + '<span class="team-compliance-member-list__name">' + escapeHtml(m.displayName || m.userId) + '</span>'
                     + '<span class="team-compliance-member-list__meta">' + escapeHtml(violationsLabel) + '</span>'
-                    + '<a class="btn btn--sm btn--secondary" href="' + escapeHtml(m.violationsUrl) + '">' + escapeHtml(t('View violations', 'View violations')) + '</a>'
+                    + '<a class="azc-btn azc-btn--sm azc-btn--secondary" href="' + escapeHtml(m.violationsUrl) + '">' + escapeHtml(t('View violations', 'View violations')) + '</a>'
                     + '</li>';
             }).join('') + '</ul>';
         }
@@ -721,11 +733,11 @@
         lastComplianceMembers = Array.isArray(c.members) ? c.members : [];
 
         const html = (
-            '<div class="team-compliance-grid" role="group" aria-label="' + escapeHtml(t('Team compliance summary', 'Team compliance summary')) + '">'
-            + complianceStatCard('ok', compliant, t('Compliant', 'Compliant'), '')
-            + complianceStatCard('warning', withWarnings, t('Warnings', 'Warnings'), withWarnings > 0 ? ' team-compliance-stat--has-issues' : '')
-            + complianceStatCard('error', withViolations, t('Critical Violations', 'Critical Violations'), withViolations > 0 ? ' team-compliance-stat--has-issues' : '')
-            + (totalViolations > 0 ? complianceStatCard('info', totalViolations, t('Total Violations', 'Total Violations'), '') : '')
+            '<div class="azc-stat-strip team-compliance-grid" role="group" aria-label="' + escapeHtml(t('Team compliance summary', 'Team compliance summary')) + '">'
+            + complianceStatCard('ok', compliant, t('Compliant', 'Compliant'), 'success')
+            + complianceStatCard('warning', withWarnings, t('Warnings', 'Warnings'), 'warning')
+            + complianceStatCard('error', withViolations, t('Critical Violations', 'Critical Violations'), 'danger')
+            + (totalViolations > 0 ? complianceStatCard('info', totalViolations, t('Total Violations', 'Total Violations'), 'primary') : '')
             + '</div>'
             + (hasIssues
                 ? '<p class="team-compliance-note">' + escapeHtml(t('Click a number to see affected team members.', 'Click a number to see affected team members.')) + '</p>'

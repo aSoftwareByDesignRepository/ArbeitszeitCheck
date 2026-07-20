@@ -56,36 +56,35 @@ $teamMembers = $_['teamMembers'] ?? [];
 		?>
 		<?php endif; ?>
 
-		<section class="manager-dashboard__stats" aria-labelledby="stats-heading">
-			<h2 id="stats-heading" class="visually-hidden"><?php p($l->t('Team statistics')); ?></h2>
-			<div class="stats-grid manager-dashboard__stats-grid">
-				<?php
-				$totalMembers = (int)($teamStats['total_members'] ?? 0);
-				$activeToday = (int)($teamStats['active_today'] ?? 0);
-				$hoursToday = round((float)($teamStats['total_hours_today'] ?? 0), 1);
-				$pendingAbsences = (int)($teamStats['pending_absences'] ?? 0);
-				?>
-				<div class="stat-card manager-stat-card" role="group"
-					aria-label="<?php p($l->n('%n team member', '%n team members', $totalMembers)); ?>">
-					<span class="stat-number" aria-hidden="true"><?php p($totalMembers); ?></span>
-					<span class="stat-label" aria-hidden="true"><?php p($l->t('Team Members')); ?></span>
-				</div>
-				<div class="stat-card manager-stat-card" role="group"
-					aria-label="<?php p($l->n('%n team member active today', '%n team members active today', $activeToday)); ?>">
-					<span class="stat-number" aria-hidden="true"><?php p($activeToday); ?></span>
-					<span class="stat-label" aria-hidden="true"><?php p($l->t('Active Today')); ?></span>
-				</div>
-				<div class="stat-card manager-stat-card" role="group"
-					aria-label="<?php p($l->t('%s hours worked today by the team', [(string)$hoursToday])); ?>">
-					<span class="stat-number" aria-hidden="true"><?php p($hoursToday); ?>h</span>
-					<span class="stat-label" aria-hidden="true"><?php p($l->t('Hours Today')); ?></span>
-				</div>
-				<a class="stat-card manager-stat-card manager-stat-card--link" href="#pending-approvals-section"
-					aria-label="<?php p($l->n('%n pending absence request — jump to approvals', '%n pending absence requests — jump to approvals', $pendingAbsences)); ?>">
-					<span class="stat-number" aria-hidden="true"><?php p($pendingAbsences); ?></span>
-					<span class="stat-label" aria-hidden="true"><?php p($l->t('Pending Absences')); ?></span>
-				</a>
-			</div>
+		<?php
+		$totalMembers = (int)($teamStats['total_members'] ?? 0);
+		$activeToday = (int)($teamStats['active_today'] ?? 0);
+		$hoursToday = round((float)($teamStats['total_hours_today'] ?? 0), 1);
+		$pendingAbsences = (int)($teamStats['pending_absences'] ?? 0);
+		?>
+		<section class="azc-stat-strip manager-dashboard__stats" aria-label="<?php p($l->t('Team statistics')); ?>">
+			<article class="azc-stat-tile"
+				aria-label="<?php p($l->n('%n team member', '%n team members', $totalMembers)); ?>">
+				<span class="azc-stat-tile__label"><?php p($l->t('Team Members')); ?></span>
+				<span class="azc-stat-tile__value" aria-hidden="true"><?php p($totalMembers); ?></span>
+			</article>
+			<article class="azc-stat-tile azc-stat-tile--primary"
+				aria-label="<?php p($l->n('%n team member active today', '%n team members active today', $activeToday)); ?>">
+				<span class="azc-stat-tile__label"><?php p($l->t('Active Today')); ?></span>
+				<span class="azc-stat-tile__value" aria-hidden="true"><?php p($activeToday); ?></span>
+			</article>
+			<article class="azc-stat-tile"
+				aria-label="<?php p($l->t('%s hours worked today by the team', [(string)$hoursToday])); ?>">
+				<span class="azc-stat-tile__label"><?php p($l->t('Hours Today')); ?></span>
+				<span class="azc-stat-tile__value" aria-hidden="true"><?php p($hoursToday); ?>h</span>
+			</article>
+			<a class="azc-stat-tile <?php echo $pendingAbsences > 0 ? 'azc-stat-tile--warning' : 'azc-stat-tile--neutral'; ?>"
+				href="#pending-approvals-section"
+				aria-label="<?php p($l->n('%n pending absence request — jump to approvals', '%n pending absence requests — jump to approvals', $pendingAbsences)); ?>">
+				<span class="azc-stat-tile__label"><?php p($l->t('Pending Absences')); ?></span>
+				<span class="azc-stat-tile__value" aria-hidden="true"><?php p($pendingAbsences); ?></span>
+				<span class="azc-stat-tile__meta"><?php p($l->t('Jump to approvals')); ?></span>
+			</a>
 		</section>
 
 		<section class="azc-card manager-dashboard__approvals" id="pending-approvals-section" aria-labelledby="pending-approvals-title">
@@ -165,6 +164,7 @@ $teamMembers = $_['teamMembers'] ?? [];
 			<header class="azc-card__header">
 				<div class="azc-card__header-text">
 					<h2 id="team-members-title" class="azc-card__title"><?php p($l->t('Team Members')); ?></h2>
+					<p class="azc-card__lead"><?php p($l->t('Who is on your team today, how many hours they logged, and whether they have open absence requests.')); ?></p>
 				</div>
 			</header>
 			<div class="azc-card__body">

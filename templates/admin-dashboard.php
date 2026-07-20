@@ -95,37 +95,39 @@ $payoutsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.overtime_payout.index
             </section>
             <?php endif; ?>
 
-            <section class="admin-dashboard__stats" aria-label="<?php p($l->t('Statistics')); ?>">
-                <div class="stats-grid admin-dashboard__stats-grid">
-                    <button type="button"
-                            class="stat-card stat-card--drilldown"
-                            data-stat="total_users"
-                            data-drilldown-filter="all"
-                            aria-expanded="false"
-                            aria-label="<?php p($l->t('Total employees: %s. Show employee list.', [$_['statistics']['total_users'] ?? 0])); ?>">
-                        <span class="stat-number"><?php p($_['statistics']['total_users'] ?? 0); ?></span>
-                        <span class="stat-label"><?php p($l->t('Total employees')); ?></span>
-                    </button>
-                    <button type="button"
-                            class="stat-card stat-card--drilldown"
-                            data-stat="active_users_today"
-                            data-drilldown-filter="active_today"
-                            aria-expanded="false"
-                            aria-label="<?php p($l->t('Employees active today: %s. Show list.', [$_['statistics']['active_users_today'] ?? 0])); ?>">
-                        <span class="stat-number"><?php p($_['statistics']['active_users_today'] ?? 0); ?></span>
-                        <span class="stat-label"><?php p($l->t('Active today')); ?></span>
-                    </button>
-                    <a class="stat-card stat-card--link"
-                       data-stat="unresolved_violations"
-                       data-drilldown-filter="violations"
-                       data-href="<?php p($violationsUrl); ?>"
-                       href="<?php p($violationsUrl); ?>"
-                       title="<?php p($l->t('Number of open working-time compliance violations')); ?>"
-                       aria-label="<?php p($l->t('Unresolved violations: %s. Open compliance violations.', [$_['statistics']['unresolved_violations'] ?? 0])); ?>">
-                        <span class="stat-number"><?php p($_['statistics']['unresolved_violations'] ?? 0); ?></span>
-                        <span class="stat-label"><?php p($l->t('Open issues')); ?></span>
-                    </a>
-                </div>
+            <?php $unresolvedViolations = (int)($_['statistics']['unresolved_violations'] ?? 0); ?>
+            <section class="azc-stat-strip admin-dashboard__stats" aria-label="<?php p($l->t('Statistics')); ?>">
+                <button type="button"
+                        class="azc-stat-tile"
+                        data-stat="total_users"
+                        data-drilldown-filter="all"
+                        aria-expanded="false"
+                        aria-label="<?php p($l->t('Total employees: %s. Show employee list.', [$_['statistics']['total_users'] ?? 0])); ?>">
+                    <span class="azc-stat-tile__label"><?php p($l->t('Total employees')); ?></span>
+                    <span class="azc-stat-tile__value stat-number"><?php p($_['statistics']['total_users'] ?? 0); ?></span>
+                    <span class="azc-stat-tile__meta"><?php p($l->t('Click to show the employee list')); ?></span>
+                </button>
+                <button type="button"
+                        class="azc-stat-tile azc-stat-tile--primary"
+                        data-stat="active_users_today"
+                        data-drilldown-filter="active_today"
+                        aria-expanded="false"
+                        aria-label="<?php p($l->t('Employees active today: %s. Show list.', [$_['statistics']['active_users_today'] ?? 0])); ?>">
+                    <span class="azc-stat-tile__label"><?php p($l->t('Active today')); ?></span>
+                    <span class="azc-stat-tile__value stat-number"><?php p($_['statistics']['active_users_today'] ?? 0); ?></span>
+                    <span class="azc-stat-tile__meta"><?php p($l->t('Employees with time entries today')); ?></span>
+                </button>
+                <a class="azc-stat-tile <?php echo $unresolvedViolations > 0 ? 'azc-stat-tile--danger' : 'azc-stat-tile--success'; ?>"
+                   data-stat="unresolved_violations"
+                   data-drilldown-filter="violations"
+                   data-href="<?php p($violationsUrl); ?>"
+                   href="<?php p($violationsUrl); ?>"
+                   title="<?php p($l->t('Number of open working-time compliance violations')); ?>"
+                   aria-label="<?php p($l->t('Unresolved violations: %s. Open compliance violations.', [$unresolvedViolations])); ?>">
+                    <span class="azc-stat-tile__label"><?php p($l->t('Open issues')); ?></span>
+                    <span class="azc-stat-tile__value stat-number"><?php p((string)$unresolvedViolations); ?></span>
+                    <span class="azc-stat-tile__meta"><?php p($l->t('Open compliance violations')); ?></span>
+                </a>
             </section>
 
             <section class="azc-card admin-dashboard__issues" aria-labelledby="admin-dashboard-issues-title">

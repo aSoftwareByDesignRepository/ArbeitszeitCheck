@@ -49,54 +49,55 @@ $rangeEnd = min($total, $offset + $shownCount);
 						id="audit-log-filter-form"
 						class="audit-log-page__filter-form"
 						novalidate
-						aria-describedby="audit-log-filter-error"
+						aria-describedby="audit-log-filter-help audit-log-filter-footnote audit-log-filter-error"
 					>
-						<div class="audit-log-page__filter-grid audit-log-scope-filter" role="group" aria-label="<?php p($l->t('Filter options')); ?>">
-							<div class="azc-filter-field azc-filter-field--user">
-								<label for="user-filter" class="azc-filter-field__label"><?php p($l->t('User account')); ?></label>
-								<div class="azc-filter-field__control">
+						<?php /* Dates first (required), then optional filters. IDs must stay stable for audit-log-viewer.js. */ ?>
+						<div class="audit-log-page__filter-grid" role="group" aria-label="<?php p($l->t('Filter options')); ?>">
+							<div class="audit-log-filter__field audit-log-filter__field--from">
+								<label for="start-date" class="audit-log-filter__label"><?php p($l->t('From')); ?></label>
+								<div class="audit-log-filter__control">
 									<input
-										type="search"
-										id="user-filter"
-										name="user_id"
-										class="form-input"
-										placeholder="<?php p($l->t('Nextcloud user ID…')); ?>"
+										type="text"
+										id="start-date"
+										name="start_date"
+										class="form-input datepicker-input"
+										placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
+										pattern="\d{2}\.\d{2}\.\d{4}"
+										maxlength="10"
+										readonly
+										required
 										autocomplete="off"
-										autocapitalize="none"
-										spellcheck="false"
-										inputmode="text"
-										maxlength="200"
+										aria-required="true"
+										value="<?php p($startDate); ?>"
 										aria-describedby="audit-log-filter-footnote"
-										aria-label="<?php p($l->t('User account')); ?>"
 									/>
 								</div>
 							</div>
 
-							<div class="azc-filter-field azc-filter-field--action">
-								<label for="action-category-filter" class="azc-filter-field__label"><?php p($l->t('Action')); ?></label>
-								<div class="azc-filter-field__control">
-									<select id="action-category-filter" name="action_category" class="form-select" aria-label="<?php p($l->t('Action')); ?>">
-										<?php foreach ($actionCategoryOptions as $value => $label): ?>
-											<option value="<?php p((string)$value); ?>"><?php p($label); ?></option>
-										<?php endforeach; ?>
-									</select>
+							<div class="audit-log-filter__field audit-log-filter__field--to">
+								<label for="end-date" class="audit-log-filter__label"><?php p($l->t('To')); ?></label>
+								<div class="audit-log-filter__control">
+									<input
+										type="text"
+										id="end-date"
+										name="end_date"
+										class="form-input datepicker-input"
+										placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
+										pattern="\d{2}\.\d{2}\.\d{4}"
+										maxlength="10"
+										readonly
+										required
+										autocomplete="off"
+										aria-required="true"
+										value="<?php p($endDate); ?>"
+										aria-describedby="audit-log-filter-footnote"
+									/>
 								</div>
 							</div>
 
-							<div class="azc-filter-field azc-filter-field--entity">
-								<label for="entity-type-filter" class="azc-filter-field__label"><?php p($l->t('What changed')); ?></label>
-								<div class="azc-filter-field__control">
-									<select id="entity-type-filter" name="entity_type" class="form-select" aria-label="<?php p($l->t('What changed')); ?>">
-										<?php foreach ($entityTypeOptions as $value => $label): ?>
-											<option value="<?php p((string)$value); ?>"><?php p($label); ?></option>
-										<?php endforeach; ?>
-									</select>
-								</div>
-							</div>
-
-							<div class="azc-filter-field azc-filter-field--actions">
-								<span class="azc-filter-field__label visually-hidden"><?php p($l->t('Actions')); ?></span>
-								<div class="azc-filter-field__control azc-filter-actions">
+							<div class="audit-log-filter__field audit-log-filter__field--actions">
+								<span class="audit-log-filter__label audit-log-filter__label--spacer" aria-hidden="true">&nbsp;</span>
+								<div class="audit-log-filter__control audit-log-filter__actions" role="group" aria-label="<?php p($l->t('Actions')); ?>">
 									<button type="submit" id="apply-filters" class="azc-btn azc-btn--primary">
 										<?php p($l->t('Show')); ?>
 									</button>
@@ -109,54 +110,44 @@ $rangeEnd = min($total, $offset + $shownCount);
 								</div>
 							</div>
 
-							<div
-								class="azc-filter-field azc-filter-field--dates"
-								role="group"
-								aria-labelledby="audit-log-date-range-label"
-							>
-								<span id="audit-log-date-range-label" class="azc-filter-field__label"><?php p($l->t('Date range')); ?></span>
-								<div class="azc-filter-field__control">
-									<div class="azc-date-range">
-										<div class="azc-date-range__part">
-											<label for="start-date" class="azc-date-range__sublabel visually-hidden"><?php p($l->t('From')); ?></label>
-											<input
-												type="text"
-												id="start-date"
-												name="start_date"
-												class="form-input datepicker-input"
-												placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
-												pattern="\d{2}\.\d{2}\.\d{4}"
-												maxlength="10"
-												readonly
-												required
-												autocomplete="off"
-												aria-required="true"
-												value="<?php p($startDate); ?>"
-												aria-label="<?php p($l->t('From')); ?>"
-												aria-describedby="audit-log-filter-footnote"
-											/>
-										</div>
-										<span class="azc-date-range__sep" aria-hidden="true"><?php p($l->t('to')); ?></span>
-										<div class="azc-date-range__part">
-											<label for="end-date" class="azc-date-range__sublabel visually-hidden"><?php p($l->t('To')); ?></label>
-											<input
-												type="text"
-												id="end-date"
-												name="end_date"
-												class="form-input datepicker-input"
-												placeholder="<?php p($l->t('dd.mm.yyyy')); ?>"
-												pattern="\d{2}\.\d{2}\.\d{4}"
-												maxlength="10"
-												readonly
-												required
-												autocomplete="off"
-												aria-required="true"
-												value="<?php p($endDate); ?>"
-												aria-label="<?php p($l->t('To')); ?>"
-												aria-describedby="audit-log-filter-footnote"
-											/>
-										</div>
-									</div>
+							<div class="audit-log-filter__field audit-log-filter__field--user">
+								<label for="user-filter" class="audit-log-filter__label"><?php p($l->t('User account')); ?></label>
+								<div class="audit-log-filter__control">
+									<input
+										type="search"
+										id="user-filter"
+										name="user_id"
+										class="form-input"
+										placeholder="<?php p($l->t('Nextcloud user ID…')); ?>"
+										autocomplete="off"
+										autocapitalize="none"
+										spellcheck="false"
+										inputmode="text"
+										maxlength="200"
+										aria-describedby="audit-log-filter-footnote"
+									/>
+								</div>
+							</div>
+
+							<div class="audit-log-filter__field audit-log-filter__field--action">
+								<label for="action-category-filter" class="audit-log-filter__label"><?php p($l->t('Action')); ?></label>
+								<div class="audit-log-filter__control">
+									<select id="action-category-filter" name="action_category" class="form-select">
+										<?php foreach ($actionCategoryOptions as $value => $label): ?>
+											<option value="<?php p((string)$value); ?>"><?php p($label); ?></option>
+										<?php endforeach; ?>
+									</select>
+								</div>
+							</div>
+
+							<div class="audit-log-filter__field audit-log-filter__field--entity">
+								<label for="entity-type-filter" class="audit-log-filter__label"><?php p($l->t('What changed')); ?></label>
+								<div class="audit-log-filter__control">
+									<select id="entity-type-filter" name="entity_type" class="form-select">
+										<?php foreach ($entityTypeOptions as $value => $label): ?>
+											<option value="<?php p((string)$value); ?>"><?php p($label); ?></option>
+										<?php endforeach; ?>
+									</select>
 								</div>
 							</div>
 						</div>

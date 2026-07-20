@@ -26,9 +26,8 @@ use OCP\IUserSession;
  */
 trait PageShellTrait
 {
-	/** Page IDs that keep a readable max width (forms, preferences). */
+	/** Page IDs that keep a readable max width (dense single-entity forms). */
 	private const CONSTRAINED_SHELL_PAGE_IDS = [
-		'settings',
 		'admin-user-detail',
 	];
 
@@ -44,6 +43,7 @@ trait PageShellTrait
 		'compliance-dashboard',
 		'compliance-violations',
 		'compliance-reports',
+		'settings',
 		'manager-dashboard',
 		'manager-time-entries',
 		'manager-absences',

@@ -126,10 +126,10 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 	<?php endif; ?>
 
 	<section class="azc-license-overview" aria-label="<?php p($l->t('License overview')); ?>">
-		<div class="azc-license-stat-grid">
-			<article class="azc-license-stat <?php echo $isActive ? 'azc-license-stat--active' : ($hasLicense ? 'azc-license-stat--warning' : 'azc-license-stat--neutral'); ?>" aria-labelledby="azc-license-stat-status-label">
-				<p id="azc-license-stat-status-label" class="azc-license-stat__label"><?php p($l->t('Status')); ?></p>
-				<p class="azc-license-stat__value">
+		<div class="azc-stat-strip azc-license-stat-grid">
+			<article class="azc-stat-tile azc-license-stat <?php echo $isActive ? 'azc-stat-tile--success' : ($hasLicense ? 'azc-stat-tile--warning' : 'azc-stat-tile--neutral'); ?>" aria-labelledby="azc-license-stat-status-label">
+				<p id="azc-license-stat-status-label" class="azc-stat-tile__label"><?php p($l->t('Status')); ?></p>
+				<p class="azc-stat-tile__value">
 					<span id="azc-license-active-badge" class="azc-badge <?php echo $isActive ? 'azc-badge--success' : 'azc-badge--warning'; ?>"
 						data-active-label="<?php p($l->t('Active')); ?>"
 						data-inactive-label="<?php p($l->t('Expired or invalid')); ?>"
@@ -148,7 +148,7 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 					</span>
 				</p>
 				<?php if ($hasLicense): ?>
-				<p class="azc-license-stat__meta">
+				<p class="azc-stat-tile__meta">
 					<span class="azc-license-stat__meta-label"><?php p($l->t('Valid until')); ?>:</span>
 					<span id="azc-license-valid-until"><?php p($validUntil !== '' ? $validUntil : '—'); ?></span>
 				</p>
@@ -156,11 +156,11 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 			</article>
 
 			<?php if ($showMobile || !$hasLicense): ?>
-			<article class="azc-license-stat" aria-labelledby="azc-license-stat-mobile-label">
-				<p id="azc-license-stat-mobile-label" class="azc-license-stat__label"><?php p($l->t('Mobile seats')); ?></p>
-				<p class="azc-license-stat__value">
+			<article class="azc-stat-tile azc-stat-tile--primary azc-license-stat" aria-labelledby="azc-license-stat-mobile-label">
+				<p id="azc-license-stat-mobile-label" class="azc-stat-tile__label"><?php p($l->t('Mobile seats')); ?></p>
+				<p class="azc-stat-tile__value">
 					<span id="azc-license-mobile-used"><?php p((string)$mobileUsed); ?></span>
-					<span class="azc-license-stat__sep">/</span>
+					<span class="azc-stat-tile__sep" aria-hidden="true">/</span>
 					<span id="azc-license-mobile-limit"><?php p((string)$mobileLimit); ?></span>
 				</p>
 				<div class="azc-license-meter" role="meter"
@@ -176,11 +176,11 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 			<?php endif; ?>
 
 			<?php if ($showTerminal || !$hasLicense): ?>
-			<article class="azc-license-stat" aria-labelledby="azc-license-stat-terminal-label">
-				<p id="azc-license-stat-terminal-label" class="azc-license-stat__label"><?php p($l->t('Terminal devices')); ?></p>
-				<p class="azc-license-stat__value">
+			<article class="azc-stat-tile azc-stat-tile--primary azc-license-stat" aria-labelledby="azc-license-stat-terminal-label">
+				<p id="azc-license-stat-terminal-label" class="azc-stat-tile__label"><?php p($l->t('Terminal devices')); ?></p>
+				<p class="azc-stat-tile__value">
 					<span id="azc-license-terminal-used"><?php p((string)$terminalUsed); ?></span>
-					<span class="azc-license-stat__sep">/</span>
+					<span class="azc-stat-tile__sep" aria-hidden="true">/</span>
 					<span id="azc-license-terminal-limit"><?php p((string)$terminalLimit); ?></span>
 				</p>
 				<div class="azc-license-meter" role="meter"
@@ -198,11 +198,13 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 	</section>
 
 	<section class="azc-card azc-license-section" aria-labelledby="azc-license-key-heading">
-		<header class="azc-license-section__header">
-			<h2 id="azc-license-key-heading" class="azc-license-section__title"><?php p($l->t('Organisation license')); ?></h2>
-			<p class="azc-license-section__lead"><?php p($l->t('Paste the license key you received after purchase. The web app stays free — this key unlocks Mobile and Terminal apps for your organisation.')); ?></p>
+		<header class="azc-card__header">
+			<div class="azc-card__header-text">
+				<h2 id="azc-license-key-heading" class="azc-card__title"><?php p($l->t('Organisation license')); ?></h2>
+				<p class="azc-card__lead"><?php p($l->t('Paste the license key you received after purchase. The web app stays free — this key unlocks Mobile and Terminal apps for your organisation.')); ?></p>
+			</div>
 		</header>
-
+		<div class="azc-card__body">
 		<div class="azc-license-form">
 			<label for="azc-license-key-input" class="azc-field__label"><?php p($l->t('License key')); ?></label>
 			<textarea id="azc-license-key-input"
@@ -264,15 +266,18 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 			</div>
 			<?php endif; ?>
 		</div>
+		</div><!-- /.azc-card__body -->
 	</section>
 
 	<?php if ($showMobile): ?>
 	<section class="azc-card azc-license-section" id="azc-mobile-seats-section" aria-labelledby="azc-mobile-seats-heading">
-		<header class="azc-license-section__header">
-			<h2 id="azc-mobile-seats-heading" class="azc-license-section__title"><?php p($l->t('Mobile seats')); ?></h2>
-			<p class="azc-license-section__lead"><?php p($l->t('Choose which employees may use the ArbeitszeitCheck Mobile app. Only assigned users can clock in from their phone.')); ?></p>
+		<header class="azc-card__header">
+			<div class="azc-card__header-text">
+				<h2 id="azc-mobile-seats-heading" class="azc-card__title"><?php p($l->t('Mobile seats')); ?></h2>
+				<p class="azc-card__lead"><?php p($l->t('Choose which employees may use the ArbeitszeitCheck Mobile app. Only assigned users can clock in from their phone.')); ?></p>
+			</div>
 		</header>
-
+		<div class="azc-card__body">
 		<div class="azc-license-seat-picker">
 			<label for="azc-seat-user-search" class="azc-field__label"><?php p($l->t('Add employee')); ?></label>
 			<div class="azc-license-search-wrap">
@@ -328,25 +333,30 @@ $licenseContactActions = static function (\OCP\IL10N $l) use ($licenseRenewMailt
 				<p class="azc-empty-state__text"><?php p($l->t('Search for an employee above to grant Mobile app access.')); ?></p>
 			</div>
 		</div>
+		</div><!-- /.azc-card__body -->
 	</section>
 	<?php endif; ?>
 
 	<?php if ($showTerminal): ?>
 	<section class="azc-card azc-license-section" aria-labelledby="azc-terminal-heading">
-		<header class="azc-license-section__header">
-			<h2 id="azc-terminal-heading" class="azc-license-section__title"><?php p($l->t('Terminal devices')); ?></h2>
-			<p class="azc-license-section__lead"><?php p($l->t('Pair kiosk tablets from the Kiosk admin area. Each paired device uses one license slot.')); ?></p>
+		<header class="azc-card__header">
+			<div class="azc-card__header-text">
+				<h2 id="azc-terminal-heading" class="azc-card__title"><?php p($l->t('Terminal devices')); ?></h2>
+				<p class="azc-card__lead"><?php p($l->t('Pair kiosk tablets from the Kiosk admin area. Each paired device uses one license slot.')); ?></p>
+			</div>
+			<?php if ($kioskAdminUrl !== ''): ?>
+			<div class="azc-card__header-actions">
+				<a href="<?php p($kioskAdminUrl); ?>" class="azc-btn azc-btn--primary">
+					<?php p($l->t('Open kiosk administration')); ?>
+				</a>
+			</div>
+			<?php endif; ?>
 		</header>
-		<p class="azc-license-terminal-summary">
-			<?php p($l->t('%1$d of %2$d terminal slots in use.', [$terminalUsed, $terminalLimit])); ?>
-		</p>
-		<?php if ($kioskAdminUrl !== ''): ?>
-		<p class="azc-license-terminal-actions">
-			<a href="<?php p($kioskAdminUrl); ?>" class="azc-btn azc-btn--primary">
-				<?php p($l->t('Open kiosk administration')); ?>
-			</a>
-		</p>
-		<?php endif; ?>
+		<div class="azc-card__body">
+			<p class="azc-license-terminal-summary">
+				<?php p($l->t('%1$d of %2$d terminal slots in use.', [$terminalUsed, $terminalLimit])); ?>
+			</p>
+		</div>
 	</section>
 	<?php endif; ?>
 

@@ -69,28 +69,28 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 	<div id="azc-kiosk-alert" class="azc-sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
 	<div id="azc-kiosk-feedback" class="azc-kiosk-feedback" role="status" hidden></div>
 
-	<section class="azc-kiosk-overview" aria-label="<?php p($l->t('Kiosk status overview')); ?>">
-		<article id="azc-kiosk-stat-mode" class="azc-kiosk-stat <?php echo $kioskEnabled ? 'azc-kiosk-stat--on' : 'azc-kiosk-stat--off'; ?>">
-			<span class="azc-kiosk-stat__label"><?php p($l->t('Kiosk mode')); ?></span>
-			<span class="azc-kiosk-stat__value" id="azc-kiosk-overview-mode"><?php p($kioskEnabled ? $l->t('On') : $l->t('Off')); ?></span>
-			<span class="azc-kiosk-stat__meta"><?php p($l->t('Foyer tablet clocking')); ?></span>
+	<section class="azc-stat-strip azc-kiosk-overview" aria-label="<?php p($l->t('Kiosk status overview')); ?>">
+		<article id="azc-kiosk-stat-mode" class="azc-stat-tile azc-kiosk-stat <?php echo $kioskEnabled ? 'azc-kiosk-stat--on' : 'azc-kiosk-stat--off'; ?>">
+			<span class="azc-stat-tile__label"><?php p($l->t('Kiosk mode')); ?></span>
+			<span class="azc-stat-tile__value" id="azc-kiosk-overview-mode"><?php p($kioskEnabled ? $l->t('On') : $l->t('Off')); ?></span>
+			<span class="azc-stat-tile__meta"><?php p($l->t('Foyer tablet clocking')); ?></span>
 		</article>
-		<article class="azc-kiosk-stat azc-kiosk-stat--primary">
-			<span class="azc-kiosk-stat__label"><?php p($l->t('Active tablets')); ?></span>
-			<span class="azc-kiosk-stat__value" id="azc-kiosk-overview-active"><?php p((string)$activeTerminalCount); ?></span>
-			<span class="azc-kiosk-stat__meta"><?php p($l->t('Ready for badge scans')); ?></span>
+		<article class="azc-stat-tile azc-stat-tile--primary azc-kiosk-stat">
+			<span class="azc-stat-tile__label"><?php p($l->t('Active tablets')); ?></span>
+			<span class="azc-stat-tile__value" id="azc-kiosk-overview-active"><?php p((string)$activeTerminalCount); ?></span>
+			<span class="azc-stat-tile__meta"><?php p($l->t('Ready for badge scans')); ?></span>
 		</article>
-		<article class="azc-kiosk-stat">
-			<span class="azc-kiosk-stat__label"><?php p($l->t('License slots')); ?></span>
-			<span class="azc-kiosk-stat__value">
-				<span id="azc-kiosk-overview-used"><?php p((string)$terminalUsed); ?></span><span class="azc-kiosk-stat__sep" aria-hidden="true">/</span><span id="azc-kiosk-overview-limit"><?php p((string)$terminalLimit); ?></span>
+		<article class="azc-stat-tile azc-kiosk-stat">
+			<span class="azc-stat-tile__label"><?php p($l->t('License slots')); ?></span>
+			<span class="azc-stat-tile__value">
+				<span id="azc-kiosk-overview-used"><?php p((string)$terminalUsed); ?></span><span class="azc-stat-tile__sep" aria-hidden="true">/</span><span id="azc-kiosk-overview-limit"><?php p((string)$terminalLimit); ?></span>
 			</span>
-			<span class="azc-kiosk-stat__meta"><?php p($l->t('Terminal devices used')); ?></span>
+			<span class="azc-stat-tile__meta"><?php p($l->t('Terminal devices used')); ?></span>
 		</article>
-		<article class="azc-kiosk-stat">
-			<span class="azc-kiosk-stat__label"><?php p($l->t('All terminals')); ?></span>
-			<span class="azc-kiosk-stat__value" id="azc-kiosk-overview-total"><?php p((string)count($terminals)); ?></span>
-			<span class="azc-kiosk-stat__meta"><?php p($l->t('Including pending / revoked')); ?></span>
+		<article class="azc-stat-tile azc-kiosk-stat">
+			<span class="azc-stat-tile__label"><?php p($l->t('All terminals')); ?></span>
+			<span class="azc-stat-tile__value" id="azc-kiosk-overview-total"><?php p((string)count($terminals)); ?></span>
+			<span class="azc-stat-tile__meta"><?php p($l->t('Including pending / revoked')); ?></span>
 		</article>
 	</section>
 

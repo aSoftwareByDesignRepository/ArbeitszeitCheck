@@ -106,6 +106,12 @@
 		}
 		if (violationsEl) {
 			violationsEl.textContent = stats.unresolved_violations || 0;
+			const violationsTile = violationsEl.closest('[data-stat="unresolved_violations"]');
+			if (violationsTile) {
+				const hasOpen = (stats.unresolved_violations || 0) > 0;
+				violationsTile.classList.toggle('azc-stat-tile--danger', hasOpen);
+				violationsTile.classList.toggle('azc-stat-tile--success', !hasOpen);
+			}
 		}
 	}
 

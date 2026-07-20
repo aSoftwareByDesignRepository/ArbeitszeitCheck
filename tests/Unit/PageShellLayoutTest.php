@@ -46,13 +46,16 @@ class PageShellLayoutTest extends TestCase
 		$this->assertStringContainsString("buildAdminShellParams(\n\t\t\t\t'admin-working-time-models'", $content);
 	}
 
-	public function testSettingsUsesConstrainedShell(): void
+	public function testSettingsUsesWideShell(): void
 	{
 		$controller = new ReflectionClass(\OCA\ArbeitszeitCheck\Controller\PageController::class);
-		$constant = $controller->getConstant('CONSTRAINED_SHELL_PAGE_IDS');
-		$this->assertIsArray($constant);
-		$this->assertContains('settings', $constant);
-		$this->assertContains('admin-user-detail', $constant);
+		$wide = $controller->getConstant('WIDE_SHELL_PAGE_IDS');
+		$constrained = $controller->getConstant('CONSTRAINED_SHELL_PAGE_IDS');
+		$this->assertIsArray($wide);
+		$this->assertIsArray($constrained);
+		$this->assertContains('settings', $wide);
+		$this->assertNotContains('settings', $constrained);
+		$this->assertContains('admin-user-detail', $constrained);
 	}
 
 	public function testAdminUserDetailControllerMergesShellParams(): void
@@ -67,6 +70,11 @@ class PageShellLayoutTest extends TestCase
 		$content = (string)file_get_contents(__DIR__ . '/../../css/manager-time-entries.css');
 		$this->assertStringContainsString('.manager-scope-page', $content);
 		$this->assertStringNotContainsString('max-width: 56rem', $content);
+
+		$monthClosures = (string)file_get_contents(__DIR__ . '/../../css/manager-month-closures.css');
+		$this->assertStringContainsString('max-width: none', $monthClosures);
+		$this->assertStringNotContainsString('max-width: 48rem', $monthClosures);
+		$this->assertStringNotContainsString('max-width: 56rem', $monthClosures);
 	}
 
 	public function testAdminKioskUsesFullWidthLayout(): void

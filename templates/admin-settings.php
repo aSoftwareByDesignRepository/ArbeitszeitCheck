@@ -78,6 +78,7 @@ $cancelUrl = $isNcAdminShell
                     ['href' => '#section-access-heading', 'label' => $l->t('Access control')],
                     ['href' => '#section-compliance-heading', 'label' => $l->t('Compliance and working time rules')],
                     ['href' => '#section-time-capture-heading', 'label' => $l->t('Time recording methods')],
+                    ['href' => '#section-time-approval-heading', 'label' => $l->t('Time entries and approval')],
                     ['href' => '#section-export-heading', 'label' => $l->t('Exports and reporting')],
                     ['href' => '#section-month-closure-heading', 'label' => $l->t('Month closure (revision-safe)')],
                     ['href' => '#section-hours-heading', 'label' => $l->t('Daily hours and rest periods')],
@@ -89,8 +90,14 @@ $cancelUrl = $isNcAdminShell
                 ?>
             <form id="admin-settings-form" class="form admin-settings-form" method="post" action="#" novalidate>
                 <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
-                <section class="admin-settings-section" aria-labelledby="section-access-heading">
-                    <h3 id="section-access-heading" class="admin-settings-section__title"><?php p($l->t('Access control')); ?></h3>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-access-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-access-heading" class="azc-card__title"><?php p($l->t('Access control')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('Choose who may administer ArbeitszeitCheck and which Nextcloud groups may use the app.')); ?></p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
                     <div class="form-group">
                         <?php $selectedAppAdmins = is_array($settings['appAdminUserIds'] ?? null) ? $settings['appAdminUserIds'] : []; ?>
                         <label for="appAdminUsersSearch" class="form-label"><?php p($l->t('ArbeitszeitCheck app administrators')); ?></label>
@@ -187,13 +194,17 @@ $cancelUrl = $isNcAdminShell
                             <?php p($l->t('Select one or more groups. The rule applies immediately after saving settings.')); ?>
                         </p>
                     </div>
+                    </div><!-- /.azc-card__body -->
                 </section>
-                <section class="admin-settings-section" aria-labelledby="section-compliance-heading">
-                    <h3 id="section-compliance-heading" class="admin-settings-section__title"><?php p($l->t('Compliance and working time rules')); ?></h3>
-                    <p class="form-help form-help--block">
-                        <?php p($l->t('Define how ArbeitszeitCheck validates bookings, handles break edge cases, and enforces legal limits.')); ?>
-                    </p>
-                    <h4 class="admin-settings-section__title"><?php p($l->t('Compliance checks')); ?></h4>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-compliance-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-compliance-heading" class="azc-card__title"><?php p($l->t('Compliance and working time rules')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('Define how ArbeitszeitCheck validates bookings, handles break edge cases, and enforces legal limits.')); ?></p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
+                    <h3 class="admin-settings-subsection__title"><?php p($l->t('Compliance checks')); ?></h3>
                 <div class="form-group">
                     <label class="form-label"><?php p($l->t('Configured timezone')); ?></label>
                     <p class="form-help">
@@ -255,7 +266,7 @@ $cancelUrl = $isNcAdminShell
                         <?php p($l->t('When someone works too many hours or doesn\'t take required breaks, the system will send a notification to managers and the employee.')); ?>
                     </p>
                 </div>
-                <h4 class="admin-settings-section__title"><?php p($l->t('Absence workflow rules')); ?></h4>
+                <h3 class="admin-settings-subsection__title"><?php p($l->t('Absence workflow rules')); ?></h3>
                 <p class="form-help form-help--block">
                     <?php p($l->t('Define for which absence types a substitute must be chosen before a request can be submitted.')); ?>
                 </p>
@@ -289,7 +300,7 @@ $cancelUrl = $isNcAdminShell
                         </div>
                     <?php endforeach; ?>
                 </fieldset>
-                <h4 class="admin-settings-section__title"><?php p($l->t('Break fallback behavior')); ?></h4>
+                <h3 class="admin-settings-subsection__title"><?php p($l->t('Break fallback behavior')); ?></h3>
                 <p class="form-help form-help--block">
                     <?php p($l->t('Use these settings to prevent users from staying in an open break state for many hours by accident.')); ?>
                 </p>
@@ -348,13 +359,19 @@ $cancelUrl = $isNcAdminShell
                 <p class="form-help form-help--note">
                     <?php p($l->t('For non-shift models (flex policy), automatic clock-out is suppressed inside this daytime window. Shift work remains strict.')); ?>
                 </p>
+                </div><!-- /.azc-card__body -->
                 </section>
 
-                <section class="admin-settings-section" aria-labelledby="section-time-capture-heading">
-                    <h3 id="section-time-capture-heading" class="admin-settings-section__title"><?php p($l->t('Time recording methods')); ?></h3>
-                    <p id="section-time-capture-intro" class="form-help form-help--block">
-                        <?php p($l->t('Choose which ways employees may record working time across your organisation. These are administrator settings — employees cannot change them. You can restrict individual employees further under Employees.')); ?>
-                    </p>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-time-capture-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-time-capture-heading" class="azc-card__title"><?php p($l->t('Time recording methods')); ?></h2>
+                            <p id="section-time-capture-intro" class="azc-card__lead">
+                                <?php p($l->t('Choose which ways employees may record working time across your organisation. These are administrator settings — employees cannot change them. You can restrict individual employees further under Employees.')); ?>
+                            </p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
                     <?php
                     $orgClockStampingEnabled = (bool)($settings['clockStampingEnabled'] ?? true);
                     $orgManualTimeEntryEnabled = (bool)($settings['manualTimeEntryEnabled'] ?? true);
@@ -423,11 +440,17 @@ $cancelUrl = $isNcAdminShell
                             ?>
                         </p>
                     </fieldset>
+                    </div><!-- /.azc-card__body -->
                 </section>
 
-                <section class="admin-settings-section" aria-labelledby="section-time-approval-heading">
-                    <h3 id="section-time-approval-heading" class="admin-settings-section__title"><?php p($l->t('Time entries and approval')); ?></h3>
-                    <p class="form-help form-help--block"><?php p($l->t('Both options are off by default (legacy behaviour). Enable only when your organisation requires four-eyes approval.')); ?></p>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-time-approval-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-time-approval-heading" class="azc-card__title"><?php p($l->t('Time entries and approval')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('Both options are off by default (legacy behaviour). Enable only when your organisation requires four-eyes approval.')); ?></p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
                     <fieldset class="form-fieldset" aria-labelledby="time-changes-legend">
                         <legend id="time-changes-legend" class="form-legend"><?php p($l->t('Changes to existing entries')); ?></legend>
                         <div class="form-group">
@@ -452,10 +475,17 @@ $cancelUrl = $isNcAdminShell
                             <p id="manualTimeEntriesRequireApproval-help" class="form-help"><?php p($l->t('When enabled, manual entries stay pending until a manager approves them (excluded from overtime until completed).')); ?></p>
                         </div>
                     </fieldset>
+                    </div><!-- /.azc-card__body -->
                 </section>
 
-                <section class="admin-settings-section" aria-labelledby="section-export-heading">
-                    <h3 id="section-export-heading" class="admin-settings-section__title"><?php p($l->t('Exports and reporting')); ?></h3>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-export-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-export-heading" class="azc-card__title"><?php p($l->t('Exports and reporting')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('Control how entries that run across midnight appear in CSV and JSON exports.')); ?></p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
                     <div class="form-group">
                         <div class="form-checkbox">
                             <input type="checkbox"
@@ -477,14 +507,20 @@ $cancelUrl = $isNcAdminShell
                             <?php p($l->t('DATEV export always uses full, unsplit time entries as required by the DATEV payroll format. CSV and JSON exports respect the midnight split setting above when it is enabled.')); ?>
                         </p>
                     </div>
+                    </div><!-- /.azc-card__body -->
                 </section>
 
                 <?php $monthClosureOn = !empty($settings['monthClosureEnabled']); ?>
-                <section class="admin-settings-section" aria-labelledby="section-month-closure-heading">
-                    <h3 id="section-month-closure-heading" class="admin-settings-section__title"><?php p($l->t('Month closure (revision-safe)')); ?></h3>
-                    <p class="form-help form-help--block" id="month-closure-section-intro">
-                        <?php p($l->t('Employees seal a calendar month when work is complete. Administrators can reopen a sealed month if corrections are needed.')); ?>
-                    </p>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-month-closure-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-month-closure-heading" class="azc-card__title"><?php p($l->t('Month closure (revision-safe)')); ?></h2>
+                            <p class="azc-card__lead" id="month-closure-section-intro">
+                                <?php p($l->t('Employees seal a calendar month when work is complete. Administrators can reopen a sealed month if corrections are needed.')); ?>
+                            </p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
                     <div class="form-group">
                         <div class="form-checkbox">
                             <input type="checkbox"
@@ -579,13 +615,17 @@ $cancelUrl = $isNcAdminShell
                         </div>
                         <div id="monthClosureReopenLive" class="form-help" role="status" aria-live="polite" aria-atomic="true"></div>
                     </fieldset>
+                    </div><!-- /.azc-card__body -->
                 </section>
 
-                <section class="admin-settings-section" aria-labelledby="section-hours-heading">
-                    <h3 id="section-hours-heading" class="admin-settings-section__title"><?php p($l->t('Daily hours and rest periods')); ?></h3>
-                <p class="form-help form-help--block">
-                    <?php p($l->t('Set baseline working-time limits used for legal checks and default employee setup.')); ?>
-                </p>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-hours-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-hours-heading" class="azc-card__title"><?php p($l->t('Daily hours and rest periods')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('Set baseline working-time limits used for legal checks and default employee setup.')); ?></p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
                 <div class="form-group">
                     <label for="maxDailyHours" class="form-label">
                         <?php p($l->t('Maximum working hours per day (in hours)')); ?>
@@ -653,13 +693,17 @@ $cancelUrl = $isNcAdminShell
                         <?php p($l->t('Default daily working hours. Used for new employees until individual models are set. Decimal hours are allowed (e.g. 7.74).')); ?>
                     </p>
                 </div>
+                </div><!-- /.azc-card__body -->
                 </section>
 
-                <section class="admin-settings-section" aria-labelledby="section-regional-heading">
-                    <h3 id="section-regional-heading" class="admin-settings-section__title"><?php p($l->t('Region and holidays')); ?></h3>
-                <p class="form-help form-help--block">
-                    <?php p($l->t('Configure the default holiday region and how statutory holidays are repopulated.')); ?>
-                </p>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-regional-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-regional-heading" class="azc-card__title"><?php p($l->t('Region and holidays')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('Configure the default holiday region and how statutory holidays are repopulated.')); ?></p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
                 <div class="form-group">
                     <label for="germanState" class="form-label">
                         <?php p($l->t('Default federal state for holidays')); ?>
@@ -720,13 +764,17 @@ $cancelUrl = $isNcAdminShell
                         <?php p($l->t('When enabled, missing statutory holidays are added when the calendar is viewed. Disable if you want deleted holidays to stay removed.')); ?>
                     </p>
                 </div>
+                </div><!-- /.azc-card__body -->
                 </section>
 
-                <section class="admin-settings-section" aria-labelledby="section-retention-heading">
-                    <h3 id="section-retention-heading" class="admin-settings-section__title"><?php p($l->t('Data retention')); ?></h3>
-                <p class="form-help form-help--block">
-                    <?php p($l->t('Control how long time-tracking records are kept before automated cleanup.')); ?>
-                </p>
+                <section class="azc-card admin-settings-section" aria-labelledby="section-retention-heading">
+                    <header class="azc-card__header">
+                        <div class="azc-card__header-text">
+                            <h2 id="section-retention-heading" class="azc-card__title"><?php p($l->t('Data retention')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('Control how long time-tracking records are kept before automated cleanup.')); ?></p>
+                        </div>
+                    </header>
+                    <div class="azc-card__body">
                 <div class="form-group">
                     <label for="retentionPeriod" class="form-label">
                         <?php p($l->t('Data retention period for time records (in years)')); ?>
@@ -745,6 +793,7 @@ $cancelUrl = $isNcAdminShell
                         <?php p($l->t('Number of years to keep time tracking data before automatic deletion (typically at least 2 years).')); ?>
                     </p>
                 </div>
+                </div><!-- /.azc-card__body -->
                 </section>
 
                 <?php include __DIR__ . '/partials/projectcheck-admin-settings-section.php'; ?>

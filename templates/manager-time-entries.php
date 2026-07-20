@@ -21,9 +21,11 @@ $maxManagerListDateRangeDays = (int)($_['maxManagerListDateRangeDays'] ?? Consta
 					<h2 id="manager-create-time-entry-title" class="azc-card__title"><?php p($l->t('Record time for an employee')); ?></h2>
 					<p class="azc-card__lead"><?php p($l->t('Create a completed manual entry on behalf of someone you manage. The employee is notified and the change is logged for audit.')); ?></p>
 				</div>
-				<button type="button" id="manager-open-create-time-entry" class="azc-btn azc-btn--primary">
-					<?php p($l->t('Add time entry')); ?>
-				</button>
+				<div class="azc-card__header-actions">
+					<button type="button" id="manager-open-create-time-entry" class="azc-btn azc-btn--primary">
+						<?php p($l->t('Add time entry')); ?>
+					</button>
+				</div>
 			</header>
 			<?php if (!empty($_['projectCheckEnabled'])): ?>
 				<p class="manager-scope-page__create-hint azc-callout azc-callout--neutral" role="note">

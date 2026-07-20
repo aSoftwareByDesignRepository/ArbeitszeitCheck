@@ -15,7 +15,11 @@
 	function t(key, fallback) {
 		const bundle = window.ArbeitszeitCheck?.l10n || {};
 		const value = bundle[key];
-		return value !== undefined && value !== '' ? value : (fallback || key);
+		if (value !== undefined && value !== '') {
+			return value;
+		}
+		const msgid = fallback || key;
+		return (typeof window.t === 'function' ? window.t('arbeitszeitcheck', msgid) : msgid);
 	}
 
 	function labels() {

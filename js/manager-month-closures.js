@@ -57,7 +57,11 @@
         if (l10n && typeof l10n[key] === 'string' && l10n[key] !== '') {
             return l10n[key];
         }
-        return fallback || key;
+        const msgid = fallback || key;
+        if (typeof window.t === 'function') {
+            return window.t('arbeitszeitcheck', msgid);
+        }
+        return msgid;
     }
 
     /** English msgids — must match l10n JSON from PHP ($l->t('January') etc.) */

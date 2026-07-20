@@ -13,13 +13,27 @@
 		dateLocale: window.ArbeitszeitCheck?.dateLocale || document.documentElement.lang || undefined,
 	};
 
-	function t(key, fallback) {
+	function t(key, fallback, vars) {
 		const bundle = window.ArbeitszeitCheck?.l10n || {};
 		const value = bundle[key];
 		if (value !== undefined && value !== '') {
+			if (vars && typeof vars === 'object') {
+				return String(value).replace(/\{(\w+)\}/g, (_, name) => (
+					Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : '{' + name + '}'
+				));
+			}
 			return value;
 		}
-		return fallback || key;
+		const msgid = fallback || key;
+		if (typeof window.t === 'function') {
+			return window.t('arbeitszeitcheck', msgid, vars || {});
+		}
+		if (vars && typeof vars === 'object') {
+			return String(msgid).replace(/\{(\w+)\}/g, (_, name) => (
+				Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : '{' + name + '}'
+			));
+		}
+		return msgid;
 	}
 
 	function formatHours(value) {
@@ -393,7 +407,7 @@
 			state.countBeforeLoad = '';
 			return;
 		}
-		const text = t('{count} entries', '{count} entries').replace('{count}', String(state.total));
+		const text = t('{count} entries', '{count} entries', { count: state.total });
 		countEl.textContent = text;
 		state.countBeforeLoad = text;
 	}

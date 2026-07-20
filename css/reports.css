@@ -181,115 +181,216 @@
 	font-size: 1rem;
 }
 
-/* ========== Report type cards ========== */
-.report-selection-section {
+/* ========== Report type chooser (theme-safe option list) ========== */
+#app-content.azc-app--reports .report-selection-section {
 	padding: 0;
 }
 
-.report-types-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-	gap: var(--space-4, 1rem);
-	margin-top: var(--space-4, 1rem);
+#app-content.azc-app--reports .report-selection-section .azc-card__body {
+	padding-top: var(--azc-space-4, 1rem);
 }
 
-.report-types-grid--simple {
-	margin-top: var(--space-3, 0.75rem);
-}
-
-.report-type-card {
-	background: var(--color-main-background);
-	border: 2px solid var(--color-border);
-	border-radius: var(--border-radius-large, 10px);
-	padding: var(--space-5, 1.25rem);
+#app-content.azc-app--reports .report-types-grid {
 	display: flex;
 	flex-direction: column;
+	gap: var(--azc-space-3, 0.75rem);
+	margin: 0;
+	width: 100%;
+	min-width: 0;
+}
+
+/*
+ * One full-width option row (not nested mini-cards).
+ * Icons use primary-element + primary-element-text so contrast holds in
+ * light, dark, and high-contrast themes (no fragile success/warning mixes).
+ */
+#app-content.azc-app--reports .report-type-card {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
-	text-align: center;
-	cursor: pointer;
-	transition: border-color 0.15s ease, box-shadow 0.15s ease;
-	min-height: var(--default-clickable-area, 44px);
-	min-height: 11rem;
+	column-gap: var(--azc-space-4, 1rem);
+	row-gap: var(--azc-space-2, 0.5rem);
+	width: 100%;
+	min-height: 3.5rem;
+	margin: 0;
+	padding: var(--azc-space-4, 1rem) var(--azc-space-5, 1.25rem);
 	box-sizing: border-box;
+	text-align: left;
+	font: inherit;
+	color: var(--color-main-text);
+	cursor: pointer;
+	appearance: none;
+	border: 2px solid var(--color-border);
+	border-radius: var(--azc-radius-md, 0.5rem);
+	background: var(--color-main-background);
+	box-shadow: none;
+	transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.report-type-card--primary {
-	border-color: var(--color-primary-light);
-	background: var(--color-background-dark);
+#app-content.azc-app--reports .report-type-card:hover {
+	border-color: var(--color-primary-element, #0082c9);
+	background: var(--color-background-hover, var(--color-background-dark));
 }
 
-.report-type-card:hover {
-	border-color: var(--color-primary-element);
-	box-shadow: 0 2px 8px var(--arbeitszeitcheck-color-shadow-light, var(--color-box-shadow));
+#app-content.azc-app--reports .report-type-card:focus {
+	outline: none;
 }
 
-.report-type-card:focus-within {
-	outline: 2px solid var(--color-primary-element);
+#app-content.azc-app--reports .report-type-card:focus-visible {
+	outline: 3px solid var(--color-primary-element, #0082c9);
 	outline-offset: 2px;
 }
 
-.report-type-card.is-selected {
-	border-color: var(--color-primary-element);
-	box-shadow: 0 0 0 2px var(--color-primary-light);
+#app-content.azc-app--reports .report-type-card.is-selected,
+#app-content.azc-app--reports .report-type-card[aria-checked='true'] {
+	border-color: var(--color-primary-element, #0082c9);
+	background: var(--color-primary-light, var(--color-background-hover));
 }
 
-.report-type-icon {
-	display: flex;
+#app-content.azc-app--reports .report-type-card:disabled,
+#app-content.azc-app--reports .report-type-card[aria-disabled='true'] {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+#app-content.azc-app--reports .report-type-card__icon {
+	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 3.25rem;
-	height: 3.25rem;
-	margin-bottom: var(--space-3, 0.75rem);
-	border-radius: var(--border-radius-large, 10px);
-	border: 2px solid var(--color-border);
-	background: var(--color-main-background);
-	line-height: 1;
-	box-sizing: border-box;
+	flex-shrink: 0;
+	width: 2.75rem;
+	height: 2.75rem;
+	border-radius: var(--azc-radius-md, 0.5rem);
+	border: 2px solid var(--color-primary-element, #0082c9);
+	background: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text, #fff);
 }
 
-.report-type-icon__abbr {
-	font-size: 0.9375rem;
+#app-content.azc-app--reports .report-type-card__icon-svg,
+#app-content.azc-app--reports .report-type-card__icon .azc-icon {
+	width: 1.4rem;
+	height: 1.4rem;
+	max-width: none;
+	stroke: currentColor;
+	color: inherit;
+}
+
+#app-content.azc-app--reports .report-type-card__body {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	min-width: 0;
+}
+
+#app-content.azc-app--reports .report-type-card__title {
+	margin: 0;
+	font-size: 1.0625rem;
 	font-weight: 700;
-	letter-spacing: 0.02em;
+	line-height: 1.3;
 	color: var(--color-main-text);
 }
 
-.report-type-icon--working-time {
-	border-color: var(--color-primary-element);
-	background: var(--color-primary-light);
-}
-
-.report-type-icon--absence {
-	border-color: var(--color-success);
-	background: var(--color-success-hover, var(--color-background-dark));
-}
-
-.report-type-icon--compliance {
-	border-color: var(--color-warning);
-	background: var(--color-background-dark);
-}
-
-.report-type-card__title,
-.report-type-card h4 {
-	margin: 0 0 var(--space-2, 0.5rem);
-	font-size: 1.1rem;
-	font-weight: 600;
-	color: var(--color-main-text);
-}
-
-.report-type-card__desc,
-.report-type-card p {
-	margin: 0 0 var(--space-4, 1rem);
+#app-content.azc-app--reports .report-type-card__desc {
+	margin: 0;
 	font-size: 0.9375rem;
-	color: var(--color-text-maxcontrast);
+	font-weight: 400;
 	line-height: 1.45;
-	flex: 1;
+	color: var(--color-text-maxcontrast);
 }
 
-.report-type-card .btn-select-report {
-	width: 100%;
-	margin-top: auto;
+#app-content.azc-app--reports .report-type-card__action {
+	display: inline-flex;
+	align-items: center;
 	justify-content: center;
+	gap: 0.45rem;
+	flex-shrink: 0;
+	min-height: 2.75rem;
+	padding: 0.35rem 0.75rem;
+	border-radius: 999px;
+	border: 2px solid var(--color-border);
+	background: transparent;
+	font-size: 0.875rem;
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--color-main-text);
+	white-space: nowrap;
+}
+
+#app-content.azc-app--reports .report-type-card__action-mark {
+	display: inline-block;
+	width: 1rem;
+	height: 1rem;
+	border-radius: 999px;
+	border: 2px solid var(--color-main-text);
+	box-sizing: border-box;
+	background: transparent;
+}
+
+#app-content.azc-app--reports .report-type-card.is-selected .report-type-card__action,
+#app-content.azc-app--reports .report-type-card[aria-checked='true'] .report-type-card__action {
+	border-color: var(--color-primary-element, #0082c9);
+	background: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text, #fff);
+}
+
+#app-content.azc-app--reports .report-type-card.is-selected .report-type-card__action-mark,
+#app-content.azc-app--reports .report-type-card[aria-checked='true'] .report-type-card__action-mark {
+	border-color: var(--color-primary-element-text, #fff);
+	background: var(--color-primary-element-text, #fff);
+	box-shadow: inset 0 0 0 2px var(--color-primary-element, #0082c9);
+}
+
+@media (max-width: 640px) {
+	#app-content.azc-app--reports .report-type-card {
+		grid-template-columns: auto minmax(0, 1fr);
+		padding: var(--azc-space-4, 1rem);
+	}
+
+	#app-content.azc-app--reports .report-type-card__action {
+		grid-column: 2;
+		justify-self: start;
+	}
+}
+
+@media (forced-colors: active) {
+	#app-content.azc-app--reports .report-type-card {
+		border: 2px solid ButtonText;
+		background: ButtonFace;
+		color: ButtonText;
+	}
+
+	#app-content.azc-app--reports .report-type-card__icon {
+		forced-color-adjust: none;
+		background: Highlight;
+		border-color: Highlight;
+		color: HighlightText;
+	}
+
+	#app-content.azc-app--reports .report-type-card[aria-checked='true'],
+	#app-content.azc-app--reports .report-type-card.is-selected {
+		outline: 3px solid Highlight;
+		outline-offset: 2px;
+	}
+
+	#app-content.azc-app--reports .report-type-card__action {
+		border-color: ButtonText;
+		color: ButtonText;
+		background: ButtonFace;
+	}
+}
+
+@media (prefers-contrast: more) {
+	#app-content.azc-app--reports .report-type-card {
+		border-width: 3px;
+	}
+
+	#app-content.azc-app--reports .report-type-card__icon {
+		border-width: 3px;
+	}
+
+	#app-content.azc-app--reports .report-type-card__title {
+		font-weight: 800;
+	}
 }
 
 /* ========== Parameters form ========== */
@@ -537,16 +638,6 @@
 		min-width: max-content;
 	}
 
-	.report-types-grid {
-		grid-template-columns: 1fr;
-		gap: var(--space-3, 0.75rem);
-	}
-
-	.report-type-card {
-		min-height: 10rem;
-		padding: var(--space-4, 1rem);
-	}
-
 	.reports-form__actions {
 		flex-direction: column;
 		align-items: stretch;
@@ -560,17 +651,5 @@
 	.azc-reports-stepper {
 		flex-direction: column;
 		align-items: stretch;
-	}
-}
-
-@media (min-width: 769px) {
-	.report-types-grid {
-		grid-template-columns: repeat(2, 1fr);
-	}
-}
-
-@media (min-width: 1024px) {
-	.report-types-grid {
-		grid-template-columns: repeat(3, 1fr);
 	}
 }

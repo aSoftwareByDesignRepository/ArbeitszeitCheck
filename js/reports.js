@@ -16,8 +16,9 @@
 			return;
 		}
 
-		const reportCards = document.querySelectorAll('.report-type-card');
-		const reportButtons = document.querySelectorAll('.btn-select-report');
+		const reportCards = document.querySelectorAll('.report-type-card.btn-select-report');
+		const reportButtons = reportCards;
+		const reportTypeGroup = document.querySelector('.report-types-grid[role="radiogroup"]');
 		const reportParameters = document.getElementById('report-parameters');
 		const reportForm = document.getElementById('report-form');
 		const reportTypeInput = document.getElementById('report-type');
@@ -34,6 +35,7 @@
 		const generateBtn = document.getElementById('btn-generate-report');
 		const scopeForm = document.getElementById('report-scope-form');
 		const stepperItems = document.querySelectorAll('.azc-reports-stepper__item');
+		let reportFetchSeq = 0;
 
 		function setSectionVisible(section, visible) {
 			if (!section) {
@@ -230,12 +232,28 @@
 		// Use both 'change' and 'input' so scope updates reliably (e.g. keyboard, click, assistive tech)
 		function applyReportTypeRestrictionsForScope(_scope) {
 			reportCards.forEach((card) => {
-				const btn = card.querySelector('.btn-select-report');
-				if (!btn) return;
-				// Keep report types selectable for all scopes.
-				btn.disabled = false;
-				btn.setAttribute('aria-disabled', 'false');
+				card.disabled = false;
+				card.setAttribute('aria-disabled', 'false');
 			});
+		}
+
+		function setReportTypeSelection(selectedButton) {
+			reportCards.forEach((card) => {
+				const selected = card === selectedButton;
+				card.classList.toggle('is-selected', selected);
+				card.setAttribute('aria-checked', selected ? 'true' : 'false');
+				card.tabIndex = selected ? 0 : -1;
+				const actionLabel = card.querySelector('.report-type-card__action-label')
+					|| card.querySelector('.report-type-card__action');
+				if (actionLabel) {
+					const selectLabel = card.getAttribute('data-label-select') || 'Select';
+					const selectedLabel = card.getAttribute('data-label-selected') || 'Selected';
+					actionLabel.textContent = selected ? selectedLabel : selectLabel;
+				}
+			});
+			if (reportCards.length && !Array.from(reportCards).some((c) => c.tabIndex === 0)) {
+				reportCards[0].tabIndex = 0;
+			}
 		}
 
 		/** Show team variant + export layout controls when they apply (working time export, team scope, formats). */
@@ -315,102 +333,117 @@
 			updateReportsStepper(1);
 		}
 
-		// Handle report card clicks
-		reportCards.forEach((card) => {
-			card.addEventListener('click', (e) => {
-				// Don't trigger if clicking the button
-				if (e.target instanceof HTMLElement && e.target.classList.contains('btn-select-report')) {
+		// Report type chooser: each option is a single button (role=radio).
+		function selectReportType(button) {
+			if (!(button instanceof HTMLElement) || button.disabled) {
+				return;
+			}
+			const reportType = button.dataset.report;
+			if (!reportType || !reportTypeInput) {
+				return;
+			}
+
+			setReportTypeSelection(button);
+			reportTypeInput.value = reportType;
+
+			if (teamVariantSelect) {
+				teamVariantSelect.value = 'time_entries';
+			}
+			if (exportLayoutSelect) {
+				exportLayoutSelect.value = 'long';
+			}
+
+			updateScopeFromForm();
+
+			if (reportParameters) {
+				setSectionVisible(reportParameters, true);
+				updateReportsStepper(3);
+				reportParameters.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+			}
+
+			const timeApi = window.ArbeitszeitCheckTime;
+			const utils = window.ArbeitszeitCheckUtils;
+			const toDDMMYYYY = (d) => {
+				if (utils && typeof utils.formatDate === 'function') {
+					return utils.formatDate(d, 'DD.MM.YYYY');
+				}
+				const day = String(d.getDate()).padStart(2, '0');
+				const month = String(d.getMonth() + 1).padStart(2, '0');
+				const year = d.getFullYear();
+				return `${day}.${month}.${year}`;
+			};
+			const todayAnchor = (timeApi && timeApi.parseYmd(timeApi.todayYmd()))
+				? timeApi.parseYmd(timeApi.todayYmd())
+				: new Date();
+			const thirtyDaysAgo = new Date(todayAnchor);
+			thirtyDaysAgo.setDate(todayAnchor.getDate() - 30);
+
+			let defaultStart = thirtyDaysAgo;
+			let defaultEnd = todayAnchor;
+
+			if (reportType === 'daily') {
+				defaultStart = todayAnchor;
+				defaultEnd = todayAnchor;
+			} else if (reportType === 'weekly') {
+				const jsDay = todayAnchor.getDay();
+				defaultStart = new Date(todayAnchor);
+				defaultStart.setDate(todayAnchor.getDate() - jsDay);
+				defaultEnd = new Date(defaultStart);
+				defaultEnd.setDate(defaultStart.getDate() + 6);
+			} else if (reportType === 'monthly') {
+				defaultStart = thirtyDaysAgo;
+				defaultEnd = todayAnchor;
+			} else {
+				defaultStart = thirtyDaysAgo;
+				defaultEnd = todayAnchor;
+			}
+
+			if (startDateInput) startDateInput.value = toDDMMYYYY(defaultStart);
+			if (endDateInput) endDateInput.value = toDDMMYYYY(defaultEnd);
+			updateExportOptionVisibility();
+			button.focus();
+		}
+
+		reportButtons.forEach((button) => {
+			button.tabIndex = -1;
+			button.addEventListener('click', (e) => {
+				e.preventDefault();
+				selectReportType(button);
+			});
+		});
+		if (reportButtons.length) {
+			reportButtons[0].tabIndex = 0;
+		}
+
+		if (reportTypeGroup) {
+			reportTypeGroup.addEventListener('keydown', (e) => {
+				const keys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'];
+				if (!keys.includes(e.key)) {
 					return;
 				}
-				const button = card.querySelector('.btn-select-report');
-				if (button instanceof HTMLElement) {
-					button.click();
+				const options = Array.from(reportButtons).filter((btn) => !btn.disabled);
+				if (!options.length) {
+					return;
 				}
-			});
-		});
-
-		// Handle report button clicks
-		reportButtons.forEach((button) => {
-			button.addEventListener('click', (e) => {
-				e.stopPropagation();
-				const reportType = button.dataset.report;
-				if (reportType && reportTypeInput) {
-					reportCards.forEach((card) => card.classList.remove('is-selected'));
-					const selectedCard = button.closest('.report-type-card');
-					if (selectedCard) {
-						selectedCard.classList.add('is-selected');
-					}
-					reportTypeInput.value = reportType;
-
-					if (teamVariantSelect) {
-						teamVariantSelect.value = 'time_entries';
-					}
-					if (exportLayoutSelect) {
-						exportLayoutSelect.value = 'long';
-					}
-
-					// Ensure scope is up to date before showing parameters
-					updateScopeFromForm();
-
-					// For daily and weekly reports we only really need one anchor date; we keep both fields visible
-					// for consistency but will adjust the API parameters later.
-
-					// Show parameters section
-					if (reportParameters) {
-						setSectionVisible(reportParameters, true);
-						updateReportsStepper(3);
-						reportParameters.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-					}
-
-					// Set default dates (last 30 days) in dd.mm.yyyy format (display TZ).
-					const timeApi = window.ArbeitszeitCheckTime;
-					const utils = window.ArbeitszeitCheckUtils;
-					const toDDMMYYYY = (d) => {
-						if (utils && typeof utils.formatDate === 'function') {
-							return utils.formatDate(d, 'DD.MM.YYYY');
-						}
-						const day = String(d.getDate()).padStart(2, '0');
-						const month = String(d.getMonth() + 1).padStart(2, '0');
-						const year = d.getFullYear();
-						return `${day}.${month}.${year}`;
-					};
-					const todayAnchor = (timeApi && timeApi.parseYmd(timeApi.todayYmd()))
-						? timeApi.parseYmd(timeApi.todayYmd())
-						: new Date();
-					const thirtyDaysAgo = new Date(todayAnchor);
-					thirtyDaysAgo.setDate(todayAnchor.getDate() - 30);
-
-					// Defaults per report type so preview and export ranges match user expectations.
-					let defaultStart = thirtyDaysAgo;
-					let defaultEnd = todayAnchor;
-
-					if (reportType === 'daily') {
-						defaultStart = todayAnchor;
-						defaultEnd = todayAnchor;
-					} else if (reportType === 'weekly') {
-						// Backend aligns week start by subtracting JS weekday (w=0 is Sunday).
-						const jsDay = todayAnchor.getDay(); // 0=Sun, 6=Sat
-						defaultStart = new Date(todayAnchor);
-						defaultStart.setDate(todayAnchor.getDate() - jsDay);
-						defaultEnd = new Date(defaultStart);
-						defaultEnd.setDate(defaultStart.getDate() + 6);
-					} else if (reportType === 'monthly') {
-						// Rolling window so team/time-entry exports include recent bookings (e.g. overnight
-						// shifts last month) instead of only the current calendar month.
-						defaultStart = thirtyDaysAgo;
-						defaultEnd = todayAnchor;
-					} else {
-						// overtime, absence, compliance: keep last-30-days default
-						defaultStart = thirtyDaysAgo;
-						defaultEnd = todayAnchor;
-					}
-
-					if (startDateInput) startDateInput.value = toDDMMYYYY(defaultStart);
-					if (endDateInput) endDateInput.value = toDDMMYYYY(defaultEnd);
-					updateExportOptionVisibility();
+				const currentIndex = options.findIndex((btn) => btn === document.activeElement || btn.getAttribute('aria-checked') === 'true');
+				let nextIndex = currentIndex >= 0 ? currentIndex : 0;
+				if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+					nextIndex = (nextIndex + 1) % options.length;
+				} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+					nextIndex = (nextIndex - 1 + options.length) % options.length;
+				} else if (e.key === 'Home') {
+					nextIndex = 0;
+				} else if (e.key === 'End') {
+					nextIndex = options.length - 1;
 				}
+				e.preventDefault();
+				const next = options[nextIndex];
+				options.forEach((btn) => {
+					btn.tabIndex = btn === next ? 0 : -1;
+				});
+				next.focus();
 			});
-		});
+		}
 
 		if (formatSelect) {
 			formatSelect.addEventListener('change', updateExportOptionVisibility);
@@ -804,6 +837,7 @@
 			const requestToken = getRequestToken();
 			const originalPreviewText = previewBtn ? previewBtn.textContent : '';
 			const originalGenerateText = generateBtn ? generateBtn.textContent : '';
+			const fetchSeq = ++reportFetchSeq;
 			if (previewBtn) {
 				previewBtn.disabled = true;
 				previewBtn.textContent = (A.l10n && A.l10n.generating) || 'Generating...';
@@ -826,6 +860,9 @@
 					})),
 				)
 				.then((result) => {
+					if (fetchSeq !== reportFetchSeq) {
+						return { success: false, stale: true };
+					}
 					let data = null;
 					try {
 						data = result.text ? JSON.parse(result.text) : null;
@@ -912,6 +949,9 @@
 					}
 				})
 				.catch(() => {
+					if (fetchSeq !== reportFetchSeq) {
+						return { success: false, stale: true };
+					}
 					if (previewBtn) {
 						previewBtn.disabled = false;
 						previewBtn.textContent = originalPreviewText;

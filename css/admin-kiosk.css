@@ -36,82 +36,15 @@
 	color: var(--color-main-text);
 }
 
-/* ── KPI strip (single layer, no nested chrome) ──────────────── */
-#app-content.azc-app .azc-kiosk-overview {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: var(--azc-space-3, 0.75rem);
-	margin: 0;
-	width: 100%;
-}
-
-#app-content.azc-app .azc-kiosk-stat {
-	display: flex;
-	flex-direction: column;
-	gap: 0.25rem;
-	min-height: 0;
-	padding: var(--azc-space-4, 1rem) var(--azc-space-4, 1rem);
-	margin: 0;
-	border: none;
-	border-radius: var(--azc-radius-md, 10px);
-	background: var(--azc-bg-card, var(--color-main-background));
-	box-shadow: none;
-	border-left: 3px solid var(--azc-border, var(--color-border));
-}
-
+/* ── KPI strip: shared tile pattern (common/stat-tiles.css) ────
+   Only the kiosk on/off state accents live here; the JS toggles
+   .azc-kiosk-stat--on / --off on #azc-kiosk-stat-mode. */
 #app-content.azc-app .azc-kiosk-stat--on {
 	border-left-color: var(--color-success-text, var(--color-success, #2d7a3e));
 }
 
 #app-content.azc-app .azc-kiosk-stat--off {
-	border-left-color: var(--color-border);
-}
-
-#app-content.azc-app .azc-kiosk-stat--primary {
-	border-left-color: var(--color-primary-element, #0082c9);
-}
-
-#app-content.azc-app .azc-kiosk-stat__label {
-	margin: 0;
-	font-size: var(--azc-fs-xs, 0.8125rem);
-	font-weight: 700;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	color: var(--azc-muted, var(--color-text-maxcontrast));
-}
-
-#app-content.azc-app .azc-kiosk-stat__value {
-	margin: 0;
-	font-size: clamp(1.25rem, 2vw, 1.6rem);
-	font-weight: 700;
-	line-height: var(--azc-line-tight, 1.2);
-	font-variant-numeric: tabular-nums;
-	color: var(--azc-text, var(--color-main-text));
-}
-
-#app-content.azc-app .azc-kiosk-stat__sep {
-	margin-inline: 0.15em;
-	font-weight: 500;
-	color: var(--azc-muted, var(--color-text-maxcontrast));
-}
-
-#app-content.azc-app .azc-kiosk-stat__meta {
-	margin: 0;
-	font-size: var(--azc-fs-xs, 0.8125rem);
-	line-height: 1.4;
-	color: var(--azc-muted, var(--color-text-maxcontrast));
-}
-
-@media (max-width: 64rem) {
-	#app-content.azc-app .azc-kiosk-overview {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-}
-
-@media (max-width: 30rem) {
-	#app-content.azc-app .azc-kiosk-overview {
-		grid-template-columns: 1fr;
-	}
+	border-left-color: var(--azc-border, var(--color-border));
 }
 
 /* ── Panels use standard azc-card header/body (no extra padding box) */

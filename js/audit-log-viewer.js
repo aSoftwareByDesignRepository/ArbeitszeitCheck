@@ -20,6 +20,7 @@
 		defaultStartDate: config.defaultStartDate || '',
 		defaultEndDate: config.defaultEndDate || '',
 		loading: false,
+		loadSeq: 0,
 	};
 
 	function alT(msg, params) {
@@ -314,11 +315,15 @@
 			tbody.innerHTML = '<tr><td colspan="5" class="text-center">' + escapeHtml(alT('Loading…')) + '</td></tr>';
 		}
 		setLoading(true);
+		const seq = ++state.loadSeq;
 
 		const params = buildQueryParams(filters, true);
 		Utils.ajax('/apps/arbeitszeitcheck/api/admin/audit-logs?' + params.toString(), {
 			method: 'GET',
 			onSuccess: function (data) {
+				if (seq !== state.loadSeq) {
+					return;
+				}
 				setLoading(false);
 				if (data.success && Array.isArray(data.logs)) {
 					state.total = Number(data.total) >= 0 ? Number(data.total) : data.logs.length;
@@ -339,6 +344,9 @@
 				updatePaginationUi();
 			},
 			onError: function () {
+				if (seq !== state.loadSeq) {
+					return;
+				}
 				setLoading(false);
 				state.total = 0;
 				if (tbody) {

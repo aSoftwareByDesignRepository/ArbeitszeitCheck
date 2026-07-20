@@ -436,16 +436,7 @@
   }
 
   .settings-container {
-    gap: var(--space-8);
-  }
-
-  .settings-section {
-    padding: var(--space-4) 0;
-  }
-
-  #app-content-wrapper .section-title,
-  #app-content-wrapper .settings-section .section-title {
-    font-size: var(--arbeitszeitcheck-font-size-base);
+    gap: var(--space-5);
   }
 
   .setting-item {
@@ -470,34 +461,13 @@
 .settings-container {
   display: flex;
   flex-direction: column;
-  gap: var(--space-10);
-  max-width: 52rem;
+  gap: var(--space-6);
+  max-width: none;
+  width: 100%;
 }
 
-.settings-section {
-  padding: var(--space-6) 0;
-  border-bottom: 1px solid var(--arbeitszeitcheck-color-border);
-}
-
-.settings-section:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.settings-section:first-child {
-  padding-top: 0;
-}
-
-/* Section title: one clear heading per block (WCAG: heading hierarchy) */
-#app-content-wrapper .section-title,
-#app-content-wrapper .settings-section .section-title {
-  font-size: var(--arbeitszeitcheck-font-size-lg);
-  font-weight: var(--arbeitszeitcheck-font-weight-bold);
-  color: var(--arbeitszeitcheck-color-text);
-  margin: 0 0 var(--space-4) 0;
-  line-height: var(--arbeitszeitcheck-line-height-tight);
-  letter-spacing: -0.01em;
-}
+/* Settings sections are azc-card blocks with the shared header/body
+   pattern (css/app.css .azc-card__*) — no divider/padding decoration here. */
 
 .setting-item {
   display: flex;
@@ -533,7 +503,8 @@
   line-height: var(--arbeitszeitcheck-line-height-relaxed);
 }
 
-.info-box h4 {
+.info-box h4,
+.info-box .info-box__title {
   font-size: var(--arbeitszeitcheck-font-size-base);
   font-weight: var(--arbeitszeitcheck-font-weight-semibold);
   margin: 0 0 var(--space-2) 0;
@@ -554,14 +525,9 @@
   padding-left: var(--space-6);
 }
 
-/* Spacing between section content and next section title */
+/* Spacing between section content and actions */
 .settings-section .form,
 .settings-section .card-actions,
 .settings-section .form-actions {
   margin-top: 0;
-}
-
-.settings-section .section-title+.form,
-.settings-section .section-title+.info-box {
-  margin-top: var(--space-2);
 }

@@ -5,8 +5,8 @@
 
 #app-content.azc-app--manager-month-closures .manager-month-closures {
 	width: 100%;
-	max-width: 56rem;
-	margin-inline: auto;
+	max-width: none;
+	min-width: 0;
 }
 
 #app-content.azc-app--manager-month-closures .manager-mc-wizard.azc-card {
@@ -195,12 +195,6 @@
 
 #app-content.azc-app--manager-month-closures .manager-mc-page-error[hidden] {
 	display: none !important;
-}
-
-@media (min-width: 900px) {
-	#app-content.azc-app--manager-month-closures .manager-month-closures {
-		max-width: 48rem;
-	}
 }
 
 @media (max-width: 768px) {

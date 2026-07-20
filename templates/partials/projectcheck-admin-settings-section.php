@@ -16,9 +16,14 @@ declare(strict_types=1);
 $pcAvailable = !empty($projectCheckAvailable);
 $pcEnabled = !empty($settings['projectCheckIntegrationEnabled']);
 ?>
-<section class="admin-settings-section azc-projectcheck-admin-settings" aria-labelledby="section-projectcheck-heading">
-	<h3 id="section-projectcheck-heading" class="admin-settings-section__title"><?php p($l->t('ProjectCheck connection')); ?></h3>
-
+<section class="azc-card admin-settings-section azc-projectcheck-admin-settings" aria-labelledby="section-projectcheck-heading">
+	<header class="azc-card__header">
+		<div class="azc-card__header-text">
+			<h2 id="section-projectcheck-heading" class="azc-card__title"><?php p($l->t('ProjectCheck connection')); ?></h2>
+			<p class="azc-card__lead"><?php p($l->t('Optionally let employees link working time to ProjectCheck projects.')); ?></p>
+		</div>
+	</header>
+	<div class="azc-card__body">
 	<?php if (!$pcAvailable): ?>
 		<?php
 		$calloutVariant = 'warning';
@@ -72,4 +77,5 @@ $pcEnabled = !empty($settings['projectCheckIntegrationEnabled']);
 			</p>
 		</div>
 	<?php endif; ?>
+	</div><!-- /.azc-card__body -->
 </section>

@@ -2,6 +2,13 @@
  * Audit Log page styles
  * WCAG 2.1 AA compliant, responsive, theme-safe
  *
+ * Filter fields use audit-log-filter__* (not global .azc-filter-field) so
+ * page-patterns subgrid (grid-row: span 2) cannot punch holes in the layout.
+ *
+ * Desktop layout (manager-scope style):
+ *   From | To | [Show] [Reset] [Export]
+ *   User | Action | What changed
+ *
  * @copyright Copyright (c) 2024, Nextcloud GmbH
  * @license AGPL-3.0-or-later
  */
@@ -11,12 +18,22 @@
 	min-width: 0;
 }
 
-/* ── Search filters (isolated from global .azc-filter-grid) ───── */
+#app-content.azc-app--admin-audit-log .audit-log-page__filters,
+#app-content.azc-app--admin-audit-log .audit-log-page__results {
+	width: 100%;
+	min-width: 0;
+}
+
 #app-content.azc-app--admin-audit-log .audit-log-page__toolbar {
+	--azc-audit-filter-label-h: calc(var(--azc-fs-sm, 0.875rem) * var(--azc-line-tight, 1.25));
+	--azc-audit-filter-label-gap: var(--azc-space-2, 0.5rem);
 	display: flex;
 	flex-direction: column;
-	gap: var(--azc-space-3, 0.75rem);
+	gap: var(--azc-space-4, 1rem);
+	width: 100%;
 	min-width: 0;
+	container-type: inline-size;
+	container-name: audit-filters;
 }
 
 #app-content.azc-app--admin-audit-log .audit-log-page__filter-form {
@@ -24,162 +41,145 @@
 	flex-direction: column;
 	gap: var(--azc-space-3, 0.75rem);
 	margin: 0;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .audit-log-scope-filter,
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .audit-log-page__filter-grid {
-	display: grid;
-	grid-template-rows: auto auto;
-	align-items: start;
-	column-gap: var(--azc-space-4, 1rem);
-	row-gap: var(--azc-space-4, 1rem);
 	width: 100%;
-	margin: 0;
-	grid-template-columns:
-		minmax(0, 1.15fr)
-		minmax(0, 0.9fr)
-		minmax(0, 0.95fr)
-		auto;
-	grid-template-areas:
-		'user action entity actions'
-		'dates dates dates dates';
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field--user {
-	grid-area: user;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field--action {
-	grid-area: action;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field--entity {
-	grid-area: entity;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field--actions {
-	grid-area: actions;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field--dates {
-	grid-area: dates;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field {
-	display: flex;
-	flex-direction: column;
-	grid-row: auto;
-	gap: var(--azc-space-2, 0.5rem);
 	min-width: 0;
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field__label {
+#app-content.azc-app--admin-audit-log .audit-log-page__filter-grid {
+	display: grid;
+	grid-template-columns:
+		minmax(0, 1fr)
+		minmax(0, 1fr)
+		minmax(0, auto);
+	grid-template-areas:
+		'from to actions'
+		'user action entity';
+	column-gap: var(--azc-space-4, 1rem);
+	row-gap: var(--azc-space-4, 1rem);
+	align-items: start;
+	width: 100%;
+	margin: 0;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__field--from {
+	grid-area: from;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__field--to {
+	grid-area: to;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__field--actions {
+	grid-area: actions;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__field--user {
+	grid-area: user;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__field--action {
+	grid-area: action;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__field--entity {
+	grid-area: entity;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-audit-filter-label-gap);
+	min-width: 0;
+	align-self: stretch;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__label {
+	display: block;
+	margin: 0;
+	min-height: var(--azc-audit-filter-label-h);
 	font-size: var(--azc-fs-sm, 0.875rem);
 	font-weight: 600;
 	line-height: var(--azc-line-tight, 1.25);
 	color: var(--azc-text, var(--color-main-text));
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field__control {
+#app-content.azc-app--admin-audit-log .audit-log-filter__label--spacer {
+	visibility: hidden;
+	user-select: none;
+	pointer-events: none;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__control {
 	position: relative;
 	display: block;
 	min-width: 0;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field--actions .azc-filter-field__control {
-	display: flex;
-	align-items: flex-end;
 	min-height: 44px;
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .form-input,
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .form-select {
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .form-input,
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .form-select {
 	min-height: 44px;
 	width: 100%;
 	box-sizing: border-box;
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field--dates .azc-filter-field__control {
-	display: flex;
-	align-items: flex-start;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range {
-	display: flex;
-	flex-wrap: nowrap;
-	align-items: center;
-	gap: var(--azc-space-2, 0.5rem) var(--azc-space-3, 0.75rem);
-	width: 100%;
-	max-width: 30rem;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__part {
-	display: block;
-	flex: 1 1 0;
-	min-width: 9rem;
-	max-width: 14rem;
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__sep {
-	flex: 0 0 auto;
-	align-self: center;
-	padding: 0;
-	margin: 0;
-	white-space: nowrap;
-	font-size: var(--azc-fs-sm, 0.875rem);
-	font-weight: 500;
-	color: var(--azc-muted, var(--color-text-maxcontrast));
-}
-
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__part .azc-datepicker-host,
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__part .azc-datepicker-host--flex {
+/* Datepicker host + toggle (mirrors manager-scope-filter) */
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .azc-datepicker-host,
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .azc-datepicker-host--flex {
 	position: relative;
 	display: block;
 	width: 100%;
 	max-width: 100%;
 	min-height: 44px;
+	flex: none;
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__part .datepicker-input {
-	min-width: 0;
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .azc-datepicker-host .datepicker-input {
 	width: 100%;
+	box-sizing: border-box;
 	padding-inline-end: 3rem;
 	font-variant-numeric: tabular-nums;
-	text-overflow: clip;
-	color: var(--color-main-text, var(--azc-text));
-	background-color: var(--color-main-background, var(--azc-bg));
-	border: 1px solid var(--color-border, var(--azc-border));
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__part .azc-datepicker-toggle {
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .azc-datepicker-toggle {
 	position: absolute !important;
 	inset-inline-end: 0;
 	top: 50% !important;
 	transform: translateY(-50%) !important;
-	color: var(--color-main-text, var(--azc-text));
-	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 12%, var(--color-main-background, #fff));
-	border: 1px solid color-mix(in srgb, var(--color-primary-element, #0082c9) 35%, var(--color-border, #ddd));
-	border-radius: var(--azc-radius-sm, 6px);
+	z-index: 1;
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__part .azc-datepicker-toggle:focus-visible,
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__part .datepicker-input:focus-visible {
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .azc-datepicker-toggle:focus-visible,
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .form-input:focus-visible,
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .form-select:focus-visible {
 	outline: 3px solid var(--color-primary-element, #0082c9);
 	outline-offset: 2px;
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-actions {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: flex-start;
-	gap: var(--azc-space-2, 0.5rem);
-	margin: 0;
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .form-input[aria-invalid='true'],
+#app-content.azc-app--admin-audit-log .audit-log-filter__field .form-select[aria-invalid='true'] {
+	border-color: var(--color-error, #e9322d);
+	outline-color: var(--color-error, #e9322d);
 }
 
-#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-actions .azc-btn {
+#app-content.azc-app--admin-audit-log .audit-log-filter__actions {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--azc-space-2, 0.5rem);
+	margin: 0;
+	width: 100%;
+	min-height: 44px;
+}
+
+#app-content.azc-app--admin-audit-log .audit-log-filter__actions .azc-btn {
 	flex: 0 1 auto;
 	min-width: 6.5rem;
+	min-height: 44px;
+	justify-content: center;
+	white-space: nowrap;
 }
 
 #app-content.azc-app--admin-audit-log .audit-log-page__toolbar-feedback {
@@ -192,6 +192,92 @@
 	font-size: var(--azc-fs-sm, 0.875rem);
 	line-height: var(--azc-line-base, 1.45);
 	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+@container audit-filters (max-width: 40rem) {
+	#app-content.azc-app--admin-audit-log .audit-log-page__filter-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-areas:
+			'from to'
+			'user action'
+			'entity entity'
+			'actions actions';
+	}
+
+	#app-content.azc-app--admin-audit-log .audit-log-filter__field--actions .audit-log-filter__label--spacer {
+		display: none;
+	}
+
+	#app-content.azc-app--admin-audit-log .audit-log-filter__actions {
+		justify-content: flex-start;
+	}
+}
+
+@container audit-filters (max-width: 28rem) {
+	#app-content.azc-app--admin-audit-log .audit-log-page__filter-grid {
+		grid-template-columns: 1fr;
+		grid-template-areas:
+			'from'
+			'to'
+			'user'
+			'action'
+			'entity'
+			'actions';
+	}
+
+	#app-content.azc-app--admin-audit-log .audit-log-filter__actions {
+		justify-content: stretch;
+	}
+
+	#app-content.azc-app--admin-audit-log .audit-log-filter__actions .azc-btn {
+		flex: 1 1 calc(50% - 0.5rem);
+	}
+
+	#app-content.azc-app--admin-audit-log .audit-log-filter__actions .azc-btn--primary {
+		flex: 1 1 100%;
+	}
+}
+
+@supports not (container-type: inline-size) {
+	@media (max-width: 900px) {
+		#app-content.azc-app--admin-audit-log .audit-log-page__filter-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			grid-template-areas:
+				'from to'
+				'user action'
+				'entity entity'
+				'actions actions';
+		}
+
+		#app-content.azc-app--admin-audit-log .audit-log-filter__field--actions .audit-log-filter__label--spacer {
+			display: none;
+		}
+
+		#app-content.azc-app--admin-audit-log .audit-log-filter__actions {
+			justify-content: flex-start;
+		}
+	}
+
+	@media (max-width: 640px) {
+		#app-content.azc-app--admin-audit-log .audit-log-page__filter-grid {
+			grid-template-columns: 1fr;
+			grid-template-areas:
+				'from'
+				'to'
+				'user'
+				'action'
+				'entity'
+				'actions';
+		}
+
+		#app-content.azc-app--admin-audit-log .audit-log-filter__actions .azc-btn {
+			flex: 1 1 calc(50% - 0.5rem);
+		}
+
+		#app-content.azc-app--admin-audit-log .audit-log-filter__actions .azc-btn--primary {
+			flex: 1 1 100%;
+		}
+	}
 }
 
 /* ── Results table ─────────────────────────────────────────────── */
@@ -251,61 +337,6 @@
 	margin: 0;
 	font-size: var(--azc-fs-sm, 0.875rem);
 	color: var(--color-text-maxcontrast);
-}
-
-@media (max-width: 1100px) {
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .audit-log-scope-filter,
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .audit-log-page__filter-grid {
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-		grid-template-areas:
-			'user user'
-			'action entity'
-			'actions actions'
-			'dates dates';
-	}
-}
-
-@media (max-width: 900px) {
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range {
-		flex-wrap: wrap;
-		max-width: none;
-	}
-}
-
-@media (max-width: 768px) {
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .audit-log-scope-filter,
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .audit-log-page__filter-grid {
-		grid-template-columns: 1fr;
-		grid-template-areas:
-			'user'
-			'action'
-			'entity'
-			'dates'
-			'actions';
-		align-items: stretch;
-	}
-
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-date-range__part {
-		max-width: none;
-		flex: 1 1 9rem;
-	}
-
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-field--actions .azc-filter-field__control {
-		min-height: 0;
-	}
-
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-actions {
-		width: 100%;
-	}
-
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-actions .azc-btn {
-		flex: 1 1 calc(50% - 0.5rem);
-		justify-content: center;
-	}
-
-	#app-content.azc-app--admin-audit-log .audit-log-page__toolbar .azc-filter-actions .azc-btn--primary {
-		flex: 1 1 100%;
-	}
 }
 
 @media (max-width: 767px) {

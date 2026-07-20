@@ -27,9 +27,20 @@ $urlGenerator = $_['urlGenerator'] ?? null;
 
         <div class="azc-page-stack">
 
-        <div class="section">
-            <div class="section-content">
-                <div class="azc-list-toolbar admin-users-toolbar">
+        <section class="azc-card admin-users-card" aria-labelledby="admin-users-list-heading">
+            <header class="azc-card__header">
+                <div class="azc-card__header-text">
+                    <h2 id="admin-users-list-heading" class="azc-card__title"><?php p($l->t('Employee list')); ?></h2>
+                    <p class="azc-card__lead"><?php p($l->t('Review work schedules, vacation days, and overtime settings. Open an employee to change their setup.')); ?></p>
+                </div>
+                <div class="azc-card__header-actions">
+                    <button type="button" id="refresh-users" class="azc-btn azc-btn--secondary">
+                        <?php p($l->t('Refresh list')); ?>
+                    </button>
+                </div>
+            </header>
+            <div class="azc-card__body">
+                <div class="admin-users-toolbar">
                     <div class="admin-users-toolbar__search">
                         <label for="user-search" class="form-label"><?php p($l->t('Find an employee')); ?></label>
                         <input type="search"
@@ -43,11 +54,6 @@ $urlGenerator = $_['urlGenerator'] ?? null;
                         <p id="user-search-help" class="form-help">
                             <?php p($l->t('Type at least 2 characters to search. Leave empty to browse the list page by page.')); ?>
                         </p>
-                    </div>
-                    <div class="azc-list-toolbar__actions">
-                        <button type="button" id="refresh-users" class="btn btn--secondary">
-                            <?php p($l->t('Refresh list')); ?>
-                        </button>
                     </div>
                 </div>
 
@@ -144,10 +150,10 @@ $urlGenerator = $_['urlGenerator'] ?? null;
                 </div>
 
                 <nav class="admin-users-pager" id="users-pager" aria-label="<?php p($l->t('Employee list pages')); ?>" hidden>
-                    <button type="button" id="users-page-prev" class="btn btn--secondary" disabled>
+                    <button type="button" id="users-page-prev" class="azc-btn azc-btn--secondary" disabled>
                         <?php p($l->t('Previous page')); ?>
                     </button>
-                    <button type="button" id="users-page-next" class="btn btn--secondary" disabled>
+                    <button type="button" id="users-page-next" class="azc-btn azc-btn--secondary" disabled>
                         <?php p($l->t('Next page')); ?>
                     </button>
                 </nav>
@@ -163,7 +169,8 @@ $urlGenerator = $_['urlGenerator'] ?? null;
                         ));
                     ?></p>
                 </div>
-            </div>
+            </div><!-- /.azc-card__body -->
+        </section><!-- /.azc-card -->
 <?php $urlGenerator = $_['urlGenerator'] ?? $urlGenerator ?? null; ?>
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
 <?php include __DIR__ . '/partials/admin-user-edit-l10n.php'; ?>
@@ -180,6 +187,5 @@ $urlGenerator = $_['urlGenerator'] ?? null;
     ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 
-</div><!-- /.section -->
 </div><!-- /.azc-page-stack -->
 <?php include __DIR__ . '/common/page-end.php'; ?>

@@ -1,0 +1,141 @@
+/**
+ * Shared KPI stat tiles (design origin: admin kiosk overview strip).
+ *
+ * Markup:
+ *   <section class="azc-stat-strip" aria-label="…">
+ *     <article class="azc-stat-tile azc-stat-tile--primary">
+ *       <span class="azc-stat-tile__label">…</span>
+ *       <span class="azc-stat-tile__value">42</span>
+ *       <span class="azc-stat-tile__meta">…</span>
+ *     </article>
+ *   </section>
+ *
+ * Interactive tiles (drilldowns) use <button> or <a> with the same classes.
+ * Accent variants: --primary, --success, --warning, --danger, --neutral (default).
+ *
+ * @license AGPL-3.0-or-later
+ */
+
+#app-content.azc-app .azc-stat-strip {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+	gap: var(--azc-space-3, 0.75rem);
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	min-width: 0;
+	list-style: none;
+}
+
+#app-content.azc-app .azc-stat-tile {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: flex-start;
+	gap: 0.25rem;
+	min-height: 0;
+	min-width: 0;
+	margin: 0;
+	padding: var(--azc-space-4, 1rem);
+	border: none;
+	border-left: 3px solid var(--azc-border, var(--color-border));
+	border-radius: var(--azc-radius-md, 10px);
+	background: var(--azc-bg-card, var(--color-main-background));
+	box-shadow: none;
+	text-align: left;
+	color: inherit;
+}
+
+#app-content.azc-app .azc-stat-tile--primary {
+	border-left-color: var(--color-primary-element, #0082c9);
+}
+
+#app-content.azc-app .azc-stat-tile--success {
+	border-left-color: var(--color-success-text, var(--color-success, #2d7a3e));
+}
+
+#app-content.azc-app .azc-stat-tile--warning {
+	border-left-color: var(--color-warning-text, var(--color-warning, #a67c00));
+}
+
+#app-content.azc-app .azc-stat-tile--danger {
+	border-left-color: var(--color-error-text, var(--color-error, #e9322d));
+}
+
+#app-content.azc-app .azc-stat-tile--neutral {
+	border-left-color: var(--azc-border, var(--color-border));
+}
+
+#app-content.azc-app .azc-stat-tile__label {
+	margin: 0;
+	font-size: var(--azc-fs-xs, 0.8125rem);
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app .azc-stat-tile__value {
+	margin: 0;
+	font-size: clamp(1.25rem, 2vw, 1.6rem);
+	font-weight: 700;
+	line-height: var(--azc-line-tight, 1.2);
+	font-variant-numeric: tabular-nums;
+	color: var(--azc-text, var(--color-main-text));
+	overflow-wrap: anywhere;
+}
+
+#app-content.azc-app .azc-stat-tile__sep {
+	margin-inline: 0.15em;
+	font-weight: 500;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app .azc-stat-tile__meta {
+	margin: 0;
+	font-size: var(--azc-fs-xs, 0.8125rem);
+	line-height: 1.4;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+/* Interactive tiles (drilldown buttons / links) */
+#app-content.azc-app button.azc-stat-tile,
+#app-content.azc-app a.azc-stat-tile {
+	width: 100%;
+	font: inherit;
+	text-decoration: none;
+	cursor: pointer;
+	transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#app-content.azc-app button.azc-stat-tile:hover,
+#app-content.azc-app a.azc-stat-tile:hover {
+	background: var(--color-background-hover, var(--azc-bg-soft));
+	box-shadow: var(--azc-shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.06));
+	text-decoration: none;
+}
+
+#app-content.azc-app button.azc-stat-tile:focus-visible,
+#app-content.azc-app a.azc-stat-tile:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element, #0082c9) 55%, transparent);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#app-content.azc-app button.azc-stat-tile,
+	#app-content.azc-app a.azc-stat-tile {
+		transition: none;
+	}
+}
+
+@media (forced-colors: active) {
+	#app-content.azc-app .azc-stat-tile {
+		border: 1px solid CanvasText;
+		border-left-width: 3px;
+	}
+
+	#app-content.azc-app button.azc-stat-tile:focus-visible,
+	#app-content.azc-app a.azc-stat-tile:focus-visible {
+		outline: 3px solid Highlight;
+	}
+}

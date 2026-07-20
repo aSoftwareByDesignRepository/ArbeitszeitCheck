@@ -12,6 +12,7 @@
 @import url('common/layout.css');
 @import url('common/app-layout.css');
 @import url('common/page-patterns.css');
+@import url('common/stat-tiles.css');
 @import url('common/manager-scope-filter.css');
 @import url('common/utilities.css');
 @import url('common/responsive.css');
