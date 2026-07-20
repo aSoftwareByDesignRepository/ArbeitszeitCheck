@@ -130,6 +130,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Service\Kiosk\KioskTerminalService::class),
 				$c->query(\OCP\L10N\IFactory::class),
 				$c->query(\Psr\Log\LoggerInterface::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\Kiosk\KioskErrorMessages::class),
 			);
 		});
 		$context->registerMiddleware(KioskLicenseMiddleware::class);

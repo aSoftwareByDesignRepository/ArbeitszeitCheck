@@ -9,18 +9,11 @@ declare(strict_types=1);
  */
 function azc_test_render_projectcheck_picker_options(array $projects, string $selectedId, \OCP\IL10N $l): string
 {
+	// Use the real Nextcloud template helpers (p(), …). Never declare our own p():
+	// the server declares it unconditionally, so a local copy fatals with
+	// "Cannot redeclare function p()" as soon as any other test renders a template.
 	if (!\function_exists('p')) {
-		/**
-		 * @param string|list<string> $text
-		 */
-		function p($text, $args = []): void
-		{
-			if (\is_array($args) && $args !== []) {
-				echo \str_replace(['%s', '%n'], [(string)($args[0] ?? ''), (string)($args[0] ?? '')], (string)$text);
-				return;
-			}
-			echo (string)$text;
-		}
+		require_once \OC::$SERVERROOT . '/lib/private/Template/functions.php';
 	}
 
 	$azcPickerProjects = $projects;

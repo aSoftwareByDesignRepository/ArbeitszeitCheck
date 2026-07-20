@@ -14,6 +14,7 @@ use OCA\ArbeitszeitCheck\Db\KioskSessionMapper;
 use OCA\ArbeitszeitCheck\Db\KioskTerminal;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Kiosk\KioskCrypto;
+use OCA\ArbeitszeitCheck\Exception\TimeCaptureForbiddenException;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
@@ -203,7 +204,13 @@ class KioskAuthService
 		if (!$this->permissionService->isUserAllowedByAccessGroups($userId)) {
 			throw new KioskException('KIOSK_USER_NOT_ALLOWED');
 		}
-		$this->timeCaptureMethodService->assertClockStampingAllowed($userId);
+		try {
+			$this->timeCaptureMethodService->assertClockStampingAllowed($userId);
+		} catch (TimeCaptureForbiddenException) {
+			// Must stay a KioskException — uncaught BusinessRuleException becomes an HTML
+			// 500 and the tablet shows the useless "unknown" error.
+			throw new KioskException('KIOSK_CLOCK_STAMPING_DISABLED');
+		}
 	}
 
 	private function mapKioskStatus(string $rawStatus): string

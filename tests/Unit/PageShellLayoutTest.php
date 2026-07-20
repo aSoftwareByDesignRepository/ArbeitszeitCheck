@@ -83,9 +83,17 @@ class PageShellLayoutTest extends TestCase
 		$this->assertStringContainsString('.azc-kiosk-page', $content);
 		$this->assertStringContainsString('max-width: none', $content);
 		$this->assertStringNotContainsString('max-width: min(72rem', $content);
-		$this->assertStringContainsString('.azc-kiosk-overview', $content);
 		$this->assertStringContainsString('.azc-kiosk-panel', $content);
+
+		// Overview strip moved to the shared stat-tile pattern (1.5.18):
+		// template must use azc-stat-strip and app.css must ship the shared styles.
 		$template = (string)file_get_contents(__DIR__ . '/../../templates/admin-kiosk.php');
+		$this->assertStringContainsString('azc-stat-strip azc-kiosk-overview', $template);
+		$appCss = (string)file_get_contents(__DIR__ . '/../../css/app.css');
+		$this->assertStringContainsString("common/stat-tiles.css", $appCss);
+		$statTiles = (string)file_get_contents(__DIR__ . '/../../css/common/stat-tiles.css');
+		$this->assertStringContainsString('.azc-stat-strip', $statTiles);
+
 		$this->assertStringContainsString('azc-kiosk-open-create', $template);
 		$this->assertStringContainsString('azc-kiosk-create-modal', $template);
 	}

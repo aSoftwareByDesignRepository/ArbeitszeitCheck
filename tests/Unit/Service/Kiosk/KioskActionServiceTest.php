@@ -123,4 +123,141 @@ final class KioskActionServiceTest extends TestCase
 		$this->expectException(KioskException::class);
 		$service->performAction($terminal, 'session-token', 'clock_in');
 	}
+
+	public function testPerformActionReleasesClaimWhenClockInRejected(): void
+	{
+		$terminal = new KioskTerminal();
+		$terminal->setTerminalId('tid-1');
+
+		$session = new KioskSession();
+		$session->setId(9);
+		$session->setUserId('alice');
+
+		$auth = $this->createMock(KioskAuthService::class);
+		$auth->method('validateSession')->willReturn($session);
+		$auth->method('assertUserEligibleForAction');
+
+		$now = new \DateTime('2026-06-10 12:00:00');
+		$timeFactory = $this->createMock(ITimeFactory::class);
+		$timeFactory->method('getDateTime')->willReturn($now);
+
+		$sessionMapper = $this->createMock(KioskSessionMapper::class);
+		$sessionMapper->expects(self::once())
+			->method('claimUnused')
+			->with($session, $now)
+			->willReturn(true);
+		$sessionMapper->expects(self::once())
+			->method('releaseClaim')
+			->with($session, $now)
+			->willReturn(true);
+
+		$tracking = $this->createMock(TimeTrackingService::class);
+		$tracking->expects(self::once())
+			->method('clockIn')
+			->willThrowException(new \OCA\ArbeitszeitCheck\Exception\BusinessRuleException('already in'));
+
+		$service = new KioskActionService(
+			$auth,
+			$sessionMapper,
+			$tracking,
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(IL10N::class),
+			$timeFactory,
+		);
+
+		$this->expectException(KioskException::class);
+		$this->expectExceptionMessage('KIOSK_ACTION_INVALID');
+		$service->performAction($terminal, 'session-token', 'clock_in');
+	}
+
+	public function testPerformActionReleasesClaimOnUnexpectedFailure(): void
+	{
+		$terminal = new KioskTerminal();
+		$terminal->setTerminalId('tid-1');
+
+		$session = new KioskSession();
+		$session->setId(9);
+		$session->setUserId('alice');
+
+		$auth = $this->createMock(KioskAuthService::class);
+		$auth->method('validateSession')->willReturn($session);
+		$auth->method('assertUserEligibleForAction');
+
+		$now = new \DateTime('2026-06-10 12:00:00');
+		$timeFactory = $this->createMock(ITimeFactory::class);
+		$timeFactory->method('getDateTime')->willReturn($now);
+
+		$sessionMapper = $this->createMock(KioskSessionMapper::class);
+		$sessionMapper->expects(self::once())
+			->method('claimUnused')
+			->with($session, $now)
+			->willReturn(true);
+		$sessionMapper->expects(self::once())
+			->method('releaseClaim')
+			->with($session, $now)
+			->willReturn(true);
+
+		$tracking = $this->createMock(TimeTrackingService::class);
+		$tracking->expects(self::once())
+			->method('clockIn')
+			->willThrowException(new \RuntimeException('db down'));
+
+		$service = new KioskActionService(
+			$auth,
+			$sessionMapper,
+			$tracking,
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(IL10N::class),
+			$timeFactory,
+		);
+
+		$this->expectException(\RuntimeException::class);
+		$service->performAction($terminal, 'session-token', 'clock_in');
+	}
+
+	public function testPerformActionReleasesClaimWhenStampingDisabledMidMutation(): void
+	{
+		$terminal = new KioskTerminal();
+		$terminal->setTerminalId('tid-1');
+
+		$session = new KioskSession();
+		$session->setId(9);
+		$session->setUserId('alice');
+
+		$auth = $this->createMock(KioskAuthService::class);
+		$auth->method('validateSession')->willReturn($session);
+		$auth->method('assertUserEligibleForAction');
+
+		$now = new \DateTime('2026-06-10 12:00:00');
+		$timeFactory = $this->createMock(ITimeFactory::class);
+		$timeFactory->method('getDateTime')->willReturn($now);
+
+		$sessionMapper = $this->createMock(KioskSessionMapper::class);
+		$sessionMapper->method('claimUnused')->willReturn(true);
+		$sessionMapper->expects(self::once())->method('releaseClaim')->with($session, $now);
+
+		$tracking = $this->createMock(TimeTrackingService::class);
+		$tracking->method('clockIn')->willThrowException(
+			new \OCA\ArbeitszeitCheck\Exception\TimeCaptureForbiddenException(
+				'off',
+				\OCA\ArbeitszeitCheck\Exception\TimeCaptureForbiddenException::CODE_CLOCK_STAMPING_DISABLED,
+			),
+		);
+
+		$service = new KioskActionService(
+			$auth,
+			$sessionMapper,
+			$tracking,
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(IL10N::class),
+			$timeFactory,
+		);
+
+		try {
+			$service->performAction($terminal, 'session-token', 'clock_in');
+			self::fail('Expected KioskException');
+		} catch (KioskException $e) {
+			self::assertSame('KIOSK_CLOCK_STAMPING_DISABLED', $e->getErrorCode());
+		}
+	}
 }

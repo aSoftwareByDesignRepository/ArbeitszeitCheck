@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Config\VendorPublicKey;
+use OCA\ArbeitszeitCheck\Middleware\KioskUnauthorizedException;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskActionService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskAuthService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskEnrollmentService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskErrorMessages;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskException;
+use OCA\ArbeitszeitCheck\Service\Kiosk\KioskHttp;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskTerminalService;
 use OCA\ArbeitszeitCheck\Service\LicenseService;
 use OCA\ArbeitszeitCheck\Service\TerminalDeviceService;
@@ -17,19 +19,18 @@ use OCA\ArbeitszeitCheck\Service\TimeZoneService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\BruteForceProtection;
-use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\JSONResponse;
-use OCP\IL10N;
 use OCP\IRequest;
+use OCP\Security\Bruteforce\IThrottler;
+use Psr\Log\LoggerInterface;
 
 class KioskController extends Controller
 {
 	public function __construct(
 		string $appName,
 		IRequest $request,
-		private readonly IL10N $l10n,
 		private readonly KioskTerminalService $terminalService,
 		private readonly KioskAuthService $authService,
 		private readonly KioskActionService $actionService,
@@ -38,6 +39,8 @@ class KioskController extends Controller
 		private readonly LicenseService $licenseService,
 		private readonly TerminalDeviceService $terminalDeviceService,
 		private readonly TimeZoneService $timeZoneService,
+		private readonly LoggerInterface $logger,
+		private readonly IThrottler $throttler,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -54,7 +57,10 @@ class KioskController extends Controller
 				'data' => $result,
 			], Http::STATUS_CREATED);
 		} catch (KioskException $e) {
-			return $this->kioskError($e);
+			return $this->kioskError($e, 'arbeitszeitcheck_kiosk_pair');
+		} catch (\Throwable $e) {
+			$this->logger->error('Kiosk pair failed: ' . $e->getMessage(), ['exception' => $e]);
+			return $this->kioskError(new KioskException('KIOSK_INTERNAL_ERROR'));
 		}
 	}
 
@@ -62,33 +68,41 @@ class KioskController extends Controller
 	#[NoCSRFRequired]
 	public function config(): JSONResponse
 	{
+		// requireTerminal must stay outside try — unauthorized must reach middleware.
 		$terminal = $this->requireTerminal();
-		$this->terminalService->recordHeartbeat($terminal);
+		try {
+			$this->terminalService->recordHeartbeat($terminal);
 
-		$enrollment = $this->enrollmentService->getConfigEnrollment($terminal->getTerminalId());
-		$envelope = $this->licenseService->buildEnvelope();
-		$state = $this->licenseService->getLicenseSummary() ?? [];
+			$enrollment = $this->enrollmentService->getConfigEnrollment($terminal->getTerminalId());
+			$envelope = $this->licenseService->buildEnvelope();
+			$state = $this->licenseService->getLicenseSummary() ?? [];
 
-		$data = [
-			'serverNow' => $this->timeZoneService->nowAsIso(),
-			'serverTimezone' => $this->timeZoneService->storageTimeZoneName(),
-			'label' => $terminal->getLabel(),
-			'licensing' => [
-				'terminal' => [
-					'planActive' => $this->licenseService->isTerminalPlanActive(),
-					'devices' => (int)($state['terminalDevices'] ?? 0),
-					'devicesRegistered' => $this->terminalDeviceService->getActiveCount(),
-					'expiresAt' => $state['validUntil'] ?? null,
+			$data = [
+				'serverNow' => $this->timeZoneService->nowAsIso(),
+				'serverTimezone' => $this->timeZoneService->storageTimeZoneName(),
+				'label' => $terminal->getLabel(),
+				'licensing' => [
+					'terminal' => [
+						'planActive' => $this->licenseService->isTerminalPlanActive(),
+						'devices' => (int)($state['terminalDevices'] ?? 0),
+						'devicesRegistered' => $this->terminalDeviceService->getActiveCount(),
+						'expiresAt' => $state['validUntil'] ?? null,
+					],
+					'envelope' => $envelope,
+					'vendorPublicKeyB64' => VendorPublicKey::publicKeyB64(),
 				],
-				'envelope' => $envelope,
-				'vendorPublicKeyB64' => VendorPublicKey::publicKeyB64(),
-			],
-		];
-		if ($enrollment !== null) {
-			$data['enrollment'] = $enrollment;
-		}
+			];
+			if ($enrollment !== null) {
+				$data['enrollment'] = $enrollment;
+			}
 
-		return new JSONResponse(['success' => true, 'data' => $data]);
+			return new JSONResponse(['success' => true, 'data' => $data]);
+		} catch (KioskException $e) {
+			return $this->kioskError($e);
+		} catch (\Throwable $e) {
+			$this->logger->error('Kiosk config failed: ' . $e->getMessage(), ['exception' => $e]);
+			return $this->kioskError(new KioskException('KIOSK_INTERNAL_ERROR'));
+		}
 	}
 
 	#[PublicPage]
@@ -96,10 +110,17 @@ class KioskController extends Controller
 	public function users(): JSONResponse
 	{
 		$this->requireTerminal();
-		return new JSONResponse([
-			'success' => true,
-			'data' => ['users' => $this->authService->listPinUsers()],
-		]);
+		try {
+			return new JSONResponse([
+				'success' => true,
+				'data' => ['users' => $this->authService->listPinUsers()],
+			]);
+		} catch (KioskException $e) {
+			return $this->kioskError($e);
+		} catch (\Throwable $e) {
+			$this->logger->error('Kiosk users failed: ' . $e->getMessage(), ['exception' => $e]);
+			return $this->kioskError(new KioskException('KIOSK_INTERNAL_ERROR'));
+		}
 	}
 
 	#[PublicPage]
@@ -112,7 +133,14 @@ class KioskController extends Controller
 			$data = $this->authService->identify($terminal, $method, $rfidUid, $userId, $pin);
 			return new JSONResponse(['success' => true, 'data' => $data]);
 		} catch (KioskException $e) {
-			return $this->kioskError($e);
+			return $this->kioskError($e, 'arbeitszeitcheck_kiosk_identify');
+		} catch (\Throwable $e) {
+			// Never leak HTML/exception pages to the tablet — those become "Fehler unknown".
+			$this->logger->error('Kiosk identify failed: ' . $e->getMessage(), [
+				'exception' => $e,
+				'method' => $method,
+			]);
+			return $this->kioskError(new KioskException('KIOSK_INTERNAL_ERROR'));
 		}
 	}
 
@@ -126,6 +154,12 @@ class KioskController extends Controller
 			return new JSONResponse(['success' => true, 'data' => $data]);
 		} catch (KioskException $e) {
 			return $this->kioskError($e);
+		} catch (\Throwable $e) {
+			$this->logger->error('Kiosk action failed: ' . $e->getMessage(), [
+				'exception' => $e,
+				'action' => $action,
+			]);
+			return $this->kioskError(new KioskException('KIOSK_INTERNAL_ERROR'));
 		}
 	}
 
@@ -134,8 +168,15 @@ class KioskController extends Controller
 	public function heartbeat(): JSONResponse
 	{
 		$terminal = $this->requireTerminal();
-		$this->terminalService->recordHeartbeat($terminal);
-		return new JSONResponse(['success' => true]);
+		try {
+			$this->terminalService->recordHeartbeat($terminal);
+			return new JSONResponse(['success' => true]);
+		} catch (KioskException $e) {
+			return $this->kioskError($e);
+		} catch (\Throwable $e) {
+			$this->logger->error('Kiosk heartbeat failed: ' . $e->getMessage(), ['exception' => $e]);
+			return $this->kioskError(new KioskException('KIOSK_INTERNAL_ERROR'));
+		}
 	}
 
 	#[PublicPage]
@@ -148,6 +189,9 @@ class KioskController extends Controller
 			return new JSONResponse(['success' => true, 'data' => $data], Http::STATUS_CREATED);
 		} catch (KioskException $e) {
 			return $this->kioskError($e);
+		} catch (\Throwable $e) {
+			$this->logger->error('Kiosk enroll-scan failed: ' . $e->getMessage(), ['exception' => $e]);
+			return $this->kioskError(new KioskException('KIOSK_INTERNAL_ERROR'));
 		}
 	}
 
@@ -157,26 +201,41 @@ class KioskController extends Controller
 		$token = (string)$this->request->getHeader('X-Kiosk-Token');
 		$terminal = $this->terminalService->validateTerminalToken($terminalId, $token);
 		if ($terminal === null) {
-			throw new \OCA\ArbeitszeitCheck\Middleware\KioskUnauthorizedException();
+			throw new KioskUnauthorizedException();
 		}
 		return $terminal;
 	}
 
-	private function kioskError(KioskException $e): JSONResponse
+	/**
+	 * @param string|null $bruteForceAction Matching #[BruteForceProtection] action when the
+	 *                                      failure should count toward rate limiting.
+	 */
+	private function kioskError(KioskException $e, ?string $bruteForceAction = null): JSONResponse
 	{
 		$code = $e->getErrorCode();
-		$status = match ($code) {
-			'TERMINAL_LICENSE_REQUIRED' => Http::STATUS_PAYMENT_REQUIRED,
-			'TERMINAL_DEVICE_LIMIT_REACHED', 'KIOSK_USER_NOT_ALLOWED' => Http::STATUS_FORBIDDEN,
-			'KIOSK_RFID_ALREADY_ASSIGNED', 'ENROLLMENT_ACTIVE', 'KIOSK_BUSY' => Http::STATUS_CONFLICT,
-			'ENROLLMENT_NOT_ACTIVE', 'KIOSK_CREDENTIAL_NOT_FOUND', 'KIOSK_TERMINAL_NOT_FOUND', 'PAIRING_CODE_INVALID', 'KIOSK_CREDENTIAL_UNKNOWN' => Http::STATUS_NOT_FOUND,
-			'PIN_INVALID', 'PIN_LOCKED', 'KIOSK_SESSION_INVALID', 'KIOSK_TERMINAL_UNAUTHORIZED' => Http::STATUS_UNAUTHORIZED,
-			default => Http::STATUS_BAD_REQUEST,
-		};
-		return new JSONResponse([
+		$response = new JSONResponse([
 			'success' => false,
 			'error' => $code,
 			'message' => $this->kioskErrorMessages->message($code),
-		], $status);
+		], KioskHttp::statusForCode($code));
+
+		/*
+		 * Do NOT use JSONResponse::throttle().
+		 *
+		 * BruteForceMiddleware.afterController runs AFTER app middlewares (reverse order).
+		 * When max delay is reached it replaces the body with HTML TooManyRequestsResponse —
+		 * exactly the “Fehler unknown” class of bug. Register attempts directly; the
+		 * #[BruteForceProtection] attribute still sleeps / MaxDelayReached on the next call,
+		 * which our middleware converts to JSON.
+		 */
+		if ($bruteForceAction !== null && KioskHttp::shouldRegisterBruteForceAttempt($code)) {
+			$this->throttler->registerAttempt(
+				$bruteForceAction,
+				$this->request->getRemoteAddress(),
+				['reason' => $code],
+			);
+		}
+
+		return $response;
 	}
 }

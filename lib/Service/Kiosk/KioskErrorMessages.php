@@ -33,6 +33,15 @@ final class KioskErrorMessages
 			'KIOSK_USER_NOT_ALLOWED' => $this->l10n->t(
 				'This employee is not allowed to use the kiosk. In Badges & PIN, turn on “Allow kiosk access” first.',
 			),
+			'KIOSK_CLOCK_STAMPING_DISABLED' => $this->l10n->t(
+				'Clock in/out is not enabled for this employee. An administrator must enable stamping under time recording methods.',
+			),
+			'KIOSK_INTERNAL_ERROR' => $this->l10n->t(
+				'Something went wrong on the server. Try again or contact your administrator.',
+			),
+			'KIOSK_RATE_LIMITED' => $this->l10n->t(
+				'Too many attempts. Wait a few minutes, then try again.',
+			),
 			'KIOSK_RFID_ALREADY_ASSIGNED' => $this->l10n->t(
 				'This badge is already assigned to another employee. Remove it from the other person first, or use a different badge.',
 			),

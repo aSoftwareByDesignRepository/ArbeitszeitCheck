@@ -9,6 +9,7 @@ use OCA\ArbeitszeitCheck\Db\KioskSessionMapper;
 use OCA\ArbeitszeitCheck\Db\KioskTerminal;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
+use OCA\ArbeitszeitCheck\Exception\TimeCaptureForbiddenException;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IL10N;
@@ -49,10 +50,24 @@ class KioskActionService
 				'break_end' => $this->doEndBreak($userId),
 				default => throw new KioskException('KIOSK_ACTION_INVALID'),
 			};
+		} catch (KioskException $e) {
+			// Invalid action string — keep the claim (client bug / replay).
+			throw $e;
 		} catch (MonthFinalizedException) {
+			// Mutation did not apply — restore the session so the employee can retry
+			// after IT un-finalizes, without scanning again.
+			$this->sessionMapper->releaseClaim($session, $now);
 			throw new KioskException('MONTH_FINALIZED');
+		} catch (TimeCaptureForbiddenException) {
+			$this->sessionMapper->releaseClaim($session, $now);
+			throw new KioskException('KIOSK_CLOCK_STAMPING_DISABLED');
 		} catch (BusinessRuleException) {
+			$this->sessionMapper->releaseClaim($session, $now);
 			throw new KioskException('KIOSK_ACTION_INVALID');
+		} catch (\Throwable $e) {
+			// Unexpected failure after claim (DB, etc.) — do not burn the one-shot session.
+			$this->sessionMapper->releaseClaim($session, $now);
+			throw $e;
 		}
 
 		$this->auditLogMapper->logAction($userId, 'kiosk_action', 'kiosk_session', $session->getId(), null, [

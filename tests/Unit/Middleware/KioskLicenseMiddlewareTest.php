@@ -6,6 +6,7 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Middleware;
 
 use OCA\ArbeitszeitCheck\Middleware\KioskLicenseMiddleware;
 use OCA\ArbeitszeitCheck\Middleware\KioskTerminalLicenseRequiredException;
+use OCA\ArbeitszeitCheck\Service\Kiosk\KioskErrorMessages;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskSettingsService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskTerminalService;
 use OCA\ArbeitszeitCheck\Service\LicenseService;
@@ -27,6 +28,14 @@ class KioskLicenseMiddlewareTest extends TestCase
 		$factory->method('get')->willReturn($l10n);
 
 		return $factory;
+	}
+
+	private function errorMessages(): KioskErrorMessages
+	{
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnArgument(0);
+
+		return new KioskErrorMessages($l10n);
 	}
 
 	public function testUnlicensedOrgGets402OnKioskAction(): void
@@ -57,6 +66,7 @@ class KioskLicenseMiddlewareTest extends TestCase
 			$terminals,
 			$this->l10nFactory(),
 			$this->createMock(LoggerInterface::class),
+			$this->errorMessages(),
 		);
 
 		$this->expectException(KioskTerminalLicenseRequiredException::class);
@@ -82,6 +92,7 @@ class KioskLicenseMiddlewareTest extends TestCase
 			$this->createMock(KioskTerminalService::class),
 			$this->l10nFactory(),
 			$this->createMock(LoggerInterface::class),
+			$this->errorMessages(),
 		);
 
 		$middleware->beforeController(new \stdClass(), 'pair');
@@ -97,6 +108,7 @@ class KioskLicenseMiddlewareTest extends TestCase
 			$this->createMock(KioskTerminalService::class),
 			$this->l10nFactory(),
 			$this->createMock(LoggerInterface::class),
+			$this->errorMessages(),
 		);
 
 		$response = $middleware->afterException(

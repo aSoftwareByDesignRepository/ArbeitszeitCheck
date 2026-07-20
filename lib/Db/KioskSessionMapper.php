@@ -75,4 +75,30 @@ class KioskSessionMapper extends QBMapper
 		}
 		return false;
 	}
+
+	/**
+	 * Undo a claim when the stamp mutation failed without changing time data.
+	 * Lets the foyer retry the same session instead of forcing a full re-identify.
+	 */
+	public function releaseClaim(KioskSession $session, \DateTimeInterface $expectedUsedAt): bool
+	{
+		$id = $session->getId();
+		if ($id === null) {
+			return false;
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('used_at', $qb->createNamedParameter(null, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_NULL))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq(
+				'used_at',
+				$qb->createNamedParameter($expectedUsedAt->format('Y-m-d H:i:s')),
+			));
+		$affected = $qb->executeStatement();
+		if ($affected === 1) {
+			$session->setUsedAt(null);
+			return true;
+		}
+		return false;
+	}
 }
