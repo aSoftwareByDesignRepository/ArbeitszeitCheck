@@ -4097,6 +4097,18 @@ OC.L10N.register(
 	"%n pending absence request — jump to approvals" : "%n pending absence request — jump to approvals",
 	"%n pending absence requests — jump to approvals" : "%n pending absence requests — jump to approvals",
 	"Selected" : "Selected",
-	"Use the arrow keys to move between exports, then press Enter or Space to select." : "Use the arrow keys to move between exports, then press Enter or Space to select."
+	"Use the arrow keys to move between exports, then press Enter or Space to select." : "Use the arrow keys to move between exports, then press Enter or Space to select.",
+	"A PIN is already being generated. Please wait a moment." : "A PIN is already being generated. Please wait a moment.",
+	"A badge scan is already open for this tablet. Click “Cancel scan” first, then start again." : "A badge scan is already open for this tablet. Click “Cancel scan” first, then start again.",
+	"Another PIN or badge change is still finishing for this employee or tablet. Wait a few seconds, then try again. If a badge scan is stuck, click “Cancel scan” — that always clears it." : "Another PIN or badge change is still finishing for this employee or tablet. Wait a few seconds, then try again. If a badge scan is stuck, click “Cancel scan” — that always clears it.",
+	"Another PIN or badge change is still finishing. Wait a few seconds, then try again. If a badge scan is stuck, click “Cancel scan” — that always clears it." : "Another PIN or badge change is still finishing. Wait a few seconds, then try again. If a badge scan is stuck, click “Cancel scan” — that always clears it.",
+	"Badge already saved" : "Badge already saved",
+	"Cleared a stuck scan so you can start again." : "Cleared a stuck scan so you can start again.",
+	"Clock in\/out is not enabled for this employee. An administrator must enable stamping under time recording methods." : "Clock in\/out is not enabled for this employee. An administrator must enable stamping under time recording methods.",
+	"Something went wrong on the server. Try again or contact your administrator." : "Something went wrong on the server. Try again or contact your administrator.",
+	"Stopping the scan…" : "Stopping the scan…",
+	"The badge scan was stopped. Nothing was saved. You can start again whenever you are ready." : "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.",
+	"The badge was already saved on the tablet before cancel finished." : "The badge was already saved on the tablet before cancel finished.",
+	"Too many attempts. Wait a few minutes, then try again." : "Too many attempts. Wait a few minutes, then try again."
 	}
 );

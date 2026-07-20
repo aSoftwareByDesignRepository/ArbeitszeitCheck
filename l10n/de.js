@@ -4097,10 +4097,18 @@ OC.L10N.register(
 	"%n pending absence request — jump to approvals" : "%n ausstehender Abwesenheitsantrag — zur Freigabe springen",
 	"%n pending absence requests — jump to approvals" : "%n ausstehende Abwesenheitsanträge — zur Freigabe springen",
 	"Selected" : "Ausgewählt",
-	"Use the arrow keys to move between exports, then press Enter or Space to select." : "Mit den Pfeiltasten zwischen Exporten wechseln, dann Enter oder Leertaste zum Auswählen."
-	}
-);
+	"Use the arrow keys to move between exports, then press Enter or Space to select." : "Mit den Pfeiltasten zwischen Exporten wechseln, dann Enter oder Leertaste zum Auswählen.",
+	"A PIN is already being generated. Please wait a moment." : "A PIN is already being generated. Please wait a moment.",
+	"A badge scan is already open for this tablet. Click “Cancel scan” first, then start again." : "A badge scan is already open for this tablet. Click “Cancel scan” first, then start again.",
+	"Another PIN or badge change is still finishing for this employee or tablet. Wait a few seconds, then try again. If a badge scan is stuck, click “Cancel scan” — that always clears it." : "Für diese Person oder dieses Tablet läuft noch eine PIN- oder Ausweis-Änderung. Einige Sekunden warten und erneut versuchen. Wenn ein Ausweis-Scan hängt, auf „Scan abbrechen“ klicken — das räumt ihn immer auf.",
+	"Another PIN or badge change is still finishing. Wait a few seconds, then try again. If a badge scan is stuck, click “Cancel scan” — that always clears it." : "Es läuft noch eine PIN- oder Ausweis-Änderung. Einige Sekunden warten und erneut versuchen. Wenn ein Ausweis-Scan hängt, auf „Scan abbrechen“ klicken — das räumt ihn immer auf.",
+	"Badge already saved" : "Ausweis bereits gespeichert",
+	"Cleared a stuck scan so you can start again." : "Hängengebliebener Scan wurde freigegeben. Du kannst neu starten.",
+	"Clock in\/out is not enabled for this employee. An administrator must enable stamping under time recording methods." : "Clock in\/out is not enabled for this employee. An administrator must enable stamping under time recording methods.",
+	"Something went wrong on the server. Try again or contact your administrator." : "Something went wrong on the server. Try again or contact your administrator.",
+	"Stopping the scan…" : "Scan wird gestoppt…",
 	"The badge scan was stopped. Nothing was saved. You can start again whenever you are ready." : "Die Ausweis-Erfassung wurde gestoppt. Es wurde nichts gespeichert. Sie können jederzeit neu starten.",
 	"The badge was already saved on the tablet before cancel finished." : "Der Ausweis wurde am Tablet bereits gespeichert, bevor der Abbruch fertig war.",
-	"Badge already saved" : "Ausweis bereits gespeichert",
-	"Stopping the scan…" : "Scan wird gestoppt…",
+	"Too many attempts. Wait a few minutes, then try again." : "Too many attempts. Wait a few minutes, then try again."
+	}
+);

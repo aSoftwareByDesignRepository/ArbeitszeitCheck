@@ -19,6 +19,9 @@ class KioskEnrollmentService
 {
 	private const SCAN_ERROR_TTL = 300;
 
+	/** Brief retries while a concurrent scan/identify finishes (~2s total). */
+	private const LOCK_RETRY_ATTEMPTS = 8;
+
 	public function __construct(
 		private readonly KioskEnrollmentMapper $enrollmentMapper,
 		private readonly KioskTerminalMapper $terminalMapper,
@@ -29,6 +32,7 @@ class KioskEnrollmentService
 		private readonly ILockingProvider $lockingProvider,
 		private readonly ICacheFactory $cacheFactory,
 		private readonly KioskErrorMessages $errorMessages,
+		private readonly KioskDbLockPurger $lockPurger,
 	) {
 	}
 
@@ -59,12 +63,34 @@ class KioskEnrollmentService
 			throw new KioskException('KIOSK_USER_NOT_ALLOWED');
 		}
 
-		// Consistent lock order (user → terminal) avoids deadlocks with completeScan.
+		try {
+			return $this->startUnderLocks($userId, $terminalId, $createdBy, $user->getDisplayName());
+		} catch (KioskException $e) {
+			if ($e->getErrorCode() !== 'KIOSK_BUSY') {
+				throw $e;
+			}
+			// Orphan exclusive locks (crash / pre-1.5.20 truncation) block start.
+			// Purge known keys for this pair, then one more attempt.
+			$this->lockPurger->purgeEnrollmentLocks($userId, $terminalId);
+			return $this->startUnderLocks($userId, $terminalId, $createdBy, $user->getDisplayName());
+		}
+	}
+
+	/**
+	 * @return array{enrollmentId: int, terminalId: string, userId: string, displayName: string, expiresAt: string}
+	 */
+	private function startUnderLocks(
+		string $userId,
+		string $terminalId,
+		string $createdBy,
+		string $displayName,
+	): array {
+		// Consistent lock order (user → terminal) avoids deadlocks with completeScan/cancel.
 		$userLockKey = $this->userEnrollmentLockKey($userId);
 		$terminalLockKey = $this->terminalEnrollmentLockKey($terminalId);
-		$this->acquireExclusive($userLockKey, 'Kiosk enrollment start user');
+		$this->acquireExclusiveWithRetry($userLockKey, 'Kiosk enrollment start user');
 		try {
-			$this->acquireExclusive($terminalLockKey, 'Kiosk enrollment start terminal');
+			$this->acquireExclusiveWithRetry($terminalLockKey, 'Kiosk enrollment start terminal');
 			try {
 				$this->enrollmentMapper->cancelForTerminal($terminalId);
 				$this->clearScanError($terminalId);
@@ -87,7 +113,7 @@ class KioskEnrollmentService
 					'enrollmentId' => $enrollment->getId(),
 					'terminalId' => $terminalId,
 					'userId' => $userId,
-					'displayName' => $user->getDisplayName(),
+					'displayName' => $displayName,
 					'expiresAt' => $expires->format('c'),
 				];
 			} finally {
@@ -146,12 +172,12 @@ class KioskEnrollmentService
 	/**
 	 * Abort a pending badge enrollment for a terminal.
 	 *
-	 * Lock order is always user → terminal (same as start/completeScan) to avoid
-	 * deadlocks. When no active enrollment is known yet, the terminal lock is taken
-	 * alone first; if an enrollment appears, that lock is released before taking
-	 * the full ordered pair.
+	 * Prefer ordered locks (user → terminal) so cancel serializes with start/scan.
+	 * If locks stay busy after retries (orphan exclusive rows), force-abort still
+	 * clears the enrollment intent and purges the known lock keys — Admin must
+	 * never be trapped by “cancel first” when cancel itself cannot take the mutex.
 	 *
-	 * @return array{status: 'cancelled'|'already_idle'|'already_completed', enrollmentId?: int}
+	 * @return array{status: 'cancelled'|'already_idle'|'already_completed', enrollmentId?: int, forced?: bool}
 	 */
 	public function cancel(string $terminalId, string $actorUserId): array
 	{
@@ -162,32 +188,96 @@ class KioskEnrollmentService
 
 		$now = $this->timeFactory->getDateTime();
 		$preview = $this->enrollmentMapper->findActiveByTerminalId($terminalId, $now);
-		if ($preview !== null) {
-			return $this->cancelUnderUserTerminalLocks(
-				$preview->getUserId(),
-				$terminalId,
+		$previewUserId = $preview?->getUserId();
+
+		try {
+			if ($preview !== null) {
+				return $this->cancelUnderUserTerminalLocks(
+					$preview->getUserId(),
+					$terminalId,
+					$actorUserId,
+				);
+			}
+
+			// Serialize cleanup with start/complete/identify without guessing a user lock.
+			$terminalLockKey = $this->terminalEnrollmentLockKey($terminalId);
+			$this->acquireExclusiveWithRetry($terminalLockKey, 'Kiosk enrollment cancel terminal');
+			$discoveredUserId = null;
+			try {
+				$now = $this->timeFactory->getDateTime();
+				$active = $this->enrollmentMapper->findActiveByTerminalId($terminalId, $now);
+				if ($active === null) {
+					$this->enrollmentMapper->cancelForTerminal($terminalId);
+					$this->clearScanError($terminalId);
+					return $this->cancelOutcomeWhenIdle($terminalId);
+				}
+				$discoveredUserId = $active->getUserId();
+			} finally {
+				$this->lockingProvider->releaseLock($terminalLockKey, ILockingProvider::LOCK_EXCLUSIVE);
+			}
+
+			return $this->cancelUnderUserTerminalLocks($discoveredUserId, $terminalId, $actorUserId);
+		} catch (KioskException $e) {
+			if ($e->getErrorCode() !== 'KIOSK_BUSY') {
+				throw $e;
+			}
+			return $this->forceAbortEnrollment($terminalId, $actorUserId, $previewUserId);
+		}
+	}
+
+	/**
+	 * Clear enrollment without requiring locks. Purges orphan lock rows so the
+	 * next start/PIN/badge assign is not immediately blocked by the same stuck mutex.
+	 *
+	 * @return array{status: 'cancelled'|'already_idle'|'already_completed', enrollmentId?: int, forced: true}
+	 */
+	private function forceAbortEnrollment(
+		string $terminalId,
+		string $actorUserId,
+		?string $knownUserId,
+	): array {
+		$incomplete = $this->enrollmentMapper->findIncompleteByTerminalId($terminalId);
+		$userId = $knownUserId;
+		if (($userId === null || $userId === '') && $incomplete !== null) {
+			$userId = $incomplete->getUserId();
+		}
+
+		$this->lockPurger->purgeEnrollmentLocks($userId, $terminalId);
+		if ($userId !== null && $userId !== '') {
+			// PIN/RFID assign may also be stuck on the same employee.
+			$this->lockPurger->purgeCredentialLocks($userId);
+		}
+
+		$deleted = $this->enrollmentMapper->cancelForTerminal($terminalId);
+		$this->clearScanError($terminalId);
+
+		if ($deleted > 0 && $incomplete !== null) {
+			$enrollmentId = $incomplete->getId();
+			$this->auditLogMapper->logAction(
+				$incomplete->getUserId(),
+				'kiosk_enrollment_cancelled',
+				'kiosk_enrollment',
+				$enrollmentId,
+				null,
+				[
+					'terminalId' => $terminalId,
+					'forced' => true,
+				],
 				$actorUserId,
 			);
-		}
-
-		// Serialize cleanup with start/complete/identify without guessing a user lock.
-		$terminalLockKey = $this->terminalEnrollmentLockKey($terminalId);
-		$this->acquireExclusiveWithRetry($terminalLockKey, 'Kiosk enrollment cancel terminal');
-		$discoveredUserId = null;
-		try {
-			$now = $this->timeFactory->getDateTime();
-			$active = $this->enrollmentMapper->findActiveByTerminalId($terminalId, $now);
-			if ($active === null) {
-				$this->enrollmentMapper->cancelForTerminal($terminalId);
-				$this->clearScanError($terminalId);
-				return $this->cancelOutcomeWhenIdle($terminalId);
+			$result = [
+				'status' => 'cancelled',
+				'forced' => true,
+			];
+			if ($enrollmentId !== null) {
+				$result['enrollmentId'] = $enrollmentId;
 			}
-			$discoveredUserId = $active->getUserId();
-		} finally {
-			$this->lockingProvider->releaseLock($terminalLockKey, ILockingProvider::LOCK_EXCLUSIVE);
+			return $result;
 		}
 
-		return $this->cancelUnderUserTerminalLocks($discoveredUserId, $terminalId, $actorUserId);
+		$idle = $this->cancelOutcomeWhenIdle($terminalId);
+		$idle['forced'] = true;
+		return $idle;
 	}
 
 	/**
@@ -200,7 +290,6 @@ class KioskEnrollmentService
 	): array {
 		$userLockKey = $this->userEnrollmentLockKey($userId);
 		$terminalLockKey = $this->terminalEnrollmentLockKey($terminalId);
-		// Cancel is an admin abort — brief retries beat a flaky 409 while a scan finishes.
 		$this->acquireExclusiveWithRetry($userLockKey, 'Kiosk enrollment cancel user');
 		try {
 			$this->acquireExclusiveWithRetry($terminalLockKey, 'Kiosk enrollment cancel terminal');
@@ -270,9 +359,9 @@ class KioskEnrollmentService
 
 		$userLockKey = $this->userEnrollmentLockKey($enrollmentPreview->getUserId());
 		$terminalLockKey = $this->terminalEnrollmentLockKey($terminalId);
-		$this->acquireExclusive($userLockKey, 'Kiosk enrollment scan user');
+		$this->acquireExclusiveWithRetry($userLockKey, 'Kiosk enrollment scan user');
 		try {
-			$this->acquireExclusive($terminalLockKey, 'Kiosk enrollment scan terminal');
+			$this->acquireExclusiveWithRetry($terminalLockKey, 'Kiosk enrollment scan terminal');
 			try {
 				$now = $this->timeFactory->getDateTime();
 				$enrollment = $this->enrollmentMapper->findActiveByTerminalId($terminalId, $now);
@@ -354,23 +443,15 @@ class KioskEnrollmentService
 		];
 	}
 
-	private function acquireExclusive(string $lockKey, string $label): void
-	{
-		try {
-			$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, $label);
-		} catch (LockedException) {
-			throw new KioskException('KIOSK_BUSY');
-		}
-	}
-
 	/**
-	 * Acquire an exclusive lock with short retries. Used by cancel so a brief
-	 * completeScan/identify window does not surface as a hard failure to Admin.
+	 * Acquire an exclusive lock with short retries so brief completeScan/identify
+	 * windows do not surface as hard failures. Orphan recovery is handled by callers
+	 * via {@see KioskDbLockPurger} after retries are exhausted.
 	 */
-	private function acquireExclusiveWithRetry(string $lockKey, string $label, int $attempts = 4): void
+	private function acquireExclusiveWithRetry(string $lockKey, string $label, int $attempts = self::LOCK_RETRY_ATTEMPTS): void
 	{
 		$attempts = max(1, $attempts);
-		$delayUs = 40000; // 40ms, then 80ms, 160ms…
+		$delayUs = 40000; // 40ms, then 80ms, 160ms… capped at 200ms
 		for ($i = 0; $i < $attempts; $i++) {
 			try {
 				$this->lockingProvider->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE, $label);

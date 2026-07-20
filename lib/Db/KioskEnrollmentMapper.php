@@ -28,13 +28,50 @@ class KioskEnrollmentMapper extends QBMapper
 		return $entities[0] ?? null;
 	}
 
-	public function cancelForTerminal(string $terminalId): void
+	/**
+	 * Incomplete enrollment for a terminal, including already-expired rows.
+	 * Used by force-abort so we can audit the target user even after TTL.
+	 */
+	public function findIncompleteByTerminalId(string $terminalId): ?KioskEnrollment
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('terminal_id', $qb->createNamedParameter($terminalId)))
+			->andWhere($qb->expr()->isNull('completed_at'))
+			->orderBy('id', 'DESC')
+			->setMaxResults(1);
+		$entities = $this->findEntities($qb);
+		return $entities[0] ?? null;
+	}
+
+	/**
+	 * @return int Number of incomplete enrollment rows deleted
+	 */
+	public function cancelForTerminal(string $terminalId): int
 	{
 		$qb = $this->db->getQueryBuilder();
 		$qb->delete($this->getTableName())
 			->where($qb->expr()->eq('terminal_id', $qb->createNamedParameter($terminalId)))
 			->andWhere($qb->expr()->isNull('completed_at'));
-		$qb->executeStatement();
+		return $qb->executeStatement();
+	}
+
+	/**
+	 * GC for background maintenance — remove expired incomplete enrollments.
+	 *
+	 * @return int Rows deleted
+	 */
+	public function deleteExpiredIncomplete(\DateTimeInterface $now): int
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->isNull('completed_at'))
+			->andWhere($qb->expr()->lte(
+				'expires_at',
+				$qb->createNamedParameter($now->format('Y-m-d H:i:s')),
+			));
+		return $qb->executeStatement();
 	}
 
 	public function findLatestCompletedByTerminalId(string $terminalId): ?KioskEnrollment

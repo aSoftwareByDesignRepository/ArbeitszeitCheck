@@ -18,6 +18,9 @@ class KioskCredentialService
 {
 	private const IMPORT_MAX_BYTES = 1_048_576;
 
+	/** Brief retries while a concurrent PIN/RFID mutation finishes (~1s total). */
+	private const LOCK_RETRY_ATTEMPTS = 8;
+
 	public function __construct(
 		private readonly KioskCredMapper $credMapper,
 		private readonly KioskSettingsService $settingsService,
@@ -25,6 +28,7 @@ class KioskCredentialService
 		private readonly AuditLogMapper $auditLogMapper,
 		private readonly ITimeFactory $timeFactory,
 		private readonly ILockingProvider $lockingProvider,
+		private readonly KioskDbLockPurger $lockPurger,
 	) {
 	}
 
@@ -59,7 +63,7 @@ class KioskCredentialService
 		// Serialize per user so concurrent enrollments / admin assign cannot race
 		// unique(lookup_hash) or unique(user_id, type) into an unmapped 500.
 		$lockKey = KioskCredentialLockKeys::forRfidAssign($userId);
-		$this->acquireExclusive($lockKey, 'Kiosk RFID assign');
+		$this->acquireExclusiveRecoverable($lockKey, $userId, 'Kiosk RFID assign');
 		try {
 			$lookup = $this->settingsService->rfidLookupHash($normalized);
 			$existingByHash = $this->credMapper->findByLookupHash($lookup);
@@ -133,7 +137,7 @@ class KioskCredentialService
 	{
 		$this->assertUserKioskAllowed($userId);
 		$lockKey = KioskCredentialLockKeys::forPinGenerate($userId);
-		$this->acquireExclusive($lockKey, 'Kiosk PIN generate');
+		$this->acquireExclusiveRecoverable($lockKey, $userId, 'Kiosk PIN generate');
 		try {
 			$pin = KioskCrypto::generatePin();
 			$now = $this->timeFactory->getDateTime();
@@ -149,7 +153,16 @@ class KioskCredentialService
 			$cred->setLookupHash(null);
 			$cred->setFailedAttempts(0);
 			$cred->setLockedUntil(null);
-			$cred = $cred->getId() === null ? $this->credMapper->insert($cred) : $this->credMapper->update($cred);
+			try {
+				$cred = $cred->getId() === null ? $this->credMapper->insert($cred) : $this->credMapper->update($cred);
+			} catch (\Throwable $e) {
+				// unique(user_id, type) race: a concurrent generate just inserted.
+				// Surface as BUSY (mapped, retryable) instead of an unmapped 500.
+				if ($this->isUniqueConstraintViolation($e)) {
+					throw new KioskException('KIOSK_BUSY');
+				}
+				throw $e;
+			}
 
 			$this->auditLogMapper->logAction($userId, 'kiosk_pin_generated', 'kiosk_cred', $cred->getId(), null, null, $createdBy);
 
@@ -237,6 +250,36 @@ class KioskCredentialService
 		} catch (LockedException) {
 			throw new KioskException('KIOSK_BUSY');
 		}
+	}
+
+	/**
+	 * Acquire with short retries, then one orphan-lock recovery pass.
+	 *
+	 * Retries first (~1s total) so live sub-second holders (double-click,
+	 * concurrent enrollment scan) win via waiting — never by purging a live
+	 * lock, which would break per-user serialization. Only sustained busy
+	 * (crashed holder / pre-1.5.20 truncated key) reaches the purge. Live
+	 * contention still surfaces KIOSK_BUSY after the final attempt fails.
+	 */
+	private function acquireExclusiveRecoverable(string $lockKey, string $userId, string $label): void
+	{
+		$delayUs = 40000; // 40ms, then 80ms, 160ms… capped at 200ms
+		for ($i = 0; $i < self::LOCK_RETRY_ATTEMPTS; $i++) {
+			try {
+				$this->acquireExclusive($lockKey, $label);
+				return;
+			} catch (KioskException $e) {
+				if ($e->getErrorCode() !== 'KIOSK_BUSY') {
+					throw $e;
+				}
+				if ($i + 1 < self::LOCK_RETRY_ATTEMPTS) {
+					usleep($delayUs);
+					$delayUs = min(200000, $delayUs * 2);
+				}
+			}
+		}
+		$this->lockPurger->purgeCredentialLocks($userId);
+		$this->acquireExclusive($lockKey, $label);
 	}
 
 	public function resetFailedAttempts(KioskCred $cred): void

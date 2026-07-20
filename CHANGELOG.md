@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.21 - 2026-07-20
+
+### Fixed
+
+- **Stuck badge scan cannot be cancelled:** Admin “Cancel scan” no longer depends on acquiring exclusive DB locks. If locks are orphaned (crash or pre-1.5.20 truncated keys), cancel force-aborts: clears the enrollment, purges known lock rows for that employee/tablet, and returns success so a new card can be enrolled immediately.
+- **Start / PIN / RFID blocked by orphan locks:** starting a scan and assigning PIN/badge first retry briefly (live changes win by waiting), then purge the stuck keys once and retry — instead of looping on “already running” until the ~1h lock TTL. Live locks are never purged on first contact, so concurrent admin actions stay serialized.
+- **Double-click on “Generate PIN” could return HTTP 500:** a unique-constraint race between two concurrent PIN generates is now mapped to the retryable “busy” error instead of an unmapped server error.
+- **Cancel hidden after reload:** Cancel stays available whenever a tablet is selected in Kiosk admin, not only during an in-page poll, so stuck server-side scans can always be cleared.
+- **German translations broken:** `l10n/de.js` contained a syntax error (strings appended outside the catalog), which disabled the entire German catalog in the browser. All locale catalogs regenerated with full key parity across the 10 supported languages.
+
+### Changed
+
+- **Kiosk maintenance:** expired incomplete enrollments are garbage-collected every 15 minutes so tablets leave enrollment mode even if nobody cancelled.
+- **Busy copy:** no longer tells admins to “cancel first” in a way that implies cancel itself might be impossible.
+
 ## 1.5.20 - 2026-07-20
 
 ### Fixed

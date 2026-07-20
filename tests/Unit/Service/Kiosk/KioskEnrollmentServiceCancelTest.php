@@ -9,6 +9,7 @@ use OCA\ArbeitszeitCheck\Db\KioskEnrollment;
 use OCA\ArbeitszeitCheck\Db\KioskEnrollmentMapper;
 use OCA\ArbeitszeitCheck\Db\KioskTerminalMapper;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskCredentialService;
+use OCA\ArbeitszeitCheck\Service\Kiosk\KioskDbLockPurger;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskEnrollmentLockKeys;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskEnrollmentService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskErrorMessages;
@@ -34,6 +35,8 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 	private ITimeFactory $timeFactory;
 	/** @var ICache&MockObject */
 	private ICache $cache;
+	/** @var KioskDbLockPurger&MockObject */
+	private KioskDbLockPurger $lockPurger;
 
 	private KioskEnrollmentService $service;
 
@@ -45,6 +48,7 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 		$this->lockingProvider = $this->createMock(ILockingProvider::class);
 		$this->timeFactory = $this->createMock(ITimeFactory::class);
 		$this->cache = $this->createMock(ICache::class);
+		$this->lockPurger = $this->createMock(KioskDbLockPurger::class);
 
 		$cacheFactory = $this->createMock(ICacheFactory::class);
 		$cacheFactory->method('createDistributed')->willReturn($this->cache);
@@ -64,6 +68,7 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 			$this->lockingProvider,
 			$cacheFactory,
 			new KioskErrorMessages($l10n),
+			$this->lockPurger,
 		);
 	}
 
@@ -86,7 +91,8 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 			->willReturn($enrollment);
 		$this->enrollmentMapper->expects($this->once())
 			->method('cancelForTerminal')
-			->with('term-1');
+			->with('term-1')
+			->willReturn(1);
 		$this->cache->expects($this->once())->method('remove');
 
 		$acquired = [];
@@ -96,6 +102,7 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 				$acquired[] = $key;
 			});
 		$this->lockingProvider->expects($this->exactly(2))->method('releaseLock');
+		$this->lockPurger->expects($this->never())->method('purgeEnrollmentLocks');
 
 		$this->auditLogMapper->expects($this->once())
 			->method('logAction')
@@ -112,6 +119,7 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 		$result = $this->service->cancel('term-1', 'admin');
 		$this->assertSame('cancelled', $result['status']);
 		$this->assertSame(42, $result['enrollmentId']);
+		$this->assertArrayNotHasKey('forced', $result);
 		$this->assertCount(2, $acquired);
 		$this->assertSame(KioskEnrollmentLockKeys::forUser('alice'), $acquired[0]);
 		$this->assertSame(KioskEnrollmentLockKeys::forTerminal('term-1'), $acquired[1]);
@@ -126,7 +134,8 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 			->willReturn(null);
 		$this->enrollmentMapper->expects($this->once())
 			->method('cancelForTerminal')
-			->with('term-1');
+			->with('term-1')
+			->willReturn(0);
 		$this->enrollmentMapper->expects($this->once())
 			->method('findLatestCompletedByTerminalId')
 			->willReturn(null);
@@ -134,6 +143,7 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 		$this->lockingProvider->expects($this->once())->method('acquireLock');
 		$this->lockingProvider->expects($this->once())->method('releaseLock');
 		$this->auditLogMapper->expects($this->never())->method('logAction');
+		$this->lockPurger->expects($this->never())->method('purgeEnrollmentLocks');
 
 		$result = $this->service->cancel('term-1', 'admin');
 		$this->assertSame(['status' => 'already_idle'], $result);
@@ -147,7 +157,7 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 		$completed->setCompletedAt(new \DateTime('2026-07-20 11:59:30'));
 
 		$this->enrollmentMapper->method('findActiveByTerminalId')->willReturn(null);
-		$this->enrollmentMapper->expects($this->once())->method('cancelForTerminal');
+		$this->enrollmentMapper->expects($this->once())->method('cancelForTerminal')->willReturn(0);
 		$this->enrollmentMapper->expects($this->once())
 			->method('findLatestCompletedByTerminalId')
 			->willReturn($completed);
@@ -160,20 +170,51 @@ class KioskEnrollmentServiceCancelTest extends TestCase
 		$this->assertSame(['status' => 'already_completed'], $result);
 	}
 
-	public function testCancelSurfacesBusyAfterRetriesExhausted(): void
+	public function testCancelForceAbortsWhenLocksStayBusy(): void
 	{
 		$enrollment = new KioskEnrollment();
 		$enrollment->setId(7);
 		$enrollment->setTerminalId('term-1');
 		$enrollment->setUserId('alice');
-		$this->enrollmentMapper->method('findActiveByTerminalId')->willReturn($enrollment);
 
-		$this->lockingProvider->expects($this->exactly(4))
+		$this->enrollmentMapper->method('findActiveByTerminalId')->willReturn($enrollment);
+		$this->enrollmentMapper->expects($this->once())
+			->method('findIncompleteByTerminalId')
+			->with('term-1')
+			->willReturn($enrollment);
+		$this->enrollmentMapper->expects($this->once())
+			->method('cancelForTerminal')
+			->with('term-1')
+			->willReturn(1);
+
+		// Exhaust retries on the user lock (8 attempts).
+		$this->lockingProvider->expects($this->exactly(8))
 			->method('acquireLock')
 			->willThrowException(new LockedException('held'));
 
-		$this->expectException(KioskException::class);
-		$this->expectExceptionMessage('KIOSK_BUSY');
-		$this->service->cancel('term-1', 'admin');
+		$this->lockPurger->expects($this->once())
+			->method('purgeEnrollmentLocks')
+			->with('alice', 'term-1');
+		$this->lockPurger->expects($this->once())
+			->method('purgeCredentialLocks')
+			->with('alice');
+		$this->cache->expects($this->once())->method('remove');
+
+		$this->auditLogMapper->expects($this->once())
+			->method('logAction')
+			->with(
+				'alice',
+				'kiosk_enrollment_cancelled',
+				'kiosk_enrollment',
+				7,
+				null,
+				['terminalId' => 'term-1', 'forced' => true],
+				'admin',
+			);
+
+		$result = $this->service->cancel('term-1', 'admin');
+		$this->assertSame('cancelled', $result['status']);
+		$this->assertTrue($result['forced']);
+		$this->assertSame(7, $result['enrollmentId']);
 	}
 }

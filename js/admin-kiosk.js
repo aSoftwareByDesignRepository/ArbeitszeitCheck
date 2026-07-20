@@ -153,7 +153,7 @@
 			),
 			KIOSK_BUSY: t(
 				'errKioskBusy',
-				'Another PIN or badge change is still finishing. Wait a few seconds, then try again. If a scan is open, cancel it first.',
+				'Another PIN or badge change is still finishing. Wait a few seconds, then try again. If a badge scan is stuck, click “Cancel scan” — that always clears it.',
 			),
 			KIOSK_SCAN_FAILED: t(
 				'errScanFailed',
@@ -800,13 +800,19 @@
 			pinBtnEl.disabled = !canAct;
 			pinBtnEl.setAttribute('aria-disabled', canAct ? 'false' : 'true');
 		}
+		const hasTerminal = terminalSelect
+			? String(terminalSelect.value || '').trim() !== ''
+			: false;
 		if (enrollBtnEl) {
-			const hasTerminal = terminalSelect
-				? String(terminalSelect.value || '').trim() !== ''
-				: false;
 			const canScan = canAct && hasTerminal && !enrollmentInFlight;
 			enrollBtnEl.disabled = !canScan;
 			enrollBtnEl.setAttribute('aria-disabled', canScan ? 'false' : 'true');
+		}
+		// Cancel must stay available whenever a tablet is selected — not only during
+		// an in-page poll. Page reload / failed start must still clear a stuck server scan.
+		const cancelBtnEl = document.getElementById('azc-kiosk-cancel-enrollment');
+		if (cancelBtnEl) {
+			cancelBtnEl.hidden = !hasTerminal;
 		}
 	}
 
@@ -1064,10 +1070,6 @@
 		enrollmentPollToken += 1;
 		enrollmentTerminalId = '';
 		enrollmentInFlight = false;
-		const cancelBtn = document.getElementById('azc-kiosk-cancel-enrollment');
-		if (cancelBtn) {
-			cancelBtn.hidden = true;
-		}
 		const enrollBtnEl = document.getElementById('azc-kiosk-start-enrollment');
 		if (enrollBtnEl) {
 			setBusy(enrollBtnEl, false);
@@ -1079,10 +1081,6 @@
 		const myToken = ++enrollmentPollToken;
 		enrollmentTerminalId = terminalId;
 		enrollmentInFlight = true;
-		const cancelBtn = document.getElementById('azc-kiosk-cancel-enrollment');
-		if (cancelBtn) {
-			cancelBtn.hidden = false;
-		}
 		updateWizardUi();
 
 		// Server TTL is 300s. Poll slightly longer so Admin never expires early.
@@ -1279,6 +1277,7 @@
 							body: JSON.stringify({ terminalId }),
 						});
 						const status = (data.data && data.data.status) || 'cancelled';
+						const forced = !!(data.data && data.data.forced);
 						if (status === 'already_completed') {
 							setEnrollmentPanel(
 								'success',
@@ -1307,7 +1306,12 @@
 								'The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.',
 							),
 						);
-						showFeedback(t('enrollmentCancelled', 'Scan cancelled'), 'success');
+						showFeedback(
+							forced
+								? t('enrollmentCancelForced', 'Cleared a stuck scan so you can start again.')
+								: t('enrollmentCancelled', 'Scan cancelled'),
+							'success',
+						);
 						stopEnrollmentPoll();
 						return;
 					} catch (e) {
@@ -1329,18 +1333,12 @@
 				setEnrollmentPanel(
 					'error',
 					t('requestFailed', 'Request failed'),
-					msg + ' '
-						+ t(
-							'enrollmentScanRetryHint',
-							'The scan is still open — hold the badge again, or cancel and restart.',
-						),
-					{ showSteps: true },
+					msg,
 				);
 				showFeedback(msg, 'error');
-				// Resume polling so Admin still sees a tablet-side success/expiry.
-				if (cancelToken === enrollmentPollToken) {
-					pollEnrollment(terminalId);
-				}
+				// Keep Cancel available via updateWizardUi; do not re-enter a stuck poll loop.
+				enrollmentInFlight = false;
+				updateWizardUi();
 			} finally {
 				setBusy(cancelEnrollBtn, false);
 			}
