@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.18 - 2026-07-20
+
+### Changed
+
+- **Full-width admin shells:** My Settings and manager month-closures use the wide page shell instead of narrow constrained layouts.
+- **Audit log filters:** redesigned filter row layout (dates/actions, then user/action/entity) so fields no longer collapse into empty grid holes from shared page-pattern subgrid rules.
+- **Reports export chooser:** replaced nested badge cards with a theme-safe radiogroup of full-width options (solid icon wells, Selected state, keyboard arrow navigation).
+- **Admin / manager surface polish:** shared stat tiles and layout tweaks across dashboards, license, kiosk, users, and working-time models for clearer hierarchy and WCAG-friendlier contrast.
+
+### Fixed
+
+- **Audit log / reports fetch races:** ignore stale responses when a newer filter or export-option request is already in flight.
+
 ## 1.5.9 - 2026-07-18
 
 ### Added
