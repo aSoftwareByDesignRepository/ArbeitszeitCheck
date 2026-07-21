@@ -142,7 +142,11 @@ final class Constants
 	/** Per-install HMAC salt for RFID lookup hashes (never store raw UIDs). */
 	public const CONFIG_KIOSK_RFID_SALT = 'kiosk_rfid_hmac_salt';
 
-	public const KIOSK_PAIRING_TTL_SECONDS = 600;
+	/**
+	 * TEMPORARY (Play Store review): 14 days so reviewer pairing codes stay usable.
+	 * Revert to 600 (10 minutes) after the Terminal app is published.
+	 */
+	public const KIOSK_PAIRING_TTL_SECONDS = 1_209_600;
 
 	public const KIOSK_SESSION_TTL_SECONDS = 60;
 

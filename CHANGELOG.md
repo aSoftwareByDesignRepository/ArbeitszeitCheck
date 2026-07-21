@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.23 - 2026-07-21
+
+### Changed
+
+- **Kiosk pairing code TTL (temporary):** pending terminal pairing codes now remain valid for **14 days** instead of 10 minutes (`KIOSK_PAIRING_TTL_SECONDS`), so Google Play reviewers can pair the Terminal app from review notes without the code expiring before audit. Admin UI copy and all 10 locale catalogs updated accordingly. **Revert to 600 seconds (10 minutes) after the Terminal app is published.**
+
 ## 1.5.22 - 2026-07-21
 
 ### Changed

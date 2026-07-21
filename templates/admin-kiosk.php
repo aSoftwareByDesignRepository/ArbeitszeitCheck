@@ -168,7 +168,7 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 					</button>
 				</header>
 				<div class="azc-kiosk-modal__body">
-					<p class="azc-kiosk-modal__lead"><?php p($l->t('Give this foyer tablet a clear name. After you create it, a pairing code appears once — enter it on the tablet within 10 minutes.')); ?></p>
+					<p class="azc-kiosk-modal__lead"><?php p($l->t('Give this foyer tablet a clear name. After you create it, a pairing code appears once — enter it on the tablet within 14 days.')); ?></p>
 					<div class="azc-kiosk-modal__field">
 						<label for="azc-kiosk-terminal-label" class="azc-kiosk-modal__label"><?php p($l->t('Tablet name')); ?></label>
 						<input type="text" id="azc-kiosk-terminal-label" class="azc-input azc-kiosk-modal__input" maxlength="128"
@@ -196,7 +196,7 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 					</button>
 				</header>
 				<div class="azc-kiosk-modal__body">
-					<p class="azc-kiosk-modal__lead"><?php p($l->t('Enter this code on the tablet within 10 minutes. It is shown only once.')); ?></p>
+					<p class="azc-kiosk-modal__lead"><?php p($l->t('Enter this code on the tablet within 14 days. It is shown only once.')); ?></p>
 					<p class="azc-kiosk-modal__secret" id="azc-kiosk-pairing-code" aria-live="polite"></p>
 					<p class="azc-kiosk-modal__meta" id="azc-kiosk-pairing-expires" hidden></p>
 				</div>
