@@ -21,6 +21,7 @@ class KioskActionService
 		private readonly KioskSessionMapper $sessionMapper,
 		private readonly TimeTrackingService $timeTrackingService,
 		private readonly AuditLogMapper $auditLogMapper,
+		private readonly KioskBusinessRuleMapper $businessRuleMapper,
 		private readonly IL10N $l10n,
 		private readonly ITimeFactory $timeFactory,
 	) {
@@ -61,9 +62,9 @@ class KioskActionService
 		} catch (TimeCaptureForbiddenException) {
 			$this->sessionMapper->releaseClaim($session, $now);
 			throw new KioskException('KIOSK_CLOCK_STAMPING_DISABLED');
-		} catch (BusinessRuleException) {
+		} catch (BusinessRuleException $e) {
 			$this->sessionMapper->releaseClaim($session, $now);
-			throw new KioskException('KIOSK_ACTION_INVALID');
+			throw $this->businessRuleMapper->toKioskException($e);
 		} catch (\Throwable $e) {
 			// Unexpected failure after claim (DB, etc.) — do not burn the one-shot session.
 			$this->sessionMapper->releaseClaim($session, $now);

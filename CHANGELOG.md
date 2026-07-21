@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.22 - 2026-07-21
+
+### Changed
+
+- **Kiosk stamp errors are specific instead of generic:** business-rule rejections during clock in/out and break start/end now return stable machine codes (`KIOSK_ALREADY_CLOCKED_IN`, `KIOSK_NOT_CLOCKED_IN`, `KIOSK_ON_BREAK_END_FIRST`, `KIOSK_BREAK_ALREADY_STARTED`, `KIOSK_NOT_ON_BREAK`, `KIOSK_DAILY_HOURS_LIMIT`, `KIOSK_REST_PERIOD_REQUIRED`, `KIOSK_ACTION_REJECTED`) instead of one opaque `KIOSK_ACTION_INVALID`, so terminals can show actionable messages.
+- **Detailed compliance messages pass through:** rest-period and daily-hours rejections keep the detailed, translated server message (which shift ended when, when clock-in is possible again) instead of a generic phrase.
+- **HTTP semantics:** kiosk state conflicts (already clocked in, break already started, end break first) answer 409 Conflict; compliance limits stay 400.
+
+### Fixed
+
+- **Kiosk error copy translated:** the new kiosk error messages ship in all 10 supported languages (en/de/fr/es/da/nl/it/pl/sv/nb) with full catalog parity.
+
 ## 1.5.21 - 2026-07-20
 
 ### Fixed

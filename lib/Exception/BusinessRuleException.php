@@ -17,4 +17,15 @@ namespace OCA\ArbeitszeitCheck\Exception;
 
 class BusinessRuleException extends \RuntimeException
 {
+	public function __construct(
+		string $message,
+		private readonly ?string $reasonCode = null,
+	) {
+		parent::__construct($message);
+	}
+
+	public function getReasonCode(): ?string
+	{
+		return $this->reasonCode;
+	}
 }

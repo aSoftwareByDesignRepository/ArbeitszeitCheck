@@ -4117,6 +4117,14 @@
         "Stopping the scan…": "Stopping the scan…",
         "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.": "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.",
         "The badge was already saved on the tablet before cancel finished.": "The badge was already saved on the tablet before cancel finished.",
-        "Too many attempts. Wait a few minutes, then try again.": "Too many attempts. Wait a few minutes, then try again."
+        "Too many attempts. Wait a few minutes, then try again.": "Too many attempts. Wait a few minutes, then try again.",
+        "The maximum daily working hours have been reached.": "The maximum daily working hours have been reached.",
+        "The minimum rest period between shifts has not passed yet.": "The minimum rest period between shifts has not passed yet.",
+        "This time recording action could not be completed.": "This time recording action could not be completed.",
+        "You are already clocked in.": "You are already clocked in.",
+        "You are not clocked in.": "You are not clocked in.",
+        "You are not on break.": "You are not on break.",
+        "You are on break. End your break first.": "You are on break. End your break first.",
+        "Your break has already started.": "Your break has already started."
     }
 }

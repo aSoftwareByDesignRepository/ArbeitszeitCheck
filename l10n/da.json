@@ -4117,7 +4117,15 @@
         "Stopping the scan…": "Stopping the scan…",
         "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.": "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.",
         "The badge was already saved on the tablet before cancel finished.": "The badge was already saved on the tablet before cancel finished.",
-        "Too many attempts. Wait a few minutes, then try again.": "Too many attempts. Wait a few minutes, then try again."
+        "Too many attempts. Wait a few minutes, then try again.": "Too many attempts. Wait a few minutes, then try again.",
+        "The maximum daily working hours have been reached.": "Den maksimale daglige arbejdstid er nået.",
+        "The minimum rest period between shifts has not passed yet.": "Den mindste hviletid mellem vagter er endnu ikke gået.",
+        "This time recording action could not be completed.": "Denne tidsregistreringshandling kunne ikke gennemføres.",
+        "You are already clocked in.": "Du er allerede stemplet ind.",
+        "You are not clocked in.": "Du er ikke stemplet ind.",
+        "You are not on break.": "Du holder ikke pause.",
+        "You are on break. End your break first.": "Du holder pause. Afslut først pausen.",
+        "Your break has already started.": "Din pause er allerede startet."
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

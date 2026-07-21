@@ -18,6 +18,7 @@ use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
+use OCA\ArbeitszeitCheck\BusinessRuleCode;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
@@ -323,12 +324,18 @@ class TimeTrackingService
 				$projectCheckProjectId = $this->normalizeAndAssertProjectCheckForClockIn($userId, $projectCheckProjectId);
 				$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
 				if ($activeEntry !== null) {
-					throw new BusinessRuleException($this->l10n->t('User is already clocked in'));
+					throw new BusinessRuleException(
+						$this->l10n->t('User is already clocked in'),
+						BusinessRuleCode::ALREADY_CLOCKED_IN,
+					);
 				}
 
 				$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
 				if ($breakEntry !== null) {
-					throw new BusinessRuleException($this->l10n->t('User is currently on break. End break first.'));
+					throw new BusinessRuleException(
+						$this->l10n->t('User is currently on break. End break first.'),
+						BusinessRuleCode::ON_BREAK_END_FIRST,
+					);
 				}
 
 				[$today, $tomorrow] = $this->getAppLocalTodayWindow();
@@ -346,10 +353,13 @@ class TimeTrackingService
 				$todayHours = $this->getTodayHours($userId);
 				$maxDailyHours = $this->getMaxDailyHours();
 				if ($todayHours >= $maxDailyHours) {
-					throw new BusinessRuleException($this->l10n->t(
-						'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
-						[(int)$maxDailyHours, $todayHours]
-					));
+					throw new BusinessRuleException(
+						$this->l10n->t(
+							'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
+							[(int)$maxDailyHours, $todayHours]
+						),
+						BusinessRuleCode::DAILY_HOURS_LIMIT,
+					);
 				}
 
 				$now = $this->nowForAtEntries();
@@ -411,7 +421,10 @@ class TimeTrackingService
 				$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
 				$currentEntry = $activeEntry ?: $breakEntry;
 				if ($currentEntry === null) {
-					throw new BusinessRuleException($this->l10n->t('User is not currently clocked in'));
+					throw new BusinessRuleException(
+						$this->l10n->t('User is not currently clocked in'),
+						BusinessRuleCode::NOT_CLOCKED_IN,
+					);
 				}
 
 				$this->monthClosureGuard->assertTimeEntryMutable($currentEntry);
@@ -516,10 +529,13 @@ class TimeTrackingService
 		$todayHours   = $this->getTodayHours($userId);
 		$maxDailyHours = $this->getMaxDailyHours();
 		if ($todayHours >= $maxDailyHours) {
-			throw new BusinessRuleException($this->l10n->t(
-				'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
-				[(int)$maxDailyHours, $todayHours]
-			));
+			throw new BusinessRuleException(
+				$this->l10n->t(
+					'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
+					[(int)$maxDailyHours, $todayHours]
+				),
+				BusinessRuleCode::DAILY_HOURS_LIMIT,
+			);
 		}
 
 		$now      = $this->nowForAtEntries();
@@ -573,11 +589,17 @@ class TimeTrackingService
 			try {
 				$activeEntry = $this->timeEntryMapper->findActiveByUser($userId);
 				if ($activeEntry === null) {
-					throw new BusinessRuleException($this->l10n->t('User is not currently clocked in'));
+					throw new BusinessRuleException(
+						$this->l10n->t('User is not currently clocked in'),
+						BusinessRuleCode::NOT_CLOCKED_IN,
+					);
 				}
 				$this->monthClosureGuard->assertTimeEntryMutable($activeEntry);
 				if ($activeEntry->getBreakStartTime() !== null && $activeEntry->getBreakEndTime() === null) {
-					throw new BusinessRuleException($this->l10n->t('Break is already started'));
+					throw new BusinessRuleException(
+						$this->l10n->t('Break is already started'),
+						BusinessRuleCode::BREAK_ALREADY_STARTED,
+					);
 				}
 
 				$oldSummary = $this->safeGetSummary($activeEntry, $userId);
@@ -626,7 +648,10 @@ class TimeTrackingService
 			try {
 				$breakEntry = $this->timeEntryMapper->findOnBreakByUser($userId);
 				if ($breakEntry === null) {
-					throw new BusinessRuleException($this->l10n->t('User is not currently on break'));
+					throw new BusinessRuleException(
+						$this->l10n->t('User is not currently on break'),
+						BusinessRuleCode::NOT_ON_BREAK,
+					);
 				}
 
 				$this->monthClosureGuard->assertTimeEntryMutable($breakEntry);
@@ -978,7 +1003,12 @@ class TimeTrackingService
 			$criticalIssues = array_filter($issues, fn($issue) => $issue['severity'] === 'error');
 			if (!empty($criticalIssues)) {
 				$firstIssue = reset($criticalIssues);
-				throw new BusinessRuleException((string)$firstIssue['message']);
+				$reasonCode = match ($firstIssue['type'] ?? '') {
+					\OCA\ArbeitszeitCheck\Db\ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD => BusinessRuleCode::REST_PERIOD_REQUIRED,
+					\OCA\ArbeitszeitCheck\Db\ComplianceViolation::TYPE_DAILY_HOURS_LIMIT_EXCEEDED => BusinessRuleCode::DAILY_HOURS_LIMIT,
+					default => null,
+				};
+				throw new BusinessRuleException((string)$firstIssue['message'], $reasonCode);
 			}
 		}
 	}

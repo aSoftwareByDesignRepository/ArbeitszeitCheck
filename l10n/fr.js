@@ -4109,6 +4109,14 @@ OC.L10N.register(
 	"Stopping the scan…" : "Stopping the scan…",
 	"The badge scan was stopped. Nothing was saved. You can start again whenever you are ready." : "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.",
 	"The badge was already saved on the tablet before cancel finished." : "The badge was already saved on the tablet before cancel finished.",
-	"Too many attempts. Wait a few minutes, then try again." : "Too many attempts. Wait a few minutes, then try again."
+	"Too many attempts. Wait a few minutes, then try again." : "Too many attempts. Wait a few minutes, then try again.",
+	"The maximum daily working hours have been reached." : "La durée maximale de travail quotidienne est atteinte.",
+	"The minimum rest period between shifts has not passed yet." : "Le temps de repos minimal entre les services n'est pas encore écoulé.",
+	"This time recording action could not be completed." : "Cette action d'enregistrement du temps n'a pas pu être effectuée.",
+	"You are already clocked in." : "Vous êtes déjà pointé en entrée.",
+	"You are not clocked in." : "Vous n'êtes pas pointé en entrée.",
+	"You are not on break." : "Vous n'êtes pas en pause.",
+	"You are on break. End your break first." : "Vous êtes en pause. Terminez d'abord votre pause.",
+	"Your break has already started." : "Votre pause a déjà commencé."
 	}
 );

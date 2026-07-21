@@ -4109,7 +4109,15 @@ OC.L10N.register(
 	"Stopping the scan…" : "Stopping the scan…",
 	"The badge scan was stopped. Nothing was saved. You can start again whenever you are ready." : "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.",
 	"The badge was already saved on the tablet before cancel finished." : "The badge was already saved on the tablet before cancel finished.",
-	"Too many attempts. Wait a few minutes, then try again." : "Too many attempts. Wait a few minutes, then try again."
+	"Too many attempts. Wait a few minutes, then try again." : "Too many attempts. Wait a few minutes, then try again.",
+	"The maximum daily working hours have been reached." : "Den maximala dagliga arbetstiden har uppnåtts.",
+	"The minimum rest period between shifts has not passed yet." : "Den minsta vilotiden mellan arbetspass har inte passerat ännu.",
+	"This time recording action could not be completed." : "Denna tidsregistreringsåtgärd kunde inte slutföras.",
+	"You are already clocked in." : "Du är redan instämplad.",
+	"You are not clocked in." : "Du är inte instämplad.",
+	"You are not on break." : "Du har inte rast.",
+	"You are on break. End your break first." : "Du har rast. Avsluta rasten först.",
+	"Your break has already started." : "Din rast har redan startat."
 	},
 	"nplurals=2; plural=(n != 1);"
 );

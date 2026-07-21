@@ -18,6 +18,26 @@ final class KioskErrorMessages
 	) {
 	}
 
+	public function resolve(KioskException $e): string
+	{
+		$code = $e->getErrorCode();
+		$detail = trim($e->getMessage());
+		if ($detail !== '' && $detail !== $code && $this->prefersDetailMessage($code)) {
+			return $detail;
+		}
+
+		return $this->message($code);
+	}
+
+	private function prefersDetailMessage(string $code): bool
+	{
+		return in_array($code, [
+			'KIOSK_ACTION_REJECTED',
+			'KIOSK_REST_PERIOD_REQUIRED',
+			'KIOSK_DAILY_HOURS_LIMIT',
+		], true);
+	}
+
 	public function message(string $code): string
 	{
 		return match ($code) {
@@ -77,6 +97,14 @@ final class KioskErrorMessages
 			'KIOSK_SESSION_USED' => $this->l10n->t('This kiosk session was already used. Identify again.'),
 			'KIOSK_SESSION_INVALID' => $this->l10n->t('Session expired. Identify again.'),
 			'KIOSK_ACTION_INVALID' => $this->l10n->t('This action is not allowed in the current state.'),
+			'KIOSK_ACTION_REJECTED' => $this->l10n->t('This time recording action could not be completed.'),
+			'KIOSK_ALREADY_CLOCKED_IN' => $this->l10n->t('You are already clocked in.'),
+			'KIOSK_NOT_CLOCKED_IN' => $this->l10n->t('You are not clocked in.'),
+			'KIOSK_ON_BREAK_END_FIRST' => $this->l10n->t('You are on break. End your break first.'),
+			'KIOSK_BREAK_ALREADY_STARTED' => $this->l10n->t('Your break has already started.'),
+			'KIOSK_NOT_ON_BREAK' => $this->l10n->t('You are not on break.'),
+			'KIOSK_DAILY_HOURS_LIMIT' => $this->l10n->t('The maximum daily working hours have been reached.'),
+			'KIOSK_REST_PERIOD_REQUIRED' => $this->l10n->t('The minimum rest period between shifts has not passed yet.'),
 			'KIOSK_DISABLED' => $this->l10n->t('Kiosk mode is disabled. Enable it in Kiosk administration.'),
 			'PIN_INVALID' => $this->l10n->t('PIN is incorrect.'),
 			'PIN_LOCKED' => $this->l10n->t('PIN is temporarily locked. Try again later.'),

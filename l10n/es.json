@@ -4117,6 +4117,14 @@
         "Stopping the scan…": "Stopping the scan…",
         "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.": "The badge scan was stopped. Nothing was saved. You can start again whenever you are ready.",
         "The badge was already saved on the tablet before cancel finished.": "The badge was already saved on the tablet before cancel finished.",
-        "Too many attempts. Wait a few minutes, then try again.": "Too many attempts. Wait a few minutes, then try again."
+        "Too many attempts. Wait a few minutes, then try again.": "Too many attempts. Wait a few minutes, then try again.",
+        "The maximum daily working hours have been reached.": "Se ha alcanzado el máximo de horas de trabajo diarias.",
+        "The minimum rest period between shifts has not passed yet.": "El descanso mínimo entre turnos aún no ha transcurrido.",
+        "This time recording action could not be completed.": "Esta acción de registro de tiempo no se pudo completar.",
+        "You are already clocked in.": "Ya ha fichado la entrada.",
+        "You are not clocked in.": "No ha fichado la entrada.",
+        "You are not on break.": "No está en pausa.",
+        "You are on break. End your break first.": "Está en pausa. Finalice primero la pausa.",
+        "Your break has already started.": "Su pausa ya ha comenzado."
     }
 }

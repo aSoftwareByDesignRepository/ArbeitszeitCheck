@@ -216,7 +216,7 @@ class KioskController extends Controller
 		$response = new JSONResponse([
 			'success' => false,
 			'error' => $code,
-			'message' => $this->kioskErrorMessages->message($code),
+			'message' => $this->kioskErrorMessages->resolve($e),
 		], KioskHttp::statusForCode($code));
 
 		/*

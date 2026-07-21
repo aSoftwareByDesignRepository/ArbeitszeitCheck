@@ -10,6 +10,7 @@ use OCA\ArbeitszeitCheck\Db\KioskSessionMapper;
 use OCA\ArbeitszeitCheck\Db\KioskTerminal;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskActionService;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskAuthService;
+use OCA\ArbeitszeitCheck\Service\Kiosk\KioskBusinessRuleMapper;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskException;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -18,6 +19,24 @@ use PHPUnit\Framework\TestCase;
 
 final class KioskActionServiceTest extends TestCase
 {
+	private function createService(
+		KioskAuthService $auth,
+		KioskSessionMapper $sessionMapper,
+		TimeTrackingService $tracking,
+		?IL10N $l10n = null,
+		?ITimeFactory $timeFactory = null,
+	): KioskActionService {
+		return new KioskActionService(
+			$auth,
+			$sessionMapper,
+			$tracking,
+			$this->createMock(AuditLogMapper::class),
+			new KioskBusinessRuleMapper(),
+			$l10n ?? $this->createMock(IL10N::class),
+			$timeFactory ?? $this->createMock(ITimeFactory::class),
+		);
+	}
+
 	public function testPerformActionReChecksUserEligibility(): void
 	{
 		$terminal = new KioskTerminal();
@@ -37,13 +56,10 @@ final class KioskActionServiceTest extends TestCase
 		$sessionMapper = $this->createMock(KioskSessionMapper::class);
 		$sessionMapper->expects(self::never())->method('claimUnused');
 
-		$service = new KioskActionService(
+		$service = $this->createService(
 			$auth,
 			$sessionMapper,
 			$this->createMock(TimeTrackingService::class),
-			$this->createMock(AuditLogMapper::class),
-			$this->createMock(IL10N::class),
-			$this->createMock(ITimeFactory::class),
 		);
 
 		$this->expectException(KioskException::class);
@@ -79,14 +95,7 @@ final class KioskActionServiceTest extends TestCase
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnArgument(0);
 
-		$service = new KioskActionService(
-			$auth,
-			$sessionMapper,
-			$tracking,
-			$this->createMock(AuditLogMapper::class),
-			$l10n,
-			$timeFactory,
-		);
+		$service = $this->createService($auth, $sessionMapper, $tracking, $l10n, $timeFactory);
 
 		$result = $service->performAction($terminal, 'session-token', 'clock_in');
 		self::assertSame('working', $result['newStatus']);
@@ -111,14 +120,7 @@ final class KioskActionServiceTest extends TestCase
 		$tracking = $this->createMock(TimeTrackingService::class);
 		$tracking->expects(self::never())->method('clockIn');
 
-		$service = new KioskActionService(
-			$auth,
-			$sessionMapper,
-			$tracking,
-			$this->createMock(AuditLogMapper::class),
-			$this->createMock(IL10N::class),
-			$this->createMock(ITimeFactory::class),
-		);
+		$service = $this->createService($auth, $sessionMapper, $tracking);
 
 		$this->expectException(KioskException::class);
 		$service->performAction($terminal, 'session-token', 'clock_in');
@@ -154,20 +156,20 @@ final class KioskActionServiceTest extends TestCase
 		$tracking = $this->createMock(TimeTrackingService::class);
 		$tracking->expects(self::once())
 			->method('clockIn')
-			->willThrowException(new \OCA\ArbeitszeitCheck\Exception\BusinessRuleException('already in'));
+			->willThrowException(new \OCA\ArbeitszeitCheck\Exception\BusinessRuleException(
+				'already in',
+				\OCA\ArbeitszeitCheck\BusinessRuleCode::ALREADY_CLOCKED_IN,
+			));
 
-		$service = new KioskActionService(
-			$auth,
-			$sessionMapper,
-			$tracking,
-			$this->createMock(AuditLogMapper::class),
-			$this->createMock(IL10N::class),
-			$timeFactory,
-		);
+		$service = $this->createService($auth, $sessionMapper, $tracking, null, $timeFactory);
 
-		$this->expectException(KioskException::class);
-		$this->expectExceptionMessage('KIOSK_ACTION_INVALID');
-		$service->performAction($terminal, 'session-token', 'clock_in');
+		try {
+			$service->performAction($terminal, 'session-token', 'clock_in');
+			self::fail('Expected KioskException');
+		} catch (KioskException $e) {
+			self::assertSame('KIOSK_ALREADY_CLOCKED_IN', $e->getErrorCode());
+			self::assertSame('already in', $e->getMessage());
+		}
 	}
 
 	public function testPerformActionReleasesClaimOnUnexpectedFailure(): void
@@ -202,14 +204,7 @@ final class KioskActionServiceTest extends TestCase
 			->method('clockIn')
 			->willThrowException(new \RuntimeException('db down'));
 
-		$service = new KioskActionService(
-			$auth,
-			$sessionMapper,
-			$tracking,
-			$this->createMock(AuditLogMapper::class),
-			$this->createMock(IL10N::class),
-			$timeFactory,
-		);
+		$service = $this->createService($auth, $sessionMapper, $tracking, null, $timeFactory);
 
 		$this->expectException(\RuntimeException::class);
 		$service->performAction($terminal, 'session-token', 'clock_in');
@@ -244,14 +239,7 @@ final class KioskActionServiceTest extends TestCase
 			),
 		);
 
-		$service = new KioskActionService(
-			$auth,
-			$sessionMapper,
-			$tracking,
-			$this->createMock(AuditLogMapper::class),
-			$this->createMock(IL10N::class),
-			$timeFactory,
-		);
+		$service = $this->createService($auth, $sessionMapper, $tracking, null, $timeFactory);
 
 		try {
 			$service->performAction($terminal, 'session-token', 'clock_in');
