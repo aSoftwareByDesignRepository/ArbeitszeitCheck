@@ -273,8 +273,8 @@ class HolidayServiceSeedingTest extends TestCase
 
 		// The previously deleted statutory row is gone from the DB.
 		$this->holidayMapper
-			->method('existsForStateDateScope')
-			->willReturn(false);
+			->method('findIdForStateDateScope')
+			->willReturn(null);
 
 		$this->holidayMapper
 			->method('hasStatutoryHolidaysForStateAndYear')
@@ -340,8 +340,22 @@ class HolidayServiceSeedingTest extends TestCase
 			->willReturn(true);
 
 		$this->holidayMapper
-			->method('existsForStateDateScope')
-			->willReturn(true);
+			->method('findIdForStateDateScope')
+			->willReturn(9001);
+
+		$existingFull = new Holiday();
+		$existingFull->setId(9001);
+		$existingFull->setState($state);
+		$existingFull->setName('Existing');
+		$existingFull->setKind(Holiday::KIND_FULL);
+		$existingFull->setScope(Holiday::SCOPE_STATUTORY);
+		$existingFull->setSource(Holiday::SOURCE_GENERATED);
+		$existingFull->setDate(new \DateTime('2026-01-01'));
+		$existingFull->setCreatedAt(new \DateTime());
+		$existingFull->setUpdatedAt(new \DateTime());
+		$this->holidayMapper
+			->method('findById')
+			->willReturn($existingFull);
 
 		$this->holidayMapper
 			->method('findByStateAndYear')
@@ -401,8 +415,22 @@ class HolidayServiceSeedingTest extends TestCase
 			->willReturn(true);
 
 		$this->holidayMapper
-			->method('existsForStateDateScope')
-			->willReturn(true); // catalog dates already present; only pruning matters here
+			->method('findIdForStateDateScope')
+			->willReturn(9001);
+
+		$existingFull = new Holiday();
+		$existingFull->setId(9001);
+		$existingFull->setState($state);
+		$existingFull->setName('Existing');
+		$existingFull->setKind(Holiday::KIND_FULL);
+		$existingFull->setScope(Holiday::SCOPE_STATUTORY);
+		$existingFull->setSource(Holiday::SOURCE_GENERATED);
+		$existingFull->setDate(new \DateTime("$year-01-01"));
+		$existingFull->setCreatedAt(new \DateTime());
+		$existingFull->setUpdatedAt(new \DateTime());
+		$this->holidayMapper
+			->method('findById')
+			->willReturn($existingFull);
 
 		$this->holidayMapper
 			->method('findByStateAndYear')
@@ -423,6 +451,71 @@ class HolidayServiceSeedingTest extends TestCase
 
 		$this->assertContains(4242, $deletedIds, 'Stale generated statutory row must be pruned.');
 		$this->assertNotContains(99, $deletedIds, 'Manual statutory entry must never be auto-pruned.');
+	}
+
+	/**
+	 * E-6: a generated statutory row seeded as full must be corrected to half
+	 * when the catalog says half (Zurich Sechseläuten).
+	 */
+	public function testSeedReconcilesGeneratedStatutoryKindToHalf(): void
+	{
+		$state = 'CH-ZH';
+		$year = 2026;
+		$this->configStore['statutory_auto_reseed'] = '1';
+
+		$staleFull = new Holiday();
+		$staleFull->setId(77);
+		$staleFull->setState($state);
+		$staleFull->setName('Sechseläuten');
+		$staleFull->setKind(Holiday::KIND_FULL);
+		$staleFull->setScope(Holiday::SCOPE_STATUTORY);
+		$staleFull->setSource(Holiday::SOURCE_GENERATED);
+		$staleFull->setDate(new \DateTime('2026-04-20'));
+		$staleFull->setCreatedAt(new \DateTime());
+		$staleFull->setUpdatedAt(new \DateTime());
+
+		$this->holidayMapper
+			->method('hasStatutoryHolidaysForStateAndYear')
+			->willReturn(true);
+
+		$this->holidayMapper
+			->method('findIdForStateDateScope')
+			->willReturnCallback(static function (string $s, string $date) use ($state): ?int {
+				return ($s === $state && $date === '2026-04-20') ? 77 : 9001;
+			});
+
+		$otherFull = clone $staleFull;
+		$otherFull->setId(9001);
+		$otherFull->setDate(new \DateTime('2026-01-01'));
+		$otherFull->setName('New Year');
+
+		$this->holidayMapper
+			->method('findById')
+			->willReturnCallback(static function (int $id) use ($staleFull, $otherFull): Holiday {
+				return $id === 77 ? $staleFull : $otherFull;
+			});
+
+		$this->holidayMapper
+			->method('findByStateAndYear')
+			->willReturn([$staleFull]);
+
+		$updated = [];
+		$this->holidayMapper
+			->expects($this->atLeastOnce())
+			->method('update')
+			->willReturnCallback(static function (Holiday $h) use (&$updated): Holiday {
+				$updated[] = $h;
+				return $h;
+			});
+
+		$this->service->getHolidaysForRange(
+			$state,
+			new \DateTime('2026-01-01'),
+			new \DateTime('2026-12-31')
+		);
+
+		$kinds = array_map(static fn (Holiday $h): string => (string)$h->getKind(), $updated);
+		$this->assertContains(Holiday::KIND_HALF, $kinds, 'Sechseläuten must be corrected to half');
 	}
 
 	public function testSuppressedStatutoryDateCountsAsWorkingDayWhenAutoReseedOff(): void
