@@ -24,7 +24,11 @@ if (!is_file($phpunit)) {
 }
 
 function run_unit_tests(string $appRoot, string $phpunit): int {
-	$cmd = escapeshellarg($phpunit)
+	$phpBin = 'php';
+	// Disable CLI opcache so file mutations are visible to the next PHPUnit process.
+	$cmd = escapeshellarg($phpBin)
+		. ' -d opcache.enable_cli=0 -d opcache.enable=0 '
+		. escapeshellarg($phpunit)
 		. ' -c ' . escapeshellarg($appRoot . '/phpunit.xml')
 		. ' --filter SupportUsLinksTest';
 	passthru($cmd, $code);
@@ -59,12 +63,16 @@ $mutations = [
 		'to' => "return 'mailto:' . self::CONTACT_EMAIL . '?subject=' . \$subject;",
 	],
 	'force_english_locale' => [
-		'from' => "return str_starts_with(\$lang, 'de');",
+		'from' => "return \$lang === 'de' || str_starts_with(\$lang, 'de-');",
 		'to' => "return false;",
 	],
 	'allow_empty_display_name' => [
 		'from' => "if (\$normalized === '' || !\$this->isSafeDisplayName(\$normalized)) {",
 		'to' => "if (false && (\$normalized === '' || !\$this->isSafeDisplayName(\$normalized))) {",
+	],
+	'allow_at_in_relative_license_url' => [
+		'from' => "&& !str_contains(\$url, '\\\\')\n\t\t\t\t&& !str_contains(\$url, '@');",
+		'to' => "&& !str_contains(\$url, '\\\\');",
 	],
 ];
 
@@ -82,7 +90,19 @@ foreach ($mutations as $name => $pair) {
 		continue;
 	}
 	file_put_contents($backup, $original);
-	file_put_contents($source, str_replace($pair['from'], $pair['to'], $original));
+	$mutated = str_replace($pair['from'], $pair['to'], $original);
+	if ($mutated === $original) {
+		fwrite(STDERR, "Mutation replace had no effect for {$name}\n");
+		$failedToKill[] = $name . ' (no effect)';
+		restore($source, $backup);
+		continue;
+	}
+	if (file_put_contents($source, $mutated) === false) {
+		fwrite(STDERR, "Cannot write mutated source for {$name}\n");
+		$failedToKill[] = $name . ' (write failed)';
+		restore($source, $backup);
+		continue;
+	}
 	$code = run_unit_tests($appRoot, $phpunit);
 	restore($source, $backup);
 	if ($code === 0) {

@@ -19,12 +19,12 @@ final class SupportUsSectionContractTest extends TestCase {
 
 	public function testPrimaryCtaIsPartnerMailtoNotSponsors(): void {
 		$src = $this->template();
-		$partnerPos = strpos($src, "partnerMailto");
-		$sponsorsPos = strpos($src, "sponsorsUrl");
+		$partnerPos = strpos($src, 'partnerMailto');
+		$sponsorsPos = strpos($src, 'sponsorsUrl');
 		self::assertNotFalse($partnerPos);
 		self::assertNotFalse($sponsorsPos);
 		self::assertLessThan($sponsorsPos, $partnerPos, 'Partner CTA must appear before Sponsors');
-		self::assertStringContainsString("Ask for a partner offer", $src);
+		self::assertStringContainsString('Ask for a partner offer', $src);
 		self::assertStringContainsString('data-support-us="1"', $src);
 	}
 
@@ -51,6 +51,7 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertStringContainsString('aria-describedby', $src);
 		self::assertStringContainsString('role="group"', $src);
 		self::assertStringContainsString('Support & us', $src);
+		self::assertStringContainsString('aria-hidden="true"', $src);
 	}
 
 	public function testMobileLicenseBlockIsConditional(): void {
@@ -75,5 +76,6 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertStringContainsString('azc-support-us', $css);
 		self::assertStringContainsString(':focus-visible', $css);
 		self::assertStringContainsString('prefers-reduced-motion', $css);
+		self::assertStringContainsString('min-height: 2.75rem', $css);
 	}
 }

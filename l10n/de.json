@@ -2299,6 +2299,7 @@
 		"Note": "Hinweis",
 		"Note: Good Friday has not been a statutory public holiday in Austria since 2019. It is therefore never added automatically — add it as a company holiday if your organisation grants it.": "Hinweis: Der Karfreitag ist in Österreich seit 2019 kein gesetzlicher Feiertag mehr. Er wird daher nie automatisch ergänzt — fügen Sie ihn als Firmenfeiertag hinzu, wenn Ihre Organisation ihn gewährt.",
 		"Note: Team reports currently support single user selection. Multiple users can be added in future updates.": "Hinweis: Teamberichte unterstützen derzeit die Auswahl einzelner Benutzer. Mehrere Benutzer können in zukünftigen Updates hinzugefügt werden.",
+		"Note: You are approaching the maximum working hours (%1$dh, %2$s).": "Hinweis: Sie nähern sich der maximalen Arbeitszeit (%1$dh, %2$s).",
 		"Note: You are approaching the maximum working hours. Extended hours must be compensated within 6 months (ArbZG §3).": "Hinweis: Sie nähern sich der maximalen Arbeitszeit. Überstunden müssen innerhalb von 6 Monaten ausgeglichen werden (ArbZG §3).",
 		"Note: You are approaching the maximum working hours. Extended hours must be compensated within the averaging window (%s).": "Hinweis: Sie nähern sich der maximalen Arbeitszeit. Verlängerungen müssen im Durchschnittsfenster ausgeglichen werden (%s).",
 		"notice": "hinweis",
@@ -4255,7 +4256,6 @@
 		"{count} entries": "{count} Einträge",
 		"{count} of 10+ characters — you can submit": "{count} von mindestens 10 Zeichen — absenden möglich",
 		"{field} is required. Please fill in this field.": "{field} ist erforderlich. Bitte füllen Sie dieses Feld aus.",
-		"{remaining} more characters needed ({count} of {min})": "Noch {remaining} Zeichen nötig ({count} von {min})",
-		"Note: You are approaching the maximum working hours (%1$dh, %2$s).": "Hinweis: Sie nähern sich der maximalen Arbeitszeit (%1$dh, %2$s)."
+		"{remaining} more characters needed ({count} of {min})": "Noch {remaining} Zeichen nötig ({count} von {min})"
 	}
 }

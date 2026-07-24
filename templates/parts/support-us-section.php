@@ -8,7 +8,8 @@ declare(strict_types=1);
  * Expected variables (set by the including settings template):
  * @var \OCP\IL10N $l
  * @var \OCA\ArbeitszeitCheck\Support\SupportUsLinks $supportUsLinks
- * @var string $supportUsCssPrefix CSS BEM prefix without trailing dash (e.g. azc, bc, dc)
+ * @var string $supportUsCssPrefix CSS BEM prefix for support-us + element ids (e.g. azc, bc, dkc)
+ * @var string $supportUsShellPrefix optional card/section design-system prefix (defaults to css prefix)
  * @var string $supportUsBtnPrimaryClass
  * @var string $supportUsBtnSecondaryClass
  * @var string|null $supportUsLanguageCode optional override; defaults to $l->getLanguageCode()
@@ -29,6 +30,9 @@ $links = $supportUsLinks->forLocale($lang);
 $prefix = isset($supportUsCssPrefix) && is_string($supportUsCssPrefix) && $supportUsCssPrefix !== ''
 	? preg_replace('/[^a-z0-9\-]/i', '', $supportUsCssPrefix)
 	: 'azc';
+$shell = isset($supportUsShellPrefix) && is_string($supportUsShellPrefix) && $supportUsShellPrefix !== ''
+	? preg_replace('/[^a-z0-9\-]/i', '', $supportUsShellPrefix)
+	: $prefix;
 $btnPrimary = isset($supportUsBtnPrimaryClass) && is_string($supportUsBtnPrimaryClass) && $supportUsBtnPrimaryClass !== ''
 	? $supportUsBtnPrimaryClass
 	: 'button primary';
@@ -41,18 +45,18 @@ $titleId = $prefix . '-support-us-title';
 $introId = $prefix . '-support-us-intro';
 ?>
 <section
-	class="<?php p($prefix); ?>-card <?php p($prefix); ?>-section <?php p($prefix); ?>-support-us"
+	class="<?php p($shell); ?>-card <?php p($shell); ?>-section <?php p($prefix); ?>-support-us"
 	id="<?php p($sectionId); ?>"
 	aria-labelledby="<?php p($titleId); ?>"
 	aria-describedby="<?php p($introId); ?>"
 	data-support-us="1"
 >
-	<header class="<?php p($prefix); ?>-section__header <?php p($prefix); ?>-support-us__header">
+	<header class="<?php p($shell); ?>-section__header <?php p($prefix); ?>-support-us__header">
 		<div>
-			<h2 id="<?php p($titleId); ?>" class="<?php p($prefix); ?>-card__title <?php p($prefix); ?>-support-us__title">
+			<h2 id="<?php p($titleId); ?>" class="<?php p($shell); ?>-card__title <?php p($prefix); ?>-support-us__title">
 				<?php p($l->t('Support & us')); ?>
 			</h2>
-			<p id="<?php p($introId); ?>" class="<?php p($prefix); ?>-section__sub <?php p($prefix); ?>-support-us__intro">
+			<p id="<?php p($introId); ?>" class="<?php p($shell); ?>-section__sub <?php p($prefix); ?>-support-us__intro">
 				<?php p($l->t(
 					'%s stays free (AGPL) on your Nextcloud. GitHub issues for bugs and ideas remain welcome. For bookable help on an invoice — setup, hour packs, commissioned work — or the official mobile app:',
 					[$appName]

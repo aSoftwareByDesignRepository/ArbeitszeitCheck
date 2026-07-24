@@ -16,9 +16,13 @@ final class SupportUsLinksTest extends TestCase {
 		self::assertTrue($links->isGermanLocale('de'));
 		self::assertTrue($links->isGermanLocale('de_DE'));
 		self::assertTrue($links->isGermanLocale('de-DE'));
+		self::assertTrue($links->isGermanLocale('de_CH'));
 		self::assertFalse($links->isGermanLocale('en'));
 		self::assertFalse($links->isGermanLocale('fr'));
 		self::assertFalse($links->isGermanLocale(''));
+		// Must not treat unrelated codes that merely start with "de" as German.
+		self::assertFalse($links->isGermanLocale('den'));
+		self::assertFalse($links->isGermanLocale('del'));
 	}
 
 	public function testPartnerMailtoIsPrimaryAndEncoded(): void {
@@ -92,6 +96,21 @@ final class SupportUsLinksTest extends TestCase {
 		new SupportUsLinks('ArbeitszeitCheck', true, 'javascript:alert(1)');
 	}
 
+	public function testRejectsNonHttpSchemes(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		new SupportUsLinks('ArbeitszeitCheck', true, 'ftp://files.example/license');
+	}
+
+	public function testRejectsLicenseUrlWithUserinfo(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		new SupportUsLinks('ArbeitszeitCheck', true, 'https://user:pass@evil.example/phish');
+	}
+
+	public function testRejectsRelativeLicenseUrlWithAtSign(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		new SupportUsLinks('ArbeitszeitCheck', true, '/apps/@evil');
+	}
+
 	public function testForLocalePayloadOmitsPricesAndKeepsHierarchyFields(): void {
 		$links = new SupportUsLinks('TicketCheck');
 		$payload = $links->forLocale('en');
@@ -125,5 +144,16 @@ final class SupportUsLinksTest extends TestCase {
 			'https://example.local/apps/arbeitszeitcheck/admin/license',
 			$links->licensePageUrl()
 		);
+	}
+
+	public function testRejectsEmptyDisplayName(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		new SupportUsLinks('   ');
+	}
+
+	public function testMobileFalseIgnoresLicenseUrl(): void {
+		$links = new SupportUsLinks('BudgetCheck', false, '/ignored');
+		self::assertFalse($links->hasOfficialMobileLicenses());
+		self::assertNull($links->licensePageUrl());
 	}
 }

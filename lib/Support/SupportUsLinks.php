@@ -85,13 +85,14 @@ final class SupportUsLinks {
 
 	/**
 	 * Prefer German copy/subjects when the Nextcloud language is German.
+	 * Matches de, de-DE, de_CH, etc. — not "den", "del", or empty.
 	 */
 	public function isGermanLocale(string $languageCode): bool {
 		$lang = strtolower(str_replace('_', '-', trim($languageCode)));
 		if ($lang === '') {
 			return false;
 		}
-		return str_starts_with($lang, 'de');
+		return $lang === 'de' || str_starts_with($lang, 'de-');
 	}
 
 	public function partnerMailto(string $languageCode): string {
@@ -191,13 +192,21 @@ final class SupportUsLinks {
 			// relative paths are allowed for in-app license jumps).
 			return !preg_match('/[\x00-\x1F\x7F\s]/', $url)
 				&& !str_contains($url, '://')
-				&& !str_contains($url, '\\');
+				&& !str_contains($url, '\\')
+				&& !str_contains($url, '@');
 		}
 		if (!str_starts_with($url, 'https://') && !str_starts_with($url, 'http://')) {
 			return false;
 		}
+		// Reject credentials in URL userinfo (https://user:pass@host/...).
+		if (preg_match('#^https?://[^/]*@#', $url) === 1) {
+			return false;
+		}
 		$parts = parse_url($url);
 		if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+			return false;
+		}
+		if (isset($parts['user']) || isset($parts['pass'])) {
 			return false;
 		}
 		$scheme = strtolower((string)$parts['scheme']);

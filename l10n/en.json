@@ -2299,6 +2299,7 @@
 		"Note": "Note",
 		"Note: Good Friday has not been a statutory public holiday in Austria since 2019. It is therefore never added automatically — add it as a company holiday if your organisation grants it.": "Note: Good Friday has not been a statutory public holiday in Austria since 2019. It is therefore never added automatically — add it as a company holiday if your organisation grants it.",
 		"Note: Team reports currently support single user selection. Multiple users can be added in future updates.": "Note: Team reports currently support single user selection. Multiple users can be added in future updates.",
+		"Note: You are approaching the maximum working hours (%1$dh, %2$s).": "Note: You are approaching the maximum working hours (%1$dh, %2$s).",
 		"Note: You are approaching the maximum working hours. Extended hours must be compensated within 6 months (ArbZG §3).": "Note: You are approaching the maximum working hours. Extended hours must be compensated within 6 months (ArbZG §3).",
 		"Note: You are approaching the maximum working hours. Extended hours must be compensated within the averaging window (%s).": "Note: You are approaching the maximum working hours. Extended hours must be compensated within the averaging window (%s).",
 		"notice": "notice",
@@ -4255,7 +4256,6 @@
 		"{count} entries": "{count} entries",
 		"{count} of 10+ characters — you can submit": "{count} of 10+ characters — you can submit",
 		"{field} is required. Please fill in this field.": "{field} is required. Please fill in this field.",
-		"{remaining} more characters needed ({count} of {min})": "{remaining} more characters needed ({count} of {min})",
-		"Note: You are approaching the maximum working hours (%1$dh, %2$s).": "Note: You are approaching the maximum working hours (%1$dh, %2$s)."
+		"{remaining} more characters needed ({count} of {min})": "{remaining} more characters needed ({count} of {min})"
 	}
 }

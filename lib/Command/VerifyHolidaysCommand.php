@@ -31,9 +31,17 @@ class VerifyHolidaysCommand extends Command
 		$this
 			->setName('arbeitszeitcheck:holidays:verify')
 			->setDescription('Compare statutory catalog, DB rows, and suppressions for a region/year.')
-			->addArgument('state', InputArgument::REQUIRED, 'Region code (e.g. NW, BB, AT-W, AT-OOE)')
+			->addArgument('state', InputArgument::REQUIRED, 'Region code (e.g. NW, BB, AT-W, AT-OOE, CH-ZH, CH-GE)')
 			->addArgument('year', InputArgument::REQUIRED, 'Calendar year (e.g. 2026)')
-			->addOption('json', null, InputOption::VALUE_NONE, 'Output machine-readable JSON');
+			->addOption('json', null, InputOption::VALUE_NONE, 'Output machine-readable JSON')
+			->setHelp(
+				"Compare the statutory holiday catalog for a DACH region/year with the database\n" .
+				"and any admin suppressions.\n\n" .
+				"Examples:\n" .
+				"  php occ arbeitszeitcheck:holidays:verify NW 2026\n" .
+				"  php occ arbeitszeitcheck:holidays:verify AT-OOE 2027\n" .
+				"  php occ arbeitszeitcheck:holidays:verify CH-ZH 2026 --json"
+			);
 	}
 
 	protected function execute(InputInterface $input, OutputInterface $output): int
