@@ -31,9 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Manager/correction AZG break gate:** illegal Austrian break splits (e.g. 20+10) are now rejected on manager create/correct and correction approve/auto-approve via the same `blockingIssuesForCompletedEntry` fail-closed gate as employee portal saves.
+- **Manager/correction AZG break gate:** illegal Austrian break splits (e.g. 20+10) are now rejected on manager create/correct and correction approve/**auto-approve** via the same `blockingIssuesForCompletedEntry` fail-closed gate as employee portal saves (`autoApprove` re-validates defensively even if a caller skipped the pre-check).
 - **Edit/correction break floor:** AT 10-minute portions no longer disappear on edit hydration or client validation; clock-form, correction UI, and manager create use the profile/`minBreakMinutes` floor (including per-employee E-9).
-- **E-8 confirm UX:** organisation country changes never fall back to `window.confirm`; missing `confirmDialog` fails closed.
+- **E-8 confirm UX:** organisation country changes never fall back to `window.confirm`; missing `confirmDialog` fails closed. Remaining admin confirmations (unsaved leave, seat removal, kiosk revoke/PIN) use accessible `confirmDestructiveAction`.
 - **Duplicate statutory holidays (race):** the unique index on `at_holidays` (state, date, scope) is verified during the upgrade (and created for databases restored from old backups); a redundant duplicate index from pre-release 1.6.0 builds is dropped. Creating a holiday on an occupied slot answers a friendly 409 instead of a database error; a lost race after the pre-check also maps unique-constraint failures to HTTP 409.
 - **Legacy holiday opt-outs preserved:** the deprecated `holidays_initialized_state_years` flag is converted to per-date suppressions during the upgrade, so years that were emptied before the suppression table existed stay empty, and the flag is retired.
 - **Region lists unified:** seven previously duplicated (and partially drifted) Bundesland lists were replaced by a single region registry used by services, controllers, commands, and templates.

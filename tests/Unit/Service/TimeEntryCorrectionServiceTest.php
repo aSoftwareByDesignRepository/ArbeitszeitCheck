@@ -146,6 +146,45 @@ class TimeEntryCorrectionServiceTest extends TestCase
 		$this->assertSame('manager1', $json['approved_by']);
 	}
 
+	public function testAutoApproveRevalidatesProposalAndBlocksIllegalBreakSplit(): void
+	{
+		$entry = $this->buildEntry();
+		$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$entry->setJustification(json_encode([
+			'justification' => 'Please accept this correction.',
+			'proposed' => [
+				'startTime' => '2026-01-15T08:00:00+00:00',
+				'endTime' => '2026-01-15T15:00:00+00:00',
+				'breaks' => [
+					['start' => '2026-01-15T10:00:00+00:00', 'end' => '2026-01-15T10:20:00+00:00'],
+					['start' => '2026-01-15T12:00:00+00:00', 'end' => '2026-01-15T12:10:00+00:00'],
+				],
+			],
+		]));
+
+		$this->complianceService = $this->createMock(ComplianceService::class);
+		$this->complianceService->method('checkRestPeriodForStartTime')->willReturn(['valid' => true]);
+		$this->complianceService->method('blockingIssuesForCompletedEntry')
+			->willReturn(['Break requirement not met (AZG §11): portions must be continuous ≥30, 2×15, or 3×10.']);
+
+		$service = new TimeEntryCorrectionService(
+			$this->timeEntryMapper,
+			$this->monthClosureGuard,
+			$this->complianceService,
+			$this->timeTrackingService,
+			$this->notificationService,
+			$this->auditLogMapper,
+			$this->config,
+			$this->l10n,
+			$this->createMock(\OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService::class),
+			$this->createMock(\OCA\ArbeitszeitCheck\Service\ProjectCheckLaborTimeSyncService::class),
+		);
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('AZG');
+		$service->autoApprove($entry);
+	}
+
 	public function testRejectRestoresOriginalIncludingBreaksJson(): void
 	{
 		$entry = $this->buildEntry();

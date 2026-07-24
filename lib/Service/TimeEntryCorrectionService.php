@@ -307,6 +307,12 @@ class TimeEntryCorrectionService
 		if (is_array($justificationData)) {
 			$proposal = $justificationData['proposed'] ?? null;
 			if (is_array($proposal) && $proposal !== []) {
+				// Defensive: same fail-closed labour-law gate as approve()/manager writes,
+				// even if a future caller forgets to validate first.
+				$error = $this->validateProposal($entry, $proposal);
+				if ($error !== null) {
+					throw new \InvalidArgumentException($error);
+				}
 				$this->applyProposal($entry, $proposal);
 				$this->applyComplianceAdjustments($entry);
 			}
