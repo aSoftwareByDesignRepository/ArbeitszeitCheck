@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Region lists unified:** seven previously duplicated (and partially drifted) Bundesland lists were replaced by a single region registry used by services, controllers, commands, and templates.
 - **Unset max daily hours default:** when `max_daily_hours` is not configured, admin/settings/forms fall back to the country profile (DE 10 / AT 12) instead of always assuming 10. Explicit admin values are never overwritten on country switch (E-4).
 - **Compliance dashboard lead:** page description follows the configured country (Austrian labour law vs German labor law).
+- **E-6 kind self-heal:** generated statutory rows whose catalog kind changed (e.g. Zurich Sechseläuten stored as full) are corrected on the next seed reconcile; manual statutory edits are left alone.
+- **Capabilities CH feature tag:** Switzerland reports `swiss-arg-compliance` (not `arg-compliance`) to avoid colliding with Austrian ARG naming.
+- **Country-aware clock-out / approaching copy:** dashboard timer messages remap legacy ArbZG msgids to the active law label; CH omits averaging-window compensation claims; warning threshold is `maxDailyHours − 2`.
+- **Absolute weekly caps tested:** AT 60 h / CH 45 h warn path + DE skip covered by unit + mutation gauntlet.
 
 ## 1.5.23 - 2026-07-21
 

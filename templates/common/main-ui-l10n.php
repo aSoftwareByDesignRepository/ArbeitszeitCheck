@@ -18,16 +18,33 @@ try {
 	$azcLawProfile = LaborLawProfileFactory::profileForCountry(RegionRegistry::COUNTRY_DE);
 }
 $azcDailyLaw = $azcLawProfile->lawLabel('daily');
-$azcMaxDaily = (int)round($azcLawProfile->dailyMaxHoursDefault);
+// Effective admin max wins over the country-profile default (same as Capabilities).
+try {
+	$azcMaxDaily = (int)round(max(1.0, min(24.0, (float)\OCP\Server::get(\OCP\IConfig::class)->getAppValue(
+		'arbeitszeitcheck',
+		'max_daily_hours',
+		(string)$azcLawProfile->dailyMaxHoursDefault
+	))));
+} catch (\Throwable) {
+	$azcMaxDaily = (int)round($azcLawProfile->dailyMaxHoursDefault);
+}
 
 $criticalClockOut = $l->t(
 	'CRITICAL: Maximum daily working hours (%1$dh) exceeded! Automatically clocking out to comply with labour law (%2$s).',
 	[$azcMaxDaily, $azcDailyLaw]
 );
-$approachingMax = $l->t(
-	'Note: You are approaching the maximum working hours. Extended hours must be compensated within the averaging window (%s).',
-	[$azcDailyLaw]
-);
+// Countries without an averaging window (CH) must not claim compensation in that window.
+if ($azcLawProfile->dailyAvgMaxHours !== null || $azcLawProfile->weeklyAvgMaxHours !== null) {
+	$approachingMax = $l->t(
+		'Note: You are approaching the maximum working hours. Extended hours must be compensated within the averaging window (%s).',
+		[$azcDailyLaw]
+	);
+} else {
+	$approachingMax = $l->t(
+		'Note: You are approaching the maximum working hours (%1$dh, %2$s).',
+		[$azcMaxDaily, $azcDailyLaw]
+	);
+}
 $autoClockedOut = $l->t(
 	'Automatically clocked out to comply with labour law (%s).',
 	[$azcDailyLaw]
@@ -84,6 +101,7 @@ $clockOutMap = [
 	'CRITICAL: Maximum daily working hours (%1$dh) exceeded! Automatically clocking out to comply with labour law (%2$s).' => $criticalClockOut,
 	'CRITICAL: Maximum daily working hours (10h) exceeded! Automatically clocking out to comply with German labor law (ArbZG §3).' => $criticalClockOut,
 	'Note: You are approaching the maximum working hours. Extended hours must be compensated within the averaging window (%s).' => $approachingMax,
+	'Note: You are approaching the maximum working hours (%1$dh, %2$s).' => $approachingMax,
 	'Note: You are approaching the maximum working hours. Extended hours must be compensated within 6 months (ArbZG §3).' => $approachingMax,
 	'Automatically clocked out to comply with labour law (%s).' => $autoClockedOut,
 	'Automatically clocked out to comply with German labor law (ArbZG §3).' => $autoClockedOut,

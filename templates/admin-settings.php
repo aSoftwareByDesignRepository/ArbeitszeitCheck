@@ -85,6 +85,7 @@ $cancelUrl = $isNcAdminShell
                     ['href' => '#section-regional-heading', 'label' => $l->t('Region and holidays')],
                     ['href' => '#section-retention-heading', 'label' => $l->t('Data retention')],
                     ['href' => '#section-projectcheck-heading', 'label' => $l->t('ProjectCheck connection')],
+                    ['href' => '#azc-support-us-title', 'label' => $l->t('Support & us')],
                 ];
                 include __DIR__ . '/common/azc-jump-nav.php';
                 ?>
@@ -855,6 +856,19 @@ $cancelUrl = $isNcAdminShell
                     </div>
                 </div>
             </form>
+                <?php
+                // Support & Us — informational CTAs only; never gates AGPL use.
+                $supportUsLanguageCode = method_exists($l, 'getLanguageCode') ? (string)$l->getLanguageCode() : 'en';
+                $supportUsCssPrefix = 'azc';
+                $supportUsBtnPrimaryClass = 'azc-btn azc-btn--primary';
+                $supportUsBtnSecondaryClass = 'azc-btn azc-btn--secondary';
+                $supportUsLinks = new \OCA\ArbeitszeitCheck\Support\SupportUsLinks(
+                	'ArbeitszeitCheck',
+                	true,
+                	$urlGenerator->linkToRoute('arbeitszeitcheck.license_admin.index')
+                );
+                include __DIR__ . '/parts/support-us-section.php';
+                ?>
             </div>
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
 window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};

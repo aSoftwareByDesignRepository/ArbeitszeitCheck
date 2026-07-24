@@ -579,3 +579,138 @@
     transition: none;
   }
 }
+
+/* === support-us:azc start === */
+/**
+ * Support & Us — shared family styles (WCAG 2.1 AA, responsive).
+ * Prefix: azc
+ * Uses Nextcloud CSS variables only (no hardcoded brand purple / cream biases).
+ */
+
+.azc-support-us {
+	margin-block-start: 1.5rem;
+}
+
+.azc-support-us__header {
+	margin-block-end: 1rem;
+}
+
+.azc-support-us__title {
+	margin: 0 0 0.35rem;
+	font-size: 1.25rem;
+	line-height: 1.35;
+	color: var(--color-main-text);
+}
+
+.azc-support-us__intro {
+	margin: 0;
+	max-width: 48rem;
+	font-size: 0.95rem;
+	line-height: 1.55;
+	color: var(--color-text-maxcontrast);
+}
+
+.azc-support-us__body {
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+
+.azc-support-us__primary {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.5rem;
+	padding: 1rem 1.1rem;
+	border: 1px solid var(--color-border-maxcontrast, var(--color-border));
+	border-radius: var(--border-radius-large, var(--border-radius, 8px));
+	background:
+		linear-gradient(
+			160deg,
+			var(--color-primary-element-light, var(--color-background-hover)) 0%,
+			var(--color-main-background) 72%
+		);
+}
+
+.azc-support-us__hint {
+	margin: 0;
+	max-width: 40rem;
+	font-size: 0.875rem;
+	line-height: 1.5;
+	color: var(--color-text-maxcontrast);
+}
+
+.azc-support-us__hint a {
+	color: var(--color-main-text);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+.azc-support-us__secondary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.65rem;
+}
+
+.azc-support-us__cta {
+	min-height: 2.75rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding-inline: 1rem;
+	text-align: center;
+	text-decoration: none;
+	box-sizing: border-box;
+}
+
+.azc-support-us__cta:focus-visible,
+.azc-support-us__hint a:focus-visible,
+.azc-support-us__more a:focus-visible,
+.azc-support-us__contact a:focus-visible {
+	outline: 2px solid var(--color-main-text);
+	outline-offset: 2px;
+}
+
+.azc-support-us__tertiary {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	padding-block-start: 0.25rem;
+	border-block-start: 1px solid var(--color-border);
+}
+
+.azc-support-us__more,
+.azc-support-us__contact {
+	margin: 0;
+	font-size: 0.875rem;
+	line-height: 1.5;
+	color: var(--color-text-maxcontrast);
+}
+
+.azc-support-us__more a,
+.azc-support-us__contact a {
+	color: var(--color-main-text);
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+@media (max-width: 640px) {
+	.azc-support-us__secondary {
+		flex-direction: column;
+	}
+
+	.azc-support-us__cta {
+		width: 100%;
+	}
+
+	.azc-support-us__primary {
+		width: 100%;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.azc-support-us__cta {
+		transition: none;
+	}
+}
+/* === support-us:azc end === */

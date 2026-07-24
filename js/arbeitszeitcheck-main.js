@@ -486,22 +486,22 @@
 
                                     this.triggerAutomaticDailyMaximumClockOut();
                                 }
-                            } else if (totalDailyHours >= 8) {
-                                // Approaching 10 hours (8+ hours) - show warning state
+                            } else if (totalDailyHours >= Math.max(1, maxWorkingHours - 2)) {
+                                // Approaching the configured daily maximum (max − 2 h).
+                                // Country-aware copy is injected via mainUiStrings (legacy ArbZG keys remap).
                                 timerEl.classList.add('timer-warning');
                                 if (sessionTimerEl) {
                                     sessionTimerEl.classList.add('timer-warning');
                                 }
-                                
-                                // Show info notification when reaching 8 hours (only once)
+
                                 if (!timerEl.dataset.infoShown) {
                                     timerEl.dataset.infoShown = 'true';
-                                    
+
                                     if (window.OC && OC.Notification) {
                                         const infoMsg = mainT('Note: You are approaching the maximum working hours. Extended hours must be compensated within 6 months (ArbZG §3).');
-                                        OC.Notification.showTemporary(infoMsg, { 
-                                            type: 'info', 
-                                            timeout: 10000 
+                                        OC.Notification.showTemporary(infoMsg, {
+                                            type: 'info',
+                                            timeout: 10000
                                         });
                                     }
                                 }

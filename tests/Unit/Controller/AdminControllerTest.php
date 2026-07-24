@@ -2603,6 +2603,31 @@ class AdminControllerTest extends TestCase
 		$this->assertSame('AT-K', $store['german_state'], 'A region already matching the country must not be reset');
 	}
 
+	/**
+	 * E-4: switching country must never overwrite an explicit max_daily_hours
+	 * admin setting — only the default region may be reset.
+	 */
+	public function testUpdateAdminSettingsCountrySwitchDoesNotOverwriteMaxDailyHours(): void
+	{
+		$store = &$this->wireAppConfigStore([
+			'german_state' => 'NW',
+			'max_daily_hours' => '9.5',
+			'min_rest_period' => '12',
+		]);
+		$this->request->method('getParams')->willReturn(['country' => 'AT']);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('AT', $store['country']);
+		$this->assertSame('AT-W', $store['german_state']);
+		$this->assertSame('9.5', $store['max_daily_hours'], 'E-4: explicit max daily hours must survive country switch');
+		$this->assertSame('12', $store['min_rest_period'], 'E-4: explicit rest period must survive country switch');
+		$this->assertArrayNotHasKey('maxDailyHours', $data['settings'] ?? []);
+		$this->assertArrayNotHasKey('minRestPeriod', $data['settings'] ?? []);
+	}
+
 	public function testGetStateHolidaysRejectsInvalidRegion(): void
 	{
 		$this->holidayCalendarService->expects($this->never())->method('getHolidaysForRange');

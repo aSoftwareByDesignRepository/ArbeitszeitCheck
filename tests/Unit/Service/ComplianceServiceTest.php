@@ -1221,4 +1221,68 @@ class ComplianceServiceTest extends TestCase
 		$this->assertStringContainsString('60', $longIssues[0]);
 		$this->assertStringContainsString('ArG Art. 15', $longIssues[0]);
 	}
+
+	public function testAustrianAbsoluteWeeklyMaximumWarnsAboveSixtyHours(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$this->timeEntryMapper->expects($this->once())
+			->method('getTotalHoursByUserAndDateRange')
+			->willReturn(61.5);
+
+		$method = new \ReflectionMethod(ComplianceService::class, 'checkAbsoluteWeeklyHours');
+		$method->setAccessible(true);
+		$result = $method->invoke(
+			$this->service,
+			'at-user',
+			new \DateTime('2024-01-15 18:00:00')
+		);
+
+		$this->assertFalse($result['valid']);
+		$this->assertSame(60.0, $result['limit']);
+		$this->assertSame(61.5, $result['average']);
+		$this->assertStringContainsString('60', (string)$result['message']);
+		$this->assertStringContainsString('AZG §9', (string)$result['message']);
+	}
+
+	public function testSwissAbsoluteWeeklyMaximumWarnsAboveFortyFiveHours(): void
+	{
+		$this->rebuildServiceForCountry('CH');
+
+		$this->timeEntryMapper->expects($this->once())
+			->method('getTotalHoursByUserAndDateRange')
+			->willReturn(46.0);
+
+		$method = new \ReflectionMethod(ComplianceService::class, 'checkAbsoluteWeeklyHours');
+		$method->setAccessible(true);
+		$result = $method->invoke(
+			$this->service,
+			'ch-user',
+			new \DateTime('2024-01-15 18:00:00')
+		);
+
+		$this->assertFalse($result['valid']);
+		$this->assertSame(45.0, $result['limit']);
+		$this->assertStringContainsString('45', (string)$result['message']);
+		$this->assertStringContainsString('ArG', (string)$result['message']);
+	}
+
+	public function testGermanProfileSkipsAbsoluteWeeklyMaximum(): void
+	{
+		$this->rebuildServiceForCountry('DE');
+
+		$this->timeEntryMapper->expects($this->never())
+			->method('getTotalHoursByUserAndDateRange');
+
+		$method = new \ReflectionMethod(ComplianceService::class, 'checkAbsoluteWeeklyHours');
+		$method->setAccessible(true);
+		$result = $method->invoke(
+			$this->service,
+			'de-user',
+			new \DateTime('2024-01-15 18:00:00')
+		);
+
+		$this->assertTrue($result['valid']);
+		$this->assertNull($result['message']);
+	}
 }

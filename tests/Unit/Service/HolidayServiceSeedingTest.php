@@ -58,6 +58,9 @@ class HolidayServiceSeedingTest extends TestCase
 	/** @var string[] "STATE|Y-m-d" entries passed to removeSuppression() */
 	private $removedSuppressions = [];
 
+	/** @var array<string,int> date Y-m-d => holiday id for findIdForStateDateScope */
+	private $existingStatutoryIdsByDate = [];
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -66,6 +69,7 @@ class HolidayServiceSeedingTest extends TestCase
 		$this->suppressionMapper = $this->createMock(HolidaySuppressionMapper::class);
 		$this->suppressedDates = [];
 		$this->removedSuppressions = [];
+		$this->existingStatutoryIdsByDate = [];
 		// A single mutable stub: tests set $this->suppressedDates instead of
 		// re-stubbing (re-stubbing the same method does not override the first
 		// configuration in PHPUnit 9).
@@ -124,10 +128,12 @@ class HolidayServiceSeedingTest extends TestCase
 				return $msg;
 			});
 
-		// Default: no existing statutory row for a catalog date (insert path).
+		// Mutable stub — tests populate $this->existingStatutoryIdsByDate.
 		$this->holidayMapper
 			->method('findIdForStateDateScope')
-			->willReturn(null);
+			->willReturnCallback(function (string $state, string $dateYmd, string $scope): ?int {
+				return $this->existingStatutoryIdsByDate[$dateYmd] ?? null;
+			});
 
 		$this->service = new HolidayService(
 			$this->holidayMapper,
@@ -272,9 +278,7 @@ class HolidayServiceSeedingTest extends TestCase
 		$this->suppressedDates = [$state . '|' . $suppressedDate];
 
 		// The previously deleted statutory row is gone from the DB.
-		$this->holidayMapper
-			->method('findIdForStateDateScope')
-			->willReturn(null);
+		$this->existingStatutoryIdsByDate = [];
 
 		$this->holidayMapper
 			->method('hasStatutoryHolidaysForStateAndYear')
@@ -339,9 +343,10 @@ class HolidayServiceSeedingTest extends TestCase
 			->method('hasStatutoryHolidaysForStateAndYear')
 			->willReturn(true);
 
-		$this->holidayMapper
-			->method('findIdForStateDateScope')
-			->willReturn(9001);
+		// Catalog dates already present — only pruning of stale rows matters.
+		foreach (array_keys(\OCA\ArbeitszeitCheck\Support\HolidayCatalogResolver::statutoryHolidaysForRegionAndYear($state, 2026)) as $ymd) {
+			$this->existingStatutoryIdsByDate[$ymd] = 9001;
+		}
 
 		$existingFull = new Holiday();
 		$existingFull->setId(9001);
@@ -414,9 +419,9 @@ class HolidayServiceSeedingTest extends TestCase
 			->method('hasStatutoryHolidaysForStateAndYear')
 			->willReturn(true);
 
-		$this->holidayMapper
-			->method('findIdForStateDateScope')
-			->willReturn(9001);
+		foreach (array_keys(\OCA\ArbeitszeitCheck\Support\HolidayCatalogResolver::statutoryHolidaysForRegionAndYear($state, $year)) as $ymd) {
+			$this->existingStatutoryIdsByDate[$ymd] = 9001;
+		}
 
 		$existingFull = new Holiday();
 		$existingFull->setId(9001);
@@ -474,20 +479,24 @@ class HolidayServiceSeedingTest extends TestCase
 		$staleFull->setCreatedAt(new \DateTime());
 		$staleFull->setUpdatedAt(new \DateTime());
 
+		$otherFull = new Holiday();
+		$otherFull->setId(9001);
+		$otherFull->setState($state);
+		$otherFull->setName('New Year');
+		$otherFull->setKind(Holiday::KIND_FULL);
+		$otherFull->setScope(Holiday::SCOPE_STATUTORY);
+		$otherFull->setSource(Holiday::SOURCE_GENERATED);
+		$otherFull->setDate(new \DateTime('2026-01-01'));
+		$otherFull->setCreatedAt(new \DateTime());
+		$otherFull->setUpdatedAt(new \DateTime());
+
 		$this->holidayMapper
 			->method('hasStatutoryHolidaysForStateAndYear')
 			->willReturn(true);
 
-		$this->holidayMapper
-			->method('findIdForStateDateScope')
-			->willReturnCallback(static function (string $s, string $date) use ($state): ?int {
-				return ($s === $state && $date === '2026-04-20') ? 77 : 9001;
-			});
-
-		$otherFull = clone $staleFull;
-		$otherFull->setId(9001);
-		$otherFull->setDate(new \DateTime('2026-01-01'));
-		$otherFull->setName('New Year');
+		foreach (array_keys(\OCA\ArbeitszeitCheck\Support\HolidayCatalogResolver::statutoryHolidaysForRegionAndYear($state, $year)) as $ymd) {
+			$this->existingStatutoryIdsByDate[$ymd] = ($ymd === '2026-04-20') ? 77 : 9001;
+		}
 
 		$this->holidayMapper
 			->method('findById')
