@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use OCA\ArbeitszeitCheck\Service\IconCatalog;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 
 /**
  * Dashboard template for arbeitszeitcheck app
@@ -23,7 +24,12 @@ $overtime = $_['overtime'] ?? [];
 $weekOvertime = is_array($_['weekOvertime'] ?? null) ? $_['weekOvertime'] : [];
 $overtimeBank = is_array($_['overtimeBank'] ?? null) ? $_['overtimeBank'] : ['enabled' => false];
 $overtimeTrafficLight = is_array($_['overtimeTrafficLight'] ?? null) ? $_['overtimeTrafficLight'] : ['enabled' => false, 'state' => 'green'];
-$maxDailyHours = (float)\OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+try {
+	$azcMaxDefault = (string)\OCP\Server::get(LaborLawProfileFactory::class)->getProfile()->dailyMaxHoursDefault;
+} catch (\Throwable) {
+	$azcMaxDefault = '10';
+}
+$maxDailyHours = (float)\OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitcheck', 'max_daily_hours', $azcMaxDefault);
 $recentEntries = $_['recentEntries'] ?? [];
 $dashboardError = isset($_['error']) && is_string($_['error']) ? trim($_['error']) : '';
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
@@ -147,7 +153,7 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                 <header class="azc-card__header">
                     <div class="azc-card__header-text">
                         <h2 id="welcome-title" class="azc-card__title"><?php p($l->t('Welcome to Time Tracking!')); ?></h2>
-                        <p class="azc-card__lead"><?php p($l->t('This app helps you record your work time and follow German labor law. Here\'s how to get started:')); ?></p>
+                        <p class="azc-card__lead"><?php p($l->t('This app helps you record your work time and follow the configured labour law. Here\'s how to get started:')); ?></p>
                     </div>
                 </header>
                 <div class="azc-card__body">
@@ -305,7 +311,7 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                 <span class="azc-callout__icon azc-notif-icon-well" aria-hidden="true"><?php print_unescaped(IconCatalog::render('clock', 'azc-callout__icon-svg')); ?></span>
                                 <div class="azc-callout__body">
                                     <p class="azc-callout__title"><?php p($l->t('Night shift across midnight')); ?></p>
-                                    <p class="azc-callout__text"><?php p($l->t('Your session continues from yesterday. “Worked today” counts only the hours since midnight on the current calendar day (German labor law, ArbZG §3). The session timer shows your total working time since clock-in.')); ?></p>
+                                    <p class="azc-callout__text"><?php p($l->t('Your session continues from yesterday. “Worked today” counts only the hours since midnight on the current calendar day (labour-law daily limit). The session timer shows your total working time since clock-in.')); ?></p>
                                 </div>
                             </div>
                         <?php endif; ?>
@@ -420,7 +426,7 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                     class="azc-btn azc-btn--secondary"
                                     type="button"
                                     aria-label="<?php p($l->t('Start a break from work')); ?>"
-                                    title="<?php p($l->t('Click to start a break. You must take breaks according to German labor law.')); ?>">
+                                    title="<?php p($l->t('Click to start a break. You must take breaks according to the configured labour law.')); ?>">
                                     <?php p($l->t('Start Break')); ?>
                                 </button>
                                 <button class="azc-btn azc-btn--danger btn-clock-out"

@@ -31,7 +31,7 @@ $currentYear = date('Y');
                         <span class="footer__logo-text"><?php p($l->t('ArbeitszeitCheck')); ?></span>
                     </div>
                     <p class="footer__description">
-                        <?php p($l->t('Professional time tracking and compliance management for German labor law.')); ?>
+                        <?php p($l->t('Professional time tracking and compliance management for Germany, Austria and Switzerland (DACH).')); ?>
                         <?php p($l->t('Track work hours, manage absences, and ensure legal compliance.')); ?>
                     </p>
                     <div class="footer__version">
@@ -119,10 +119,26 @@ $currentYear = date('Y');
                 <!-- Legal and compliance -->
                 <div class="footer__section">
                     <h3 class="footer__section-title"><?php p($l->t('Legal and compliance')); ?></h3>
+                    <?php
+                    try {
+                        $azcFooterProfile = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)->getProfile();
+                    } catch (\Throwable) {
+                        $azcFooterProfile = \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry('DE');
+                    }
+                    $azcFooterCountry = $azcFooterProfile->country;
+                    ?>
                     <ul class="footer__link-list">
                         <li class="footer__link-item">
                             <span class="footer__link footer__link--info">
-                                <?php p($l->t('German Labor Law Compliant')); ?>
+                                <?php
+                                p(match ($azcFooterCountry) {
+                                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_AT
+                                        => $l->t('Austrian labour law oriented (AZG / ARG)'),
+                                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH
+                                        => $l->t('Swiss labour law oriented (ArG)'),
+                                    default => $l->t('German Labor Law Compliant'),
+                                });
+                                ?>
                             </span>
                         </li>
                         <li class="footer__link-item">
@@ -132,12 +148,28 @@ $currentYear = date('Y');
                         </li>
                         <li class="footer__link-item">
                             <span class="footer__link footer__link--info">
-                                <?php p($l->t('Arbeitsschutzgesetz (ArbSchG)')); ?>
+                                <?php
+                                p(match ($azcFooterCountry) {
+                                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_AT
+                                        => $l->t('Arbeitszeitgesetz (AZG)'),
+                                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH
+                                        => $l->t('Arbeitsgesetz (ArG)'),
+                                    default => $l->t('Arbeitsschutzgesetz (ArbSchG)'),
+                                });
+                                ?>
                             </span>
                         </li>
                         <li class="footer__link-item">
                             <span class="footer__link footer__link--info">
-                                <?php p($l->t('Arbeitszeitgesetz (ArbZG)')); ?>
+                                <?php
+                                p(match ($azcFooterCountry) {
+                                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_AT
+                                        => $l->t('Arbeitsruhegesetz (ARG)'),
+                                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH
+                                        => $l->t('Ordinances to the Labour Act (ArGV)'),
+                                    default => $l->t('Arbeitszeitgesetz (ArbZG)'),
+                                });
+                                ?>
                             </span>
                         </li>
                     </ul>
@@ -153,7 +185,15 @@ $currentYear = date('Y');
                             <?php p($l->t('Built for Nextcloud.')); ?>
                         </p>
                         <p class="footer__compliance-notice">
-                            <?php p($l->t('Compliant with German labor law (ArbZG, ArbSchG) and GDPR (DSGVO).')); ?>
+                            <?php
+                            p(match ($azcFooterCountry) {
+                                \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_AT
+                                    => $l->t('Oriented on Austrian labour law (AZG/ARG) and GDPR (DSGVO).'),
+                                \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH
+                                    => $l->t('Oriented on Swiss labour law (ArG) and GDPR (DSGVO).'),
+                                default => $l->t('Compliant with German labor law (ArbZG, ArbSchG) and GDPR (DSGVO).'),
+                            });
+                            ?>
                         </p>
                     </div>
 

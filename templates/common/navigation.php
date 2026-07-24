@@ -13,11 +13,18 @@ declare(strict_types=1);
  */
 
 use OCA\ArbeitszeitCheck\Constants;
+use OCA\ArbeitszeitCheck\Service\IconCatalog;
 use OCP\Util;
 
-// Ensure navigation scripts load on all pages with sidebar (submenu toggles, keyboard nav, SVG icons)
+// Ensure navigation scripts load on all pages with sidebar (submenu toggles, keyboard nav).
+// Nav icons are server-rendered via IconCatalog; navigation-icons.js remains for rare
+// post-load [data-lucide] placeholders on other pages.
 Util::addScript('arbeitszeitcheck', 'common/navigation');
 Util::addScript('arbeitszeitcheck', 'common/navigation-icons');
+
+$azcNavIcon = static function (string $name): string {
+	return IconCatalog::render($name, 'azc-nav__icon-svg');
+};
 
 // Single, authoritative emission of the JavaScript timezone bootstrap on every
 // page that uses the shared navigation. This guarantees that `ArbeitszeitCheck.tz`
@@ -32,41 +39,69 @@ require __DIR__ . '/time-bootstrap.php';
 $urlGenerator = $_['urlGenerator'];
 $l = $_['l'];
 
-// Get current page to highlight active navigation item
+// Prefer controller-provided pageId (reliable); fall back to URI matching for
+// legacy/partial renders that omit the shell params.
+$pageId = isset($_['pageId']) ? (string)$_['pageId'] : '';
 $currentPage = $_SERVER['REQUEST_URI'] ?? '';
-$isTimeEntries = strpos($currentPage, '/time-entries') !== false;
-$isAbsences = strpos($currentPage, '/absences') !== false;
-$isReports = strpos($currentPage, '/reports') !== false;
-$isCalendar = strpos($currentPage, '/calendar') !== false;
-$isTimeline = strpos($currentPage, '/timeline') !== false;
-$isSettings = strpos($currentPage, '/settings') !== false;
-$isManagerPage = strpos($currentPage, '/manager') !== false;
-$isManagerTimeEntries = strpos($currentPage, '/manager/time-entries') !== false;
-$isManagerAbsences = strpos($currentPage, '/manager/absences') !== false;
-$isManagerMonthClosures = strpos($currentPage, '/manager/month-closures') !== false;
-$isManagerDashboard = $isManagerPage && !$isManagerTimeEntries && !$isManagerAbsences && !$isManagerMonthClosures;
-$isSubstitutionRequests = strpos($currentPage, '/substitution-requests') !== false;
-$isCompliance = strpos($currentPage, '/compliance') !== false;
-$isAdmin = strpos($currentPage, '/admin') !== false;
+
+$isTimeEntries = $pageId === 'time-entries' || ($pageId === '' && strpos($currentPage, '/time-entries') !== false);
+$isAbsences = $pageId === 'absences' || ($pageId === '' && strpos($currentPage, '/absences') !== false);
+$isReports = $pageId === 'reports' || ($pageId === '' && strpos($currentPage, '/reports') !== false);
+$isCalendar = $pageId === 'calendar' || ($pageId === '' && strpos($currentPage, '/calendar') !== false);
+$isTimeline = $pageId === 'timeline' || ($pageId === '' && strpos($currentPage, '/timeline') !== false);
+$isSettings = $pageId === 'settings' || ($pageId === '' && strpos($currentPage, '/settings') !== false);
+$isManagerDashboard = $pageId === 'manager-dashboard';
+$isManagerTimeEntries = $pageId === 'manager-time-entries';
+$isManagerAbsences = $pageId === 'manager-absences';
+$isManagerMonthClosures = $pageId === 'manager-month-closures';
+$isManagerPage = $isManagerDashboard || $isManagerTimeEntries || $isManagerAbsences || $isManagerMonthClosures
+	|| ($pageId === '' && strpos($currentPage, '/manager') !== false);
+if ($pageId === '' && $isManagerPage) {
+	$isManagerTimeEntries = strpos($currentPage, '/manager/time-entries') !== false;
+	$isManagerAbsences = strpos($currentPage, '/manager/absences') !== false;
+	$isManagerMonthClosures = strpos($currentPage, '/manager/month-closures') !== false;
+	$isManagerDashboard = $isManagerPage && !$isManagerTimeEntries && !$isManagerAbsences && !$isManagerMonthClosures;
+}
+$isSubstitutionRequests = $pageId === 'substitution-requests'
+	|| ($pageId === '' && strpos($currentPage, '/substitution-requests') !== false);
+$isCompliance = str_starts_with($pageId, 'compliance-')
+	|| ($pageId === '' && strpos($currentPage, '/compliance') !== false);
+$isAdmin = str_starts_with($pageId, 'admin-')
+	|| ($pageId === '' && strpos($currentPage, '/admin') !== false);
 // Finer-grained admin section flags for clear highlighting of sub-items
-$isAdminDashboard = strpos($currentPage, '/admin/dashboard') !== false || ($isAdmin && strpos($currentPage, '/admin/') === false);
-$isAdminUsers = strpos($currentPage, '/admin/users') !== false;
-$isAdminWorkingTimeModels = strpos($currentPage, '/admin/working-time-models') !== false;
-$isAdminTariffRules = strpos($currentPage, '/admin/tariff-rules') !== false;
-$isAdminHolidays = strpos($currentPage, '/admin/holidays') !== false;
-$isAdminTeams = strpos($currentPage, '/admin/teams') !== false;
-$isAdminVacationLayers = strpos($currentPage, '/admin/vacation-layers') !== false;
-$isAdminAuditLog = strpos($currentPage, '/admin/audit-log') !== false;
-$isAdminSettingsPage = strpos($currentPage, '/admin/settings') !== false;
-$isAdminLicensePage = strpos($currentPage, '/admin/license') !== false;
-$isAdminKioskPage = strpos($currentPage, '/admin/kiosk') !== false;
-$isAdminNotificationsPage = strpos($currentPage, '/admin/notifications') !== false;
-$isAdminOvertimePayoutsPage = strpos($currentPage, '/admin/overtime-payouts') !== false;
-$isAdminOvertimePayoutAuditPage = strpos($currentPage, '/admin/overtime-payout-audit') !== false;
-// Dashboard is active if URL contains /dashboard OR if it's the base app URL without any specific section
-$isDashboard = strpos($currentPage, '/dashboard') !== false ||
+$isAdminDashboard = $pageId === 'admin-dashboard'
+	|| ($pageId === '' && (strpos($currentPage, '/admin/dashboard') !== false || ($isAdmin && strpos($currentPage, '/admin/') === false)));
+$isAdminUsers = $pageId === 'admin-users' || $pageId === 'admin-user-detail'
+	|| ($pageId === '' && strpos($currentPage, '/admin/users') !== false);
+$isAdminWorkingTimeModels = $pageId === 'admin-working-time-models'
+	|| ($pageId === '' && strpos($currentPage, '/admin/working-time-models') !== false);
+$isAdminTariffRules = $pageId === 'admin-tariff-rules'
+	|| ($pageId === '' && strpos($currentPage, '/admin/tariff-rules') !== false);
+$isAdminHolidays = $pageId === 'admin-holidays'
+	|| ($pageId === '' && strpos($currentPage, '/admin/holidays') !== false);
+$isAdminTeams = $pageId === 'admin-teams'
+	|| ($pageId === '' && strpos($currentPage, '/admin/teams') !== false);
+$isAdminVacationLayers = $pageId === 'admin-vacation-layers'
+	|| ($pageId === '' && strpos($currentPage, '/admin/vacation-layers') !== false);
+$isAdminAuditLog = $pageId === 'admin-audit-log'
+	|| ($pageId === '' && strpos($currentPage, '/admin/audit-log') !== false);
+$isAdminSettingsPage = $pageId === 'admin-settings'
+	|| ($pageId === '' && strpos($currentPage, '/admin/settings') !== false);
+$isAdminLicensePage = $pageId === 'admin-license'
+	|| ($pageId === '' && strpos($currentPage, '/admin/license') !== false);
+$isAdminKioskPage = $pageId === 'admin-kiosk'
+	|| ($pageId === '' && strpos($currentPage, '/admin/kiosk') !== false);
+$isAdminNotificationsPage = $pageId === 'admin-notifications'
+	|| ($pageId === '' && strpos($currentPage, '/admin/notifications') !== false);
+$isAdminOvertimePayoutsPage = $pageId === 'admin-overtime-payouts'
+	|| ($pageId === '' && strpos($currentPage, '/admin/overtime-payouts') !== false);
+$isAdminOvertimePayoutAuditPage = $pageId === 'admin-overtime-payout-audit'
+	|| ($pageId === '' && strpos($currentPage, '/admin/overtime-payout-audit') !== false);
+// Dashboard is active if pageId says so, or URI fallback for the app home.
+$isDashboard = $pageId === 'dashboard' ||
+    ($pageId === '' && (strpos($currentPage, '/dashboard') !== false ||
     (!$isTimeEntries && !$isAbsences && !$isReports && !$isCompliance && !$isCalendar && !$isTimeline && !$isSettings &&
-        !$isSubstitutionRequests && !$isAdmin && strpos($currentPage, '/apps/arbeitszeitcheck') !== false) && !$isManagerPage;
+        !$isSubstitutionRequests && !$isAdmin && strpos($currentPage, '/apps/arbeitszeitcheck') !== false) && !$isManagerPage));
 
 // Show Substitution requests link only when user has pending requests (where they are the substitute)
 $showSubstitutionLink = !empty($_['showSubstitutionLink']);
@@ -97,11 +132,15 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
         <!-- Sidebar Header -->
         <div class="sidebar-header">
             <div class="app-brand">
-                <div class="app-icon">
-                    <i data-lucide="clock" class="lucide-icon" aria-hidden="true"></i>
+                <div class="app-icon" aria-hidden="true">
+                    <span class="azc-nav__icon"><?php print_unescaped($azcNavIcon('clock')); ?></span>
                 </div>
                 <div class="app-info">
                     <h3><?php p($l->t('ArbeitszeitCheck')); ?></h3>
+                    <p class="app-brand__subtitle"><?php p($l->t('Working time & compliance')); ?></p>
+                    <?php if (!empty($_['roleLabel'])): ?>
+                        <p class="app-brand__role"><?php p((string)$_['roleLabel']); ?></p>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -112,7 +151,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                 <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.index')); ?>"
                     title="<?php p($l->t('Dashboard: View your current status, today\'s hours, and recent entries')); ?>"
                     aria-label="<?php p($l->t('Go to dashboard to see your status and today\'s hours')); ?>">
-                    <i data-lucide="home" class="lucide-icon" aria-hidden="true"></i>
+                    <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('home')); ?></span>
                     <span><?php p($l->t('Dashboard')); ?></span>
                 </a>
             </li>
@@ -120,7 +159,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                 <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.timeEntries')); ?>"
                     title="<?php p($l->t('Time entries: View, create, and edit working time records')); ?>"
                     aria-label="<?php p($l->t('Go to time entries to view all working times')); ?>">
-                    <i data-lucide="clock" class="lucide-icon" aria-hidden="true"></i>
+                    <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('clock')); ?></span>
                     <span><?php p($l->t('Time entries')); ?></span>
                 </a>
             </li>
@@ -128,7 +167,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                 <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.absences')); ?>"
                     title="<?php p($l->t('Absences: Manage vacation, sickness, and other absences')); ?>"
                     aria-label="<?php p($l->t('Go to absences to manage vacation and sick leave')); ?>">
-                    <i data-lucide="calendar-off" class="lucide-icon" aria-hidden="true"></i>
+                    <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('calendar-off')); ?></span>
                     <span><?php p($l->t('Absences')); ?></span>
                 </a>
             </li>
@@ -136,7 +175,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                 <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.calendar')); ?>"
                     title="<?php p($l->t('Calendar: View working times and absences in calendar format')); ?>"
                     aria-label="<?php p($l->t('Go to calendar to view working times in a calendar')); ?>">
-                    <i data-lucide="calendar" class="lucide-icon" aria-hidden="true"></i>
+                    <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('calendar')); ?></span>
                     <span><?php p($l->t('Calendar')); ?></span>
                 </a>
             </li>
@@ -144,15 +183,15 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                 <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.timeline')); ?>"
                     title="<?php p($l->t('Timeline: View working times in chronological order')); ?>"
                     aria-label="<?php p($l->t('Go to timeline to view your working-time history')); ?>">
-                    <i data-lucide="activity" class="lucide-icon" aria-hidden="true"></i>
+                    <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('activity')); ?></span>
                     <span><?php p($l->t('Timeline')); ?></span>
                 </a>
             </li>
             <li class="<?php p($isCompliance ? 'active' : ''); ?>" <?php p($isCompliance ? 'aria-current="page"' : ''); ?>>
                 <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.compliance.dashboard')); ?>"
-                    title="<?php p($l->t('Working time compliance: Check whether your times comply with German labor law')); ?>"
+                    title="<?php p($l->t('Working time compliance: Check whether your times comply with the configured labour law')); ?>"
                     aria-label="<?php p($l->t('Go to working time compliance to review compliance status')); ?>">
-                    <i data-lucide="shield-check" class="lucide-icon" aria-hidden="true"></i>
+                    <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('shield-check')); ?></span>
                     <span><?php p($l->t('Working time compliance')); ?></span>
                 </a>
             </li>
@@ -161,7 +200,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                 <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.settings')); ?>"
                     title="<?php p($l->t('My settings: Customize personal view and notification options')); ?>"
                     aria-label="<?php p($l->t('Go to my settings to change personal options')); ?>">
-                    <i data-lucide="settings" class="lucide-icon" aria-hidden="true"></i>
+                    <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('settings')); ?></span>
                     <span><?php p($l->t('My settings')); ?></span>
                 </a>
             </li>
@@ -172,7 +211,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                         type="button"
                         aria-expanded="<?php p($isAdmin ? 'true' : 'false'); ?>"
                         aria-controls="admin-subnav">
-                        <i data-lucide="shield" class="lucide-icon" aria-hidden="true"></i>
+                        <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('shield')); ?></span>
                         <span><?php p($l->t('Administration')); ?></span>
                     </button>
                     <ul id="admin-subnav" class="nav-submenu" <?php p($isAdmin ? '' : 'hidden'); ?>>
@@ -284,7 +323,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                         type="button"
                         aria-expanded="<?php p($isManagerPage ? 'true' : 'false'); ?>"
                         aria-controls="manager-subnav">
-                        <i data-lucide="users" class="lucide-icon" aria-hidden="true"></i>
+                        <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('users')); ?></span>
                         <span><?php p($l->t('Manager')); ?></span>
                     </button>
                     <ul id="manager-subnav" class="nav-submenu" <?php p($isManagerPage ? '' : 'hidden'); ?>>
@@ -348,7 +387,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                     <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.reports')); ?>"
                         title="<?php p($l->t('Reports for team and organization overviews (visible to managers/admins only)')); ?>"
                         aria-label="<?php p($l->t('Go to reports to create team or organization overviews (managers/admins only)')); ?>">
-                        <i data-lucide="file-text" class="lucide-icon" aria-hidden="true"></i>
+                        <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('file-text')); ?></span>
                         <span><?php p($l->t('Reports')); ?></span>
                     </a>
                 </li>
@@ -358,7 +397,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                     <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.substitute.index')); ?>"
                         title="<?php p($l->t('Substitution requests: Accept or decline colleague coverage requests')); ?>"
                         aria-label="<?php p($l->t('Go to substitution requests')); ?>">
-                        <i data-lucide="user-check" class="lucide-icon" aria-hidden="true"></i>
+                        <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('user-check')); ?></span>
                         <span><?php p($l->t('Substitution requests')); ?></span>
                     </a>
                 </li>

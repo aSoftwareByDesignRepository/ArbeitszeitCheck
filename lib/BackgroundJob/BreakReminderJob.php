@@ -16,6 +16,7 @@ use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\TimedJob;
 use OCP\IConfig;
@@ -25,8 +26,8 @@ use Psr\Log\LoggerInterface;
 /**
  * Break reminder job
  *
- * Checks for users who have worked 6+ hours without taking a break
- * Runs every 30 minutes during business hours
+ * Checks for users who have reached a country-profile break tier without
+ * taking the required break. Runs every 30 minutes during business hours.
  */
 class BreakReminderJob extends TimedJob
 {
@@ -38,6 +39,7 @@ class BreakReminderJob extends TimedJob
 	private LoggerInterface $logger;
 	private PermissionService $permissionService;
 	private TimeTrackingService $timeTrackingService;
+	private LaborLawProfileFactory $lawProfileFactory;
 
 	public function __construct(
 		ITimeFactory $timeFactory,
@@ -48,7 +50,8 @@ class BreakReminderJob extends TimedJob
 		IConfig $config,
 		LoggerInterface $logger,
 		PermissionService $permissionService,
-		TimeTrackingService $timeTrackingService
+		TimeTrackingService $timeTrackingService,
+		LaborLawProfileFactory $lawProfileFactory,
 	) {
 		parent::__construct($timeFactory);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -59,6 +62,7 @@ class BreakReminderJob extends TimedJob
 		$this->logger = $logger;
 		$this->permissionService = $permissionService;
 		$this->timeTrackingService = $timeTrackingService;
+		$this->lawProfileFactory = $lawProfileFactory;
 
 		// Run every 30 minutes
 		$this->setInterval(30 * 60);
@@ -142,17 +146,13 @@ class BreakReminderJob extends TimedJob
 				// Calendar-day hours (midnight-clipped), same rules as TimeTrackingService::getTodayHours().
 				$totalHoursWorked = $this->timeTrackingService->getTodayHours($userId);
 
-				// Check if break is required (ArbZG §4: 9h check must precede 6h check)
-				$breakDuration = $activeEntry->getBreakDurationHours();
-				$requiredBreak = 0;
-
-				if ($totalHoursWorked >= 9 && $breakDuration < 0.75) {
-					// 45 minutes break required after 9 hours
-					$requiredBreak = 45;
-				} elseif ($totalHoursWorked >= 6 && $breakDuration < 0.5) {
-					// 30 minutes break required after 6 hours
-					$requiredBreak = 30;
-				}
+				// Country profile break tiers (DE: 9h→45 then 6h→30; AT: 6h→30).
+				$requiredBreakMinutes = $this->lawProfileFactory->getProfile()
+					->requiredBreakMinutes($totalHoursWorked);
+				$takenBreakMinutes = (int)round($activeEntry->getBreakDurationHours() * 60);
+				$requiredBreak = $requiredBreakMinutes > $takenBreakMinutes
+					? $requiredBreakMinutes
+					: 0;
 
 				if ($requiredBreak > 0) {
 					// Check if we already sent a reminder in the last hour for this entry

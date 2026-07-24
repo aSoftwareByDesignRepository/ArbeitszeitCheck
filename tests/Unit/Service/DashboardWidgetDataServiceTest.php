@@ -80,6 +80,9 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 	public function testEmployeeWidgetDataFormatsIsoSessionStartInUserDisplayTz(): void {
 		$timeTrackingService = $this->createMock(TimeTrackingService::class);
+		$timeTrackingService->method('lawProfile')->willReturn(
+			\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry('DE')
+		);
 		$timeTrackingService->method('getStatus')->with('u1')->willReturn([
 			'status' => 'active',
 			'working_today_hours' => 1.0,
@@ -175,6 +178,9 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 	public function testEmployeeWidgetDataExposesBreakStartTimeIso(): void {
 		$timeTrackingService = $this->createMock(TimeTrackingService::class);
+		$timeTrackingService->method('lawProfile')->willReturn(
+			\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry('DE')
+		);
 		$timeTrackingService->method('getStatus')->with('u1')->willReturn([
 			'status' => 'break',
 			'working_today_hours' => 2.0,
@@ -216,6 +222,9 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 	public function testEmployeeWidgetDataExposesServerClockAnchor(): void {
 		$timeTrackingService = $this->createMock(TimeTrackingService::class);
+		$timeTrackingService->method('lawProfile')->willReturn(
+			\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry('DE')
+		);
 		$timeTrackingService->method('getStatus')->with('u1')->willReturn([
 			'status' => 'active',
 			'server_now' => '2026-01-15T10:00:00+01:00',
@@ -256,6 +265,9 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 	public function testEmployeeWidgetDataUsesTimeTrackingStatus(): void {
 		$timeTrackingService = $this->createMock(TimeTrackingService::class);
+		$timeTrackingService->method('lawProfile')->willReturn(
+			\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry('DE')
+		);
 		$timeTrackingService->method('getStatus')->with('u1')->willReturn([
 			'status' => 'active',
 			'working_today_hours' => 4.5,

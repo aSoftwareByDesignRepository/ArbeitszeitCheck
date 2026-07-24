@@ -58,7 +58,6 @@ class HolidayPolicyIntegrationTest extends TestCase
 		$holidayMapper = \OC::$server->get(HolidayMapper::class);
 
 		$holidayService->clearCacheForStateYear(self::TEST_STATE, self::TEST_YEAR);
-		$this->setAppConfigValue('holidays_initialized_state_years', '[]');
 
 		$start = new \DateTime(self::TEST_YEAR . '-01-01');
 		$end = new \DateTime(self::TEST_YEAR . '-12-31');
@@ -108,7 +107,6 @@ class HolidayPolicyIntegrationTest extends TestCase
 		$adminService = \OC::$server->get(HolidayAdminService::class);
 
 		$holidayService->clearCacheForStateYear(self::TEST_STATE, self::TEST_YEAR);
-		$this->setAppConfigValue('holidays_initialized_state_years', '[]');
 
 		$start = new \DateTime(self::TEST_YEAR . '-01-01');
 		$end = new \DateTime(self::TEST_YEAR . '-12-31');

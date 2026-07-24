@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.0 - 2026-07-24
+
+### Added
+
+- **Austria (DACH phase 1):** the instance can now be configured for Austria. New "Country and region" card in the admin settings (accessible radio cards for Germany/Austria with a country-filtered region picker), all nine Austrian Bundesländer as holiday regions (`AT-B` … `AT-W`), and a complete Austrian statutory holiday catalog (13 nationwide days per ARG §7, Easter-linked days included).
+- **Switzerland (DACH phase 2):** Switzerland is a first-class country profile. All 26 cantons (`CH-AG` … `CH-ZH`), Swiss Labour Act (ArG) break tiers (5.5→15 / 7→30 / 9→60), 45 h absolute weekly maximum, and canton-specific statutory calendars including Geneva Jeûne genevois and Vaud Lundi du Jeûne. Zurich Sechseläuten and Knabenschiessen seed as **half-day** statutory holidays (E-6).
+- **Austrian working-time profile:** compliance and time tracking are now driven by a per-country labor-law profile. Austria: 12 h daily / 60 h weekly absolute maximum and 48 h average over 17 weeks (AZG §9), 30-minute break after 6 h (AZG §11), 11 h daily rest (AZG §12), night window 22:00–05:00 (AZG §12b), weekend/holiday rest per ARG §3. Germany keeps the exact previous ArbZG behaviour (guarded by golden snapshot tests).
+- **Holiday suggestions:** the holidays admin page now offers curated non-statutory suggestions per region (Good Friday, patron saint days, 24/31 December for Austria) with one-click add as company holidays; days that already exist are marked. Good Friday ships with an explanatory note (statutory status ended 2019, ARG §7a).
+- **Per-user regions across the border:** employees may be assigned a region of any supported country (cross-border commuters); the UI groups regions by country and shows a clear note when a user's region differs from the instance country.
+- **Mobile capabilities:** the capabilities/bootstrap payload now includes a `compliance` block (country, limits, break tiers, law labels) so mobile clients can render correct legal hints; the app version in capabilities is no longer hard-coded.
+- **Employee mobile app:** bootstrap `compliance` params drive break-rule copy and minimum break length, with German ArbZG defaults when talking to older servers.
+
+### Changed
+
+- **Country-aware personal settings & chrome:** compliance information, footer, and admin help texts follow the configured country (ArbZG vs AZG/ARG) instead of always citing German law.
+- **UI family alignment (Phase 0b):** flatter sidebar chrome (no gradient/accent bar), server-side `IconCatalog` nav icons with brand subtitle/role badge, dialogs use `--azc-radius-lg` / `--azc-shadow-md`, toasts sit bottom-right with MC-style left accent and correct `role="status"` vs `role="alert"`.
+- **Toasts & navigation:** success/info/warning toasts use `role="status"` (errors stay `role="alert"`); sidebar active state prefers `pageId` over URI matching for fewer false positives.
+- **Break reminders & dashboard urgency:** break reminder job and break warning levels use the country profile tiers (no more hard-coded 9 h → 45 min path on Austrian instances).
+- **Web time-entry form:** auto-break calculation, requirement indicator, and compliance status read break tiers from the same profile bootstrap as mobile (`complianceParams`), so Austrian instances no longer show or enforce a phantom 45-minute ArbZG tier in the browser.
+- **Admin wording:** employee holiday picker and section guides say “region” instead of “federal state” (DACH-neutral).
+
+### Fixed
+
+- **Duplicate statutory holidays (race):** `at_holidays` now has a unique index on (state, date, scope); existing duplicates are removed during the upgrade and concurrent seeding can no longer create doubled rows. Creating a holiday on an occupied slot answers a friendly 409 instead of a database error; a lost race after the pre-check also maps unique-constraint failures to HTTP 409.
+- **Legacy holiday opt-outs preserved:** the deprecated `holidays_initialized_state_years` flag is converted to per-date suppressions during the upgrade, so years that were emptied before the suppression table existed stay empty, and the flag is retired.
+- **Region lists unified:** seven previously duplicated (and partially drifted) Bundesland lists were replaced by a single region registry used by services, controllers, commands, and templates.
+- **Unset max daily hours default:** when `max_daily_hours` is not configured, admin/settings/forms fall back to the country profile (DE 10 / AT 12) instead of always assuming 10. Explicit admin values are never overwritten on country switch (E-4).
+- **Compliance dashboard lead:** page description follows the configured country (Austrian labour law vs German labor law).
+
 ## 1.5.23 - 2026-07-21
 
 ### Changed

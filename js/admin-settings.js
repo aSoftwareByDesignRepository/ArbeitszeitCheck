@@ -74,6 +74,70 @@
         initAccessGroupsPicker();
         initProjectCheckAdminToggle();
         initOrganizationTimeCapture();
+        initCountryRegionPicker();
+    }
+
+    /**
+     * Country → region picker (Country and region card).
+     *
+     * When the admin selects a different country, the region select is rebuilt
+     * from the server-rendered JSON (#azc-region-data) and preset to that
+     * country's default region. Nothing is saved until the form is submitted
+     * (WCAG 3.2.2 — no change of context on input).
+     */
+    function initCountryRegionPicker() {
+        const dataEl = document.getElementById('azc-region-data');
+        const regionSelect = Utils.$('#germanState');
+        const radios = Utils.$$('input[name="country"]');
+        if (!dataEl || !regionSelect || radios.length === 0) {
+            return;
+        }
+
+        let regionData;
+        try {
+            regionData = JSON.parse(dataEl.textContent || '{}');
+        } catch (e) {
+            return;
+        }
+        const regionsByCountry = regionData.regionsByCountry || {};
+        const defaultByCountry = regionData.defaultRegionByCountry || {};
+        const liveRegion = Utils.$('#country-region-live');
+        const t = (text) => (window.t ? window.t('arbeitszeitcheck', text) : text);
+
+        function rebuildRegions(country, preferredRegion) {
+            const regions = regionsByCountry[country] || [];
+            if (regions.length === 0) {
+                return;
+            }
+            const target = regions.some(r => r.code === preferredRegion)
+                ? preferredRegion
+                : (defaultByCountry[country] || regions[0].code);
+            regionSelect.textContent = '';
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.code;
+                option.textContent = region.label;
+                option.selected = region.code === target;
+                regionSelect.appendChild(option);
+            });
+            regionSelect.value = target;
+        }
+
+        radios.forEach(radio => {
+            Utils.on(radio, 'change', function() {
+                if (!this.checked) {
+                    return;
+                }
+                rebuildRegions(this.value, regionSelect.value);
+                if (liveRegion) {
+                    const selectedLabel = regionSelect.options[regionSelect.selectedIndex]
+                        ? regionSelect.options[regionSelect.selectedIndex].textContent
+                        : '';
+                    liveRegion.textContent = t('Region list updated. Default region: %s')
+                        .replace('%s', selectedLabel);
+                }
+            });
+        });
     }
 
     function initOrganizationTimeCapture() {

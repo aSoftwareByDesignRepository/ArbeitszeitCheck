@@ -116,6 +116,9 @@ class AdminControllerTest extends TestCase
 	/** @var HolidayService|\PHPUnit\Framework\MockObject\MockObject */
 	private $holidayCalendarService;
 
+	/** @var HolidayMapper|\PHPUnit\Framework\MockObject\MockObject */
+	private $holidayMapper;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -142,6 +145,7 @@ class AdminControllerTest extends TestCase
 		$l10n->method('t')->willReturnCallback(fn ($s, $p = []) => empty($p) ? $s : vsprintf($s, $p));
 		$urlGenerator = $this->createMock(IURLGenerator::class);
 		$holidayMapper = $this->createMock(HolidayMapper::class);
+		$this->holidayMapper = $holidayMapper;
 		$this->holidayCalendarService = $this->createMock(HolidayService::class);
 		$holidayAdminService = $this->createMock(HolidayAdminService::class);
 
@@ -752,19 +756,19 @@ class AdminControllerTest extends TestCase
 	}
 
 	/**
-	 * Test updateAdminSettings validates German state code
+	 * Test updateAdminSettings validates region code (DACH: was "German state")
 	 */
 	public function testUpdateAdminSettingsValidatesGermanState(): void
 	{
 		$this->request->method('getParams')
-			->willReturn(['germanState' => 'XX']); // Invalid state code
+			->willReturn(['germanState' => 'XX']); // Invalid region code
 
 		$response = $this->controller->updateAdminSettings();
 
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
-		$this->assertStringContainsString('Invalid German state code', $data['error']);
+		$this->assertStringContainsString('Invalid region code', $data['error']);
 	}
 
 	/**
@@ -2454,5 +2458,305 @@ class AdminControllerTest extends TestCase
 		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$this->assertFalse($response->getData()['success']);
 		$this->assertStringContainsString('method is required', $response->getData()['error']);
+	}
+
+	/* ============================================================ *
+	 * DACH: country / region settings and holiday suggestions
+	 * ============================================================ */
+
+	/**
+	 * Wires the appConfig mock to a real read-your-writes key/value store so
+	 * the country→region consistency logic can be tested end to end.
+	 *
+	 * @param array<string,string> $initial
+	 * @return array<string,string> reference-captured store
+	 */
+	private function &wireAppConfigStore(array $initial = []): array
+	{
+		$store = $initial;
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$store): bool {
+				unset($lazy, $sensitive);
+				$store[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(static function ($key, $default = '') use (&$store): string {
+				return $store[(string)$key] ?? (string)$default;
+			});
+
+		return $store;
+	}
+
+	public function testUpdateAdminSettingsRejectsUnsupportedCountry(): void
+	{
+		$this->request->method('getParams')->willReturn(['country' => 'FR']);
+		$this->appConfig->expects($this->never())->method('setAppValueString');
+
+		$response = $this->controller->updateAdminSettings();
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringContainsString('Invalid country code', $data['error']);
+	}
+
+	public function testUpdateAdminSettingsRejectsCrossCountryDefaultRegion(): void
+	{
+		// Instance stays German but an Austrian default region is submitted.
+		$this->request->method('getParams')->willReturn([
+			'country' => 'DE',
+			'germanState' => 'AT-W',
+		]);
+
+		$response = $this->controller->updateAdminSettings();
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringContainsString('does not belong to the selected country', $data['error']);
+	}
+
+	public function testUpdateAdminSettingsRejectsAustrianRegionWhenInstanceIsGerman(): void
+	{
+		// No country in the request — the configured instance country (DE via
+		// fallback) must be used for the cross-border check.
+		$this->request->method('getParams')->willReturn(['germanState' => 'AT-ST']);
+
+		$response = $this->controller->updateAdminSettings();
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testUpdateAdminSettingsAcceptsAustrianCountryWithMatchingRegion(): void
+	{
+		$store = &$this->wireAppConfigStore(['german_state' => 'NW']);
+		$this->request->method('getParams')->willReturn([
+			'country' => 'at',        // lowercase on purpose: must be normalised
+			'germanState' => 'at-st', // lowercase on purpose: must be normalised
+		]);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('AT', $store['country']);
+		$this->assertSame('AT-ST', $store['german_state']);
+	}
+
+	/**
+	 * Country switch without an explicit region: the stale German default
+	 * region must be reset to the new country's default (AT → AT-W).
+	 */
+	public function testUpdateAdminSettingsCountrySwitchResetsStaleDefaultRegion(): void
+	{
+		$store = &$this->wireAppConfigStore(['german_state' => 'NW']);
+		$this->request->method('getParams')->willReturn(['country' => 'AT']);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('AT', $store['country']);
+		$this->assertSame('AT-W', $store['german_state'], 'Stale German region must be reset to the Austrian default');
+		$this->assertSame('AT-W', $data['settings']['germanState']);
+	}
+
+	public function testUpdateAdminSettingsAcceptsSwissCountryWithMatchingCanton(): void
+	{
+		$store = &$this->wireAppConfigStore(['german_state' => 'NW']);
+		$this->request->method('getParams')->willReturn([
+			'country' => 'CH',
+			'germanState' => 'CH-ZH',
+		]);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('CH', $store['country']);
+		$this->assertSame('CH-ZH', $store['german_state']);
+	}
+
+	public function testUpdateAdminSettingsCountrySwitchToSwitzerlandResetsStaleDefaultRegion(): void
+	{
+		$store = &$this->wireAppConfigStore(['german_state' => 'NW']);
+		$this->request->method('getParams')->willReturn(['country' => 'CH']);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('CH', $store['country']);
+		$this->assertSame('CH-ZH', $store['german_state'], 'Stale German region must reset to Zurich');
+	}
+
+	public function testUpdateAdminSettingsCountrySwitchKeepsMatchingRegion(): void
+	{
+		$store = &$this->wireAppConfigStore(['country' => 'AT', 'german_state' => 'AT-K']);
+		$this->request->method('getParams')->willReturn(['country' => 'AT']);
+
+		$response = $this->controller->updateAdminSettings();
+
+		$this->assertTrue($response->getData()['success']);
+		$this->assertSame('AT-K', $store['german_state'], 'A region already matching the country must not be reset');
+	}
+
+	public function testGetStateHolidaysRejectsInvalidRegion(): void
+	{
+		$this->holidayCalendarService->expects($this->never())->method('getHolidaysForRange');
+
+		$response = $this->controller->getStateHolidays('XX', 2026);
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringContainsString('Invalid region code', $data['error']);
+	}
+
+	public function testGetHolidaySuggestionsRejectsInvalidRegion(): void
+	{
+		$response = $this->controller->getHolidaySuggestions('ZZ', 2026);
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertStringContainsString('Invalid region code', $response->getData()['error']);
+	}
+
+	public function testGetHolidaySuggestionsRejectsOutOfRangeYear(): void
+	{
+		foreach ([1969, 2101] as $year) {
+			$response = $this->controller->getHolidaySuggestions('AT-W', $year);
+			$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus(), "Year $year must be rejected");
+			$this->assertStringContainsString('Invalid year', $response->getData()['error']);
+		}
+	}
+
+	public function testGetHolidaySuggestionsMarksExistingDates(): void
+	{
+		// Good Friday 2026 (3 Apr) already exists as a company holiday.
+		$this->holidayCalendarService->method('getHolidaysForRange')->willReturn([
+			['id' => 5, 'state' => 'AT-W', 'date' => '2026-04-03', 'name' => 'Karfreitag', 'kind' => 'full', 'scope' => 'company', 'source' => 'manual', 'weight' => 1.0],
+		]);
+
+		$response = $this->controller->getHolidaySuggestions('at-w', 2026); // lowercase: must be normalised
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+		$this->assertSame('AT-W', $data['state']);
+		$this->assertSame('AT', $data['country']);
+
+		$byDate = [];
+		foreach ($data['suggestions'] as $suggestion) {
+			$byDate[$suggestion['date']] = $suggestion;
+		}
+		$this->assertArrayHasKey('2026-04-03', $byDate, 'Good Friday must be suggested');
+		$this->assertTrue($byDate['2026-04-03']['exists'], 'Existing date must be flagged');
+		$this->assertArrayHasKey('2026-12-24', $byDate, 'Christmas Eve must be suggested');
+		$this->assertFalse($byDate['2026-12-24']['exists']);
+		$this->assertArrayHasKey('2026-11-15', $byDate, 'St. Leopold (Vienna patron) must be suggested');
+	}
+
+	public function testGetHolidaySuggestionsForGermanRegionIsEmpty(): void
+	{
+		$this->holidayCalendarService->method('getHolidaysForRange')->willReturn([]);
+
+		$response = $this->controller->getHolidaySuggestions('NW', 2026);
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+		$this->assertSame('DE', $data['country']);
+		$this->assertSame([], $data['suggestions'], 'Germany deliberately ships no curated suggestions');
+	}
+
+	public function testSaveStateHolidayRejectsInvalidRegion(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'state' => 'XX',
+			'date' => '2026-12-24',
+			'name' => 'Company closure',
+		]);
+		$this->holidayMapper->expects($this->never())->method('insert');
+
+		$response = $this->controller->saveStateHoliday();
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertStringContainsString('Invalid region code', $response->getData()['error']);
+	}
+
+	/**
+	 * B-1 follow-up: creating a holiday on an occupied (state, date, scope)
+	 * slot must return a friendly 409, not a DB constraint error.
+	 */
+	public function testSaveStateHolidayReturns409ForDuplicateSlot(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'state' => 'AT-W',
+			'date' => '2026-12-24',
+			'name' => 'Christmas Eve',
+			'scope' => 'company',
+		]);
+		$this->holidayMapper->method('findIdForStateDateScope')
+			->with('AT-W', '2026-12-24', 'company')
+			->willReturn(7);
+		$this->holidayMapper->expects($this->never())->method('insert');
+		$this->holidayMapper->expects($this->never())->method('update');
+
+		$response = $this->controller->saveStateHoliday();
+
+		$this->assertSame(Http::STATUS_CONFLICT, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringContainsString('already exists', $data['error']);
+	}
+
+	/**
+	 * Editing the row that occupies the slot itself must NOT conflict.
+	 */
+	public function testSaveStateHolidayAllowsUpdatingTheOccupyingRow(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'id' => 7,
+			'state' => 'AT-W',
+			'date' => '2026-12-24',
+			'name' => 'Christmas Eve (renamed)',
+			'scope' => 'company',
+		]);
+		$this->holidayMapper->method('findIdForStateDateScope')->willReturn(7);
+		$this->holidayMapper->method('findById')
+			->willThrowException(new \OCP\AppFramework\Db\DoesNotExistException('gone'));
+		$this->holidayMapper->expects($this->once())
+			->method('update')
+			->willReturnArgument(0);
+
+		$response = $this->controller->saveStateHoliday();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame(7, $data['holiday']['id']);
+		$this->assertSame('AT-W', $data['holiday']['state']);
+	}
+
+	/**
+	 * TOCTOU race: pre-check passes, insert hits the unique index → still 409.
+	 */
+	public function testSaveStateHolidayMapsUniqueConstraintRaceTo409(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'state' => 'AT-W',
+			'date' => '2026-05-01',
+			'name' => 'Staatsfeiertag',
+			'scope' => 'company',
+		]);
+		$this->holidayMapper->method('findIdForStateDateScope')->willReturn(null);
+		$violation = $this->createMock(\Doctrine\DBAL\Exception\UniqueConstraintViolationException::class);
+		$this->holidayMapper->method('insert')->willThrowException($violation);
+
+		$response = $this->controller->saveStateHoliday();
+
+		$this->assertSame(Http::STATUS_CONFLICT, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringContainsString('already exists', $data['error']);
 	}
 }

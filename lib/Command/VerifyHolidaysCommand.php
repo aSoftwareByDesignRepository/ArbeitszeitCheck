@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Command;
 
 use OCA\ArbeitszeitCheck\Service\HolidayAdminService;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -29,8 +30,8 @@ class VerifyHolidaysCommand extends Command
 	{
 		$this
 			->setName('arbeitszeitcheck:holidays:verify')
-			->setDescription('Compare statutory catalog, DB rows, and suppressions for a Bundesland/year.')
-			->addArgument('state', InputArgument::REQUIRED, 'Bundesland code (e.g. NW, BB)')
+			->setDescription('Compare statutory catalog, DB rows, and suppressions for a region/year.')
+			->addArgument('state', InputArgument::REQUIRED, 'Region code (e.g. NW, BB, AT-W, AT-OOE)')
 			->addArgument('year', InputArgument::REQUIRED, 'Calendar year (e.g. 2026)')
 			->addOption('json', null, InputOption::VALUE_NONE, 'Output machine-readable JSON');
 	}
@@ -41,6 +42,14 @@ class VerifyHolidaysCommand extends Command
 		$state = strtoupper(trim((string)$input->getArgument('state')));
 		$year = (int)$input->getArgument('year');
 
+		if (!RegionRegistry::isValidRegion($state)) {
+			$io->error(sprintf(
+				'Unknown region code "%s". Valid codes: %s.',
+				$state,
+				implode(', ', RegionRegistry::allRegionCodes())
+			));
+			return Command::FAILURE;
+		}
 		if ($year < 1970 || $year > 2100) {
 			$io->error('Year must be between 1970 and 2100.');
 			return Command::FAILURE;
@@ -74,7 +83,7 @@ class VerifyHolidaysCommand extends Command
 		}
 
 		if (!empty($report['extraInDb'])) {
-			$io->warning('Statutory rows in DB not in catalog for this state (wrong Bundesland rules or legacy seed):');
+			$io->warning('Statutory rows in DB not in catalog for this region (wrong region rules or legacy seed):');
 			foreach ($report['extraInDb'] as $date => $name) {
 				$io->writeln(sprintf('  %s — %s', $date, $name));
 			}

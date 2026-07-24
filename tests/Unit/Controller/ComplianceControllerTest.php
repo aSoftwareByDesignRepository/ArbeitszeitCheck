@@ -22,6 +22,8 @@ use OCA\ArbeitszeitCheck\Service\LocaleFormatService;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Service\NavigationFlagsService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCP\IConfig;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -112,6 +114,7 @@ class ComplianceControllerTest extends TestCase
 			$localeFormat,
 			$this->l10n,
 			$this->createNavigationFlagsService(),
+			$this->createLaborLawProfileFactory(),
 		);
 	}
 
@@ -122,6 +125,21 @@ class ComplianceControllerTest extends TestCase
 			$this->permissionService,
 			$this->createMock(IConfig::class),
 		);
+	}
+
+	private function createLaborLawProfileFactory(string $country = RegionRegistry::COUNTRY_DE): LaborLawProfileFactory
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, mixed $default = '') use ($country): string {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return $country;
+				}
+				return is_string($default) ? $default : (string)$default;
+			}
+		);
+
+		return new LaborLawProfileFactory($config);
 	}
 
 	/**
@@ -392,6 +410,7 @@ class ComplianceControllerTest extends TestCase
 				$permissionService,
 				$this->createMock(IConfig::class),
 			),
+			$this->createLaborLawProfileFactory(),
 		);
 
 		$violation = new ComplianceViolation();
@@ -664,6 +683,7 @@ class ComplianceControllerTest extends TestCase
 				$permissionService,
 				$this->createMock(IConfig::class),
 			),
+			$this->createLaborLawProfileFactory(),
 		);
 
 		$violation = new ComplianceViolation();

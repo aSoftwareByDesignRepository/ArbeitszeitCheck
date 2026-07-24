@@ -512,6 +512,67 @@
   cursor: not-allowed;
 }
 
+/* ===== COUNTRY AND REGION CARD ===== */
+/* Same visual language as the time-capture cards (radio variant). */
+.azc-country-grid {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-bottom: var(--space-3, 0.75rem);
+}
+
+.azc-country-card {
+  display: flex;
+  gap: var(--space-3, 0.75rem);
+  align-items: flex-start;
+  padding: var(--space-3, 0.75rem);
+  border: 2px solid var(--color-border, var(--arbeitszeitcheck-color-border));
+  border-radius: var(--border-radius-large, 10px);
+  background: var(--color-main-background);
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.azc-country-card:has(.azc-country-card__radio:checked) {
+  border-color: var(--color-primary-element, #0082c9);
+  background: color-mix(in srgb, var(--color-main-background) 90%, var(--color-primary-element) 10%);
+}
+
+.azc-country-card:has(.azc-country-card__radio:focus-visible) {
+  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline-offset: 2px;
+}
+
+.azc-country-card__radio {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+  accent-color: var(--color-primary-element, #0082c9);
+}
+
+.azc-country-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 0.25rem);
+}
+
+.azc-country-card__title {
+  font-weight: 600;
+  color: var(--color-main-text);
+  line-height: 1.35;
+}
+
+.azc-country-card__text {
+  font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+  color: var(--color-text-maxcontrast);
+  line-height: 1.45;
+}
+
+#country-region-live:not(:empty) {
+  margin: 0 0 var(--space-3, 0.75rem);
+}
+
 /* ===== REDUCED MOTION ===== */
 @media (prefers-reduced-motion: reduce) {
   .admin-settings-form .btn {

@@ -29,6 +29,7 @@ use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\OvertimeDisplayService;
 use OCA\ArbeitszeitCheck\Service\OvertimeBankService;
 use OCA\ArbeitszeitCheck\Service\OvertimePayoutService;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -150,6 +151,17 @@ class PageController extends Controller
 			throw new \Exception('User not authenticated');
 		}
 		return $user->getUID();
+	}
+
+	/**
+	 * Configured max daily hours; profile supplies the fallback when unset (DE 10 / AT 12).
+	 */
+	private function getConfiguredMaxDailyHours(): float
+	{
+		$country = strtoupper(trim($this->config->getAppValue('arbeitszeitcheck', 'country', 'DE')));
+		$default = (string)LaborLawProfileFactory::profileForCountry($country)->dailyMaxHoursDefault;
+
+		return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', $default)));
 	}
 
 	/**
@@ -433,7 +445,7 @@ class PageController extends Controller
 			$timeEntryCount = $this->timeEntryMapper->countByUser($userId);
 			
 			// Get compliance configuration for frontend validation
-			$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+			$maxDailyHours = $this->getConfiguredMaxDailyHours();
 			$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
 
 			$navFlags = $this->getNavigationFlags($userId);
@@ -848,6 +860,7 @@ class PageController extends Controller
 					'total_absences' => $absenceCount,
 				],
 				'projectCheckAvailable' => $this->projectCheckIntegration->isProjectCheckAvailable(),
+				'complianceProfile' => $this->buildComplianceProfileForSettings(),
 			];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'settings', $params);
@@ -867,6 +880,84 @@ class PageController extends Controller
 			]);
 			return $this->configureCSP($response);
 		}
+	}
+
+	/**
+	 * Country-aware compliance blurbs for the personal settings page.
+	 *
+	 * @return array{
+	 *   country: string,
+	 *   lawName: string,
+	 *   lead: string,
+	 *   maxDailyHours: float,
+	 *   minRestHours: float,
+	 *   breakLines: list<string>,
+	 *   sundayNote: string,
+	 *   footerBlurb: string
+	 * }
+	 */
+	private function buildComplianceProfileForSettings(): array
+	{
+		$profile = $this->timeTrackingService->lawProfile();
+		$maxDaily = max(1.0, min(24.0, (float)$this->config->getAppValue(
+			'arbeitszeitcheck',
+			'max_daily_hours',
+			(string)$profile->dailyMaxHoursDefault
+		)));
+		$minRest = max(1.0, min(24.0, (float)$this->config->getAppValue(
+			'arbeitszeitcheck',
+			'min_rest_period',
+			(string)$profile->minRestHoursDefault
+		)));
+
+		$breakLines = [];
+		foreach ($profile->breakTiersAscending() as $tier) {
+			$afterHours = (float)$tier['afterHours'];
+			$hoursLabel = abs($afterHours - (int)$afterHours) < 0.001
+				? (string)(int)$afterHours
+				: rtrim(rtrim(number_format($afterHours, 1, '.', ''), '0'), '.');
+			$breakLines[] = $this->l10n->t(
+				'From %1$s hours of work: at least %2$d minutes break (%3$s)',
+				[$hoursLabel, (int)$tier['breakMinutes'], $profile->lawLabel('breaks')]
+			);
+		}
+
+		if ($profile->country === \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_AT) {
+			return [
+				'country' => 'AT',
+				'lawName' => $this->l10n->t('Austrian working time law (AZG / ARG)'),
+				'lead' => $this->l10n->t('Key rules from Austrian working time law that this app helps you follow.'),
+				'maxDailyHours' => $maxDaily,
+				'minRestHours' => $minRest,
+				'breakLines' => $breakLines,
+				'sundayNote' => $this->l10n->t('Sunday and public-holiday work is generally restricted (ARG §3) with exceptions.'),
+				'footerBlurb' => $this->l10n->t('Working time tracking oriented on Austrian labour law (AZG/ARG) for Nextcloud'),
+			];
+		}
+
+		if ($profile->country === \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH) {
+			return [
+				'country' => 'CH',
+				'lawName' => $this->l10n->t('Swiss Labour Act (ArG)'),
+				'lead' => $this->l10n->t('Key rules from Swiss working time law that this app helps you follow.'),
+				'maxDailyHours' => $maxDaily,
+				'minRestHours' => $minRest,
+				'breakLines' => $breakLines,
+				'sundayNote' => $this->l10n->t('Sunday and public-holiday work is generally restricted (ArG Art. 18) with exceptions.'),
+				'footerBlurb' => $this->l10n->t('Working time tracking oriented on Swiss labour law (ArG) for Nextcloud'),
+			];
+		}
+
+		return [
+			'country' => 'DE',
+			'lawName' => $this->l10n->t('German Labor Law (Arbeitszeitgesetz - ArbZG)'),
+			'lead' => $this->l10n->t('Key rules from German working time law that this app helps you follow.'),
+			'maxDailyHours' => $maxDaily,
+			'minRestHours' => $minRest,
+			'breakLines' => $breakLines,
+			'sundayNote' => $this->l10n->t('Sunday work is generally prohibited with exceptions'),
+			'footerBlurb' => $this->l10n->t('German labor law compliant time tracking for Nextcloud'),
+		];
 	}
 
 	/**

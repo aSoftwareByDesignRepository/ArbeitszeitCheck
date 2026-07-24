@@ -9,34 +9,30 @@ declare(strict_types=1);
  * @license AGPL-3.0-or-later
  */
 
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
+
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
 $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 
-$defaultState = $_['defaultState'] ?? 'NW';
+$country = $_['country'] ?? RegionRegistry::COUNTRY_DE;
+$defaultState = $_['defaultState'] ?? RegionRegistry::defaultRegionForCountry($country);
 $statutoryAutoReseed = (bool)($_['statutoryAutoReseed'] ?? true);
 $settingsUrl = $_['settingsUrl'] ?? '';
 $currentYear = (int)date('Y');
 
-$states = [
-	'BW' => 'Baden‑Württemberg',
-	'BY' => 'Bayern',
-	'BE' => 'Berlin',
-	'BB' => 'Brandenburg',
-	'HB' => 'Bremen',
-	'HH' => 'Hamburg',
-	'HE' => 'Hessen',
-	'MV' => 'Mecklenburg‑Vorpommern',
-	'NI' => 'Niedersachsen',
-	'NW' => 'Nordrhein‑Westfalen',
-	'RP' => 'Rheinland‑Pfalz',
-	'SL' => 'Saarland',
-	'SN' => 'Sachsen',
-	'ST' => 'Sachsen‑Anhalt',
-	'SH' => 'Schleswig‑Holstein',
-	'TH' => 'Thüringen',
-];
+// Regions of the instance country (default-region select must not cross the
+// border) and all regions grouped per country (calendar viewer may).
+$instanceRegions = RegionRegistry::regionsForCountry($country);
+$regionGroups = [];
+foreach (RegionRegistry::supportedCountries() as $groupCountry) {
+	$regionGroups[] = [
+		'country' => $groupCountry,
+		'countryLabel' => $l->t(RegionRegistry::countryLabels()[$groupCountry] ?? $groupCountry),
+		'regions' => RegionRegistry::regionsForCountry($groupCountry),
+	];
+}
 
 $holidaysUiStrings = [
 	'dd.mm.yyyy' => $l->t('dd.mm.yyyy'),
@@ -65,8 +61,17 @@ $holidaysUiStrings = [
 	'Statutory holiday removed. It will be added again automatically because auto-restore is enabled.' => $l->t('Statutory holiday removed. It will be added again automatically because auto-restore is enabled.'),
 	'Holiday could not be removed.' => $l->t('Holiday could not be removed.'),
 	'An error occurred while removing the holiday.' => $l->t('An error occurred while removing the holiday.'),
-	'Default federal state was saved.' => $l->t('Default federal state was saved.'),
-	'The default federal state could not be saved.' => $l->t('The default federal state could not be saved.'),
+	'Default region was saved.' => $l->t('Default region was saved.'),
+	'The default region could not be saved.' => $l->t('The default region could not be saved.'),
+	'Add as company holiday' => $l->t('Add as company holiday'),
+	'Already in the calendar' => $l->t('Already in the calendar'),
+	'Add {name} ({date}) as a company holiday' => $l->t('Add {name} ({date}) as a company holiday'),
+	'Holiday "{name}" was added as a company holiday.' => $l->t('Holiday "{name}" was added as a company holiday.'),
+	'Show holidays of another country?' => $l->t('Show holidays of another country?'),
+	'The statutory holidays of the selected region will be added to the calendar automatically.' => $l->t('The statutory holidays of the selected region will be added to the calendar automatically.'),
+	'Working time rules are not affected — they follow the country configured for the whole organisation.' => $l->t('Working time rules are not affected — they follow the country configured for the whole organisation.'),
+	'You can switch back to any other region at any time.' => $l->t('You can switch back to any other region at any time.'),
+	'Show region' => $l->t('Show region'),
 ];
 ?>
 
@@ -80,6 +85,7 @@ $holidaysUiStrings = [
 <?php echo json_encode([
 	'statutoryAutoReseed' => $statutoryAutoReseed,
 	'settingsUrl' => $settingsUrl,
+	'country' => $country,
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
 	</script>
 
@@ -88,18 +94,18 @@ $holidaysUiStrings = [
 		<section class="azc-card" aria-labelledby="holiday-default-state-title">
 			<header class="azc-card__header">
 				<div class="azc-card__header-text">
-					<h2 id="holiday-default-state-title" class="azc-card__title"><?php p($l->t('Default federal state for holidays')); ?></h2>
+					<h2 id="holiday-default-state-title" class="azc-card__title"><?php p($l->t('Default region for public holidays')); ?></h2>
 					<p class="azc-card__lead">
-						<?php p($l->t('This federal state is used automatically when no specific state is set for employees or teams.')); ?>
+						<?php p($l->t('This region is used automatically when no specific region is set for employees or teams.')); ?>
 					</p>
 				</div>
 			</header>
 			<div class="azc-card__body">
 				<div class="azc-filter-field admin-holidays__default-state-field">
-					<label for="holiday-default-state" class="azc-filter-field__label"><?php p($l->t('Select default federal state')); ?></label>
+					<label for="holiday-default-state" class="azc-filter-field__label"><?php p($l->t('Select default region')); ?></label>
 					<div class="azc-filter-field__control">
 						<select id="holiday-default-state" name="holidayDefaultState" class="form-select" aria-describedby="holiday-default-state-help">
-							<?php foreach ($states as $code => $name): ?>
+							<?php foreach ($instanceRegions as $code => $name): ?>
 								<option value="<?php p($code); ?>"<?php if ($code === $defaultState) { echo ' selected'; } ?>><?php p($l->t($name)); ?></option>
 							<?php endforeach; ?>
 						</select>
@@ -110,13 +116,14 @@ $holidaysUiStrings = [
 					<?php
 					$usersUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.users');
 					print_unescaped($l->t(
-						'The federal state for an employee is set by administrators or managers, for example in %1$sEmployee settings%2$s. If no own state is configured there, the default state configured here is used.',
+						'The region for an employee is set by administrators or managers, for example in %1$sEmployee settings%2$s. If no own region is configured there, the default region configured here is used.',
 						[
 							'<a href="' . \OCP\Util::sanitizeHTML($usersUrl) . '">',
 							'</a>',
 						]
 					));
 					?>
+					<?php p($l->t('The country for working time rules is configured in Settings under “Country and region”.')); ?>
 				</p>
 			</div>
 		</section>
@@ -124,9 +131,9 @@ $holidaysUiStrings = [
 		<section class="azc-card" aria-labelledby="state-calendar-title">
 			<header class="azc-card__header">
 				<div class="azc-card__header-text">
-					<h2 id="state-calendar-title" class="azc-card__title"><?php p($l->t('Manage calendars by federal state')); ?></h2>
+					<h2 id="state-calendar-title" class="azc-card__title"><?php p($l->t('Manage calendars by region')); ?></h2>
 					<p class="azc-card__lead">
-						<?php p($l->t('Select federal state and year to view and edit statutory holidays as well as additional company or custom holidays.')); ?>
+						<?php p($l->t('Select region and year to view and edit statutory holidays as well as additional company or custom holidays.')); ?>
 					</p>
 				</div>
 			</header>
@@ -158,11 +165,15 @@ $holidaysUiStrings = [
 				<form class="admin-holidays__toolbar" id="holiday-calendar-filters" novalidate>
 					<div class="azc-filter-grid admin-holidays__filter-grid" role="group" aria-label="<?php p($l->t('Calendar selection')); ?>">
 						<div class="azc-filter-field">
-							<label for="holiday-state-select" class="azc-filter-field__label"><?php p($l->t('Federal state')); ?></label>
+							<label for="holiday-state-select" class="azc-filter-field__label"><?php p($l->t('Region')); ?></label>
 							<div class="azc-filter-field__control">
 								<select id="holiday-state-select" name="holidayState" class="form-select">
-									<?php foreach ($states as $code => $name): ?>
-										<option value="<?php p($code); ?>"<?php if ($code === $defaultState) { echo ' selected'; } ?>><?php p($l->t($name)); ?></option>
+									<?php foreach ($regionGroups as $group): ?>
+										<optgroup label="<?php p($group['countryLabel']); ?>">
+											<?php foreach ($group['regions'] as $code => $name): ?>
+												<option value="<?php p($code); ?>"<?php if ($code === $defaultState) { echo ' selected'; } ?>><?php p($l->t($name)); ?></option>
+											<?php endforeach; ?>
+										</optgroup>
 									<?php endforeach; ?>
 								</select>
 							</div>
@@ -186,9 +197,9 @@ $holidaysUiStrings = [
 				</form>
 
 				<div class="admin-holidays__results" id="holiday-results" aria-live="polite" aria-busy="false">
-					<div class="table-container" role="region" aria-label="<?php p($l->t('List of holidays for the selected federal state and year')); ?>">
-						<table class="table table--hover azc-table--responsive" id="holiday-table" aria-label="<?php p($l->t('List of holidays for the selected federal state and year')); ?>">
-							<caption class="visually-hidden"><?php p($l->t('List of holidays for the selected federal state and year, with date, name, type and actions')); ?></caption>
+					<div class="table-container" role="region" aria-label="<?php p($l->t('List of holidays for the selected region and year')); ?>">
+						<table class="table table--hover azc-table--responsive" id="holiday-table" aria-label="<?php p($l->t('List of holidays for the selected region and year')); ?>">
+							<caption class="visually-hidden"><?php p($l->t('List of holidays for the selected region and year, with date, name, type and actions')); ?></caption>
 							<thead>
 								<tr>
 									<th scope="col"><?php p($l->t('Date')); ?></th>
@@ -208,9 +219,20 @@ $holidaysUiStrings = [
 						<?php p($l->t('"Type" determines whether a day is treated as a full-day holiday (not counted as a working day) or as a half-day holiday (e.g., 0.5 vacation day).')); ?>
 					</p>
 					<p class="azc-callout__text">
-						<?php p($l->t('"Scope" distinguishes between statutory holidays, organization-wide company holidays, and custom entries. Statutory holidays are always treated as full-day holidays.')); ?>
+						<?php p($l->t('"Scope" distinguishes between statutory holidays, organization-wide company holidays, and custom entries. Statutory holidays are usually full-day; in Switzerland some statutory days (e.g. Sechseläuten) are half-day and count as 0.5.')); ?>
 					</p>
 				</aside>
+
+				<section class="admin-holidays__suggestions" id="holiday-suggestions-section" aria-labelledby="holiday-suggestions-title" hidden>
+					<h3 id="holiday-suggestions-title" class="admin-holidays__suggestions-title"><?php p($l->t('Common additional holidays')); ?></h3>
+					<p class="form-help form-help--block">
+						<?php p($l->t('These days are customary in the selected region — for example through collective agreements — but they are not statutory holidays. Add a day as a company holiday if your organisation grants it.')); ?>
+					</p>
+					<p class="form-help form-help--block" id="holiday-good-friday-note" hidden>
+						<?php p($l->t('Note: Good Friday has not been a statutory public holiday in Austria since 2019. It is therefore never added automatically — add it as a company holiday if your organisation grants it.')); ?>
+					</p>
+					<ul class="admin-holidays__suggestions-list" id="holiday-suggestions-list" aria-live="polite"></ul>
+				</section>
 			</div>
 		</section>
 

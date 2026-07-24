@@ -510,6 +510,7 @@ class Application extends App implements IBootstrap {
 				$c->query(DailyWorkingHoursCalculator::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\ProjectCheckLaborTimeSyncService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class),
 			);
 		});
 
@@ -559,6 +560,12 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory(
+				$c->query(\OCP\IConfig::class),
+			);
+		});
+
 		$context->registerService(ComplianceService::class, function($c) {
 			return new ComplianceService(
 				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),
@@ -573,6 +580,7 @@ class Application extends App implements IBootstrap {
 				$c->query(PermissionService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\TimeZoneService::class),
 				$c->query(DailyWorkingHoursCalculator::class),
+				$c->query(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class),
 			);
 		});
 

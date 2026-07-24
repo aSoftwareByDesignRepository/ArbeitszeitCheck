@@ -165,7 +165,7 @@ class EmployeeStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, 
 		if ((bool)$data['breakRequired'] && (int)$data['remainingBreakMinutes'] > 0) {
 			$remaining = (int)$data['remainingBreakMinutes'];
 			$items[] = new WidgetItem(
-				$this->l10n->t('Break required (ArbZG §4)'),
+				$this->l10n->t('Break required (%s)', [(string)($data['lawLabelBreaks'] ?? 'ArbZG §4')]),
 				$this->l10n->t('%1$s min still needed', [$remaining]),
 				$url, $icon, $ts . '-break'
 			);

@@ -34,6 +34,7 @@ use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryDeletionPolicy;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\Lock\LockedException;
 use OCP\AppFramework\Controller;
 use OCP\IConfig;
@@ -189,6 +190,17 @@ class TimeEntryController extends Controller
 			throw new \Exception('User not authenticated');
 		}
 		return $user->getUID();
+	}
+
+	/**
+	 * Configured max daily hours; profile supplies the fallback when unset (DE 10 / AT 12).
+	 */
+	private function getConfiguredMaxDailyHours(): float
+	{
+		$country = strtoupper(trim($this->config->getAppValue('arbeitszeitcheck', 'country', 'DE')));
+		$default = (string)LaborLawProfileFactory::profileForCountry($country)->dailyMaxHoursDefault;
+
+		return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', $default)));
 	}
 
 	private function normalizeOptionalProjectCheckProjectId(mixed $raw): ?string
@@ -816,7 +828,7 @@ class TimeEntryController extends Controller
 		}
 
 		// Get compliance configuration for frontend validation
-		$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+		$maxDailyHours = (float)$this->getConfiguredMaxDailyHours();
 		$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
 		$createFormLinkingEnabled = $this->projectCheckIntegration->isLinkingEnabledForUser($userId);
 
@@ -868,7 +880,7 @@ class TimeEntryController extends Controller
 
 			// Check ownership
 			if ($entry->getUserId() !== $userId) {
-				$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+				$maxDailyHours = (float)$this->getConfiguredMaxDailyHours();
 				$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
 				$response = new TemplateResponse(
 					$this->appName,
@@ -903,7 +915,7 @@ class TimeEntryController extends Controller
 						? $this->l10n->t('Cannot edit this time entry. Only entries from the last 2 weeks can be edited.')
 						: $this->l10n->t('Cannot edit this time entry.'));
 
-				$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+				$maxDailyHours = (float)$this->getConfiguredMaxDailyHours();
 				$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
 				$response = new TemplateResponse(
 					$this->appName,
@@ -922,7 +934,7 @@ class TimeEntryController extends Controller
 			}
 
 			// Get compliance configuration for frontend validation
-			$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+			$maxDailyHours = (float)$this->getConfiguredMaxDailyHours();
 			$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
 			// Show the picker when the connection is on, or when this entry already
 			// carries a link, so the user can still see (and clear) an existing
@@ -958,7 +970,7 @@ class TimeEntryController extends Controller
 				$shared = $this->getTimeEntriesSharedTemplateParams($this->getUserId());
 			} catch (\Throwable $ignore) {
 			}
-			$maxDailyHours = (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+			$maxDailyHours = (float)$this->getConfiguredMaxDailyHours();
 			$complianceStrictMode = $this->config->getAppValue('arbeitszeitcheck', 'compliance_strict_mode', '0') === '1';
 			$response = new TemplateResponse(
 				$this->appName,
@@ -2708,11 +2720,19 @@ class TimeEntryController extends Controller
 					if (!$adjusted && $timeEntry->getIsManualEntry()) {
 						$violation = $this->timeTrackingService->findCalendarDayExceedingMaximum($timeEntry);
 						if ($violation !== null) {
+							$lawProfile = \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry(
+								$this->config->getAppValue('arbeitszeitcheck', 'country', 'DE')
+							);
+							$maxDailyHours = max(1.0, min(24.0, (float)$this->config->getAppValue(
+								'arbeitszeitcheck',
+								'max_daily_hours',
+								(string)$lawProfile->dailyMaxHoursDefault
+							)));
 							return new JSONResponse([
 								'success' => false,
 								'error' => $this->l10n->t(
-									'This time entry would exceed the maximum daily working hours of 10 hours (ArbZG §3) on %1$s (%2$s hours on that calendar day).',
-									[$violation['date'], $violation['hours']]
+									'This time entry would exceed the maximum daily working hours of %1$d hours (%2$s) on %3$s (%4$s hours on that calendar day).',
+									[(int)$maxDailyHours, $lawProfile->lawLabel('daily'), $violation['date'], $violation['hours']]
 								),
 								'errors' => [
 									'endTime' => $this->l10n->t('Maximum daily working hours already reached'),

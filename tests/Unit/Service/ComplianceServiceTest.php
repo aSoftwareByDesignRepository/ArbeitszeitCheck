@@ -98,10 +98,12 @@ class ComplianceServiceTest extends TestCase
 			return $default;
 		});
 
-		// Setup l10n mock to return translation keys
+		// Setup l10n mock: substitute parameters like the real IL10N does so
+		// assertions can match materialised messages (e.g. "30-minute break").
 		$this->l10n->method('t')
-			->willReturnCallback(function ($text) {
-				return $text;
+			->willReturnCallback(function (string $text, $parameters = []) {
+				$parameters = is_array($parameters) ? $parameters : [$parameters];
+				return $parameters === [] ? $text : vsprintf($text, $parameters);
 			});
 
 		$this->timeZoneService = $this->buildTimeZoneService($this->config);
@@ -123,6 +125,7 @@ class ComplianceServiceTest extends TestCase
 			$this->permissionService,
 			$this->timeZoneService,
 			$dailyHoursCalculator,
+			new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($this->config),
 		);
 	}
 
@@ -753,6 +756,7 @@ class ComplianceServiceTest extends TestCase
 			$this->permissionService,
 			$tz,
 			new \OCA\ArbeitszeitCheck\Service\DailyWorkingHoursCalculator($this->timeEntryMapper, $tz),
+			new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($this->config),
 		);
 
 		$violation = new ComplianceViolation();
@@ -774,7 +778,7 @@ class ComplianceServiceTest extends TestCase
 				$call['parameters'],
 				'Night-work translation must be invoked with parameters; outer sprintf() on a parameterless t() breaks the L10NString pipeline.'
 			);
-			$this->assertCount(1, $call['parameters'], 'Night-work translation expects exactly one positional parameter');
+			$this->assertCount(4, $call['parameters'], 'Night-work translation expects hours, window start/end, and law label as positional parameters');
 			$this->assertGreaterThan(
 				0.0,
 				(float)$call['parameters'][0],
@@ -1050,5 +1054,171 @@ class ComplianceServiceTest extends TestCase
 		$timeEntry->setUpdatedAt(new \DateTime());
 
 		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
+	}
+
+	/**
+	 * Rebuild the service against an Austrian labour-law profile (config country=AT).
+	 */
+	private function rebuildServiceForCountry(string $country): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, string $default = '') use ($country): string {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return $country;
+				}
+				return $default;
+			}
+		);
+		$this->config = $config;
+		$this->timeZoneService = $this->buildTimeZoneService($this->config);
+		$dailyHoursCalculator = new \OCA\ArbeitszeitCheck\Service\DailyWorkingHoursCalculator(
+			$this->timeEntryMapper,
+			$this->timeZoneService,
+		);
+		$this->service = new ComplianceService(
+			$this->timeEntryMapper,
+			$this->violationMapper,
+			$this->workingTimeModelMapper,
+			$this->userWorkingTimeModelMapper,
+			$this->userManager,
+			$this->l10n,
+			$this->notificationService,
+			$this->holidayCalendarService,
+			$this->config,
+			$this->permissionService,
+			$this->timeZoneService,
+			$dailyHoursCalculator,
+			new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($this->config),
+		);
+	}
+
+	public function testAustrianProfileDoesNotRequireFortyFiveMinuteBreak(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$timeEntry = new TimeEntry();
+		$timeEntry->setId(123);
+		$timeEntry->setUserId('at-user');
+		// 10 h gross with only a 30-minute break — DE would demand 45, AT only 30.
+		$timeEntry->setStartTime(new \DateTime('2024-01-15 07:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2024-01-15 17:30:00'));
+		$timeEntry->setBreaks(json_encode([[
+			'start' => '2024-01-15T12:00:00+00:00',
+			'end' => '2024-01-15T12:30:00+00:00',
+		]]));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$timeEntry->setIsManualEntry(false);
+		$timeEntry->setCreatedAt(new \DateTime());
+		$timeEntry->setUpdatedAt(new \DateTime());
+
+		$this->violationMapper->expects($this->never())
+			->method('createViolation')
+			->with(
+				$this->anything(),
+				ComplianceViolation::TYPE_MISSING_BREAK,
+				$this->anything(),
+				$this->anything(),
+				$this->anything(),
+				$this->anything(),
+			);
+
+		// May still create other violations (night/sunday/…) — only assert breaks are OK.
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
+	}
+
+	public function testAustrianProfileBreakMessageCitesAzg(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$timeEntry = new TimeEntry();
+		$timeEntry->setUserId('at-user');
+		$timeEntry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2024-01-15 15:00:00')); // 7h, no break
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$timeEntry->setIsManualEntry(true);
+		$timeEntry->setCreatedAt(new \DateTime());
+		$timeEntry->setUpdatedAt(new \DateTime());
+
+		$issues = $this->service->blockingIssuesForCompletedEntry($timeEntry);
+		$this->assertNotEmpty($issues);
+		$this->assertStringContainsString('30-minute', $issues[0]);
+		$this->assertStringContainsString('AZG §11', $issues[0]);
+		$this->assertStringNotContainsString('ArbZG', $issues[0]);
+	}
+
+	public function testAustrianNightWindowStartsAtTwentyTwo(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$timeEntry = new TimeEntry();
+		$timeEntry->setId(77);
+		$timeEntry->setUserId('at-user');
+		// 22:15–23:00 is night under AZG §12b but NOT under ArbZG §6 (23:00 start).
+		$timeEntry->setStartTime(new \DateTime('2024-01-15 22:15:00'));
+		$timeEntry->setEndTime(new \DateTime('2024-01-15 23:00:00'));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$timeEntry->setIsManualEntry(false);
+		$timeEntry->setCreatedAt(new \DateTime());
+		$timeEntry->setUpdatedAt(new \DateTime());
+
+		$this->violationMapper->expects($this->atLeastOnce())
+			->method('createViolation')
+			->with(
+				'at-user',
+				ComplianceViolation::TYPE_NIGHT_WORK,
+				$this->logicalAnd(
+					$this->stringContains('22:00'),
+					$this->stringContains('AZG §12b'),
+				),
+				$this->anything(),
+				77,
+				ComplianceViolation::SEVERITY_INFO
+			)
+			->willReturn(new ComplianceViolation());
+
+		$this->service->checkComplianceAfterClockOut($timeEntry);
+	}
+
+	public function testSwissProfileBreakTiersRequireFifteenThenThirtyThenSixty(): void
+	{
+		$this->rebuildServiceForCountry('CH');
+
+		$short = new TimeEntry();
+		$short->setUserId('ch-user');
+		$short->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$short->setEndTime(new \DateTime('2024-01-15 14:00:00')); // 6h, needs 15 min
+		$short->setBreaks(json_encode([]));
+		$short->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$issues = $this->service->blockingIssuesForCompletedEntry($short);
+		$this->assertNotEmpty($issues);
+		$this->assertStringContainsString('ArG Art. 15', $issues[0]);
+		$this->assertStringContainsString('15', $issues[0]);
+
+		$ok = new TimeEntry();
+		$ok->setUserId('ch-user');
+		$ok->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$ok->setEndTime(new \DateTime('2024-01-15 14:15:00'));
+		$ok->setBreaks(json_encode([[
+			'start' => '2024-01-15T12:00:00+00:00',
+			'end' => '2024-01-15T12:15:00+00:00',
+		]]));
+		$ok->setStatus(TimeEntry::STATUS_COMPLETED);
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($ok));
+
+		$long = new TimeEntry();
+		$long->setUserId('ch-user');
+		$long->setStartTime(new \DateTime('2024-01-15 07:00:00'));
+		$long->setEndTime(new \DateTime('2024-01-15 17:00:00')); // 10h, needs 60
+		$long->setBreaks(json_encode([[
+			'start' => '2024-01-15T12:00:00+00:00',
+			'end' => '2024-01-15T12:30:00+00:00',
+		]]));
+		$long->setStatus(TimeEntry::STATUS_COMPLETED);
+		$longIssues = $this->service->blockingIssuesForCompletedEntry($long);
+		$this->assertNotEmpty($longIssues);
+		$this->assertStringContainsString('60', $longIssues[0]);
+		$this->assertStringContainsString('ArG Art. 15', $longIssues[0]);
 	}
 }

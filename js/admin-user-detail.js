@@ -441,8 +441,8 @@
         const startDateLabel = t('startDate', 'Start Date');
         const endDateLabel = t('endDateOptional', 'End Date (Optional)');
         const noModelLabel = t('noModel', 'No Model Assigned');
-        const germanStateLabel = t('germanStateLabel', 'Federal state for holidays / calendar');
-        const germanStateHelp = t('germanStateHelp', 'Select the federal state whose holiday calendar applies to this person. If not set, the global default state is used.');
+        const germanStateLabel = t('germanStateLabel', 'Region for public holidays');
+        const germanStateHelp = t('germanStateHelp', 'Select the region whose holiday calendar applies to this person. If not set, the instance default region is used.');
         const germanStateDefault = t('germanStateDefault', 'Use global default state');
         const datePlaceholder = Utils.escapeHtml(t('ddmmYYYY', 'dd.mm.yyyy'));
 
@@ -498,12 +498,26 @@
             modelOptions += `<option value="${Utils.escapeHtml(String(model.id))}" ${selected}>${Utils.escapeHtml(model.name)}</option>`;
         });
 
-        const states = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.states) || [];
+        // Regions grouped per country (cross-border commuters may pick a region
+        // of another supported country; working time law stays instance-wide).
+        const regionGroups = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.regionGroups) || null;
         let stateOptions = `<option value="">${Utils.escapeHtml(germanStateDefault)}</option>`;
-        states.forEach(state => {
-            const selected = currentState === state.code ? 'selected' : '';
-            stateOptions += `<option value="${Utils.escapeHtml(state.code)}" ${selected}>${Utils.escapeHtml(state.label)}</option>`;
-        });
+        if (regionGroups && regionGroups.length > 0) {
+            regionGroups.forEach(group => {
+                stateOptions += `<optgroup label="${Utils.escapeHtml(group.countryLabel)}">`;
+                (group.regions || []).forEach(region => {
+                    const selected = currentState === region.code ? 'selected' : '';
+                    stateOptions += `<option value="${Utils.escapeHtml(region.code)}" ${selected}>${Utils.escapeHtml(region.label)}</option>`;
+                });
+                stateOptions += '</optgroup>';
+            });
+        } else {
+            const states = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.states) || [];
+            states.forEach(state => {
+                const selected = currentState === state.code ? 'selected' : '';
+                stateOptions += `<option value="${Utils.escapeHtml(state.code)}" ${selected}>${Utils.escapeHtml(state.label)}</option>`;
+            });
+        }
 
         let tariffRuleSetOptions = `<option value="">${Utils.escapeHtml(t('notAvailable', 'Not available'))}</option>`;
         (Array.isArray(ruleSets) ? ruleSets : []).forEach(ruleSet => {
@@ -533,7 +547,7 @@
                         <span class="user-edit-section__heading">${Utils.escapeHtml(t('workSchedule', 'Work schedule'))}</span>
                     </summary>
                     <div class="user-edit-section__body">
-                    <p class="user-edit-section__guide form-help form-help--block">${Utils.escapeHtml(t('sectionGuideWorkSchedule', 'Pick the work schedule and the federal state used for public holidays.'))}</p>
+                    <p class="user-edit-section__guide form-help form-help--block">${Utils.escapeHtml(t('sectionGuideWorkSchedule', 'Pick the work schedule and the region used for public holidays.'))}</p>
                 <div class="form-group">
                     <label for="user-model" class="form-label">${modelLabel}</label>
                     <select id="user-model" name="workingTimeModelId" class="form-select" aria-describedby="user-model-help">
@@ -543,10 +557,11 @@
                 </div>
                 <div class="form-group">
                     <label for="user-german-state" class="form-label">${germanStateLabel}</label>
-                    <select id="user-german-state" name="germanState" class="form-select" aria-describedby="user-german-state-help">
+                    <select id="user-german-state" name="germanState" class="form-select" aria-describedby="user-german-state-help user-german-state-crossborder">
                         ${stateOptions}
                     </select>
                     <p id="user-german-state-help" class="form-help">${germanStateHelp}</p>
+                    <p id="user-german-state-crossborder" class="form-help form-help--note" role="status" aria-live="polite" hidden>${Utils.escapeHtml(auMsg('regionCrossBorderNote', 'Public holidays follow this region. Working time rules follow the country configured for the whole organisation.'))}</p>
                 </div>
                     </div>
                 </details>
@@ -758,6 +773,26 @@
                     }
                 });
             });
+        }
+
+        // Cross-border note: visible while the selected region belongs to a
+        // different country than the instance (holidays vs. working time law).
+        const regionSelectEl = document.getElementById('user-german-state');
+        const crossBorderNoteEl = document.getElementById('user-german-state-crossborder');
+        if (regionSelectEl && crossBorderNoteEl) {
+            const instanceCountry = (window.ArbeitszeitCheck
+                && window.ArbeitszeitCheck.holidayRegionContext
+                && window.ArbeitszeitCheck.holidayRegionContext.country) || 'DE';
+            const countryOfRegion = (code) => {
+                const idx = String(code).indexOf('-');
+                return idx === -1 ? 'DE' : String(code).slice(0, idx);
+            };
+            const syncCrossBorderNote = () => {
+                const code = String(regionSelectEl.value || '');
+                crossBorderNoteEl.hidden = code === '' || countryOfRegion(code) === instanceCountry;
+            };
+            regionSelectEl.addEventListener('change', syncCrossBorderNote);
+            syncCrossBorderNote();
         }
 
         const vacationModeEl = document.getElementById('user-vacation-mode');

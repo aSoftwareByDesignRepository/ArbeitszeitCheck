@@ -5,7 +5,8 @@ declare(strict_types=1);
 /**
  * Holiday rules and working-day math for the arbeitszeitcheck app.
  *
- * Runtime source of truth: rows in at_holidays (seeded from GermanStatutoryHolidayCatalog).
+ * Runtime source of truth: rows in at_holidays (seeded from the country
+ * catalog resolved per region, see HolidayCatalogResolver).
  * Working-day math uses only DB-backed holidays — never the catalog directly.
  *
  * @copyright Copyright (c) 2026
@@ -18,7 +19,8 @@ use OCA\ArbeitszeitCheck\Db\Holiday;
 use OCA\ArbeitszeitCheck\Db\HolidayMapper;
 use OCA\ArbeitszeitCheck\Db\HolidaySuppressionMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
-use OCA\ArbeitszeitCheck\Support\GermanStatutoryHolidayCatalog;
+use OCA\ArbeitszeitCheck\Support\HolidayCatalogResolver;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCP\ICacheFactory;
 use OCP\IConfig;
 use OCP\IL10N;
@@ -26,15 +28,6 @@ use Psr\Log\LoggerInterface;
 
 class HolidayService
 {
-	/** @var string[] */
-	private const VALID_STATES = [
-		'BW', 'BY', 'BE', 'BB', 'HB', 'HH', 'HE', 'MV',
-		'NI', 'NW', 'RP', 'SL', 'SN', 'ST', 'SH', 'TH',
-	];
-
-	/** @deprecated Legacy flag; prefer at_holiday_suppress per date. */
-	private const INITIALIZED_CONFIG_KEY = 'holidays_initialized_state_years';
-
 	public function __construct(
 		private readonly HolidayMapper $holidayMapper,
 		private readonly HolidaySuppressionMapper $suppressionMapper,
@@ -114,8 +107,8 @@ class HolidayService
 
 		$state = $userState !== '' ? $userState : $defaultState;
 
-		if (!in_array($state, self::VALID_STATES, true)) {
-			$this->logger->warning('HolidayService: invalid state for user, falling back to default', [
+		if (!RegionRegistry::isValidRegion($state)) {
+			$this->logger->warning('HolidayService: invalid region for user, falling back to default', [
 				'userId' => $userId,
 				'state' => $state,
 				'defaultState' => $defaultState,
@@ -126,13 +119,26 @@ class HolidayService
 		return $state;
 	}
 
+	/**
+	 * Instance default region. Falls back to the configured country's
+	 * default region (DE => NW, AT => AT-W) when unset or invalid.
+	 */
 	private function getDefaultState(): string
 	{
-		$state = $this->config->getAppValue('arbeitszeitcheck', 'german_state', 'NW');
-		if (!in_array($state, self::VALID_STATES, true)) {
-			$state = 'NW';
+		$country = $this->getConfiguredCountry();
+		$fallback = RegionRegistry::defaultRegionForCountry($country);
+		$state = $this->config->getAppValue('arbeitszeitcheck', 'german_state', $fallback);
+		if (!RegionRegistry::isValidRegion($state)) {
+			return $fallback;
 		}
 		return $state;
+	}
+
+	private function getConfiguredCountry(): string
+	{
+		$country = strtoupper(trim($this->config->getAppValue('arbeitszeitcheck', 'country', RegionRegistry::COUNTRY_DE)));
+
+		return RegionRegistry::isSupportedCountry($country) ? $country : RegionRegistry::COUNTRY_DE;
 	}
 
 	/**
@@ -239,11 +245,7 @@ class HolidayService
 				}
 				$dateStr = $date->format('Y-m-d');
 
-				if ($holiday->getScope() === Holiday::SCOPE_STATUTORY) {
-					$weight = 1.0;
-				} else {
-					$weight = ($holiday->getKind() === Holiday::KIND_HALF) ? 0.5 : 1.0;
-				}
+				$weight = ($holiday->getKind() === Holiday::KIND_HALF) ? 0.5 : 1.0;
 
 				$current = $weights[$dateStr] ?? 0.0;
 				if ($weight > $current) {
@@ -268,10 +270,6 @@ class HolidayService
 		}
 
 		$this->reconcileStatutoryHolidaysForStateYear($state, $year);
-
-		if (!$this->isYearInitialized($state, $year)) {
-			$this->markYearInitialized($state, $year);
-		}
 
 		$statutoryAutoReseed = $this->isStatutoryAutoReseedEnabled();
 		$cacheKey = $this->getCacheKey($state, $year);
@@ -322,22 +320,15 @@ class HolidayService
 			$this->seedStatutoryHolidaysForStateAndYear($state, $year, false);
 			$this->clearDistributedCacheForStateYear($state, $year);
 		} else {
-			$needsStatutory = !$this->holidayMapper->hasStatutoryHolidaysForStateAndYear($state, $year);
-			if ($needsStatutory && $this->isYearInitialized($state, $year)) {
-				$needsStatutory = false;
-			}
-			if ($needsStatutory) {
-				// Auto-restore is off: honour per-date suppressions even on the
-				// very first seed for this Bundesland/year.
+			// Auto-restore is off: a fully emptied year stays empty because every
+			// statutory delete records a per-date suppression (and migration 1034
+			// converted the legacy "initialized" flag into suppressions), so the
+			// seeder below re-inserts nothing for opted-out dates.
+			if (!$this->holidayMapper->hasStatutoryHolidaysForStateAndYear($state, $year)) {
 				$this->seedStatutoryHolidaysForStateAndYear($state, $year, true);
 				$this->clearDistributedCacheForStateYear($state, $year);
 			}
 		}
-	}
-
-	public function markStateYearInitialized(string $state, int $year): void
-	{
-		$this->markYearInitialized($this->normalizeState($state), $year);
 	}
 
 	/**
@@ -351,7 +342,8 @@ class HolidayService
 	private function seedStatutoryHolidaysForStateAndYear(string $state, int $year, bool $honorSuppressions = true): void
 	{
 		try {
-			$base = GermanStatutoryHolidayCatalog::getStatutoryHolidaysForStateAndYear($state, $year);
+			$base = HolidayCatalogResolver::statutoryHolidaysForRegionAndYear($state, $year);
+			$kinds = HolidayCatalogResolver::statutoryHolidayKindsForRegionAndYear($state, $year);
 		} catch (\Throwable $e) {
 			$this->logger->error('HolidayService: failed to get statutory catalog', [
 				'year' => $year,
@@ -377,7 +369,31 @@ class HolidayService
 				continue;
 			}
 
-			if ($this->holidayMapper->existsForStateDateScope($state, $dateStr, Holiday::SCOPE_STATUTORY)) {
+			$desiredKind = ($kinds[$dateStr] ?? 'full') === Holiday::KIND_HALF
+				? Holiday::KIND_HALF
+				: Holiday::KIND_FULL;
+
+			$existingId = $this->holidayMapper->findIdForStateDateScope($state, $dateStr, Holiday::SCOPE_STATUTORY);
+			if ($existingId !== null) {
+				// E-6 self-heal: generated statutory rows must track catalog kind
+				// (e.g. Zurich Sechseläuten half-day). Manual statutory edits are
+				// left alone.
+				try {
+					$existing = $this->holidayMapper->findById($existingId);
+					if ($existing->getSource() === Holiday::SOURCE_GENERATED
+						&& $existing->getKind() !== $desiredKind) {
+						$existing->setKind($desiredKind);
+						$existing->setName($this->l10n->t($name));
+						$existing->setUpdatedAt(new \DateTime());
+						$this->holidayMapper->update($existing);
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('HolidayService: failed to reconcile statutory kind', [
+						'state' => $state,
+						'date' => $dateStr,
+						'exception' => $e,
+					]);
+				}
 				continue;
 			}
 
@@ -391,7 +407,7 @@ class HolidayService
 			$holiday = new Holiday();
 			$holiday->setState($state);
 			$holiday->setName($this->l10n->t($name));
-			$holiday->setKind(Holiday::KIND_FULL);
+			$holiday->setKind($desiredKind);
 			$holiday->setScope(Holiday::SCOPE_STATUTORY);
 			$holiday->setSource(Holiday::SOURCE_GENERATED);
 			$holiday->setCreatedAt(new \DateTime());
@@ -459,7 +475,7 @@ class HolidayService
 	private function normalizeState(string $state): string
 	{
 		$state = strtoupper(trim($state));
-		if (!in_array($state, self::VALID_STATES, true)) {
+		if (!RegionRegistry::isValidRegion($state)) {
 			$state = $this->getDefaultState();
 		}
 		return $state;
@@ -477,31 +493,6 @@ class HolidayService
 			$years[] = $y;
 		}
 		return $years;
-	}
-
-	private function isYearInitialized(string $state, int $year): bool
-	{
-		$json = $this->config->getAppValue('arbeitszeitcheck', self::INITIALIZED_CONFIG_KEY, '[]');
-		$list = json_decode($json, true);
-		if (!is_array($list)) {
-			$list = [];
-		}
-		$key = sprintf('%s-%04d', $state, $year);
-		return in_array($key, $list, true);
-	}
-
-	private function markYearInitialized(string $state, int $year): void
-	{
-		$json = $this->config->getAppValue('arbeitszeitcheck', self::INITIALIZED_CONFIG_KEY, '[]');
-		$list = json_decode($json, true);
-		if (!is_array($list)) {
-			$list = [];
-		}
-		$key = sprintf('%s-%04d', $state, $year);
-		if (!in_array($key, $list, true)) {
-			$list[] = $key;
-			$this->config->setAppValue('arbeitszeitcheck', self::INITIALIZED_CONFIG_KEY, json_encode($list));
-		}
 	}
 
 	/**
@@ -574,9 +565,6 @@ class HolidayService
 		}
 
 		$weight = ($holiday->getKind() === Holiday::KIND_HALF) ? 0.5 : 1.0;
-		if ($holiday->getScope() === Holiday::SCOPE_STATUTORY) {
-			$weight = 1.0;
-		}
 
 		$name = $holiday->getName();
 		if ($holiday->getScope() === Holiday::SCOPE_STATUTORY) {
@@ -682,19 +670,25 @@ class HolidayService
 		return self::computeWorkingDaysPerYearFromWeights($start, $end, $extraHolidayWeights);
 	}
 
+	/**
+	 * Catalog-only check (ignores DB overrides/suppressions).
+	 *
+	 * @deprecated Use isHolidayForState()/isHolidayForUser() (DB-backed) or
+	 *             HolidayCatalogResolver::statutoryHolidaysForRegionAndYear().
+	 */
 	public static function isGermanPublicHoliday(\DateTime $date, string $state = 'NW'): bool
 	{
 		$year = (int)$date->format('Y');
-		$holidays = GermanStatutoryHolidayCatalog::getStatutoryHolidaysForStateAndYear($state, $year);
+		$holidays = HolidayCatalogResolver::statutoryHolidaysForRegionAndYear($state, $year);
 		return isset($holidays[$date->format('Y-m-d')]);
 	}
 
 	/**
-	 * @deprecated Use GermanStatutoryHolidayCatalog::getStatutoryHolidaysForStateAndYear()
+	 * @deprecated Use HolidayCatalogResolver::statutoryHolidaysForRegionAndYear()
 	 * @return array<string,string>
 	 */
 	public static function getGermanPublicHolidaysForYear(int $year, string $state = 'NW'): array
 	{
-		return GermanStatutoryHolidayCatalog::getStatutoryHolidaysForStateAndYear($state, $year);
+		return HolidayCatalogResolver::statutoryHolidaysForRegionAndYear($state, $year);
 	}
 }

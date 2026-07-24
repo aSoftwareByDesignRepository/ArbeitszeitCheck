@@ -16,6 +16,8 @@ use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\LocaleFormatService;
 use OCA\ArbeitszeitCheck\Service\NavigationFlagsService;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
@@ -52,6 +54,7 @@ class ComplianceController extends Controller
 	protected IL10N $l10n;
 	protected LocaleFormatService $localeFormat;
 	protected NavigationFlagsService $navigationFlags;
+	private LaborLawProfileFactory $laborLawProfileFactory;
 
 	public function __construct(
 		string $appName,
@@ -67,6 +70,7 @@ class ComplianceController extends Controller
 		LocaleFormatService $localeFormat,
 		IL10N $l10n,
 		NavigationFlagsService $navigationFlags,
+		LaborLawProfileFactory $laborLawProfileFactory,
 	) {
 		parent::__construct($appName, $request);
 		$this->complianceService = $complianceService;
@@ -79,7 +83,21 @@ class ComplianceController extends Controller
 		$this->localeFormat = $localeFormat;
 		$this->l10n = $l10n;
 		$this->navigationFlags = $navigationFlags;
+		$this->laborLawProfileFactory = $laborLawProfileFactory;
 		$this->setCspService($cspService);
+	}
+
+	/**
+	 * Country-aware lead copy for the compliance dashboard (DE ArbZG / AT AZG).
+	 */
+	private function complianceDashboardLead(): string
+	{
+		$country = $this->laborLawProfileFactory->getConfiguredCountry();
+		return match ($country) {
+			RegionRegistry::COUNTRY_AT => $this->l10n->t('Check if your working time follows Austrian labour law and see any problems that need fixing'),
+			RegionRegistry::COUNTRY_CH => $this->l10n->t('Check if your working time follows Swiss labour law and see any problems that need fixing'),
+			default => $this->l10n->t('Check if your working time follows German labor law and see any problems that need fixing'),
+		};
 	}
 
 	/**
@@ -164,7 +182,7 @@ class ComplianceController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-dashboard', $this->buildShellParams(
 				'compliance',
 				$this->l10n->t('Compliance Dashboard'),
-				$this->l10n->t('Check if your working time follows German labor law and see any problems that need fixing'),
+				$this->complianceDashboardLead(),
 				$navFlags,
 			) + [
 				'complianceStatus' => $complianceStatus,
@@ -180,7 +198,7 @@ class ComplianceController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-dashboard', $this->buildShellParams(
 				'compliance',
 				$this->l10n->t('Compliance Dashboard'),
-				$this->l10n->t('Check if your working time follows German labor law and see any problems that need fixing'),
+				$this->complianceDashboardLead(),
 				$navFlags,
 			) + [
 				'complianceStatus' => [

@@ -581,16 +581,50 @@ const ArbeitszeitCheckValidation = {
   },
 
   /**
-   * Calculate required break time based on working hours (ArbZG §4)
+   * Country-profile break tiers from bootstrap (DE: 6→30, 9→45; AT: 6→30).
+   * Falls back to historic German ArbZG tiers when the payload is missing.
+   * @returns {Array<{afterHours: number, breakMinutes: number}>}
+   */
+  getBreakTiers() {
+    const raw = window.ArbeitszeitCheck?.complianceParams?.breakTiers;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw
+        .map((t) => ({
+          afterHours: Number(t.afterHours),
+          breakMinutes: Math.round(Number(t.breakMinutes)),
+        }))
+        .filter((t) => Number.isFinite(t.afterHours) && t.afterHours > 0 && t.breakMinutes > 0)
+        .sort((a, b) => a.afterHours - b.afterHours);
+    }
+    return [
+      { afterHours: 6, breakMinutes: 30 },
+      { afterHours: 9, breakMinutes: 45 },
+    ];
+  },
+
+  /**
+   * Required break minutes for a shift duration, using profile tiers
+   * (highest matching threshold wins — same as LaborLawProfile::requiredBreakMinutes).
+   */
+  calculateRequiredBreakMinutes(workingHours) {
+    const hours = Number(workingHours);
+    if (!Number.isFinite(hours) || hours <= 0) {
+      return 0;
+    }
+    const tiers = this.getBreakTiers().slice().reverse(); // highest first
+    for (const tier of tiers) {
+      if (hours >= tier.afterHours) {
+        return tier.breakMinutes;
+      }
+    }
+    return 0;
+  },
+
+  /**
+   * @deprecated Prefer calculateRequiredBreakMinutes(); kept for callers that expect hours.
    */
   calculateRequiredBreakTime(workingHours) {
-    if (workingHours <= 6) {
-      return 0; // No break required
-    } else if (workingHours <= 9) {
-      return 0.5; // 30 minutes
-    } else {
-      return 0.75; // 45 minutes
-    }
+    return this.calculateRequiredBreakMinutes(workingHours) / 60;
   },
 
   /**
@@ -644,7 +678,7 @@ const ArbeitszeitCheckValidation = {
     if (breakDurationMs < minBreakDurationMs) {
       errors.push(
         l10n.breakTooShort ||
-        t('Break must be at least 15 minutes long (ArbZG §4). Your break is {minutes} minutes.', { minutes: String(Math.round(breakDurationMs / 60000)) })
+        t('Break must be at least 15 minutes long to count toward the legal break requirement. Your break is {minutes} minutes.', { minutes: String(Math.round(breakDurationMs / 60000)) })
       );
     }
 

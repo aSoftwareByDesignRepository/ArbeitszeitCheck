@@ -17,6 +17,7 @@ declare(strict_types=1);
  */
 
 use OCA\ArbeitszeitCheck\Support\BadgeVariant;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 
 /** @var array $_ */
 /** @var \OCP\IL10N $l */
@@ -34,7 +35,12 @@ require __DIR__ . '/common/user-display-timezone.php';
 $status = $_['status'] ?? [];
 $overtime = $_['overtime'] ?? [];
 $recentEntries = $_['recentEntries'] ?? [];
-$maxDailyHours = (float)\OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10');
+try {
+	$azcMaxDefault = (string)\OCP\Server::get(LaborLawProfileFactory::class)->getProfile()->dailyMaxHoursDefault;
+} catch (\Throwable) {
+	$azcMaxDefault = '10';
+}
+$maxDailyHours = (float)\OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitcheck', 'max_daily_hours', $azcMaxDefault);
 
 /**
  * Returns a display copy of the given DateTime converted into the user's

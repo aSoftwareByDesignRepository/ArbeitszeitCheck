@@ -1083,35 +1083,38 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 }
 
 /* Modal */
-.modal {
-  background-color: var(--arbeitszeitcheck-color-modal-background);
+.modal,
+.azc-dialog {
+  background-color: var(--arbeitszeitcheck-color-modal-background, var(--azc-bg-card, var(--color-main-background)));
   color: var(--arbeitszeitcheck-color-text-maxcontrast, var(--color-text-maxcontrast, var(--arbeitszeitcheck-color-text)));
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-2xl);
+  border: 1px solid var(--azc-border, var(--color-border));
+  border-radius: var(--azc-radius-lg, 16px);
+  box-shadow: var(--azc-shadow-md, 0 8px 24px color-mix(in srgb, var(--color-main-text) 12%, transparent));
   max-width: 90vw;
   max-height: 90vh;
   max-height: 90dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  gap: 0;
   z-index: var(--z-modal);
 }
 
 /* Modal Variants */
 .modal--sm {
-  width: 400px;
+  width: min(400px, 100%);
 }
 
 .modal--md {
-  width: 600px;
+  width: min(600px, 100%);
 }
 
 .modal--lg {
-  width: 800px;
+  width: min(800px, 100%);
 }
 
 .modal--xl {
-  width: 1000px;
+  width: min(1000px, 100%);
 }
 
 .modal--fullscreen {
@@ -1169,9 +1172,17 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--arbeitszeitcheck-color-modal-border);
-  background-color: var(--arbeitszeitcheck-color-modal-header-background);
+  gap: var(--azc-space-3, var(--space-3));
+  padding: var(--azc-space-4, var(--space-4));
+  border-bottom: 1px solid var(--azc-border, var(--arbeitszeitcheck-color-modal-border));
+  background-color: transparent;
+}
+
+.confirm-dialog .modal-header,
+.azc-dialog.confirm-dialog .modal-header {
+  background-color: transparent;
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .modal-title {
@@ -1254,6 +1265,9 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
   color: var(--color-main-text);
   font-size: var(--arbeitszeitcheck-font-size-base);
   line-height: var(--arbeitszeitcheck-line-height-relaxed);
+  /* Messages are escaped plain text; keep intentional line breaks (e.g. the
+     multi-point country-switch confirmation) readable. */
+  white-space: pre-line;
 }
 
 /* ===== ALERT COMPONENTS (see common/legacy-alert.css) ===== */

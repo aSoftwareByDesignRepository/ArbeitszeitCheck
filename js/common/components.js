@@ -426,14 +426,21 @@ const ArbeitszeitCheckComponents = {
     const {
       type = 'info',
       message = '',
-      duration = 5000,
       title = null
     } = options;
+    // Errors linger longer (MC critical = 9s); callers may still override duration.
+    const duration = Object.prototype.hasOwnProperty.call(options, 'duration')
+      ? options.duration
+      : ((type === 'error' || type === 'critical' || type === 'danger') ? 9000 : 5000);
 
     const container = document.getElementById('toast-container') || document.body;
     const toast = document.createElement('div');
     toast.className = `toast toast--${type}`;
-    toast.setAttribute('role', 'alert');
+    // Errors are assertive alerts; routine success/info/warning are polite status.
+    const isAssertive = type === 'error' || type === 'critical' || type === 'danger';
+    toast.setAttribute('role', isAssertive ? 'alert' : 'status');
+    toast.setAttribute('aria-live', isAssertive ? 'assertive' : 'polite');
+    toast.setAttribute('aria-atomic', 'true');
 
     const icon = this.getToastIcon(options.type || type);
     const closeLabel = (typeof window !== 'undefined' && window.t) 

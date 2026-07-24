@@ -8,26 +8,26 @@
 	<id>arbeitszeitcheck</id>
 	<name>ArbeitszeitCheck</name>
 	<name lang="de">ArbeitszeitCheck</name>
-	<summary>Time tracking with ArbZG/GDPR compliance checks directly in your Nextcloud</summary>
-	<summary lang="de">Zeiterfassung mit ArbZG-/DSGVO-Compliance-Prüfungen direkt in Ihrer Nextcloud</summary>
-	<summary lang="fr">Suivi du temps de travail avec contrôles de conformité ArbZG/RGPD directement dans votre Nextcloud</summary>
-	<summary lang="da">Tidsregistrering med ArbZG/GDPR-overholdelseskontrol direkte i din Nextcloud</summary>
-	<summary lang="es">Registro de tiempo con comprobaciones de cumplimiento ArbZG/RGPD directamente en tu Nextcloud</summary>
-	<summary lang="nl">Tijdregistratie met ArbZG/AVG-nalevingscontroles direct in uw Nextcloud</summary>
-	<summary lang="it">Registrazione ore con controlli di conformità ArbZG/GDPR direttamente nel tuo Nextcloud</summary>
-	<summary lang="pl">Rejestracja czasu z kontrolą zgodności ArbZG/RODO bezpośrednio w Twoim Nextcloud</summary>
-	<summary lang="sv">Tidsregistrering med ArbZG/GDPR-efterlevnadskontroller direkt i din Nextcloud</summary>
-	<summary lang="nb">Tidsregistrering med ArbZG/GDPR-samsvarskontroller direkte i din Nextcloud</summary>
+	<summary>Time tracking with DACH labour-law compliance (ArbZG / AZG / ArG) and GDPR checks in Nextcloud</summary>
+	<summary lang="de">Zeiterfassung mit DACH-Arbeitsrechts-Compliance (ArbZG / AZG / ArG) und DSGVO-Prüfungen in Nextcloud</summary>
+	<summary lang="fr">Suivi du temps avec conformité DACH (ArbZG / AZG) et contrôles RGPD dans Nextcloud</summary>
+	<summary lang="da">Tidsregistrering med DACH-arbejdslovsoverholdelse (ArbZG / AZG) og GDPR-kontrol i Nextcloud</summary>
+	<summary lang="es">Registro de tiempo con cumplimiento laboral DACH (ArbZG / AZG) y comprobaciones RGPD en Nextcloud</summary>
+	<summary lang="nl">Tijdregistratie met DACH-arbeidsrechtnaleving (ArbZG / AZG) en AVG-controles in Nextcloud</summary>
+	<summary lang="it">Registrazione ore con conformità DACH (ArbZG / AZG) e controlli GDPR in Nextcloud</summary>
+	<summary lang="pl">Rejestracja czasu ze zgodnością prawa pracy DACH (ArbZG / AZG) i kontrolą RODO w Nextcloud</summary>
+	<summary lang="sv">Tidsregistrering med DACH-arbetslagstiftning (ArbZG / AZG) och GDPR-kontroller i Nextcloud</summary>
+	<summary lang="nb">Tidsregistrering med DACH-arbeidsrett (ArbZG / AZG) og GDPR-kontroller i Nextcloud</summary>
 	<description><![CDATA[
 # ArbeitszeitCheck
 
-Time tracking focused on German working time law (ArbZG) and GDPR. Record work
-times, enforce breaks and rest periods, and monitor compliance – fully self‑hosted
-in your Nextcloud instance.
+Time tracking for Germany, Austria and Switzerland (DACH). Record work times, enforce
+breaks and rest periods under ArbZG, AZG/ARG or ArG, and monitor compliance –
+fully self‑hosted in your Nextcloud instance.
 
 ## Features
 
-- **ArbZG-aware rules** – maximum hours, breaks, rest periods, Sundays/holidays
+- **Country profiles** – Germany (ArbZG), Austria (AZG/ARG) or Switzerland (ArG) with matching holiday regions
 - **Compliance monitoring** – automatic violation detection and reports
 - **Self‑service dashboards** – employee, team and manager views
 - **Absences & leave** – approval workflows and reporting
@@ -42,14 +42,14 @@ in your Nextcloud instance.
 	<description lang="de"><![CDATA[
 # ArbeitszeitCheck
 
-Zeiterfassung und Compliance-App für das deutsche Arbeitszeitgesetz (ArbZG)
-und die DSGVO. Erfassen Sie Arbeitszeiten, setzen Sie Pausen- und Ruhezeiten
+Zeiterfassung für Deutschland, Österreich und die Schweiz (DACH). Erfassen Sie
+Arbeitszeiten, setzen Sie Pausen- und Ruhezeiten nach ArbZG, AZG/ARG oder ArG
 technisch durch und überwachen Sie Verstöße – vollständig in Ihrer selbst
 gehosteten Nextcloud.
 
 ## Funktionen
 
-- **ArbZG-orientierte Regeln** – Höchstarbeitszeit, Pausen, Ruhezeiten, Sonn-/Feiertage
+- **Länderprofile** – Deutschland (ArbZG), Österreich (AZG/ARG) oder Schweiz (ArG) mit passenden Feiertagsregionen
 - **Compliance-Monitoring** – automatische Verstoßmeldungen und Berichte
 - **Self-Service-Dashboards** – für Mitarbeitende, Teams und Führungskräfte
 - **Urlaub & Abwesenheiten** – Genehmigungs-Workflows und Auswertungen
@@ -119,7 +119,7 @@ Registro de tiempo centrado en la ley laboral alemana (ArbZG) y el RGPD. Registr
 - PHP 8.1–8.4
 	]]></description>
 
-	<version>1.5.23</version>
+	<version>1.6.0</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="info@software-by-design.de" homepage="http://nextcloud.software-by-design.de">Alexander Mäule</author>
 
@@ -198,7 +198,17 @@ Registro de tiempo centrado en la ley laboral alemana (ArbZG) y el RGPD. Registr
 		<keyword>zeiterfassung</keyword>
 		<keyword>labor law</keyword>
 		<keyword>german law</keyword>
+		<keyword>austrian law</keyword>
+		<keyword>swiss law</keyword>
+		<keyword>dach</keyword>
 		<keyword>arbzg</keyword>
+		<keyword>azg</keyword>
+		<keyword>arg</keyword>
+		<keyword>österreich</keyword>
+		<keyword>austria</keyword>
+		<keyword>switzerland</keyword>
+		<keyword>schweiz</keyword>
+		<keyword>swiss</keyword>
 		<keyword>gdpr</keyword>
 		<keyword>compliance</keyword>
 		<keyword>work hours</keyword>

@@ -217,6 +217,7 @@ return [
 		['name' => 'admin#deleteCompanyHoliday', 'url' => '/api/admin/holidays', 'verb' => 'DELETE'],
 		// New state-based holidays API (backed by at_holidays via HolidayMapper)
 		['name' => 'admin#getStateHolidays', 'url' => '/api/admin/state-holidays', 'verb' => 'GET'],
+		['name' => 'admin#getHolidaySuggestions', 'url' => '/api/admin/state-holidays/suggestions', 'verb' => 'GET'],
 		['name' => 'admin#saveStateHoliday', 'url' => '/api/admin/state-holidays', 'verb' => 'POST'],
 		['name' => 'admin#deleteStateHoliday', 'url' => '/api/admin/state-holidays/{id}', 'verb' => 'DELETE'],
 		['name' => 'admin#getStatistics', 'url' => '/api/admin/statistics', 'verb' => 'GET'],

@@ -13,6 +13,8 @@ namespace OCA\ArbeitszeitCheck\Settings;
 
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Service\FrontEndAssetService;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IAppConfig;
@@ -77,9 +79,10 @@ class AdminSettings implements ISettings
 			'sendEmailSubstitutionRequest' => $this->appConfig->getAppValueString('send_email_substitution_request', '1') === '1',
 			'sendEmailSubstituteApprovedToEmployee' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_employee', '1') === '1',
 			'sendEmailSubstituteApprovedToManager' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_manager', '1') === '1',
-			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
-			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
-			'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
+			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', $this->profileMaxDailyHoursDefault()),
+			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', $this->profileMinRestHoursDefault()),
+			'country' => $this->readConfiguredCountry(),
+			'germanState' => $this->readConfiguredDefaultRegion(),
 			'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
@@ -104,6 +107,31 @@ class AdminSettings implements ISettings
 			'projectCheckAvailable' => $projectCheckAvailable,
 			'requesttoken' => Util::callRegister(),
 		]);
+	}
+
+	private function readConfiguredCountry(): string
+	{
+		$country = strtoupper(trim($this->appConfig->getAppValueString('country', RegionRegistry::COUNTRY_DE)));
+
+		return RegionRegistry::isSupportedCountry($country) ? $country : RegionRegistry::COUNTRY_DE;
+	}
+
+	private function profileMaxDailyHoursDefault(): string
+	{
+		return (string)LaborLawProfileFactory::profileForCountry($this->readConfiguredCountry())->dailyMaxHoursDefault;
+	}
+
+	private function profileMinRestHoursDefault(): string
+	{
+		return (string)LaborLawProfileFactory::profileForCountry($this->readConfiguredCountry())->minRestHoursDefault;
+	}
+
+	private function readConfiguredDefaultRegion(): string
+	{
+		$fallback = RegionRegistry::defaultRegionForCountry($this->readConfiguredCountry());
+		$region = strtoupper(trim($this->appConfig->getAppValueString('german_state', $fallback)));
+
+		return RegionRegistry::isValidRegion($region) ? $region : $fallback;
 	}
 
 	public function getSection(): string

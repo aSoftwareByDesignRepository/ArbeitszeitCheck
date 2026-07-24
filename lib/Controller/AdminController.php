@@ -52,7 +52,10 @@ use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\LocaleFormatService;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use OCA\ArbeitszeitCheck\Support\HolidayCatalogResolver;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCA\ArbeitszeitCheck\Support\OpeningBalanceYearValidator;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCA\ArbeitszeitCheck\Support\SchemaHealth;
 use OCA\ArbeitszeitCheck\Support\StrictYmdDates;
 use OCA\ArbeitszeitCheck\Support\TariffRuleModuleValidator;
@@ -701,6 +704,10 @@ class AdminController extends Controller
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 				'organizationTimeCapture' => $this->timeCaptureMethodService->getOrganizationDefaults(),
+				'holidayRegionContext' => [
+					'country' => $this->getConfiguredCountry(),
+					'defaultRegion' => $this->getConfiguredDefaultRegion(),
+				],
 			],
 		));
 		return $this->configureCSP($response, 'admin');
@@ -752,6 +759,10 @@ class AdminController extends Controller
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 				'organizationTimeCapture' => $this->timeCaptureMethodService->getOrganizationDefaults(),
+				'holidayRegionContext' => [
+					'country' => $this->getConfiguredCountry(),
+					'defaultRegion' => $this->getConfiguredDefaultRegion(),
+				],
 			],
 		));
 		if (!$found) {
@@ -796,9 +807,10 @@ class AdminController extends Controller
 			'sendEmailSubstitutionRequest' => $this->appConfig->getAppValueString('send_email_substitution_request', '1') === '1',
 			'sendEmailSubstituteApprovedToEmployee' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_employee', '1') === '1',
 			'sendEmailSubstituteApprovedToManager' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_manager', '1') === '1',
-			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
-			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
-			'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
+			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', $this->getProfileMaxDailyHoursDefault()),
+			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', $this->getProfileMinRestHoursDefault()),
+			'country' => $this->getConfiguredCountry(),
+			'germanState' => $this->getConfiguredDefaultRegion(),
 			'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
@@ -867,9 +879,49 @@ class AdminController extends Controller
 	}
 
 	/**
+	 * Instance country ('DE'/'AT'), validated with a safe German fallback.
+	 */
+	private function getConfiguredCountry(): string
+	{
+		$country = strtoupper(trim($this->appConfig->getAppValueString('country', RegionRegistry::COUNTRY_DE)));
+
+		return RegionRegistry::isSupportedCountry($country) ? $country : RegionRegistry::COUNTRY_DE;
+	}
+
+	/**
+	 * Profile default for max_daily_hours when the key is unset (DE 10 / AT 12).
+	 * Explicit admin values always win — this is only the getAppValue fallback.
+	 */
+	private function getProfileMaxDailyHoursDefault(): string
+	{
+		return (string)LaborLawProfileFactory::profileForCountry($this->getConfiguredCountry())->dailyMaxHoursDefault;
+	}
+
+	/**
+	 * Profile default for min_rest_period when the key is unset.
+	 */
+	private function getProfileMinRestHoursDefault(): string
+	{
+		return (string)LaborLawProfileFactory::profileForCountry($this->getConfiguredCountry())->minRestHoursDefault;
+	}
+
+	/**
+	 * Instance default holiday region, validated against the registry with a
+	 * country-aware fallback (DE => NW, AT => AT-W).
+	 */
+	private function getConfiguredDefaultRegion(): string
+	{
+		$country = $this->getConfiguredCountry();
+		$fallback = RegionRegistry::defaultRegionForCountry($country);
+		$region = strtoupper(trim($this->appConfig->getAppValueString('german_state', $fallback)));
+
+		return RegionRegistry::isValidRegion($region) ? $region : $fallback;
+	}
+
+	/**
 	 * Admin holidays / calendars page (admin-only by default)
 	 *
-	 * Dedicated UI to explain and manage holiday calendars per state.
+	 * Dedicated UI to explain and manage holiday calendars per region.
 	 */
 	#[NoCSRFRequired]
 	public function holidays(): TemplateResponse
@@ -879,17 +931,18 @@ class AdminController extends Controller
 
 		$this->registerFrontEndAssets('admin-holidays', 'admin-holidays', [], ['common/datepicker']);
 
-		$defaultState = $this->appConfig->getAppValueString('german_state', 'NW');
+		$defaultState = $this->getConfiguredDefaultRegion();
 		$statutoryAutoReseed = $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1';
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-holidays', array_merge(
 			$this->buildAdminShellParams(
 				'admin-holidays',
 				$this->l10n->t('Holidays and calendars'),
-				$this->l10n->t('Manage state holiday calendars and the organisation default calendar.'),
+				$this->l10n->t('Manage regional holiday calendars and the organisation default calendar.'),
 			),
 			[
 				'defaultState' => $defaultState,
+				'country' => $this->getConfiguredCountry(),
 				'statutoryAutoReseed' => $statutoryAutoReseed,
 				'settingsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings'),
 				'urlGenerator' => $this->urlGenerator,
@@ -1079,10 +1132,10 @@ class AdminController extends Controller
 			$this->migrateLegacyCompanyHolidaysIfNeeded();
 
 			$state = strtoupper(trim($state));
-			if ($state === '') {
+			if (!RegionRegistry::isValidRegion($state)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('State is required'),
+					'error' => $this->l10n->t('Invalid region code'),
 				], Http::STATUS_BAD_REQUEST);
 			}
 			if ($year < 1970 || $year > 2100) {
@@ -1113,6 +1166,74 @@ class AdminController extends Controller
 					'start' => $start->format('Y-m-d'),
 					'end' => $end->format('Y-m-d'),
 				],
+			]);
+		} catch (\Throwable $e) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Suggested (non-statutory) company holidays for a region and year.
+	 *
+	 * Returns the catalog suggestions (e.g. Good Friday, patron saint days,
+	 * 24/31 December for Austria) together with an "exists" flag telling the
+	 * UI whether a holiday is already present on that date. Suggestions are
+	 * never seeded automatically — the admin adds them explicitly (plan §5.3).
+	 *
+	 * @param string $state Region code (e.g. 'NW', 'AT-W')
+	 * @param int $year Four-digit year
+	 */
+	#[NoCSRFRequired]
+	public function getHolidaySuggestions(string $state, int $year): JSONResponse
+	{
+		try {
+			$state = strtoupper(trim($state));
+			if (!RegionRegistry::isValidRegion($state)) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid region code'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			if ($year < 1970 || $year > 2100) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid year'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$suggested = HolidayCatalogResolver::suggestedCompanyHolidaysForRegionAndYear($state, $year);
+
+			// Existing holidays (any scope) on the same dates, so the UI can
+			// disable "Add" buttons for dates that are already covered.
+			$existingByDate = [];
+			foreach ($this->holidayCalendarService->getHolidaysForRange(
+				$state,
+				new \DateTime(sprintf('%04d-01-01', $year)),
+				new \DateTime(sprintf('%04d-12-31', $year))
+			) as $dto) {
+				if (!empty($dto['date'])) {
+					$existingByDate[(string)$dto['date']] = true;
+				}
+			}
+
+			$suggestions = [];
+			foreach ($suggested as $date => $msgid) {
+				$suggestions[] = [
+					'date' => $date,
+					'name' => $this->l10n->t($msgid),
+					'exists' => isset($existingByDate[$date]),
+				];
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'state' => $state,
+				'year' => $year,
+				'country' => RegionRegistry::countryOf($state),
+				'suggestions' => $suggestions,
 			]);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
@@ -1162,6 +1283,12 @@ class AdminController extends Controller
 					'error' => $this->l10n->t('State, date, and name are required for a holiday'),
 				], Http::STATUS_BAD_REQUEST);
 			}
+			if (!RegionRegistry::isValidRegion($state)) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid region code'),
+				], Http::STATUS_BAD_REQUEST);
+			}
 
 			try {
 				$dateObj = new \DateTime($date);
@@ -1177,10 +1304,21 @@ class AdminController extends Controller
 				$scope = Holiday::SCOPE_COMPANY;
 			}
 
-			// Statutory holidays are always treated as full-day in the working-day
-			// engine, so persist them as full-day to keep the badge honest.
-			if ($scope === Holiday::SCOPE_STATUTORY) {
+			// Statutory holidays may be half-day in Switzerland (E-6). Do not
+			// force full-day here — the catalog seeds the correct kind, and
+			// admins may correct kind without being overwritten.
+			if ($scope === Holiday::SCOPE_STATUTORY && $kind !== Holiday::KIND_HALF) {
 				$kind = Holiday::KIND_FULL;
+			}
+
+			// Conflict pre-check against the unique (state, date, scope) index:
+			// a friendly 409 instead of a DB-level constraint error.
+			$conflictId = $this->holidayMapper->findIdForStateDateScope($state, $dateObj->format('Y-m-d'), $scope);
+			if ($conflictId !== null && $conflictId !== $id) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('A holiday with this scope already exists on this date for this region. Edit the existing entry instead.'),
+				], Http::STATUS_CONFLICT);
 			}
 
 			$holiday = new Holiday();
@@ -1255,6 +1393,12 @@ class AdminController extends Controller
 				],
 			]);
 		} catch (\Throwable $e) {
+			if ($this->isUniqueConstraintViolation($e)) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('A holiday with this scope already exists on this date for this region. Edit the existing entry instead.'),
+				], Http::STATUS_CONFLICT);
+			}
 			return new JSONResponse([
 				'success' => false,
 				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
@@ -1344,10 +1488,9 @@ class AdminController extends Controller
 				return;
 			}
 
-			$states = [
-				'BW', 'BY', 'BE', 'BB', 'HB', 'HH', 'HE', 'MV',
-				'NI', 'NW', 'RP', 'SL', 'SN', 'ST', 'SH', 'TH',
-			];
+			// Legacy company_holidays predate multi-country support and were
+			// organisation-wide, i.e. applied to every German Bundesland.
+			$states = array_keys(RegionRegistry::regionsForCountry(RegionRegistry::COUNTRY_DE));
 
 			$now = new \DateTime();
 
@@ -1698,9 +1841,10 @@ class AdminController extends Controller
 				'sendEmailSubstitutionRequest' => $this->appConfig->getAppValueString('send_email_substitution_request', '1') === '1',
 				'sendEmailSubstituteApprovedToEmployee' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_employee', '1') === '1',
 				'sendEmailSubstituteApprovedToManager' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_manager', '1') === '1',
-				'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', '10'),
-				'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', '11'),
-				'germanState' => $this->appConfig->getAppValueString('german_state', 'NW'),
+				'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', $this->getProfileMaxDailyHoursDefault()),
+				'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', $this->getProfileMinRestHoursDefault()),
+				'country' => $this->getConfiguredCountry(),
+				'germanState' => $this->getConfiguredDefaultRegion(),
 				'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 				'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 				'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
@@ -1780,6 +1924,9 @@ class AdminController extends Controller
 				'sendEmailSubstituteApprovedToManager' => 'send_email_substitute_approved_to_manager',
 				'maxDailyHours' => 'max_daily_hours',
 				'minRestPeriod' => 'min_rest_period',
+				// 'country' must precede 'germanState' so a combined save
+				// validates the region against the country from this request.
+				'country' => 'country',
 				'germanState' => 'german_state',
 				'statutoryAutoReseed' => 'statutory_auto_reseed',
 				'retentionPeriod' => 'retention_period',
@@ -1838,15 +1985,34 @@ class AdminController extends Controller
 						}
 					} elseif ($paramKey === 'retentionPeriod') {
 						$value = (string)max(1, min(10, (int)$value));
-					} elseif ($paramKey === 'germanState') {
-						$validStates = ['NW', 'BY', 'BW', 'HE', 'NI', 'RP', 'SL', 'BE', 'BB', 'HB', 'HH', 'MV', 'SN', 'ST', 'SH', 'TH'];
-						if (!in_array($value, $validStates)) {
+					} elseif ($paramKey === 'country') {
+						$value = strtoupper(trim((string)$value));
+						if (!RegionRegistry::isSupportedCountry($value)) {
 							return new JSONResponse([
 								'success' => false,
-								'error' => $this->l10n->t('Invalid German state code')
+								'error' => $this->l10n->t('Invalid country code')
 							], Http::STATUS_BAD_REQUEST);
 						}
-						$value = (string)$value;
+					} elseif ($paramKey === 'germanState') {
+						$value = strtoupper(trim((string)$value));
+						if (!RegionRegistry::isValidRegion($value)) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $this->l10n->t('Invalid region code')
+							], Http::STATUS_BAD_REQUEST);
+						}
+						// Default region must belong to the instance country
+						// (per-user regions may cross the border, the instance
+						// default must not).
+						$targetCountry = isset($params['country'])
+							? strtoupper(trim((string)$params['country']))
+							: $this->getConfiguredCountry();
+						if (RegionRegistry::countryOf($value) !== $targetCountry) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $this->l10n->t('The selected region does not belong to the selected country')
+							], Http::STATUS_BAD_REQUEST);
+						}
 					} elseif ($paramKey === 'vacationCarryoverExpiryMonth') {
 						$m = max(1, min(12, (int)$value));
 						$value = (string)$m;
@@ -1893,6 +2059,29 @@ class AdminController extends Controller
 
 					$this->appConfig->setAppValueString($configKey, $value);
 					$updatedSettings[$paramKey] = $value;
+				}
+			}
+
+			// Consistency: after a country change the default region must belong
+			// to the new country. If not (and no explicit region was supplied in
+			// the same request), reset it to the country's default region so
+			// holiday lookups never silently fall back (plan §3.4).
+			if (isset($updatedSettings['country'])) {
+				$country = (string)$updatedSettings['country'];
+				$currentRegion = strtoupper($this->appConfig->getAppValueString('german_state', ''));
+				if ($currentRegion === ''
+					|| !RegionRegistry::isValidRegion($currentRegion)
+					|| RegionRegistry::countryOf($currentRegion) !== $country) {
+					$defaultRegion = RegionRegistry::defaultRegionForCountry($country);
+					$this->appConfig->setAppValueString('german_state', $defaultRegion);
+					$updatedSettings['germanState'] = $defaultRegion;
+				}
+				// Drop request-cached labour-law profile so same-request readers
+				// (compliance, capabilities) see the new country immediately.
+				try {
+					\OCP\Server::get(LaborLawProfileFactory::class)->clearCache();
+				} catch (\Throwable) {
+					// Unit tests may not have a DI container.
 				}
 			}
 

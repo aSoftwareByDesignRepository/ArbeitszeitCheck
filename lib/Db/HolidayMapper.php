@@ -112,6 +112,28 @@ class HolidayMapper extends QBMapper
 	}
 
 	/**
+	 * ID of the holiday occupying (state, date, scope), or null.
+	 *
+	 * Backed by the unique index at_hol_st_dt_sc_u (migration 1035); used for
+	 * the pre-save conflict check (HTTP 409) in the admin holidays API.
+	 */
+	public function findIdForStateDateScope(string $state, string $dateYmd, string $scope): ?int
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('state', $qb->createNamedParameter($state)))
+			->andWhere($qb->expr()->eq('date', $qb->createNamedParameter($dateYmd)))
+			->andWhere($qb->expr()->eq('scope', $qb->createNamedParameter($scope)))
+			->setMaxResults(1);
+		$cursor = $qb->executeQuery();
+		$row = $cursor->fetchOne();
+		$cursor->closeCursor();
+
+		return ($row === false || $row === null) ? null : (int)$row;
+	}
+
+	/**
 	 * Check whether at least one statutory holiday exists for a state/year
 	 * (used to decide if statutory seeding is needed; company holidays alone
 	 * do not imply statutory holidays have been seeded).

@@ -73,6 +73,75 @@ class AdminUserProfileUpdateServiceTest extends TestCase
 		);
 	}
 
+	private function serviceWithUserSettingsMapper(UserSettingsMapper $userSettingsMapper): AdminUserProfileUpdateService
+	{
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnCallback(fn ($s) => $s);
+
+		return new AdminUserProfileUpdateService(
+			$this->userManager,
+			$this->userWorkingTimeModelMapper,
+			$this->workingTimeModelMapper,
+			$this->createMock(AuditLogMapper::class),
+			$userSettingsMapper,
+			$this->createMock(VacationYearBalanceMapper::class),
+			$this->createMock(VacationAllocationService::class),
+			$this->createMock(TariffRuleSetMapper::class),
+			$this->vacationPolicyMapper,
+			$this->createMock(UserOvertimeSettingsService::class),
+			$this->createMock(UserEmploymentSettingsService::class),
+			$this->createMock(TimeCaptureMethodService::class),
+			$l10n,
+			$this->createMock(IDBConnection::class),
+		);
+	}
+
+	/**
+	 * DACH: per-user regions may cross the instance border (commuters), so an
+	 * Austrian region must be accepted even on a German instance — normalised
+	 * to canonical uppercase form.
+	 */
+	public function testApplyWorkingTimeModelStoresNormalisedCrossBorderRegion(): void
+	{
+		$this->userManager->method('get')->with('alice')->willReturn($this->createMock(IUser::class));
+		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$userSettingsMapper->expects($this->once())
+			->method('setSetting')
+			->with('alice', 'german_state', 'AT-W');
+		$userSettingsMapper->expects($this->never())->method('deleteSetting');
+
+		$service = $this->serviceWithUserSettingsMapper($userSettingsMapper);
+		$result = $service->applyWorkingTimeModel('alice', ['germanState' => ' at-w '], 'admin');
+		$this->assertIsArray($result);
+	}
+
+	public function testApplyWorkingTimeModelClearsRegionOnEmptyString(): void
+	{
+		$this->userManager->method('get')->with('alice')->willReturn($this->createMock(IUser::class));
+		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$userSettingsMapper->expects($this->once())
+			->method('deleteSetting')
+			->with('alice', 'german_state');
+		$userSettingsMapper->expects($this->never())->method('setSetting');
+
+		$service = $this->serviceWithUserSettingsMapper($userSettingsMapper);
+		$service->applyWorkingTimeModel('alice', ['germanState' => ''], 'admin');
+	}
+
+	public function testApplyWorkingTimeModelRejectsInvalidRegionBeforeAnyWrite(): void
+	{
+		$this->userManager->method('get')->with('alice')->willReturn($this->createMock(IUser::class));
+		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$userSettingsMapper->expects($this->never())->method('setSetting');
+		$userSettingsMapper->expects($this->never())->method('deleteSetting');
+
+		$service = $this->serviceWithUserSettingsMapper($userSettingsMapper);
+
+		$this->expectException(AdminUserProfileUpdateException::class);
+		$this->expectExceptionMessage('Invalid region code');
+		$service->applyWorkingTimeModel('alice', ['germanState' => 'ZZ'], 'admin');
+	}
+
 	public function testUpdateProfileRejectsInvalidVacationPolicyBeforeAnyWrite(): void
 	{
 		$user = $this->createMock(IUser::class);

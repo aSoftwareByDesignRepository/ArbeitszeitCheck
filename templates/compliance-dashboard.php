@@ -74,7 +74,7 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
                         $calloutTitleId = 'compliance-status-no-data-title';
                         $calloutIcon = 'info';
                         $calloutTitle = $l->t('Not enough data yet');
-                        $calloutText = $l->t('Create time entries to get your compliance status. Once you have recorded working hours, we can check them against German labor law.');
+                        $calloutText = $l->t('Create time entries to get your compliance status. Once you have recorded working hours, we can check them against the configured labour law.');
                         $calloutHint = '';
                         include __DIR__ . '/common/alert-callout.php';
                         ?>
@@ -86,7 +86,7 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
                         $calloutTitleId = 'compliance-status-ok-title';
                         $calloutIcon = 'check-circle';
                         $calloutTitle = $l->t('Everything looks good!');
-                        $calloutText = $l->t('Your working time follows all German labor law rules. Keep up the good work!');
+                        $calloutText = $l->t('Your working time follows all configured labour-law rules. Keep up the good work!');
                         $calloutHint = '';
                         include __DIR__ . '/common/alert-callout.php';
                         ?>
@@ -113,7 +113,7 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
                             — <?php p($l->t('(no data yet)')); ?>
                         <?php endif; ?>
                         <span class="form-help compliance-dashboard__score-hint">
-                            <?php p($l->t('This shows how well your working time follows German labor law. 100% means everything is perfect.')); ?>
+                            <?php p($l->t('This shows how well your working time follows the configured labour law. 100% means everything is perfect.')); ?>
                         </span>
                     </p>
                 <?php endif; ?>

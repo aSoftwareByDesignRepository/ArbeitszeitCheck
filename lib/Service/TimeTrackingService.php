@@ -50,6 +50,7 @@ class TimeTrackingService
 	private DailyWorkingHoursCalculator $dailyWorkingHoursCalculator;
 	private ?ProjectCheckLaborTimeSyncService $projectCheckLaborSync;
 	private TimeCaptureMethodService $timeCaptureMethodService;
+	private \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory $lawProfileFactory;
 
 	public function __construct(
 		TimeEntryMapper $timeEntryMapper,
@@ -69,6 +70,7 @@ class TimeTrackingService
 		DailyWorkingHoursCalculator $dailyWorkingHoursCalculator,
 		?ProjectCheckLaborTimeSyncService $projectCheckLaborSync = null,
 		?TimeCaptureMethodService $timeCaptureMethodService = null,
+		?\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory $lawProfileFactory = null,
 	) {
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->violationMapper = $violationMapper;
@@ -92,6 +94,17 @@ class TimeTrackingService
 			$config,
 			$l10n,
 		);
+		$this->lawProfileFactory = $lawProfileFactory
+			?? new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($config);
+	}
+
+	/**
+	 * Instance-wide country working-time law profile (also consumed by the
+	 * dashboard widgets for law citations in labels).
+	 */
+	public function lawProfile(): \OCA\ArbeitszeitCheck\Support\LaborLawProfile
+	{
+		return $this->lawProfileFactory->getProfile();
 	}
 
 	/**
@@ -113,12 +126,16 @@ class TimeTrackingService
 
 	private function getMaxDailyHours(): float
 	{
-		return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', '10')));
+		$default = (string)$this->lawProfile()->dailyMaxHoursDefault;
+
+		return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', $default)));
 	}
 
 	private function getMinRestPeriod(): float
 	{
-		return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'min_rest_period', '11')));
+		$default = (string)$this->lawProfile()->minRestHoursDefault;
+
+		return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'min_rest_period', $default)));
 	}
 
 	private function getAppConfiguredTimeZone(): \DateTimeZone
@@ -355,8 +372,8 @@ class TimeTrackingService
 				if ($todayHours >= $maxDailyHours) {
 					throw new BusinessRuleException(
 						$this->l10n->t(
-							'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
-							[(int)$maxDailyHours, $todayHours]
+							'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (%3$s).',
+							[(int)$maxDailyHours, $todayHours, $this->lawProfile()->lawLabel('daily')]
 						),
 						BusinessRuleCode::DAILY_HOURS_LIMIT,
 					);
@@ -531,8 +548,8 @@ class TimeTrackingService
 		if ($todayHours >= $maxDailyHours) {
 			throw new BusinessRuleException(
 				$this->l10n->t(
-					'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (ArbZG §3).',
-					[(int)$maxDailyHours, $todayHours]
+					'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (%3$s).',
+					[(int)$maxDailyHours, $todayHours, $this->lawProfile()->lawLabel('daily')]
 				),
 				BusinessRuleCode::DAILY_HOURS_LIMIT,
 			);
@@ -1024,24 +1041,16 @@ class TimeTrackingService
 	}
 
 	/**
-	 * Calculate required break duration based on working hours (German labor law - ArbZG)
-	 * 
+	 * Calculate required break duration based on working hours, using the
+	 * country profile's break tiers (DE ArbZG §4: 6h→30min, 9h→45min;
+	 * AT AZG §11: 6h→30min).
+	 *
 	 * @param float $hoursWorked Total hours worked today (including current session)
 	 * @return int Required break duration in minutes
 	 */
 	public function calculateRequiredBreakMinutes(float $hoursWorked): int
 	{
-		// German labor law (ArbZG):
-		// - 6+ hours: 30 minutes break required
-		// - 9+ hours: 45 minutes break required
-		
-		if ($hoursWorked >= 9) {
-			return 45; // 45 minutes required after 9 hours
-		} elseif ($hoursWorked >= 6) {
-			return 30; // 30 minutes required after 6 hours
-		}
-		
-		return 0; // No break required if less than 6 hours
+		return $this->lawProfile()->requiredBreakMinutes($hoursWorked);
 	}
 
 	/**
@@ -1143,7 +1152,7 @@ class TimeTrackingService
 			'end' => $breakEndTime->format('c'),
 			'duration_minutes' => $requiredBreakMinutes,
 			'automatic' => true, // Mark as automatically generated
-			'reason' => $this->l10n->t('Automatically added: Legal break requirement (ArbZG §4)')
+			'reason' => $this->l10n->t('Automatically added: Legal break requirement (%s)', [$this->lawProfile()->lawLabel('breaks')])
 		];
 
 		$timeEntry->setBreaks(json_encode($breaks));
@@ -1218,7 +1227,7 @@ class TimeTrackingService
 
 		if ($totalDailyWorkingHours >= $maxWorkingHours) {
 			$oldValues = $timeEntry->getSummary();
-			$oldValues['_reason'] = 'ArbZG §3: Auto-completing due to daily maximum (' . (int)$maxWorkingHours . 'h)';
+			$oldValues['_reason'] = $this->lawProfile()->lawLabel('daily') . ': Auto-completing due to daily maximum (' . (int)$maxWorkingHours . 'h)';
 
 			// Maximum working hours this session may still add on today's calendar day.
 			$maxAllowedWorkingHoursForEntry = max(0, $maxWorkingHours - $totalWorkingHoursFromPreviousEntries);
@@ -1283,7 +1292,7 @@ class TimeTrackingService
 			]);
 
 			$newValues = $timeEntry->getSummary();
-			$newValues['_reason'] = 'ArbZG §3: Auto-completed at daily maximum (' . (int)$maxWorkingHours . 'h)';
+			$newValues['_reason'] = $this->lawProfile()->lawLabel('daily') . ': Auto-completed at daily maximum (' . (int)$maxWorkingHours . 'h)';
 			$this->auditLogMapper->logAction(
 				$userId,
 				'time_entry_auto_completed_daily_max',
@@ -1440,11 +1449,11 @@ class TimeTrackingService
 	}
 
 	/**
-	 * Get break warning level based on hours worked and break status
+	 * Get break warning level based on hours worked and break status.
 	 *
-	 * @param float $hoursWorked
-	 * @param float $takenBreak
-	 * @param int $requiredBreak
+	 * Thresholds come from the country profile so AT (single 6h→30 tier) does
+	 * not inherit the German 9h/45 critical path.
+	 *
 	 * @return string Warning level: 'none', 'info', 'warning', 'critical'
 	 */
 	private function getBreakWarningLevel(float $hoursWorked, float $takenBreak, int $requiredBreak): string
@@ -1454,18 +1463,36 @@ class TimeTrackingService
 		}
 
 		$remainingBreak = max(0, $requiredBreak - $takenBreak);
-		
-		// Critical: 9+ hours and still need 30+ minutes
-		if ($hoursWorked >= 9 && $remainingBreak >= 30) {
+		if ($remainingBreak <= 0) {
+			return 'none';
+		}
+
+		$tiers = $this->lawProfile()->breakTiersAscending();
+		if ($tiers === []) {
+			return 'info';
+		}
+
+		$lowest = $tiers[0];
+		$highest = $tiers[count($tiers) - 1];
+		$minChunk = max(15, (int)floor($highest['breakMinutes'] / 2));
+
+		// Critical: at/past the highest tier and still missing a meaningful chunk.
+		if ($hoursWorked >= $highest['afterHours'] && $remainingBreak >= $minChunk) {
 			return 'critical';
 		}
-		
-		// Warning: 6+ hours and still need 15+ minutes, or approaching 9 hours
-		if (($hoursWorked >= 6 && $remainingBreak >= 15) || ($hoursWorked >= 8.5 && $requiredBreak >= 45)) {
+
+		// Warning: at/past the lowest tier with a meaningful deficit, or within
+		// 30 minutes of the next (higher) tier when that tier's break is already required.
+		if ($hoursWorked >= $lowest['afterHours'] && $remainingBreak >= 15) {
 			return 'warning';
 		}
-		
-		// Info: Break required but not urgent
+		if (count($tiers) > 1
+			&& $hoursWorked >= ($highest['afterHours'] - 0.5)
+			&& $requiredBreak >= $highest['breakMinutes']) {
+			return 'warning';
+		}
+
+		// Info: break required but not urgent
 		if ($remainingBreak > 0) {
 			return 'info';
 		}
@@ -1589,8 +1616,11 @@ class TimeTrackingService
 			$updated = $this->timeEntryMapper->find($currentEntry->getId());
 			$now = $this->nowForAtEntries();
 			$noticeMessage = $this->l10n->t(
-				'Session was automatically completed at %1$s because the maximum daily working hours were reached (ArbZG §3).',
-				[$this->timeZoneService->formatForDisplay($now, 'd.m.Y H:i', $userId)]
+				'Session was automatically completed at %1$s because the maximum daily working hours were reached (%2$s).',
+				[
+					$this->timeZoneService->formatForDisplay($now, 'd.m.Y H:i', $userId),
+					$this->lawProfile()->lawLabel('daily'),
+				]
 			);
 			$this->config->setUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', json_encode([
 				'message' => $noticeMessage,

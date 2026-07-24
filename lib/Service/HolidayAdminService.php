@@ -14,7 +14,7 @@ namespace OCA\ArbeitszeitCheck\Service;
 use OCA\ArbeitszeitCheck\Db\Holiday;
 use OCA\ArbeitszeitCheck\Db\HolidayMapper;
 use OCA\ArbeitszeitCheck\Db\HolidaySuppressionMapper;
-use OCA\ArbeitszeitCheck\Support\GermanStatutoryHolidayCatalog;
+use OCA\ArbeitszeitCheck\Support\HolidayCatalogResolver;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
 
@@ -59,8 +59,9 @@ class HolidayAdminService
 		if ($state !== '' && $year !== null) {
 			$this->holidayCalendarService->clearCacheForStateYear($state, $year);
 			if ($scope === Holiday::SCOPE_STATUTORY && $dateYmd !== null && !$this->isStatutoryAutoReseedEnabled()) {
+				// The per-date suppression alone keeps the day deleted; the legacy
+				// "initialized state/years" flag was retired in migration 1034.
 				$this->suppressionMapper->addSuppression($state, $dateYmd, $suppressedBy);
-				$this->holidayCalendarService->markStateYearInitialized($state, $year);
 			}
 		}
 
@@ -87,7 +88,7 @@ class HolidayAdminService
 	public function verifyStateYear(string $state, int $year): array
 	{
 		$state = strtoupper(trim($state));
-		$catalog = GermanStatutoryHolidayCatalog::getStatutoryHolidaysForStateAndYear($state, $year);
+		$catalog = HolidayCatalogResolver::statutoryHolidaysForRegionAndYear($state, $year);
 		$suppressed = $this->suppressionMapper->findSuppressedDatesForStateAndYear($state, $year);
 
 		// Read persisted rows only — do not call getHolidaysForRange() here because

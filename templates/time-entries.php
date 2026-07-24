@@ -646,7 +646,14 @@ require __DIR__ . '/common/user-display-timezone.php';
                                                     </button>
                                             </div>
                                             <?php if ($breakIsAutomatic): ?>
-                                                <p class="form-help auto-break-note" role="status"><small><?php p($l->t('Automatically added for German labor law compliance (ArbZG §4)')); ?></small></p>
+                                                <p class="form-help auto-break-note" role="status"><small><?php
+							try {
+								$azcBreakLaw = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)->getProfile()->lawLabel('breaks');
+							} catch (\Throwable) {
+								$azcBreakLaw = 'ArbZG §4';
+							}
+							p($l->t('Automatically added for labour-law compliance (%s)', [$azcBreakLaw]));
+						?></small></p>
                                             <?php endif; ?>
                                         </div>
                                     </div>

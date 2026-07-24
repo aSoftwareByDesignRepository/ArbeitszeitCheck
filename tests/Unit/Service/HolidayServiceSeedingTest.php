@@ -124,6 +124,11 @@ class HolidayServiceSeedingTest extends TestCase
 				return $msg;
 			});
 
+		// Default: no existing statutory row for a catalog date (insert path).
+		$this->holidayMapper
+			->method('findIdForStateDateScope')
+			->willReturn(null);
+
 		$this->service = new HolidayService(
 			$this->holidayMapper,
 			$this->suppressionMapper,
@@ -179,12 +184,17 @@ class HolidayServiceSeedingTest extends TestCase
 		$this->assertNotEmpty($result2);
 	}
 
-	public function testAutoReseedOffSkipsReseedWhenYearInitialized(): void
+	public function testAutoReseedOffSkipsReseedWhenAllDatesSuppressed(): void
 	{
 		$state = 'NW';
 		$year = 2031;
 		$this->configStore['statutory_auto_reseed'] = '0';
-		$this->configStore['holidays_initialized_state_years'] = json_encode([sprintf('%s-%04d', $state, $year)]);
+		// Fully emptied year: every statutory delete recorded a per-date
+		// suppression (migration 1034 converted the legacy "initialized" flag
+		// into exactly these rows). The year must stay empty.
+		foreach (array_keys(HolidayService::getGermanPublicHolidaysForYear($year, $state)) as $dateYmd) {
+			$this->suppressedDates[] = $state . '|' . $dateYmd;
+		}
 
 		$this->holidayMapper
 			->method('hasStatutoryHolidaysForStateAndYear')
@@ -421,7 +431,6 @@ class HolidayServiceSeedingTest extends TestCase
 		$year = 2033;
 		$labourDay = "$year-05-01"; // suppressed; working-day probe uses Tuesday 05-03
 		$this->configStore['statutory_auto_reseed'] = '0';
-		$this->configStore['holidays_initialized_state_years'] = json_encode([sprintf('%s-%04d', $state, $year)]);
 
 		$this->suppressedDates = [$state . '|' . $labourDay];
 

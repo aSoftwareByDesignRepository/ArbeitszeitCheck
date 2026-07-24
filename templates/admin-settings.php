@@ -222,7 +222,7 @@ $cancelUrl = $isNcAdminShell
                         </label>
                     </div>
                     <p id="autoComplianceCheck-help" class="form-help">
-                        <?php p($l->t('The system will automatically check if working hours follow German labor law. For example, it will warn if someone works more than 8 hours per day without a break.')); ?>
+                        <?php p($l->t('The system will automatically check if working hours follow the configured country labour law (ArbZG or AZG). For example, it will warn when required breaks are missing.')); ?>
                     </p>
                 </div>
 
@@ -498,7 +498,7 @@ $cancelUrl = $isNcAdminShell
                             </label>
                         </div>
                         <p id="exportMidnightSplitEnabled-help" class="form-help">
-                            <?php p($l->t('When enabled, entries that run across midnight (for example 22:00–06:00) are shown as two lines in the export (before and after 00:00). This is only a visual/export split – all internal working time and ArbZG compliance checks continue to use the original, unsplit entry.')); ?>
+                            <?php p($l->t('When enabled, entries that run across midnight (for example 22:00–06:00) are shown as two lines in the export (before and after 00:00). This is only a visual/export split – all internal working time and labour-law compliance checks continue to use the original, unsplit entry.')); ?>
                         </p>
                         <p id="exportMidnightSplitEnabled-example" class="form-help form-help--note">
                             <?php p($l->t('Example for CSV/JSON long layout: row 1 has date = first calendar day, start_time 22:00:00, end_time 23:59:59; row 2 has date = next day, start_time 00:00:00, end_time 06:00:00. Column working_hours is the work time share per segment (the segments sum to the full entry). This is not an extra "break" row — rest breaks remain tied to the original booking; split rows may show empty break columns.')); ?>
@@ -643,7 +643,7 @@ $cancelUrl = $isNcAdminShell
                            aria-describedby="maxDailyHours-help <?php echo isset($_['errors']['maxDailyHours']) ? 'maxDailyHours-error' : ''; ?>"
                            aria-invalid="<?php echo isset($_['errors']['maxDailyHours']) ? 'true' : 'false'; ?>">
                     <p id="maxDailyHours-help" class="form-help">
-                        <?php p($l->t('Upper limit of daily working time in hours. German labor law (ArbZG) allows 8 hours normally, up to 10 in special cases.')); ?>
+                        <?php p($l->t('Upper limit of daily working time in hours. The suggested default comes from the selected country profile (Germany ArbZG: up to 10; Austria AZG: up to 12). Changing the country does not overwrite a value you already set.')); ?>
                     </p>
                     <?php if (isset($_['errors']['maxDailyHours'])): ?>
                         <?php 
@@ -699,14 +699,70 @@ $cancelUrl = $isNcAdminShell
                 <section class="azc-card admin-settings-section" aria-labelledby="section-regional-heading">
                     <header class="azc-card__header">
                         <div class="azc-card__header-text">
-                            <h2 id="section-regional-heading" class="azc-card__title"><?php p($l->t('Region and holidays')); ?></h2>
-                            <p class="azc-card__lead"><?php p($l->t('Configure the default holiday region and how statutory holidays are repopulated.')); ?></p>
+                            <h2 id="section-regional-heading" class="azc-card__title"><?php p($l->t('Country and region')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('First pick the country whose working time law applies, then the default region for public holidays.')); ?></p>
                         </div>
                     </header>
                     <div class="azc-card__body">
+                <?php
+                $azcCurrentCountry = $settings['country'] ?? \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_DE;
+                $azcCurrentState = $settings['germanState']
+                    ?? \OCA\ArbeitszeitCheck\Support\RegionRegistry::defaultRegionForCountry($azcCurrentCountry);
+                $azcCountryCards = [
+                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_DE => [
+                        'title' => $l->t('Germany'),
+                        'text' => $l->t('Working time rules follow the German Working Time Act (ArbZG).'),
+                    ],
+                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_AT => [
+                        'title' => $l->t('Austria'),
+                        'text' => $l->t('Working time rules follow the Austrian Working Time Act (AZG) and Rest Act (ARG).'),
+                    ],
+                    \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH => [
+                        'title' => $l->t('Switzerland'),
+                        'text' => $l->t('Working time rules follow the Swiss Labour Act (ArG). Public holidays follow the selected canton.'),
+                    ],
+                ];
+                // Region data for all supported countries so the region list can
+                // be rebuilt client-side when the country changes (no auto-save).
+                $azcRegionData = ['defaultRegionByCountry' => [], 'regionsByCountry' => []];
+                foreach (\OCA\ArbeitszeitCheck\Support\RegionRegistry::supportedCountries() as $azcCountryCode) {
+                    $azcRegionData['defaultRegionByCountry'][$azcCountryCode] =
+                        \OCA\ArbeitszeitCheck\Support\RegionRegistry::defaultRegionForCountry($azcCountryCode);
+                    $azcRegions = [];
+                    foreach (\OCA\ArbeitszeitCheck\Support\RegionRegistry::regionsForCountry($azcCountryCode) as $azcRegionCode => $azcRegionMsgid) {
+                        $azcRegions[] = ['code' => $azcRegionCode, 'label' => $l->t($azcRegionMsgid)];
+                    }
+                    $azcRegionData['regionsByCountry'][$azcCountryCode] = $azcRegions;
+                }
+                ?>
+                <script type="application/json" id="azc-region-data"><?php print_unescaped(json_encode($azcRegionData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?></script>
+                <fieldset class="form-fieldset" aria-labelledby="country-legend" aria-describedby="country-help">
+                    <legend id="country-legend" class="form-legend"><?php p($l->t('In which country does your organisation work?')); ?></legend>
+                    <div class="azc-country-grid" role="radiogroup" aria-labelledby="country-legend">
+                        <?php foreach ($azcCountryCards as $azcCountryCode => $azcCard): ?>
+                        <label class="azc-country-card" for="country-<?php p(strtolower($azcCountryCode)); ?>">
+                            <input type="radio"
+                                   id="country-<?php p(strtolower($azcCountryCode)); ?>"
+                                   name="country"
+                                   value="<?php p($azcCountryCode); ?>"
+                                   class="azc-country-card__radio"
+                                   <?php echo ($azcCurrentCountry === $azcCountryCode) ? 'checked' : ''; ?>
+                                   aria-describedby="country-help">
+                            <span class="azc-country-card__body">
+                                <span class="azc-country-card__title"><?php p($azcCard['title']); ?></span>
+                                <span class="azc-country-card__text"><?php p($azcCard['text']); ?></span>
+                            </span>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <p id="country-help" class="form-help">
+                        <?php p($l->t('Changing the country does not change the limit values under “Daily hours and rest periods” below — review them after switching. Nothing is saved until you select “Save all settings”.')); ?>
+                    </p>
+                </fieldset>
+                <div id="country-region-live" class="form-help" role="status" aria-live="polite" aria-atomic="true"></div>
                 <div class="form-group">
                     <label for="germanState" class="form-label">
-                        <?php p($l->t('Default federal state for holidays')); ?>
+                        <?php p($l->t('Default region for public holidays')); ?>
                         <span class="form-required" aria-label="<?php p($l->t('required')); ?>">*</span>
                     </label>
                     <select id="germanState" 
@@ -715,27 +771,8 @@ $cancelUrl = $isNcAdminShell
                             required
                             aria-describedby="germanState-help">
                         <?php
-                        $states = [
-                            'BW' => 'Baden‑Württemberg',
-                            'BY' => 'Bayern',
-                            'BE' => 'Berlin',
-                            'BB' => 'Brandenburg',
-                            'HB' => 'Bremen',
-                            'HH' => 'Hamburg',
-                            'HE' => 'Hessen',
-                            'MV' => 'Mecklenburg‑Vorpommern',
-                            'NI' => 'Niedersachsen',
-                            'NW' => 'Nordrhein‑Westfalen',
-                            'RP' => 'Rheinland‑Pfalz',
-                            'SL' => 'Saarland',
-                            'SN' => 'Sachsen',
-                            'ST' => 'Sachsen‑Anhalt',
-                            'SH' => 'Schleswig‑Holstein',
-                            'TH' => 'Thüringen',
-                        ];
-                        $currentState = $settings['germanState'] ?? 'NW';
-                        foreach ($states as $code => $name) {
-                            $selected = ($currentState === $code) ? ' selected' : '';
+                        foreach (\OCA\ArbeitszeitCheck\Support\RegionRegistry::regionsForCountry($azcCurrentCountry) as $code => $name) {
+                            $selected = ($azcCurrentState === $code) ? ' selected' : '';
                             $label = $l->t($name);
                             echo '<option value="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '"' . $selected . '>' .
                                 htmlspecialchars($label, ENT_QUOTES, 'UTF-8') .
@@ -744,7 +781,7 @@ $cancelUrl = $isNcAdminShell
                         ?>
                     </select>
                     <p id="germanState-help" class="form-help">
-                        <?php p($l->t('Used for statutory holidays and compliance when no specific state is configured for employees or teams.')); ?>
+                        <?php p($l->t('Used for statutory holidays and compliance when no specific region is configured for employees or teams.')); ?>
                     </p>
                 </div>
 

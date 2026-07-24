@@ -239,8 +239,8 @@ class TimeEntryFormManager {
 	}
 
 	/**
-	 * Automatically calculate and enforce required breaks based on German ArbZG.
-	 * This is used when the auto-break toggle is enabled.
+	 * Automatically calculate and enforce required breaks from the country
+	 * labour-law profile (DE ArbZG / AT AZG tiers via complianceParams).
 	 */
 	handleAutoBreakCalculation(options = {}) {
 		const notify = options.notify !== false;
@@ -283,13 +283,10 @@ class TimeEntryFormManager {
 			}
 
 			const workDurationHours = workDurationMs / (1000 * 60 * 60);
-
-			let requiredBreakMinutes = 0;
-			if (workDurationHours >= 9) {
-				requiredBreakMinutes = 45;
-			} else if (workDurationHours >= 6) {
-				requiredBreakMinutes = 30;
-			}
+			const requiredBreakMinutes = (typeof ArbeitszeitCheckValidation !== 'undefined'
+				&& typeof ArbeitszeitCheckValidation.calculateRequiredBreakMinutes === 'function')
+				? ArbeitszeitCheckValidation.calculateRequiredBreakMinutes(workDurationHours)
+				: this.requiredBreakMinutesFromProfile(workDurationHours);
 
 			if (requiredBreakMinutes === 0) {
 				this.removeAutoAddedBreaks();
@@ -309,6 +306,19 @@ class TimeEntryFormManager {
 		} catch (error) {
 			console.warn('Error in auto-break calculation:', error);
 		}
+	}
+
+	requiredBreakMinutesFromProfile(workingHours) {
+		const tiers = (window.ArbeitszeitCheck?.complianceParams?.breakTiers || [
+			{ afterHours: 6, breakMinutes: 30 },
+			{ afterHours: 9, breakMinutes: 45 },
+		]).slice().sort((a, b) => Number(b.afterHours) - Number(a.afterHours));
+		for (const tier of tiers) {
+			if (workingHours >= Number(tier.afterHours)) {
+				return Math.round(Number(tier.breakMinutes)) || 0;
+			}
+		}
+		return 0;
 	}
 
 	/**
@@ -371,9 +381,9 @@ class TimeEntryFormManager {
 
 		if (notify && window.OC && OC.Notification) {
 			const loc = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n;
-			const breakText = shortfallMinutes >= 45
-				? (loc && loc.autoBreakDuration45) || '45 minutes'
-				: (loc && loc.autoBreakDuration30) || '30 minutes';
+			const rounded = Math.round(shortfallMinutes);
+			const breakText = (loc && loc['autoBreakDuration' + rounded])
+				|| (rounded + ' minutes');
 			const msg = t('autoBreakAddedCompliance').replace('%s', breakText);
 			OC.Notification.showTemporary(msg, { type: 'info', timeout: 3000 });
 		}
@@ -1076,7 +1086,11 @@ class TimeEntryFormManager {
 	updateComplianceStatus(workingHours, breakHours) {
 		if (!this.complianceStatus) return;
 
-		const requiredBreakHours = workingHours > 9 ? 0.75 : (workingHours > 6 ? 0.5 : 0);
+		const requiredBreakMinutes = (typeof ArbeitszeitCheckValidation !== 'undefined'
+			&& typeof ArbeitszeitCheckValidation.calculateRequiredBreakMinutes === 'function')
+			? ArbeitszeitCheckValidation.calculateRequiredBreakMinutes(workingHours)
+			: this.requiredBreakMinutesFromProfile(workingHours);
+		const requiredBreakHours = requiredBreakMinutes / 60;
 		const hasRequiredBreak = breakHours >= requiredBreakHours;
 
 		let statusClass = 'compliant';
@@ -1101,22 +1115,22 @@ class TimeEntryFormManager {
 				statusText = t('complianceBreakNotMet');
 			}
 		} else {
-			// Provide more specific compliance messages based on work duration
-			const hasAutoBreak = this.breaksContainer ?
-				this.breaksContainer.querySelector('.break-entry[data-auto-break]') : false;
+			const hasAutoBreak = this.breaksContainer
+				? this.breaksContainer.querySelector('.break-entry[data-auto-break]')
+				: false;
+			const requiredMinutes = (typeof ArbeitszeitCheckValidation !== 'undefined'
+				&& typeof ArbeitszeitCheckValidation.calculateRequiredBreakMinutes === 'function')
+				? ArbeitszeitCheckValidation.calculateRequiredBreakMinutes(workingHours)
+				: this.requiredBreakMinutesFromProfile(workingHours);
 
-			if (workingHours < 6) {
+			if (requiredMinutes <= 0) {
 				statusText = t('complianceShortShift');
-			} else if (workingHours >= 6 && workingHours < 9) {
-				statusText = hasAutoBreak
-					? t('complianceAuto30')
-					: t('complianceManual30');
-			} else if (workingHours >= 9) {
-				statusText = hasAutoBreak
-					? t('complianceAuto45')
-					: t('complianceManual45');
 			} else {
-				statusText = t('complianceOk');
+				const autoKey = 'complianceAuto' + requiredMinutes;
+				const manualKey = 'complianceManual' + requiredMinutes;
+				statusText = hasAutoBreak
+					? (t(autoKey) || t('complianceOk'))
+					: (t(manualKey) || t('complianceOk'));
 			}
 		}
 
@@ -1385,13 +1399,17 @@ class TimeEntryFormManager {
 			return;
 		}
 
+		const requiredMinutes = (typeof ArbeitszeitCheckValidation !== 'undefined'
+			&& typeof ArbeitszeitCheckValidation.calculateRequiredBreakMinutes === 'function')
+			? ArbeitszeitCheckValidation.calculateRequiredBreakMinutes(workingHours)
+			: this.requiredBreakMinutesFromProfile(workingHours);
+
 		let requirementText = '';
-		if (workingHours < 6) {
+		if (requiredMinutes <= 0) {
 			requirementText = t('breakRequiredNone');
-		} else if (workingHours >= 6 && workingHours < 9) {
-			requirementText = t('breakRequired30');
-		} else if (workingHours >= 9) {
-			requirementText = t('breakRequired45');
+		} else {
+			requirementText = t('breakRequired' + requiredMinutes)
+				|| (requiredMinutes + ' minutes break required');
 		}
 
 		if (requirementText) {

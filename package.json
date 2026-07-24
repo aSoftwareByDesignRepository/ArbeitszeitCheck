@@ -1,7 +1,7 @@
 {
     "name": "arbeitszeitcheck",
-    "version": "1.5.23",
-    "description": "German labor law compliant time tracking system for Nextcloud",
+    "version": "1.6.0",
+    "description": "DACH labour-law compliant time tracking (ArbZG / AZG) for Nextcloud",
     "type": "module",
     "scripts": {
         "lint": "eslint js/",

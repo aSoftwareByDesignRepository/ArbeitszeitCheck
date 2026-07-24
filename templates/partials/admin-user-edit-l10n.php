@@ -3,38 +3,41 @@
 declare(strict_types=1);
 
 /**
- * Shared Bundesland list + edit-employee l10n (list + detail pages).
+ * Shared holiday-region data + edit-employee l10n (list + detail pages).
  *
- * Expects $l (\OCP\IL10N). Sets $holidayStatesForJs.
+ * Expects $l (\OCP\IL10N). Optionally $holidayRegionContext
+ * (['country' => 'DE', 'defaultRegion' => 'NW']) from the controller.
+ * Regions come from RegionRegistry — do not hardcode lists here (B-4).
  */
 
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCA\ArbeitszeitCheck\Util\TemplateL10n;
 
-$holidayStates = [
-	'BW' => 'Baden‑Württemberg',
-	'BY' => 'Bayern',
-	'BE' => 'Berlin',
-	'BB' => 'Brandenburg',
-	'HB' => 'Bremen',
-	'HH' => 'Hamburg',
-	'HE' => 'Hessen',
-	'MV' => 'Mecklenburg‑Vorpommern',
-	'NI' => 'Niedersachsen',
-	'NW' => 'Nordrhein‑Westfalen',
-	'RP' => 'Rheinland‑Pfalz',
-	'SL' => 'Saarland',
-	'SN' => 'Sachsen',
-	'ST' => 'Sachsen‑Anhalt',
-	'SH' => 'Schleswig‑Holstein',
-	'TH' => 'Thüringen',
-];
+$holidayRegionContext = (isset($holidayRegionContext) && is_array($holidayRegionContext))
+	? $holidayRegionContext
+	: ['country' => RegionRegistry::COUNTRY_DE, 'defaultRegion' => RegionRegistry::defaultRegionForCountry(RegionRegistry::COUNTRY_DE)];
+
 $holidayStatesForJs = [];
-foreach ($holidayStates as $code => $name) {
-	$holidayStatesForJs[] = [
-		'code' => $code,
-		'label' => $l->t($name),
+$holidayRegionGroupsForJs = [];
+foreach (RegionRegistry::supportedCountries() as $regionCountry) {
+	$group = [
+		'country' => $regionCountry,
+		'countryLabel' => $l->t(RegionRegistry::countryLabels()[$regionCountry] ?? $regionCountry),
+		'regions' => [],
 	];
+	foreach (RegionRegistry::regionsForCountry($regionCountry) as $code => $name) {
+		$entry = ['code' => $code, 'label' => $l->t($name)];
+		$group['regions'][] = $entry;
+		$holidayStatesForJs[] = $entry;
+	}
+	$holidayRegionGroupsForJs[] = $group;
 }
+
+$holidayRegionContextForJs = [
+	'country' => $holidayRegionContext['country'],
+	'defaultRegion' => $holidayRegionContext['defaultRegion'],
+	'defaultRegionLabel' => $l->t(RegionRegistry::regionLabel((string)$holidayRegionContext['defaultRegion'])),
+];
 ?>
 window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
@@ -73,9 +76,10 @@ window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.l10n.validFrom = <?php echo json_encode($l->t('Valid from'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.validTo = <?php echo json_encode($l->t('Valid to'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.status = <?php echo json_encode($l->t('Status'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    window.ArbeitszeitCheck.l10n.germanStateLabel = <?php echo json_encode($l->t('Federal state for holidays / calendar'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    window.ArbeitszeitCheck.l10n.germanStateHelp = <?php echo json_encode($l->t('Select the federal state whose holiday calendar applies to this person. If not set, the global default state is used.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    window.ArbeitszeitCheck.l10n.germanStateDefault = <?php echo json_encode($l->t('Use global default state'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.germanStateLabel = <?php echo json_encode($l->t('Region for public holidays'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.germanStateHelp = <?php echo json_encode($l->t('Select the region whose holiday calendar applies to this person. If not set, the instance default region is used.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.germanStateDefault = <?php echo json_encode($l->t('Instance default (currently: %s)', [$holidayRegionContextForJs['defaultRegionLabel']]), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.regionCrossBorderNote = <?php echo json_encode($l->t('Public holidays follow this region. Working time rules follow the country configured for the whole organisation.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.failedToLoadUserDetails = <?php echo json_encode($l->t('Failed to load user details'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.errorLoadingHistory = <?php echo json_encode($l->t('Error loading assignment history'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.ddmmYYYY = <?php echo json_encode($l->t('dd.mm.yyyy'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -171,7 +175,7 @@ window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.l10n.employeeProfile = <?php echo json_encode($l->t('Employee profile'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.howToEditTitle = <?php echo json_encode($l->t('How to edit this employee'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.howToEditIntro = <?php echo json_encode($l->t('Go through each section below. Open a section heading for a short explanation. When you are done, press Save at the bottom.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    window.ArbeitszeitCheck.l10n.sectionGuideWorkSchedule = <?php echo json_encode($l->t('Pick the work schedule and the federal state used for public holidays.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.sectionGuideWorkSchedule = <?php echo json_encode($l->t('Pick the work schedule and the region used for public holidays.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.sectionGuideTimeRecording = <?php echo json_encode($l->t('Choose whether this person may clock in/out and/or enter time manually. At least one method must stay on.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.sectionGuideVacation = <?php echo json_encode($l->t('Set how annual vacation is calculated, then check the preview before saving.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.sectionGuideOvertime = <?php echo json_encode($l->t('Optional: set the overtime start date (Stichtag) and an opening balance for a calendar year.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -218,3 +222,5 @@ window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.l10n.endDateAfterStart = <?php echo json_encode($l->t('The end date must be on or after the start date.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.vacationCarryoverHelpDecimals = <?php echo json_encode($l->t('Up to two decimal places are allowed, e.g. 1.5 or 4.25 — comma or dot both work.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.states = <?php echo json_encode($holidayStatesForJs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.regionGroups = <?php echo json_encode($holidayRegionGroupsForJs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.holidayRegionContext = <?php echo json_encode($holidayRegionContextForJs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

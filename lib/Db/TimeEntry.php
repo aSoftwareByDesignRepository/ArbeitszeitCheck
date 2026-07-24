@@ -397,18 +397,18 @@ class TimeEntry extends Entity
 				$errors['breakEndTime'] = 'Break end time cannot be after work end time';
 			}
 			
-			// Validate minimum break duration (ArbZG §4: breaks must be at least 15 minutes)
+			// Minimum countable break duration (15 minutes for DE/AT profiles).
 			$breakDurationSeconds = $this->breakEndTime->getTimestamp() - $this->breakStartTime->getTimestamp();
 			$minBreakDurationSeconds = 900; // 15 minutes = 900 seconds
 			if ($breakDurationSeconds < $minBreakDurationSeconds) {
-				$errors['breakEndTime'] = 'Break must be at least 15 minutes long to count toward legal break requirement (ArbZG §4)';
+				$errors['breakEndTime'] = 'Break must be at least 15 minutes long to count toward the legal break requirement';
 			}
 		}
 		
 		// Validate breaks in JSON array (multiple breaks)
 		if ($this->breaks !== null && $this->breaks !== '') {
 			$breaks = json_decode($this->breaks, true) ?? [];
-			$minBreakDurationSeconds = 900; // 15 minutes = 900 seconds (ArbZG §4)
+			$minBreakDurationSeconds = 900; // 15 minutes = 900 seconds
 			
 			foreach ($breaks as $index => $break) {
 				if (isset($break['start']) && isset($break['end'])) {
@@ -417,10 +417,9 @@ class TimeEntry extends Entity
 						$breakEnd = new \DateTime($break['end']);
 						$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
 						
-						// Validate minimum break duration (ArbZG §4)
 						if ($breakDurationSeconds < $minBreakDurationSeconds) {
 							$errors['breaks'] = sprintf(
-								'Break #%d must be at least 15 minutes long to count toward legal break requirement (ArbZG §4). Current duration: %d minutes',
+								'Break #%d must be at least 15 minutes long to count toward the legal break requirement. Current duration: %d minutes',
 								$index + 1,
 								round($breakDurationSeconds / 60)
 							);

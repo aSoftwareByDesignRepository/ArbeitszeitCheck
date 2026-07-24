@@ -16,6 +16,7 @@ declare(strict_types=1);
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $urls = $_['urls'] ?? [];
 $appVersion = \OCP\Server::get(\OCP\App\IAppManager::class)->getAppVersion('arbeitszeitcheck');
+$complianceProfile = is_array($_['complianceProfile'] ?? null) ? $_['complianceProfile'] : [];
 ?>
 
 <?php include __DIR__ . '/common/page-start.php'; ?>
@@ -43,7 +44,14 @@ $appVersion = \OCP\Server::get(\OCP\App\IAppManager::class)->getAppVersion('arbe
 						</label>
 					</div>
 					<p id="auto-break-calculation-help" class="settings-form__help">
-						<?php p($l->t('The system will automatically calculate when you need to take breaks according to German labor law. For example, if you work more than 6 hours, you must take at least a 30-minute break.')); ?>
+						<?php
+						$azcAutoBreakHelp = match ($complianceProfile['country'] ?? 'DE') {
+							'AT' => $l->t('The system will automatically calculate when you need to take breaks according to Austrian working time law (AZG). For example, after more than 6 hours you need at least a 30-minute break.'),
+							'CH' => $l->t('The system will automatically calculate when you need to take breaks according to Swiss labour law (ArG). For example, after 5.5 hours you need at least a 15-minute break.'),
+							default => $l->t('The system will automatically calculate when you need to take breaks according to German labor law. For example, if you work more than 6 hours, you must take at least a 30-minute break.'),
+						};
+						p($azcAutoBreakHelp);
+						?>
 					</p>
 				</div>
 				<div class="settings-form__actions">
@@ -146,17 +154,22 @@ $appVersion = \OCP\Server::get(\OCP\App\IAppManager::class)->getAppVersion('arbe
 		<header class="azc-card__header">
 			<div class="azc-card__header-text">
 				<h2 id="settings-compliance-heading" class="azc-card__title"><?php p($l->t('Compliance Information')); ?></h2>
-				<p class="azc-card__lead"><?php p($l->t('Key rules from German working time law that this app helps you follow.')); ?></p>
+				<p class="azc-card__lead"><?php p((string)($complianceProfile['lead'] ?? $l->t('Key rules from German working time law that this app helps you follow.'))); ?></p>
 			</div>
 		</header>
 		<div class="azc-card__body">
 			<div class="azc-callout azc-callout--neutral" role="note">
-				<p class="azc-callout__text"><strong><?php p($l->t('German Labor Law (Arbeitszeitgesetz - ArbZG)')); ?></strong></p>
+				<p class="azc-callout__text"><strong><?php p((string)($complianceProfile['lawName'] ?? $l->t('German Labor Law (Arbeitszeitgesetz - ArbZG)'))); ?></strong></p>
 				<ul class="settings-callout-list">
-					<li><?php p($l->t('Maximum working time: 8 hours per day (can be extended to 10 hours)')); ?></li>
-					<li><?php p($l->t('Minimum rest period: 11 hours between working days')); ?></li>
-					<li><?php p($l->t('Mandatory breaks: 30 min after 6 hours, 45 min after 9 hours')); ?></li>
-					<li><?php p($l->t('Sunday work is generally prohibited with exceptions')); ?></li>
+					<li><?php p($l->t('Maximum working time: %s hours per day', [(string)($complianceProfile['maxDailyHours'] ?? '10')])); ?></li>
+					<li><?php p($l->t('Minimum rest period: %s hours between working days', [(string)($complianceProfile['minRestHours'] ?? '11')])); ?></li>
+					<?php foreach (($complianceProfile['breakLines'] ?? []) as $breakLine): ?>
+						<li><?php p((string)$breakLine); ?></li>
+					<?php endforeach; ?>
+					<?php if (empty($complianceProfile['breakLines'])): ?>
+						<li><?php p($l->t('Mandatory breaks: 30 min after 6 hours, 45 min after 9 hours')); ?></li>
+					<?php endif; ?>
+					<li><?php p((string)($complianceProfile['sundayNote'] ?? $l->t('Sunday work is generally prohibited with exceptions'))); ?></li>
 				</ul>
 			</div>
 		</div>
@@ -202,7 +215,7 @@ $appVersion = \OCP\Server::get(\OCP\App\IAppManager::class)->getAppVersion('arbe
 				<strong><?php p($l->t('ArbeitszeitCheck')); ?></strong>
 				<?php p($l->t('Version:')); ?> <?php p($appVersion); ?>
 			</p>
-			<p class="settings-version-line"><?php p($l->t('German labor law compliant time tracking for Nextcloud')); ?></p>
+			<p class="settings-version-line"><?php p((string)($complianceProfile['footerBlurb'] ?? $l->t('German labor law compliant time tracking for Nextcloud'))); ?></p>
 		</div>
 	</section>
 </div>

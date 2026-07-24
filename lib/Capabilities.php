@@ -14,6 +14,8 @@ namespace OCA\ArbeitszeitCheck;
 use OCA\ArbeitszeitCheck\Service\MonthClosureFeature;
 use OCA\ArbeitszeitCheck\Service\OvertimeBankService;
 use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Services\IAppConfig;
 use OCP\Capabilities\ICapability;
@@ -31,6 +33,7 @@ class Capabilities implements ICapability {
 		private readonly IAppManager $appManager,
 		private readonly IUserSession $userSession,
 		private readonly TimeCaptureMethodService $timeCaptureMethodService,
+		private readonly LaborLawProfileFactory $lawProfileFactory,
 	) {
 	}
 
@@ -51,16 +54,34 @@ class Capabilities implements ICapability {
 
 		$projectCheckAvailable = $this->appManager->isEnabledForUser('projectcheck');
 
+		$profile = $this->lawProfileFactory->getProfile();
+		$featureTag = match ($profile->country) {
+			RegionRegistry::COUNTRY_AT => 'azg-compliance',
+			RegionRegistry::COUNTRY_CH => 'swiss-arg-compliance',
+			default => 'arbzg-compliance',
+		};
+		$isGermany = $profile->country === RegionRegistry::COUNTRY_DE;
+
+		// Effective limits: explicit admin config wins over the profile default
+		// (same clamping as ComplianceService).
+		$maxDailyHours = max(1.0, min(24.0, (float)$this->config->getAppValue(
+			'arbeitszeitcheck', 'max_daily_hours', (string)$profile->dailyMaxHoursDefault
+		)));
+		$minRestHours = max(1.0, min(24.0, (float)$this->config->getAppValue(
+			'arbeitszeitcheck', 'min_rest_period', (string)$profile->minRestHoursDefault
+		)));
+
 		return [
 			'arbeitszeitcheck' => [
-				'version' => '1.3.9',
+				// B-3: report the real installed app version, never a literal.
+				'version' => $this->appManager->getAppVersion('arbeitszeitcheck'),
 				'features' => [
 					'time-tracking',
 					'compliance-monitoring',
 					'absence-management',
 					'reporting',
 					'gdpr-compliance',
-					'arbzg-compliance',
+					$featureTag,
 					'accessibility-wcag-aaa',
 					'projectcheck-integration',
 				],
@@ -82,7 +103,15 @@ class Capabilities implements ICapability {
 					],
 				],
 				'compliance' => [
-					'german-labor-law' => true,
+					// Additive DACH block (§4.2): absent 'country' means the
+					// client may assume the historical German behaviour.
+					'country' => $profile->country,
+					'lawLabels' => $profile->lawShortLabels,
+					'breakTiers' => $profile->breakTiersAscending(),
+					'maxDailyHours' => $maxDailyHours,
+					'minRestHours' => $minRestHours,
+					'minBreakMinutes' => $profile->minBreakMinutes,
+					'german-labor-law' => $isGermany,
 					'gdpr' => true,
 					'audit-logging' => true,
 					'data-retention' => true,

@@ -17,6 +17,7 @@ use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Exception\AdminUserProfileUpdateException;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Support\OpeningBalanceYearValidator;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCA\ArbeitszeitCheck\Support\StrictYmdDates;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\TTransactional;
@@ -208,7 +209,7 @@ class AdminUserProfileUpdateService
 			if ($germanState === '') {
 				$this->userSettingsMapper->deleteSetting($userId, 'german_state');
 			} else {
-				$this->userSettingsMapper->setSetting($userId, 'german_state', $germanState);
+				$this->userSettingsMapper->setSetting($userId, 'german_state', strtoupper(trim($germanState)));
 			}
 		}
 
@@ -472,9 +473,10 @@ class AdminUserProfileUpdateService
 
 		$germanState = isset($params['germanState']) ? (string)$params['germanState'] : null;
 		if ($germanState !== null && $germanState !== '') {
-			$validStates = ['NW', 'BY', 'BW', 'HE', 'NI', 'RP', 'SL', 'BE', 'BB', 'HB', 'HH', 'MV', 'SN', 'ST', 'SH', 'TH'];
-			if (!in_array($germanState, $validStates, true)) {
-				throw new AdminUserProfileUpdateException($this->l10n->t('Invalid German state code'));
+			// Per-user regions may belong to any supported country (cross-border
+			// commuters) — only the region code itself must be valid.
+			if (!RegionRegistry::isValidRegion($germanState)) {
+				throw new AdminUserProfileUpdateException($this->l10n->t('Invalid region code'));
 			}
 		}
 

@@ -66,7 +66,7 @@
         if (holidaysPageConfig !== null) {
             return holidaysPageConfig;
         }
-        holidaysPageConfig = { statutoryAutoReseed: true, settingsUrl: '' };
+        holidaysPageConfig = { statutoryAutoReseed: true, settingsUrl: '', country: 'DE' };
         const el = document.getElementById(HOLIDAYS_CONFIG_JSON_ID);
         if (el && el.textContent && el.textContent.trim()) {
             try {
@@ -75,6 +75,7 @@
                     holidaysPageConfig = {
                         statutoryAutoReseed: parsed.statutoryAutoReseed !== false,
                         settingsUrl: typeof parsed.settingsUrl === 'string' ? parsed.settingsUrl : '',
+                        country: typeof parsed.country === 'string' && parsed.country !== '' ? parsed.country : 'DE',
                     };
                 }
             } catch (e) {
@@ -82,6 +83,13 @@
             }
         }
         return holidaysPageConfig;
+    }
+
+    /** 'BW' → 'DE' (legacy codes without a dash are German); 'AT-W' → 'AT'. */
+    function countryOfRegion(code) {
+        const value = String(code || '');
+        const idx = value.indexOf('-');
+        return idx === -1 ? 'DE' : value.slice(0, idx);
     }
 
     function isStatutoryAutoReseedEnabled() {
@@ -142,7 +150,10 @@
         const stateSelect = Utils.$('#holiday-state-select');
         const yearSelect = Utils.$('#holiday-year-select');
         if (stateSelect) {
-            Utils.on(stateSelect, 'change', loadExistingHolidays);
+            stateSelect.setAttribute('data-last-value', stateSelect.value);
+            Utils.on(stateSelect, 'change', function() {
+                handleRegionChange(stateSelect);
+            });
         }
         if (yearSelect) {
             Utils.on(yearSelect, 'change', loadExistingHolidays);
@@ -155,6 +166,47 @@
                 saveDefaultState(defaultStateSelect);
             });
         }
+    }
+
+    /**
+     * Region change in the calendar viewer. Crossing a country border shows a
+     * plain-language confirmation first (viewing lazily seeds that country's
+     * statutory holidays); Esc/Cancel reverts the selection.
+     */
+    async function handleRegionChange(select) {
+        const previous = select.getAttribute('data-last-value') || select.value;
+        const next = select.value;
+        if (next === previous) {
+            return;
+        }
+
+        if (countryOfRegion(next) !== countryOfRegion(previous)) {
+            const message = [
+                tAzc('The statutory holidays of the selected region will be added to the calendar automatically.'),
+                tAzc('Working time rules are not affected — they follow the country configured for the whole organisation.'),
+                tAzc('You can switch back to any other region at any time.'),
+            ].join('\n\n');
+
+            let accepted = false;
+            const Components = window.AzcComponents || window.ArbeitszeitCheckComponents;
+            if (Components && typeof Components.confirmDialog === 'function') {
+                const result = await Components.confirmDialog({
+                    title: tAzc('Show holidays of another country?'),
+                    message: message,
+                    confirmLabel: tAzc('Show region'),
+                    cancelLabel: tAzc('Cancel'),
+                    variant: 'info',
+                });
+                accepted = result === true || !!(result && result.confirmed);
+            }
+            if (!accepted) {
+                select.value = previous;
+                return;
+            }
+        }
+
+        select.setAttribute('data-last-value', next);
+        loadExistingHolidays();
     }
 
     let savingDefaultState = false;
@@ -190,10 +242,10 @@
 
             if (data && data.success) {
                 select.setAttribute('data-last-value', value);
-                showUserSuccess(tAzc('Default federal state was saved.'));
+                showUserSuccess(tAzc('Default region was saved.'));
             } else {
                 select.value = previous;
-                const errorMsg = (data && data.error) || tAzc('The default federal state could not be saved.');
+                const errorMsg = (data && data.error) || tAzc('The default region could not be saved.');
                 showUserError(errorMsg);
             }
         }).catch(function() {
@@ -201,7 +253,7 @@
             select.disabled = false;
             select.removeAttribute('aria-busy');
             select.value = previous;
-            showUserError(tAzc('The default federal state could not be saved.'));
+            showUserError(tAzc('The default region could not be saved.'));
         });
     }
 
@@ -427,6 +479,132 @@
             renderEmptyHolidaysRow(tbody);
             showUserError(tAzc('Holidays could not be loaded.'));
         });
+
+        loadHolidaySuggestions(state, year);
+    }
+
+    /**
+     * "Common additional holidays" below the table: catalog suggestions
+     * (never auto-seeded) with one-click add as company holiday. The section
+     * stays hidden when the catalog has no suggestions (currently Germany).
+     */
+    function loadHolidaySuggestions(state, year) {
+        const section = document.getElementById('holiday-suggestions-section');
+        const list = document.getElementById('holiday-suggestions-list');
+        if (!section || !list) {
+            return;
+        }
+
+        const url = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/state-holidays/suggestions') +
+            '?state=' + encodeURIComponent(state) + '&year=' + encodeURIComponent(String(year));
+
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'requesttoken': OC.requestToken
+            }
+        }).then(function(response) {
+            return response.json();
+        }).then(function(data) {
+            if (!data || data.success !== true || !Array.isArray(data.suggestions) || data.suggestions.length === 0) {
+                section.hidden = true;
+                list.innerHTML = '';
+                return;
+            }
+
+            const goodFridayNote = document.getElementById('holiday-good-friday-note');
+            if (goodFridayNote) {
+                goodFridayNote.hidden = data.country !== 'AT';
+            }
+
+            list.innerHTML = '';
+            data.suggestions.forEach(function(suggestion) {
+                list.appendChild(buildSuggestionItem(suggestion, state));
+            });
+            section.hidden = false;
+        }).catch(function() {
+            section.hidden = true;
+            list.innerHTML = '';
+        });
+    }
+
+    function formatDisplayDate(isoDate) {
+        let displayDate = isoDate || '';
+        if (window.ArbeitszeitCheckDatepicker && window.ArbeitszeitCheckDatepicker.convertISOToEuropean) {
+            displayDate = window.ArbeitszeitCheckDatepicker.convertISOToEuropean(displayDate);
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(displayDate)) {
+            const p = displayDate.split('-');
+            displayDate = p[2] + '.' + p[1] + '.' + p[0];
+        }
+        return displayDate;
+    }
+
+    function buildSuggestionItem(suggestion, state) {
+        const item = document.createElement('li');
+        item.className = 'admin-holidays__suggestion';
+
+        const displayDate = formatDisplayDate(suggestion.date);
+
+        const text = document.createElement('span');
+        text.className = 'admin-holidays__suggestion-text';
+        text.textContent = displayDate + ' — ' + (suggestion.name || '');
+        item.appendChild(text);
+
+        if (suggestion.exists) {
+            const badge = document.createElement('span');
+            badge.className = 'admin-holidays-badge admin-holidays-badge--company';
+            badge.textContent = tAzc('Already in the calendar');
+            item.appendChild(badge);
+            return item;
+        }
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'azc-btn azc-btn--secondary azc-btn--sm';
+        addBtn.textContent = tAzc('Add as company holiday');
+        addBtn.setAttribute('aria-label', tAzc('Add {name} ({date}) as a company holiday')
+            .replace('{name}', suggestion.name || '')
+            .replace('{date}', displayDate));
+        Utils.on(addBtn, 'click', function() {
+            addBtn.disabled = true;
+            addBtn.setAttribute('aria-busy', 'true');
+
+            const url = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/state-holidays');
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'requesttoken': OC.requestToken
+                },
+                body: JSON.stringify({
+                    state: state,
+                    date: suggestion.date,
+                    name: suggestion.name,
+                    kind: 'full',
+                    scope: 'company'
+                })
+            }).then(function(response) {
+                return response.json();
+            }).then(function(data) {
+                addBtn.disabled = false;
+                addBtn.removeAttribute('aria-busy');
+                if (data && data.success) {
+                    showUserSuccess(tAzc('Holiday "{name}" was added as a company holiday.')
+                        .replace('{name}', suggestion.name || ''));
+                    loadExistingHolidays();
+                } else {
+                    const errorMsg = (data && data.error) || tAzc('Holiday could not be saved.');
+                    showUserError(errorMsg);
+                }
+            }).catch(function() {
+                addBtn.disabled = false;
+                addBtn.removeAttribute('aria-busy');
+                showUserError(tAzc('An error occurred while saving the holiday.'));
+            });
+        });
+        item.appendChild(addBtn);
+
+        return item;
     }
 
     function appendExistingHolidayRow(tbody, item) {
