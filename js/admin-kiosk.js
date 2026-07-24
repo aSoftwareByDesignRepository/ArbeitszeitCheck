@@ -12,6 +12,7 @@
 	}
 
 	const Messaging = window.ArbeitszeitCheckMessaging || {};
+	const Utils = window.ArbeitszeitCheckUtils || {};
 	const token = page.dataset.requesttoken || '';
 	const live = document.getElementById('azc-kiosk-live');
 	const alertEl = document.getElementById('azc-kiosk-alert');
@@ -539,7 +540,16 @@
 		tbody.querySelectorAll('.azc-kiosk-delete-cred').forEach((btn) => {
 			btn.addEventListener('click', async () => {
 				const id = btn.getAttribute('data-id');
-				if (!window.confirm(t('confirmDeleteCred', 'Remove this credential?'))) {
+				const confirmed = Utils.confirmDestructiveAction
+					? await Utils.confirmDestructiveAction({
+						title: t('confirmDeleteCredTitle', 'Remove credential'),
+						message: t('confirmDeleteCred', 'Remove this credential?'),
+						confirmLabel: t('Remove', 'Remove'),
+						cancelLabel: t('Cancel', 'Cancel'),
+						variant: 'danger',
+					})
+					: null;
+				if (!confirmed) {
 					return;
 				}
 				setBusy(btn, true);
@@ -609,7 +619,16 @@
 				if (!terminalId) {
 					return;
 				}
-				if (!window.confirm(t('confirmRevoke', 'Revoke this terminal?'))) {
+				const confirmed = Utils.confirmDestructiveAction
+					? await Utils.confirmDestructiveAction({
+						title: t('confirmRevokeTitle', 'Revoke terminal'),
+						message: t('confirmRevoke', 'Revoke this terminal?'),
+						confirmLabel: t('Revoke', 'Revoke'),
+						cancelLabel: t('Cancel', 'Cancel'),
+						variant: 'danger',
+					})
+					: null;
+				if (!confirmed) {
 					return;
 				}
 				setBusy(btn, true);
@@ -1551,7 +1570,16 @@
 				'Generate a new PIN for {name}? The previous PIN will stop working immediately.',
 			);
 			const msg = String(confirmTpl).split('{name}').join(displayName || uid);
-			if (!window.confirm(msg)) {
+			const confirmed = Utils.confirmDestructiveAction
+				? await Utils.confirmDestructiveAction({
+					title: t('confirmNewPinTitle', 'Generate new PIN'),
+					message: msg,
+					confirmLabel: t('Generate PIN', 'Generate PIN'),
+					cancelLabel: t('Cancel', 'Cancel'),
+					variant: 'warning',
+				})
+				: null;
+			if (!confirmed) {
 				return;
 			}
 		}

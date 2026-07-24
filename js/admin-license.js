@@ -13,6 +13,7 @@
 	}
 
 	const Messaging = window.ArbeitszeitCheckMessaging || {};
+	const Utils = window.ArbeitszeitCheckUtils || {};
 
 	const apiLicense = page.dataset.apiLicense || '';
 	const apiClearLicense = page.dataset.apiClearLicense || '';
@@ -436,7 +437,16 @@
 			if (!userId) {
 				return;
 			}
-			if (!window.confirm(t('removeSeatConfirm', 'Remove mobile seat for this employee?'))) {
+			const confirmed = Utils.confirmDestructiveAction
+				? await Utils.confirmDestructiveAction({
+					title: t('removeSeatTitle', 'Remove mobile seat'),
+					message: t('removeSeatConfirm', 'Remove mobile seat for this employee?'),
+					confirmLabel: t('removeSeat', 'Remove seat'),
+					cancelLabel: t('Cancel', 'Cancel'),
+					variant: 'danger',
+				})
+				: null;
+			if (!confirmed) {
 				return;
 			}
 			btn.disabled = true;

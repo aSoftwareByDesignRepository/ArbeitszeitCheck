@@ -779,18 +779,29 @@
                 handleUpdateUser(form, user.userId);
             });
             form.querySelectorAll('a[data-action="back-to-list"]').forEach((link) => {
-                link.addEventListener('click', function(e) {
+                link.addEventListener('click', async function(e) {
                     if (!formDirty || saveInFlight) {
                         return;
                     }
-                    const ok = window.confirm(
-                        auMsg(
-                            'discardUnsavedConfirm',
-                            'You have unsaved changes. Leave this page without saving?',
-                        ),
-                    );
-                    if (!ok) {
-                        e.preventDefault();
+                    e.preventDefault();
+                    const href = link.getAttribute('href');
+                    if (!href) {
+                        return;
+                    }
+                    const confirmed = Utils.confirmDestructiveAction
+                        ? await Utils.confirmDestructiveAction({
+                            title: auMsg('unsavedChangesTitle', 'Unsaved changes'),
+                            message: auMsg(
+                                'discardUnsavedConfirm',
+                                'You have unsaved changes. Leave this page without saving?',
+                            ),
+                            confirmLabel: auMsg('leaveWithoutSaving', 'Leave without saving'),
+                            cancelLabel: auMsg('stayOnPage', 'Stay on page'),
+                            variant: 'warning',
+                        })
+                        : null;
+                    if (confirmed) {
+                        window.location.href = href;
                     }
                 });
             });
@@ -965,13 +976,26 @@
 
         const backLink = root.querySelector('[data-action="back-to-list"]');
         if (backLink) {
-            backLink.addEventListener('click', function(e) {
+            backLink.addEventListener('click', async function(e) {
                 if (!formDirty) {
                     return;
                 }
-                const ok = window.confirm(auMsg('unsavedChanges', 'You have unsaved changes. Leave this page anyway?'));
-                if (!ok) {
-                    e.preventDefault();
+                e.preventDefault();
+                const href = backLink.getAttribute('href');
+                if (!href) {
+                    return;
+                }
+                const confirmed = Utils.confirmDestructiveAction
+                    ? await Utils.confirmDestructiveAction({
+                        title: auMsg('unsavedChangesTitle', 'Unsaved changes'),
+                        message: auMsg('unsavedChanges', 'You have unsaved changes. Leave this page anyway?'),
+                        confirmLabel: auMsg('leaveWithoutSaving', 'Leave without saving'),
+                        cancelLabel: auMsg('stayOnPage', 'Stay on page'),
+                        variant: 'warning',
+                    })
+                    : null;
+                if (confirmed) {
+                    window.location.href = href;
                 }
             });
         }
