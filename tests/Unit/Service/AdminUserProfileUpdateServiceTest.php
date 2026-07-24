@@ -21,6 +21,7 @@ use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
 use OCA\ArbeitszeitCheck\Service\UserEmploymentSettingsService;
 use OCA\ArbeitszeitCheck\Service\UserOvertimeSettingsService;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IL10N;
@@ -73,8 +74,10 @@ class AdminUserProfileUpdateServiceTest extends TestCase
 		);
 	}
 
-	private function serviceWithUserSettingsMapper(UserSettingsMapper $userSettingsMapper): AdminUserProfileUpdateService
-	{
+	private function serviceWithUserSettingsMapper(
+		UserSettingsMapper $userSettingsMapper,
+		?LaborLawProfileFactory $laborLawProfileFactory = null,
+	): AdminUserProfileUpdateService {
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnCallback(fn ($s) => $s);
 
@@ -93,6 +96,7 @@ class AdminUserProfileUpdateServiceTest extends TestCase
 			$this->createMock(TimeCaptureMethodService::class),
 			$l10n,
 			$this->createMock(IDBConnection::class),
+			$laborLawProfileFactory,
 		);
 	}
 
@@ -140,6 +144,67 @@ class AdminUserProfileUpdateServiceTest extends TestCase
 		$this->expectException(AdminUserProfileUpdateException::class);
 		$this->expectExceptionMessage('Invalid region code');
 		$service->applyWorkingTimeModel('alice', ['germanState' => 'ZZ'], 'admin');
+	}
+
+	public function testApplyWorkingTimeModelStoresLaborLawCountryOverride(): void
+	{
+		$this->userManager->method('get')->with('alice')->willReturn($this->createMock(IUser::class));
+		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$userSettingsMapper->expects($this->once())
+			->method('setSetting')
+			->with('alice', LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY, 'AT');
+		$userSettingsMapper->expects($this->never())->method('deleteSetting');
+
+		$factory = $this->createMock(LaborLawProfileFactory::class);
+		$factory->expects($this->once())->method('clearCache');
+
+		$service = $this->serviceWithUserSettingsMapper($userSettingsMapper, $factory);
+		$service->applyWorkingTimeModel('alice', ['laborLawCountry' => ' at '], 'admin');
+	}
+
+	public function testApplyWorkingTimeModelClearsLaborLawCountryOnEmptyString(): void
+	{
+		$this->userManager->method('get')->with('alice')->willReturn($this->createMock(IUser::class));
+		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$userSettingsMapper->expects($this->once())
+			->method('deleteSetting')
+			->with('alice', LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY);
+		$userSettingsMapper->expects($this->never())->method('setSetting');
+
+		$factory = $this->createMock(LaborLawProfileFactory::class);
+		$factory->expects($this->once())->method('clearCache');
+
+		$service = $this->serviceWithUserSettingsMapper($userSettingsMapper, $factory);
+		$service->applyWorkingTimeModel('alice', ['laborLawCountry' => ''], 'admin');
+	}
+
+	public function testApplyWorkingTimeModelDoesNotClearLaborLawCacheWhenKeyAbsent(): void
+	{
+		$this->userManager->method('get')->with('alice')->willReturn($this->createMock(IUser::class));
+		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$userSettingsMapper->expects($this->once())
+			->method('setSetting')
+			->with('alice', 'german_state', 'NW');
+
+		$factory = $this->createMock(LaborLawProfileFactory::class);
+		$factory->expects($this->never())->method('clearCache');
+
+		$service = $this->serviceWithUserSettingsMapper($userSettingsMapper, $factory);
+		$service->applyWorkingTimeModel('alice', ['germanState' => 'NW'], 'admin');
+	}
+
+	public function testApplyWorkingTimeModelRejectsInvalidLaborLawCountry(): void
+	{
+		$this->userManager->method('get')->with('alice')->willReturn($this->createMock(IUser::class));
+		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
+		$userSettingsMapper->expects($this->never())->method('setSetting');
+		$userSettingsMapper->expects($this->never())->method('deleteSetting');
+
+		$service = $this->serviceWithUserSettingsMapper($userSettingsMapper);
+
+		$this->expectException(AdminUserProfileUpdateException::class);
+		$this->expectExceptionMessage('Invalid labour-law country');
+		$service->applyWorkingTimeModel('alice', ['laborLawCountry' => 'FR'], 'admin');
 	}
 
 	public function testUpdateProfileRejectsInvalidVacationPolicyBeforeAnyWrite(): void

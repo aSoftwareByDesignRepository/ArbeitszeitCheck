@@ -92,7 +92,8 @@ class Version1034LegacyFlagRetirementTest extends TestCase
 			'XX-2026',      // unknown region
 			'NW-1969',      // year below range
 			'NW-2101',      // year above range
-			'CH-ZH-2026',   // unsupported country (valid format, invalid region)
+			'FR-75-2026',   // unsupported country (valid format, invalid region)
+			'CH-XX-2026',   // supported country, unknown canton
 			'NW2026',       // missing dash
 			'NW-',          // missing year
 			42,             // not a string

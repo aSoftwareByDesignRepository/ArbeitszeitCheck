@@ -147,7 +147,7 @@ class BreakReminderJob extends TimedJob
 				$totalHoursWorked = $this->timeTrackingService->getTodayHours($userId);
 
 				// Country profile break tiers (DE: 9h→45 then 6h→30; AT: 6h→30).
-				$requiredBreakMinutes = $this->lawProfileFactory->getProfile()
+				$requiredBreakMinutes = $this->lawProfileFactory->getProfile($userId)
 					->requiredBreakMinutes($totalHoursWorked);
 				$takenBreakMinutes = (int)round($activeEntry->getBreakDurationHours() * 60);
 				$requiredBreak = $requiredBreakMinutes > $takenBreakMinutes

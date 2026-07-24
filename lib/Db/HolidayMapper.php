@@ -114,8 +114,9 @@ class HolidayMapper extends QBMapper
 	/**
 	 * ID of the holiday occupying (state, date, scope), or null.
 	 *
-	 * Backed by the unique index at_hol_st_dt_sc_u (migration 1035); used for
-	 * the pre-save conflict check (HTTP 409) in the admin holidays API.
+	 * Backed by the unique index at_holidays_state_date_scope_u (migration
+	 * 1008, consolidated in 1035); used for the pre-save conflict check
+	 * (HTTP 409) in the admin holidays API.
 	 */
 	public function findIdForStateDateScope(string $state, string $dateYmd, string $scope): ?int
 	{

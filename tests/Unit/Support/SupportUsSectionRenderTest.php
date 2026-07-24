@@ -24,11 +24,18 @@ final class SupportUsSectionRenderTest extends TestCase {
 			'en'
 		);
 		self::assertStringContainsString('data-support-us="1"', $html);
+		self::assertStringContainsString('Check Partner', $html);
+		self::assertStringContainsString('invoiceable service', $html);
+		self::assertStringContainsString('individual partner offer', $html);
 		self::assertStringContainsString('Ask for a partner offer', $html);
+		self::assertStringContainsString('billed as a service', $html);
+		self::assertStringContainsString('billed as project work', $html);
 		self::assertStringContainsString('mailto:info@software-by-design.de?subject=', $html);
 		self::assertStringContainsString(rawurlencode('ArbeitszeitCheck: partner / care retainer'), $html);
 		self::assertStringContainsString('noopener noreferrer', $html);
 		self::assertStringNotContainsString('Official mobile & terminal licenses', $html);
+		self::assertStringContainsString('bookable help on an invoice, choose an option below', $html);
+		self::assertStringNotContainsString('official mobile licenses', $html);
 		self::assertStringNotContainsString('490', $html);
 		self::assertStringNotContainsString('<script', $html);
 	}
@@ -43,8 +50,11 @@ final class SupportUsSectionRenderTest extends TestCase {
 			'de'
 		);
 		self::assertStringContainsString('Official mobile &amp; terminal licenses', $html);
+		self::assertStringContainsString('software licence on invoice', $html);
 		self::assertStringContainsString('href="/apps/arbeitszeitcheck/admin/license"', $html);
 		self::assertStringContainsString(rawurlencode('ArbeitszeitCheck: Partner / Care Retainer'), $html);
+		self::assertStringContainsString('official mobile licenses', $html);
+		self::assertStringNotContainsString('bookable help on an invoice, choose an option below', $html);
 	}
 
 	public function testRenderUsesGermanIntroViaL10nCallback(): void {
@@ -54,10 +64,14 @@ final class SupportUsSectionRenderTest extends TestCase {
 			[
 				'Support & us' => 'Support & wir',
 				'Ask for a partner offer' => 'Partner-Angebot anfragen',
+				'Check Partner' => 'Check Partner',
+				'Annual hour packs — Small, Standard, or Premium — with priority email for your organisation. This is invoiceable service — not a donation. See packages on our support page.' =>
+					'Jährliche Stundenpakete — Small, Standard oder Premium — plus priorisierte E-Mail für Ihre Organisation. Verrechenbare Leistung, keine Spende. Pakete auf unserer Support-Seite.',
 			]
 		);
 		self::assertStringContainsString('Support &amp; wir', $html);
 		self::assertStringContainsString('Partner-Angebot anfragen', $html);
+		self::assertStringContainsString('Verrechenbare Leistung', $html);
 	}
 
 	/**

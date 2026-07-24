@@ -129,6 +129,23 @@ class TimeEntryClockPayloadBuilderTest extends TestCase
 		self::assertCount(1, $proposal['breaks']);
 	}
 
+	public function testAzgTenMinuteBreaksAreKeptWhenFloorIsTen(): void
+	{
+		$proposal = TimeEntryClockPayloadBuilder::buildFromParams([
+			'date' => '15.06.2026',
+			'startTime' => '08:00',
+			'endTime' => '16:30',
+			'breaks' => [
+				['start' => '10:00', 'end' => '10:10'],
+				['start' => '12:00', 'end' => '12:10'],
+				['start' => '14:00', 'end' => '14:10'],
+			],
+		], 10);
+		self::assertNotNull($proposal);
+		self::assertArrayHasKey('breaks', $proposal);
+		self::assertCount(3, $proposal['breaks']);
+	}
+
 	public function testMalformedBreakEntriesAreSkipped(): void
 	{
 		$proposal = TimeEntryClockPayloadBuilder::buildFromParams([

@@ -18,9 +18,10 @@ final class TimeEntryClockPayloadBuilder
 
 	/**
 	 * @param array<string, mixed> $params Request body (date, startTime, endTime, breaks, …)
+	 * @param int|null $minBreakMinutes Profile floor (AT 10 / DE·CH 15). null = historic 15.
 	 * @return array<string, mixed>|null Proposal fragment with ISO instants, or null when clock fields absent
 	 */
-	public static function buildFromParams(array $params): ?array
+	public static function buildFromParams(array $params, ?int $minBreakMinutes = null): ?array
 	{
 		$dateParam = $params['date'] ?? null;
 		$startTime = $params['startTime'] ?? null;
@@ -57,7 +58,7 @@ final class TimeEntryClockPayloadBuilder
 
 		$breaks = isset($params['breaks']) && is_array($params['breaks']) ? $params['breaks'] : null;
 		if ($breaks !== null && $breaks !== []) {
-			$validBreaks = self::normalizeBreaksOnDate($baseDate, $breaks);
+			$validBreaks = self::normalizeBreaksOnDate($baseDate, $breaks, $minBreakMinutes);
 			if ($validBreaks !== []) {
 				$result['breaks'] = $validBreaks;
 			}
@@ -71,11 +72,12 @@ final class TimeEntryClockPayloadBuilder
 	 *
 	 * @param array<string, mixed> $params
 	 * @param array<string, mixed> $proposal
+	 * @param int|null $minBreakMinutes
 	 * @return array<string, mixed>
 	 */
-	public static function mergeIntoProposal(array $params, array $proposal): array
+	public static function mergeIntoProposal(array $params, array $proposal, ?int $minBreakMinutes = null): array
 	{
-		$clock = self::buildFromParams($params);
+		$clock = self::buildFromParams($params, $minBreakMinutes);
 		if ($clock !== null) {
 			return array_merge($proposal, $clock);
 		}
@@ -123,8 +125,9 @@ final class TimeEntryClockPayloadBuilder
 	 * @param list<array<string, mixed>> $breaks
 	 * @return list<array{start: string, end: string}>
 	 */
-	private static function normalizeBreaksOnDate(\DateTime $baseDate, array $breaks): array
+	private static function normalizeBreaksOnDate(\DateTime $baseDate, array $breaks, ?int $minBreakMinutes = null): array
 	{
+		$minSeconds = BreakCountable::minSeconds($minBreakMinutes);
 		$validBreaks = [];
 		foreach ($breaks as $break) {
 			if (!is_array($break)) {
@@ -150,7 +153,7 @@ final class TimeEntryClockPayloadBuilder
 				$breakEnd->modify('+1 day');
 			}
 			$durationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-			if ($durationSeconds >= 900) {
+			if ($durationSeconds >= $minSeconds) {
 				$validBreaks[] = [
 					'start' => $breakStart->format('c'),
 					'end' => $breakEnd->format('c'),

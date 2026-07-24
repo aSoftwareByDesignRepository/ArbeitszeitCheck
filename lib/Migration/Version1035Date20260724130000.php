@@ -3,19 +3,22 @@
 declare(strict_types=1);
 
 /**
- * Fix B-1: duplicate holiday rows + missing unique index on at_holidays.
+ * B-1 consolidation: guarantee the unique index on at_holidays and remove a
+ * redundant duplicate index created by pre-release 1.6.0 builds.
  *
- * at_holidays had no unique constraint on (state, date, scope), so two
- * parallel requests lazy-seeding the same state/year could insert statutory
- * rows twice (working-day math stayed correct via max-weight semantics, but
- * the admin list showed duplicates and the duplicate-catch in HolidayService
- * was dead code).
+ * The duplicate-seeding race (B-1 in the DACH plan) was already closed by
+ * {@see Version1008Date20260312000001}, which deduplicated (state, date,
+ * scope) groups and added the unique index at_holidays_state_date_scope_u.
+ * Early 1.6.0 development builds shipped this migration as a second
+ * dedupe + addUniqueIndex('at_hol_st_dt_sc_u') — creating an identical,
+ * redundant unique index on instances that ran them.
  *
- *  1. preSchemaChange — dedupe: for every (state, date, scope) group keep the
- *     row with MIN(id), delete the rest. Idempotent (second run finds no
- *     groups with more than one row).
- *  2. changeSchema — add unique index at_hol_st_dt_sc_u so the race can no
- *     longer produce duplicates and the insert-catch becomes effective.
+ * This final version therefore:
+ *  1. preSchemaChange — dedupe pass (idempotent, normally a no-op; protects
+ *     databases restored from backups that never ran 1008).
+ *  2. changeSchema — ensure the canonical unique index
+ *     at_holidays_state_date_scope_u exists, and drop the redundant
+ *     at_hol_st_dt_sc_u where a pre-release build created it.
  *
  * @copyright Copyright (c) 2026
  * @license AGPL-3.0-or-later
@@ -31,6 +34,12 @@ use OCP\Migration\SimpleMigrationStep;
 
 class Version1035Date20260724130000 extends SimpleMigrationStep
 {
+	/** Canonical unique index name, unchanged since Version1008 (≤ 30 chars for Oracle). */
+	public const UNIQUE_INDEX = 'at_holidays_state_date_scope_u';
+
+	/** Redundant duplicate index created only by pre-release 1.6.0 builds. */
+	public const REDUNDANT_INDEX = 'at_hol_st_dt_sc_u';
+
 	public function __construct(
 		private IDBConnection $db,
 	) {
@@ -71,7 +80,7 @@ class Version1035Date20260724130000 extends SimpleMigrationStep
 
 		if ($deleted > 0) {
 			$output->info(sprintf(
-				'arbeitszeitcheck: removed %d duplicate holiday row(s) before adding the unique index.',
+				'arbeitszeitcheck: removed %d duplicate holiday row(s) before enforcing the unique index.',
 				$deleted
 			));
 		}
@@ -82,13 +91,23 @@ class Version1035Date20260724130000 extends SimpleMigrationStep
 		/** @var ISchemaWrapper $schema */
 		$schema = $schemaClosure();
 
-		if ($schema->hasTable('at_holidays')) {
-			$t = $schema->getTable('at_holidays');
-			if (!$t->hasIndex('at_hol_st_dt_sc_u')) {
-				$t->addUniqueIndex(['state', 'date', 'scope'], 'at_hol_st_dt_sc_u');
-			}
+		if (!$schema->hasTable('at_holidays')) {
+			return null;
 		}
 
-		return $schema;
+		$table = $schema->getTable('at_holidays');
+		$changed = false;
+
+		if (!$table->hasIndex(self::UNIQUE_INDEX)) {
+			$table->addUniqueIndex(['state', 'date', 'scope'], self::UNIQUE_INDEX);
+			$changed = true;
+		}
+
+		if ($table->hasIndex(self::REDUNDANT_INDEX)) {
+			$table->dropIndex(self::REDUNDANT_INDEX);
+			$changed = true;
+		}
+
+		return $changed ? $schema : null;
 	}
 }

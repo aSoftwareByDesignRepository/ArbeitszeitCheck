@@ -89,7 +89,8 @@ $cancelUrl = $isNcAdminShell
                 ];
                 include __DIR__ . '/common/azc-jump-nav.php';
                 ?>
-            <form id="admin-settings-form" class="form admin-settings-form" method="post" action="#" novalidate>
+            <form id="admin-settings-form" class="form admin-settings-form" method="post" action="#" novalidate
+                  data-initial-country="<?php p($settings['country'] ?? \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_DE); ?>">
                 <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
                 <section class="azc-card admin-settings-section" aria-labelledby="section-access-heading">
                     <header class="azc-card__header">
@@ -783,6 +784,29 @@ $cancelUrl = $isNcAdminShell
                     </select>
                     <p id="germanState-help" class="form-help">
                         <?php p($l->t('Used for statutory holidays and compliance when no specific region is configured for employees or teams.')); ?>
+                    </p>
+                </div>
+
+                <?php
+                $azcWeeklyAbs = (int)($settings['weeklyAbsoluteMaxHours'] ?? 45);
+                if ($azcWeeklyAbs !== 50) {
+                	$azcWeeklyAbs = 45;
+                }
+                ?>
+                <div class="form-group" id="weekly-absolute-max-group" <?php echo $azcCurrentCountry === \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH ? '' : 'hidden'; ?>
+                     data-show-for-country="CH">
+                    <label for="weeklyAbsoluteMaxHours" class="form-label">
+                        <?php p($l->t('Weekly working time maximum (Switzerland)')); ?>
+                    </label>
+                    <select id="weeklyAbsoluteMaxHours"
+                            name="weeklyAbsoluteMaxHours"
+                            class="form-select"
+                            aria-describedby="weeklyAbsoluteMaxHours-help">
+                        <option value="45" <?php echo $azcWeeklyAbs === 45 ? 'selected' : ''; ?>><?php p($l->t('45 hours (general ArG Art. 9)')); ?></option>
+                        <option value="50" <?php echo $azcWeeklyAbs === 50 ? 'selected' : ''; ?>><?php p($l->t('50 hours (sector exception under ArG Art. 9)')); ?></option>
+                    </select>
+                    <p id="weeklyAbsoluteMaxHours-help" class="form-help">
+                        <?php p($l->t('Swiss labour law allows 45 hours as the general weekly maximum, or 50 hours for certain sectors. Pick the rule that applies to your organisation.')); ?>
                     </p>
                 </div>
 

@@ -7,7 +7,22 @@
 (function () {
 	'use strict';
 
-	const MIN_BREAK_SECONDS = 900;
+	function resolveMinBreakMinutes(overrideMinutes) {
+		const fromOverride = Number(overrideMinutes);
+		if (Number.isFinite(fromOverride) && fromOverride > 0) {
+			return Math.round(fromOverride);
+		}
+		const Validation = window.ArbeitszeitCheckValidation;
+		if (Validation && typeof Validation.getMinBreakMinutes === 'function') {
+			return Validation.getMinBreakMinutes();
+		}
+		const raw = Number(window.ArbeitszeitCheck?.complianceParams?.minBreakMinutes);
+		return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 15;
+	}
+
+	function resolveMinBreakSeconds(overrideMinutes) {
+		return resolveMinBreakMinutes(overrideMinutes) * 60;
+	}
 
 	function convertEuropeanToIso(dateStr) {
 		const dp = window.ArbeitszeitCheckDatepicker;
@@ -162,7 +177,8 @@
 		return breaks;
 	}
 
-	function validateBreaks(dateIso, startHm, endHm, breaks, t) {
+	function validateBreaks(dateIso, startHm, endHm, breaks, t, minBreakMinutes) {
+		const minBreakSeconds = resolveMinBreakSeconds(minBreakMinutes);
 		const { startMs, endMs } = workEndMs(dateIso, startHm, endHm);
 		if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
 			return { ok: false, error: t('invalidWorkTimes', 'Please enter valid start and end times.') };
@@ -179,8 +195,12 @@
 			if (bEnd <= bStart) {
 				bEnd += 86400000;
 			}
-			if (bEnd - bStart < MIN_BREAK_SECONDS * 1000) {
-				return { ok: false, error: t('breakTooShort', 'Each break must be at least 15 minutes.') };
+			if (bEnd - bStart < minBreakSeconds * 1000) {
+				const minutes = resolveMinBreakMinutes(minBreakMinutes);
+				return {
+					ok: false,
+					error: t('breakTooShort', 'Each break must be at least ' + minutes + ' minutes.'),
+				};
 			}
 			if (bStart < startMs || bEnd > endMs) {
 				return { ok: false, error: t('breakOutsideWork', 'Breaks must be within working hours.') };
@@ -318,8 +338,12 @@
 		].join('');
 	}
 
-	function bindForm(root, idPrefix, initial, t) {
+	function bindForm(root, idPrefix, initial, t, options) {
 		const p = idPrefix;
+		const opts = options && typeof options === 'object' ? options : {};
+		const currentMinBreakMinutes = () => resolveMinBreakMinutes(
+			opts.minBreakMinutes !== undefined ? opts.minBreakMinutes : initial?.minBreakMinutes
+		);
 		const dateInput = root.querySelector('#' + p + '-date');
 		const startHour = root.querySelector('#' + p + '-start-hour');
 		const startMinute = root.querySelector('#' + p + '-start-minute');
@@ -411,7 +435,7 @@
 				return { ok: false, error: t('invalidWorkTimes', 'Please enter valid start and end times.') };
 			}
 			const breaks = collectBreaks(breaksContainer);
-			const breakCheck = validateBreaks(dateIso, startHm, endHm, breaks, t);
+			const breakCheck = validateBreaks(dateIso, startHm, endHm, breaks, t, currentMinBreakMinutes());
 			if (!breakCheck.ok) {
 				return breakCheck;
 			}
@@ -435,8 +459,14 @@
 	}
 
 	window.ArbeitszeitCheckClockForm = {
-		MIN_BREAK_SECONDS,
+		resolveMinBreakMinutes,
+		resolveMinBreakSeconds,
+		/** @deprecated Prefer resolveMinBreakSeconds(); kept for older callers. */
+		get MIN_BREAK_SECONDS() {
+			return resolveMinBreakSeconds();
+		},
 		buildFormHtml,
 		bindForm,
+		validateBreaks,
 	};
 })();

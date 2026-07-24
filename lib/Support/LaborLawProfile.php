@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Immutable per-country working-time law parameters (DE ArbZG, AT AZG/ARG).
+ * Immutable per-country working-time law parameters (DE ArbZG, AT AZG/ARG, CH ArG).
  *
- * Integration contract (Phase 0 must stay behaviour-neutral for Germany):
+ * Integration contract:
  *  1. Explicitly configured admin values ALWAYS win — the profile only
  *     supplies the *defaults* passed to getAppValue().
  *  2. Break tiers, averaging windows, and the night window come from the
@@ -15,6 +15,8 @@ declare(strict_types=1);
  *  4. Rules that a country does not have are expressed as null and must be
  *     skipped by the caller (e.g. dailyAvgMaxHours for AT,
  *     weeklyAbsoluteMaxHours for DE).
+ *  5. allowedBreakSplitPatterns = null means “sum of break minutes is enough”
+ *     (DE/CH). Austria supplies the AZG §11 statutory split patterns.
  *
  * @copyright Copyright (c) 2026
  * @license AGPL-3.0-or-later
@@ -27,6 +29,8 @@ final class LaborLawProfile
 	/**
 	 * @param list<array{afterHours: float, breakMinutes: int}> $breakTiers
 	 *        Sorted descending by afterHours; first matching tier applies.
+	 * @param list<list<int>>|null $allowedBreakSplitPatterns
+	 *        null = sum-only; otherwise AZG-style portion patterns (e.g. [[15,15],[10,10,10]]).
 	 * @param array<string,string> $lawShortLabels rule key => short label,
 	 *        keys: daily, breaks, rest, weekly, night, sundayHoliday, dailyAvg
 	 */
@@ -44,6 +48,7 @@ final class LaborLawProfile
 		public readonly array $lawShortLabels,
 		public readonly int $vacationDaysSuggestion,
 		public readonly int $minBreakMinutes,
+		public readonly ?array $allowedBreakSplitPatterns = null,
 	) {
 	}
 

@@ -2628,6 +2628,59 @@ class AdminControllerTest extends TestCase
 		$this->assertArrayNotHasKey('minRestPeriod', $data['settings'] ?? []);
 	}
 
+	public function testUpdateAdminSettingsPersistsSwissWeeklyAbsoluteFiftyHours(): void
+	{
+		$store = &$this->wireAppConfigStore(['country' => 'CH', 'german_state' => 'CH-ZH']);
+		$this->request->method('getParams')->willReturn([
+			'country' => 'CH',
+			'weeklyAbsoluteMaxHours' => 50,
+		]);
+
+		$response = $this->controller->updateAdminSettings();
+
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('50', $store['weekly_absolute_max_hours']);
+		$this->assertSame('50', $data['settings']['weeklyAbsoluteMaxHours']);
+	}
+
+	public function testUpdateAdminSettingsClampsInvalidSwissWeeklyAbsoluteToFortyFive(): void
+	{
+		$store = &$this->wireAppConfigStore(['country' => 'CH', 'german_state' => 'CH-ZH']);
+		$this->request->method('getParams')->willReturn([
+			'country' => 'CH',
+			'weeklyAbsoluteMaxHours' => 48,
+		]);
+
+		$response = $this->controller->updateAdminSettings();
+
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertTrue($response->getData()['success']);
+		$this->assertSame('45', $store['weekly_absolute_max_hours']);
+		$this->assertSame('45', $response->getData()['settings']['weeklyAbsoluteMaxHours']);
+	}
+
+	public function testUpdateAdminSettingsAllowsDowngradeFromAustriaToGermany(): void
+	{
+		$store = &$this->wireAppConfigStore([
+			'country' => 'AT',
+			'german_state' => 'AT-W',
+			'max_daily_hours' => '12',
+			'min_rest_period' => '11',
+		]);
+		$this->request->method('getParams')->willReturn(['country' => 'DE']);
+
+		$response = $this->controller->updateAdminSettings();
+
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('DE', $store['country']);
+		$this->assertSame('NW', $store['german_state'], 'Default region must reset to DE default');
+		$this->assertSame('12', $store['max_daily_hours'], 'E-8: explicit limits survive downgrade');
+	}
+
 	public function testGetStateHolidaysRejectsInvalidRegion(): void
 	{
 		$this->holidayCalendarService->expects($this->never())->method('getHolidaysForRange');

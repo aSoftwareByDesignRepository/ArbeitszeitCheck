@@ -499,7 +499,7 @@
         });
 
         // Regions grouped per country (cross-border commuters may pick a region
-        // of another supported country; working time law stays instance-wide).
+        // of another supported country). Working-time law can be overridden per user (E-9).
         const regionGroups = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.regionGroups) || null;
         let stateOptions = `<option value="">${Utils.escapeHtml(germanStateDefault)}</option>`;
         if (regionGroups && regionGroups.length > 0) {
@@ -518,6 +518,20 @@
                 stateOptions += `<option value="${Utils.escapeHtml(state.code)}" ${selected}>${Utils.escapeHtml(state.label)}</option>`;
             });
         }
+
+        const instanceCountry = user.instanceCountry || (window.ArbeitszeitCheck && window.ArbeitszeitCheck.holidayRegionContext && window.ArbeitszeitCheck.holidayRegionContext.country) || 'DE';
+        const currentLaborLaw = user.laborLawCountry || '';
+        const laborLawDefault = t('laborLawCountryDefault', 'Same as organisation (%s)').replace('%s', instanceCountry);
+        const countryLabels = {
+            DE: t('countryGermany', 'Germany'),
+            AT: t('countryAustria', 'Austria'),
+            CH: t('countrySwitzerland', 'Switzerland'),
+        };
+        let laborLawOptions = `<option value="">${Utils.escapeHtml(laborLawDefault)}</option>`;
+        ['DE', 'AT', 'CH'].forEach(code => {
+            const selected = currentLaborLaw === code ? 'selected' : '';
+            laborLawOptions += `<option value="${code}" ${selected}>${Utils.escapeHtml(countryLabels[code] || code)}</option>`;
+        });
 
         let tariffRuleSetOptions = `<option value="">${Utils.escapeHtml(t('notAvailable', 'Not available'))}</option>`;
         (Array.isArray(ruleSets) ? ruleSets : []).forEach(ruleSet => {
@@ -561,7 +575,14 @@
                         ${stateOptions}
                     </select>
                     <p id="user-german-state-help" class="form-help">${germanStateHelp}</p>
-                    <p id="user-german-state-crossborder" class="form-help form-help--note" role="status" aria-live="polite" hidden>${Utils.escapeHtml(auMsg('regionCrossBorderNote', 'Public holidays follow this region. Working time rules follow the country configured for the whole organisation.'))}</p>
+                    <p id="user-german-state-crossborder" class="form-help form-help--note" role="status" aria-live="polite" hidden>${Utils.escapeHtml(auMsg('regionCrossBorderNote', 'Public holidays follow this region. Working time rules follow the labour-law country below (or the organisation default when that is empty).'))}</p>
+                </div>
+                <div class="form-group">
+                    <label for="user-labor-law-country" class="form-label">${Utils.escapeHtml(t('laborLawCountryLabel', 'Working time law country'))}</label>
+                    <select id="user-labor-law-country" name="laborLawCountry" class="form-select" aria-describedby="user-labor-law-country-help">
+                        ${laborLawOptions}
+                    </select>
+                    <p id="user-labor-law-country-help" class="form-help">${Utils.escapeHtml(t('laborLawCountryHelp', 'Optional. Use this for cross-border employees whose working time rules should differ from the organisation country. Leave empty to follow the organisation setting.'))}</p>
                 </div>
                     </div>
                 </details>
@@ -1410,7 +1431,8 @@
             vacationCarryoverYear: formData.get('vacationCarryoverYear') ? parseInt(String(formData.get('vacationCarryoverYear')), 10) : undefined,
             startDate: toISO(formData.get('startDate') || '') || null,
             endDate: toISO(formData.get('endDate') || '') || null,
-            germanState: (formData.get('germanState') || '').toString()
+            germanState: (formData.get('germanState') || '').toString(),
+            laborLawCountry: (formData.get('laborLawCountry') || '').toString()
         };
 
         const mode = (formData.get('vacationMode') || 'inherit').toString();

@@ -132,7 +132,7 @@ class DashboardWidgetDataService {
 			'breakWarningLevel'      => (string)($breakStatus['warning_level'] ?? 'none'),
 			// Country-specific short law citation for break requirements
 			// (DE: 'ArbZG §4', AT: 'AZG §11') for widget labels.
-			'lawLabelBreaks'         => $this->timeTrackingService->lawProfile()->lawLabel('breaks'),
+			'lawLabelBreaks'         => $this->timeTrackingService->lawProfile($userId)->lawLabel('breaks'),
 			// Personal setting: server may insert ArbZG §4 breaks when none were recorded.
 			'autoBreakCalculation'   => $this->timeTrackingService->isAutoBreakCalculationEnabled($userId),
 			'vacationYear'           => (int)($vacationStats['year'] ?? $vacationYear),

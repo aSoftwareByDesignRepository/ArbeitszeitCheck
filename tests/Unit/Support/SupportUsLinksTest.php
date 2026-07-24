@@ -51,11 +51,11 @@ final class SupportUsLinksTest extends TestCase {
 	public function testWebsiteUrlsAreHttpsAndLocaleAware(): void {
 		$links = new SupportUsLinks('BudgetCheck');
 		self::assertSame(
-			'https://nextcloud.software-by-design.de/de/support.html',
+			'https://nextcloud.software-by-design.de/de/support.html#packages',
 			$links->supportPageUrl('de_DE')
 		);
 		self::assertSame(
-			'https://nextcloud.software-by-design.de/en/support.html',
+			'https://nextcloud.software-by-design.de/en/support.html#packages',
 			$links->supportPageUrl('en')
 		);
 		self::assertSame(
@@ -109,6 +109,12 @@ final class SupportUsLinksTest extends TestCase {
 	public function testRejectsRelativeLicenseUrlWithAtSign(): void {
 		$this->expectException(\InvalidArgumentException::class);
 		new SupportUsLinks('ArbeitszeitCheck', true, '/apps/@evil');
+	}
+
+	public function testRejectsProtocolRelativeLicenseUrl(): void {
+		// "//evil.example/..." resolves to an external origin in browsers.
+		$this->expectException(\InvalidArgumentException::class);
+		new SupportUsLinks('ArbeitszeitCheck', true, '//evil.example/license');
 	}
 
 	public function testForLocalePayloadOmitsPricesAndKeepsHierarchyFields(): void {

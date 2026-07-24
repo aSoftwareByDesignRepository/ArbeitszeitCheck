@@ -138,6 +138,7 @@ class AdminController extends Controller
 	private AdminUserProfileUpdateService $adminUserProfileUpdateService;
 	private AuditLogPresenter $auditLogPresenter;
 	private IDBConnection $db;
+	private ?LaborLawProfileFactory $laborLawProfileFactory;
 
 	private const AUDIT_LOG_PAGE_SIZE = 50;
 
@@ -180,6 +181,7 @@ class AdminController extends Controller
 		PermissionService $permissionService,
 		LocaleFormatService $localeFormat,
 		IDBConnection $db,
+		?LaborLawProfileFactory $laborLawProfileFactory = null,
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -217,6 +219,7 @@ class AdminController extends Controller
 		$this->permissionService = $permissionService;
 		$this->localeFormat = $localeFormat;
 		$this->db = $db;
+		$this->laborLawProfileFactory = $laborLawProfileFactory;
 		$this->setCspService($cspService);
 	}
 
@@ -811,6 +814,7 @@ class AdminController extends Controller
 			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', $this->getProfileMinRestHoursDefault()),
 			'country' => $this->getConfiguredCountry(),
 			'germanState' => $this->getConfiguredDefaultRegion(),
+			'weeklyAbsoluteMaxHours' => $this->getConfiguredSwissWeeklyAbsoluteMax(),
 			'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
@@ -878,8 +882,34 @@ class AdminController extends Controller
 		return $this->configureCSP($response, 'admin');
 	}
 
+	private function getConfiguredSwissWeeklyAbsoluteMax(): int
+	{
+		if ($this->laborLawProfileFactory !== null) {
+			return (int)$this->laborLawProfileFactory->resolveSwissWeeklyAbsoluteMax();
+		}
+		$raw = (int)$this->appConfig->getAppValueString(
+			LaborLawProfileFactory::CONFIG_KEY_WEEKLY_ABSOLUTE_MAX,
+			'45'
+		);
+
+		return $raw === 50 ? 50 : 45;
+	}
+
+	private function clearLaborLawProfileCache(): void
+	{
+		if ($this->laborLawProfileFactory !== null) {
+			$this->laborLawProfileFactory->clearCache();
+			return;
+		}
+		try {
+			\OCP\Server::get(LaborLawProfileFactory::class)->clearCache();
+		} catch (\Throwable) {
+			// Unit tests may not have a DI container.
+		}
+	}
+
 	/**
-	 * Instance country ('DE'/'AT'), validated with a safe German fallback.
+	 * Instance country ('DE'/'AT'/'CH'), validated with a safe German fallback.
 	 */
 	private function getConfiguredCountry(): string
 	{
@@ -1845,6 +1875,7 @@ class AdminController extends Controller
 				'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', $this->getProfileMinRestHoursDefault()),
 				'country' => $this->getConfiguredCountry(),
 				'germanState' => $this->getConfiguredDefaultRegion(),
+				'weeklyAbsoluteMaxHours' => $this->getConfiguredSwissWeeklyAbsoluteMax(),
 				'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 				'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 				'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
@@ -1928,6 +1959,7 @@ class AdminController extends Controller
 				// validates the region against the country from this request.
 				'country' => 'country',
 				'germanState' => 'german_state',
+				'weeklyAbsoluteMaxHours' => 'weekly_absolute_max_hours',
 				'statutoryAutoReseed' => 'statutory_auto_reseed',
 				'retentionPeriod' => 'retention_period',
 				'defaultWorkingHours' => 'default_working_hours',
@@ -1993,6 +2025,8 @@ class AdminController extends Controller
 								'error' => $this->l10n->t('Invalid country code')
 							], Http::STATUS_BAD_REQUEST);
 						}
+					} elseif ($paramKey === 'weeklyAbsoluteMaxHours') {
+						$value = ((int)$value === 50) ? '50' : '45';
 					} elseif ($paramKey === 'germanState') {
 						$value = strtoupper(trim((string)$value));
 						if (!RegionRegistry::isValidRegion($value)) {
@@ -2066,23 +2100,23 @@ class AdminController extends Controller
 			// to the new country. If not (and no explicit region was supplied in
 			// the same request), reset it to the country's default region so
 			// holiday lookups never silently fall back (plan §3.4).
-			if (isset($updatedSettings['country'])) {
-				$country = (string)$updatedSettings['country'];
-				$currentRegion = strtoupper($this->appConfig->getAppValueString('german_state', ''));
-				if ($currentRegion === ''
-					|| !RegionRegistry::isValidRegion($currentRegion)
-					|| RegionRegistry::countryOf($currentRegion) !== $country) {
-					$defaultRegion = RegionRegistry::defaultRegionForCountry($country);
-					$this->appConfig->setAppValueString('german_state', $defaultRegion);
-					$updatedSettings['germanState'] = $defaultRegion;
+			if (isset($updatedSettings['country']) || isset($updatedSettings['weeklyAbsoluteMaxHours'])) {
+				$country = isset($updatedSettings['country'])
+					? (string)$updatedSettings['country']
+					: $this->getConfiguredCountry();
+				if (isset($updatedSettings['country'])) {
+					$currentRegion = strtoupper($this->appConfig->getAppValueString('german_state', ''));
+					if ($currentRegion === ''
+						|| !RegionRegistry::isValidRegion($currentRegion)
+						|| RegionRegistry::countryOf($currentRegion) !== $country) {
+						$defaultRegion = RegionRegistry::defaultRegionForCountry($country);
+						$this->appConfig->setAppValueString('german_state', $defaultRegion);
+						$updatedSettings['germanState'] = $defaultRegion;
+					}
 				}
 				// Drop request-cached labour-law profile so same-request readers
-				// (compliance, capabilities) see the new country immediately.
-				try {
-					\OCP\Server::get(LaborLawProfileFactory::class)->clearCache();
-				} catch (\Throwable) {
-					// Unit tests may not have a DI container.
-				}
+				// (compliance, capabilities) see the new country / weekly cap immediately.
+				$this->clearLaborLawProfileCache();
 			}
 
 			if (array_key_exists('accessAllowedGroups', $params)) {
@@ -3228,6 +3262,11 @@ class AdminController extends Controller
 			// per-user setting (german_state) falls back to global default.
 			$defaultState = $this->appConfig->getAppValueString('german_state', 'NW');
 			$userGermanState = $this->userSettingsMapper->getStringSetting($userId, 'german_state', $defaultState);
+			$userLaborLawCountry = $this->userSettingsMapper->getStringSetting(
+				$userId,
+				LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY,
+				''
+			);
 
 			$startDate = $currentModel ? $currentModel->getStartDate() : null;
 			$endDate = $currentModel ? $currentModel->getEndDate() : null;
@@ -3263,6 +3302,10 @@ class AdminController extends Controller
 					'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
 					'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
 					'germanState' => $userGermanState,
+					'laborLawCountry' => RegionRegistry::isSupportedCountry($userLaborLawCountry)
+						? strtoupper($userLaborLawCountry)
+						: '',
+					'instanceCountry' => $this->getConfiguredCountry(),
 					'userWorkingTimeModel' => $currentModel ? $currentModel->getSummary() : null,
 					'vacationPolicy' => $policy ? [
 						'id' => $policy->getId(),

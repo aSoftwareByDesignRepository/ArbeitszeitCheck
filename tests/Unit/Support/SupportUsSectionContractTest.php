@@ -25,6 +25,9 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertNotFalse($sponsorsPos);
 		self::assertLessThan($sponsorsPos, $partnerPos, 'Partner CTA must appear before Sponsors');
 		self::assertStringContainsString('Ask for a partner offer', $src);
+		self::assertStringContainsString('Check Partner', $src);
+		self::assertStringContainsString('invoiceable service', $src);
+		self::assertStringContainsString('individual partner offer', $src);
 		self::assertStringContainsString('data-support-us="1"', $src);
 	}
 
@@ -58,6 +61,17 @@ final class SupportUsSectionContractTest extends TestCase {
 		$src = $this->template();
 		self::assertStringContainsString('hasOfficialMobileLicenses', $src);
 		self::assertStringContainsString('Official mobile & terminal licenses', $src);
+		self::assertStringContainsString('software licence on invoice', $src);
+		self::assertStringContainsString('billed as a service', $src);
+		self::assertStringContainsString('billed as project work', $src);
+		self::assertStringContainsString(
+			'bookable help on an invoice — or official mobile licenses — choose an option below:',
+			$src
+		);
+		self::assertStringContainsString(
+			'bookable help on an invoice, choose an option below:',
+			$src
+		);
 	}
 
 	public function testCssContractHasFocusAndReducedMotion(): void {
@@ -77,5 +91,8 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertStringContainsString(':focus-visible', $css);
 		self::assertStringContainsString('prefers-reduced-motion', $css);
 		self::assertStringContainsString('min-height: 2.75rem', $css);
+		self::assertStringContainsString('support-us__option', $css);
+		self::assertStringContainsString('support-us__benefit', $css);
+		self::assertStringContainsString('support-us__coverage', $css);
 	}
 }

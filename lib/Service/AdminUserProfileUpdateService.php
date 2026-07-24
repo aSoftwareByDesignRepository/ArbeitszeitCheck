@@ -16,6 +16,7 @@ use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Exception\AdminUserProfileUpdateException;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCA\ArbeitszeitCheck\Support\OpeningBalanceYearValidator;
 use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCA\ArbeitszeitCheck\Support\StrictYmdDates;
@@ -49,6 +50,7 @@ class AdminUserProfileUpdateService
 		private readonly TimeCaptureMethodService $timeCaptureMethodService,
 		private readonly IL10N $l10n,
 		private readonly IDBConnection $db,
+		private readonly ?LaborLawProfileFactory $laborLawProfileFactory = null,
 	) {
 	}
 
@@ -211,6 +213,24 @@ class AdminUserProfileUpdateService
 			} else {
 				$this->userSettingsMapper->setSetting($userId, 'german_state', strtoupper(trim($germanState)));
 			}
+		}
+
+		if (array_key_exists('laborLawCountry', $params)) {
+			$laborLawCountry = strtoupper(trim((string)$params['laborLawCountry']));
+			if ($laborLawCountry === '') {
+				$this->userSettingsMapper->deleteSetting($userId, LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY);
+			} elseif (!RegionRegistry::isSupportedCountry($laborLawCountry)) {
+				throw new AdminUserProfileUpdateException($this->l10n->t('Invalid labour-law country'));
+			} else {
+				$this->userSettingsMapper->setSetting(
+					$userId,
+					LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY,
+					$laborLawCountry
+				);
+			}
+			// Drop request-cached profiles so same-request readers (compliance,
+			// capabilities, break reminders) see the new effective country (E-9).
+			$this->laborLawProfileFactory?->clearCache();
 		}
 
 		if (array_key_exists('vacationCarryoverDays', $params) && $params['vacationCarryoverDays'] !== '' && $params['vacationCarryoverDays'] !== null) {
@@ -477,6 +497,13 @@ class AdminUserProfileUpdateService
 			// commuters) — only the region code itself must be valid.
 			if (!RegionRegistry::isValidRegion($germanState)) {
 				throw new AdminUserProfileUpdateException($this->l10n->t('Invalid region code'));
+			}
+		}
+
+		if (array_key_exists('laborLawCountry', $params)) {
+			$laborLawCountry = strtoupper(trim((string)$params['laborLawCountry']));
+			if ($laborLawCountry !== '' && !RegionRegistry::isSupportedCountry($laborLawCountry)) {
+				throw new AdminUserProfileUpdateException($this->l10n->t('Invalid labour-law country'));
 			}
 		}
 

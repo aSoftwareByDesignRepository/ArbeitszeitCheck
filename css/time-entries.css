@@ -1281,6 +1281,24 @@
 	margin: 0;
 }
 
+/* Keep row actions reachable while horizontally scrolling wide tables (#12).
+   Skip below the card/mobile breakpoint where the Actions toggle takes over. */
+@media (min-width: 48rem) {
+	#app-content.azc-app--time-entries #time-entries-table th.azc-table-actions-col,
+	#app-content.azc-app--time-entries #time-entries-table td.actions-cell {
+		position: sticky;
+		right: 0;
+		z-index: 2;
+		background: var(--azc-bg-card, var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background)));
+		box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.18);
+	}
+
+	#app-content.azc-app--time-entries #time-entries-table thead th.azc-table-actions-col {
+		z-index: 3;
+		background: var(--arbeitszeitcheck-color-background-dark, var(--color-background-dark, var(--azc-bg-card)));
+	}
+}
+
 #app-content.azc-app--time-entries #paused-entries-banner,
 #app-content.azc-app--time-entries .pending-correction-banner {
 	margin: 0;

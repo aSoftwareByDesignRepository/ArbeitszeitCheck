@@ -129,6 +129,10 @@
                     return;
                 }
                 rebuildRegions(this.value, regionSelect.value);
+                const weeklyGroup = Utils.$('#weekly-absolute-max-group');
+                if (weeklyGroup) {
+                    weeklyGroup.hidden = this.value !== 'CH';
+                }
                 if (liveRegion) {
                     const selectedLabel = regionSelect.options[regionSelect.selectedIndex]
                         ? regionSelect.options[regionSelect.selectedIndex].textContent
@@ -346,7 +350,7 @@
     /**
      * Handle form submission
      */
-    function handleFormSubmit(e) {
+    async function handleFormSubmit(e) {
         e.preventDefault();
 
         const form = e.target;
@@ -413,6 +417,9 @@
         formData.retentionPeriod = int(formData.retentionPeriod, 2);
         const graceInput = Utils.$('#monthClosureGraceDaysAfterEom');
         formData.monthClosureGraceDaysAfterEom = graceInput ? int(graceInput.value, 0) : int(formData.monthClosureGraceDaysAfterEom, 0);
+        if (formData.weeklyAbsoluteMaxHours !== undefined) {
+            formData.weeklyAbsoluteMaxHours = int(formData.weeklyAbsoluteMaxHours, 45);
+        }
 
         const liveRegion = Utils.$('#admin-settings-live');
         const saveButton = Utils.$('#admin-settings-save');
@@ -420,6 +427,39 @@
         // Validate
         if (!validateForm(formData, liveRegion)) {
             return;
+        }
+
+        // E-8: country change (including “downgrade” AT/CH → DE) needs an explicit confirm.
+        // Fail closed when confirmDialog is unavailable — never use window.confirm (§7.3).
+        const initialCountry = (form.getAttribute('data-initial-country') || 'DE').toUpperCase();
+        const nextCountry = formData.country ? String(formData.country).toUpperCase() : initialCountry;
+        if (nextCountry !== initialCountry) {
+            const Components = window.AzcComponents || window.ArbeitszeitCheckComponents;
+            const t = (msg) => (window.t ? window.t('arbeitszeitcheck', msg) : msg);
+            const message = [
+                t('Working time rules will follow the newly selected country from now on.'),
+                t('The default holiday region is reset when it does not belong to the new country. Existing holiday calendars of other countries stay in the database.'),
+                t('Daily hour and rest limits you already set are kept. You can switch back to another country later the same way.'),
+            ].join('\n\n');
+            if (!Components || typeof Components.confirmDialog !== 'function') {
+                setLiveMessage(
+                    liveRegion,
+                    t('Could not show the country-change confirmation. Please reload the page and try again.'),
+                    'error'
+                );
+                return;
+            }
+            const result = await Components.confirmDialog({
+                title: t('Change working time country?'),
+                message: message,
+                confirmLabel: t('Change country'),
+                cancelLabel: t('Cancel'),
+                variant: 'info',
+            });
+            const accepted = result === true || !!(result && result.confirmed);
+            if (!accepted) {
+                return;
+            }
         }
 
         if (saveButton) {
@@ -444,6 +484,9 @@
                     const msg = data.message || window.ArbeitszeitCheck?.l10n?.settingsSavedSuccessfully || (window.t ? window.t('arbeitszeitcheck', 'Settings saved successfully') : 'Settings saved successfully');
                     Messaging.showSuccess(msg);
                     setLiveMessage(liveRegion, msg, 'success');
+                    if (data.settings && data.settings.country) {
+                        form.setAttribute('data-initial-country', String(data.settings.country).toUpperCase());
+                    }
                 } else {
                     const msg = data.error || window.ArbeitszeitCheck?.l10n?.failedToSaveSettings || (window.t ? window.t('arbeitszeitcheck', 'Failed to save settings') : 'Failed to save settings');
                     Messaging.showError(msg);

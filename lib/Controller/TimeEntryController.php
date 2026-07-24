@@ -34,6 +34,7 @@ use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryDeletionPolicy;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
+use OCA\ArbeitszeitCheck\Support\BreakCountable;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\Lock\LockedException;
 use OCP\AppFramework\Controller;
@@ -526,6 +527,17 @@ class TimeEntryController extends Controller
 		throw new \Exception($this->l10n->t('Invalid %s format. Use ISO-8601 (e.g. 2024-01-15T09:00:00Z).', [$fieldName]));
 	}
 
+	private function countableMinBreakMinutes(?string $userId = null): int
+	{
+		try {
+			return BreakCountable::minMinutes(
+				\OCP\Server::get(LaborLawProfileFactory::class)->getProfile($userId)->minBreakMinutes
+			);
+		} catch (\Throwable) {
+			return BreakCountable::DEFAULT_MIN_MINUTES;
+		}
+	}
+
 	/**
 	 * Build proposed start/end (and optional breaks) from the same date + HH:mm
 	 * payload the manual time-entry form uses. Returns null when ISO instants
@@ -534,83 +546,12 @@ class TimeEntryController extends Controller
 	 * @param array<string, mixed> $params
 	 * @return array<string, mixed>|null
 	 */
-	private function buildProposedWorkTimesFromDateAndClock(array $params): ?array
+	private function buildProposedWorkTimesFromDateAndClock(array $params, ?string $userId = null): ?array
 	{
-		$dateParam = $params['date'] ?? null;
-		$startTime = $params['startTime'] ?? null;
-		$endTime = $params['endTime'] ?? null;
-		if (!is_string($dateParam) || !is_string($startTime) || !is_string($endTime)) {
-			return null;
-		}
-		$startTime = trim($startTime);
-		$endTime = trim($endTime);
-		$isPlainTime = static function (string $value): bool {
-			return (bool)\preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', $value);
-		};
-		if (!$isPlainTime($startTime) || !$isPlainTime($endTime)) {
-			return null;
-		}
-
-		$baseDate = $this->parseDate($dateParam);
-		$startDateTime = clone $baseDate;
-		[$sh, $sm] = \explode(':', $startTime, 2);
-		$startDateTime->setTime((int)$sh, (int)$sm, 0);
-
-		$endDateTime = clone $baseDate;
-		[$eh, $em] = \explode(':', $endTime, 2);
-		$endDateTime->setTime((int)$eh, (int)$em, 0);
-		if ($endDateTime <= $startDateTime) {
-			$endDateTime->modify('+1 day');
-		}
-
-		$result = [
-			'startTime' => $startDateTime->format('c'),
-			'endTime' => $endDateTime->format('c'),
-		];
-
-		$breaks = isset($params['breaks']) && \is_array($params['breaks']) ? $params['breaks'] : null;
-		if ($breaks !== null && $breaks !== []) {
-			$validBreaks = [];
-			foreach ($breaks as $break) {
-				if (!\is_array($break)) {
-					continue;
-				}
-				$startKey = isset($break['start']) ? 'start' : (isset($break['start_time']) ? 'start_time' : null);
-				$endKey = isset($break['end']) ? 'end' : (isset($break['end_time']) ? 'end_time' : null);
-				if ($startKey === null || $endKey === null) {
-					continue;
-				}
-				$rawStart = trim((string)$break[$startKey]);
-				$rawEnd = trim((string)$break[$endKey]);
-				if ($rawStart === '' || $rawEnd === '') {
-					continue;
-				}
-				if (!$isPlainTime($rawStart) || !$isPlainTime($rawEnd)) {
-					continue;
-				}
-				$breakStart = clone $baseDate;
-				[$bh, $bm] = \explode(':', $rawStart, 2);
-				$breakStart->setTime((int)$bh, (int)$bm, 0);
-				$breakEnd = clone $baseDate;
-				[$eh2, $em2] = \explode(':', $rawEnd, 2);
-				$breakEnd->setTime((int)$eh2, (int)$em2, 0);
-				if ($breakEnd < $breakStart) {
-					$breakEnd->modify('+1 day');
-				}
-				$durationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-				if ($durationSeconds >= 900) {
-					$validBreaks[] = [
-						'start' => $breakStart->format('c'),
-						'end' => $breakEnd->format('c'),
-					];
-				}
-			}
-			if ($validBreaks !== []) {
-				$result['breaks'] = $validBreaks;
-			}
-		}
-
-		return $result;
+		return \OCA\ArbeitszeitCheck\Support\TimeEntryClockPayloadBuilder::buildFromParams(
+			$params,
+			$this->countableMinBreakMinutes($userId)
+		);
 	}
 
 	/**
@@ -1166,6 +1107,7 @@ class TimeEntryController extends Controller
 					}
 
 					// Validate entry before inserting
+					$timeEntry->setCountableMinBreakMinutes($this->countableMinBreakMinutes($timeEntry->getUserId()));
 					$errors = $timeEntry->validate();
 
 					// Additional compliance validation: check maximum working hours (ArbZG §3)
@@ -1418,8 +1360,11 @@ class TimeEntryController extends Controller
 				$breaks = $this->decodeBreaksPayload($breaksJson);
 				if ($breaks !== null) {
 					if (!empty($breaks)) {
-						// Filter out breaks shorter than 15 minutes (ArbZG §4)
+						// Filter out breaks shorter than the profile floor (DE/CH 15, AT 10)
 						$validBreaks = [];
+						$minBreakDurationSeconds = BreakCountable::minSeconds(
+							$this->countableMinBreakMinutes($entry->getUserId())
+						);
 						foreach ($breaks as $break) {
 							// Support both {start,end} and {start_time,end_time}
 							$startKey = isset($break['start']) ? 'start' : (isset($break['start_time']) ? 'start_time' : null);
@@ -1455,9 +1400,8 @@ class TimeEntryController extends Controller
 								}
 
 								$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-								$minBreakDurationSeconds = 900; // 15 minutes
 
-								// Only include breaks that are at least 15 minutes
+								// Only include breaks that meet the profile countable floor
 								if ($breakDurationSeconds >= $minBreakDurationSeconds) {
 									$validBreaks[] = [
 										'start' => $breakStart->format('c'),
@@ -1659,6 +1603,7 @@ class TimeEntryController extends Controller
 					}
 
 					// Validate entry (automatically adjusts end time to 10h if exceeded)
+					$entry->setCountableMinBreakMinutes($this->countableMinBreakMinutes($entry->getUserId()));
 					$errors = $entry->validate();
 
 					// Additional compliance validation: check maximum working hours (ArbZG §3)
@@ -1949,7 +1894,7 @@ class TimeEntryController extends Controller
 
 			$clockBased = null;
 			try {
-				$clockBased = $this->buildProposedWorkTimesFromDateAndClock($params);
+				$clockBased = $this->buildProposedWorkTimesFromDateAndClock($params, $entry->getUserId());
 			} catch (\Exception $e) {
 				return new JSONResponse([
 					'success' => false,
@@ -2580,8 +2525,11 @@ class TimeEntryController extends Controller
 				$breaks = $this->decodeBreaksPayload($breaksJson);
 				if ($breaks !== null) {
 					if (!empty($breaks)) {
-						// Filter out breaks shorter than 15 minutes (ArbZG §4)
+						// Filter out breaks shorter than the profile floor (DE/CH 15, AT 10)
 						$validBreaks = [];
+						$minBreakDurationSeconds = BreakCountable::minSeconds(
+							$this->countableMinBreakMinutes($userId)
+						);
 						foreach ($breaks as $break) {
 							// Support both {start,end} and {start_time,end_time} from clients
 							$startKey = isset($break['start']) ? 'start' : (isset($break['start_time']) ? 'start_time' : null);
@@ -2617,9 +2565,8 @@ class TimeEntryController extends Controller
 								}
 
 								$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-								$minBreakDurationSeconds = 900; // 15 minutes
 
-								// Only include breaks that are at least 15 minutes
+								// Only include breaks that meet the profile countable floor
 								if ($breakDurationSeconds >= $minBreakDurationSeconds) {
 									$validBreaks[] = [
 										'start' => $breakStart->format('c'),
@@ -2766,6 +2713,7 @@ class TimeEntryController extends Controller
 				}
 
 				// Validate entry after all adjustments
+				$timeEntry->setCountableMinBreakMinutes($this->countableMinBreakMinutes($timeEntry->getUserId()));
 				$errors = $timeEntry->validate();
 
 				// Additional compliance validation: check maximum working hours (ArbZG §3)

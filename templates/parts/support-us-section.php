@@ -43,6 +43,8 @@ $appName = (string)$links['appDisplayName'];
 $sectionId = $prefix . '-support-us';
 $titleId = $prefix . '-support-us-title';
 $introId = $prefix . '-support-us-intro';
+$partnerTitleId = $prefix . '-support-us-partner-title';
+$hasMobile = !empty($links['hasOfficialMobileLicenses']) && !empty($links['licensePageUrl']);
 ?>
 <section
 	class="<?php p($shell); ?>-card <?php p($shell); ?>-section <?php p($prefix); ?>-support-us"
@@ -57,16 +59,31 @@ $introId = $prefix . '-support-us-intro';
 				<?php p($l->t('Support & us')); ?>
 			</h2>
 			<p id="<?php p($introId); ?>" class="<?php p($shell); ?>-section__sub <?php p($prefix); ?>-support-us__intro">
-				<?php p($l->t(
-					'%s stays free (AGPL) on your Nextcloud. GitHub issues for bugs and ideas remain welcome. For bookable help on an invoice — setup, hour packs, commissioned work — or the official mobile app:',
-					[$appName]
-				)); ?>
+				<?php
+				// Match Block A to Block E: never mention mobile when the license CTA is hidden.
+				$introKey = $hasMobile
+					? '%s stays free (AGPL) on your Nextcloud. Bug reports and ideas on GitHub stay welcome — that is free open-source care. If your organisation needs bookable help on an invoice — or official mobile licenses — choose an option below:'
+					: '%s stays free (AGPL) on your Nextcloud. Bug reports and ideas on GitHub stay welcome — that is free open-source care. If your organisation needs bookable help on an invoice, choose an option below:';
+				p($l->t($introKey, [$appName]));
+				?>
 			</p>
 		</div>
 	</header>
 
 	<div class="<?php p($prefix); ?>-support-us__body">
-		<div class="<?php p($prefix); ?>-support-us__primary">
+		<div
+			class="<?php p($prefix); ?>-support-us__primary"
+			aria-labelledby="<?php p($partnerTitleId); ?>"
+		>
+			<h3 id="<?php p($partnerTitleId); ?>" class="<?php p($prefix); ?>-support-us__offer-title">
+				<?php p($l->t('Check Partner')); ?>
+			</h3>
+			<p class="<?php p($prefix); ?>-support-us__benefit">
+				<?php p($l->t('Annual hour packs — Small, Standard, or Premium — with priority email for your organisation. This is invoiceable service — not a donation. See packages on our support page.')); ?>
+			</p>
+			<p class="<?php p($prefix); ?>-support-us__coverage">
+				<?php p($l->t('List prices on our site apply to published Check apps. For this app, ask for an individual partner offer — we invoice only after you accept a quote.')); ?>
+			</p>
 			<a
 				class="<?php p($btnPrimary); ?> <?php p($prefix); ?>-support-us__cta <?php p($prefix); ?>-support-us__cta--primary"
 				href="<?php p($links['partnerMailto']); ?>"
@@ -74,7 +91,7 @@ $introId = $prefix . '-support-us-intro';
 				<?php p($l->t('Ask for a partner offer')); ?>
 			</a>
 			<p class="<?php p($prefix); ?>-support-us__hint">
-				<?php p($l->t('Annual hour pack + priority response — details in the offer / on our site.')); ?>
+				<?php p($l->t('Packages and terms:')); ?>
 				<a
 					href="<?php p($links['supportPageUrl']); ?>"
 					target="_blank"
@@ -83,26 +100,41 @@ $introId = $prefix . '-support-us-intro';
 			</p>
 		</div>
 
-		<div class="<?php p($prefix); ?>-support-us__secondary" role="group" aria-label="<?php p($l->t('Additional support options')); ?>">
-			<a
-				class="<?php p($btnSecondary); ?> <?php p($prefix); ?>-support-us__cta"
-				href="<?php p($links['onboardingMailto']); ?>"
-			>
-				<?php p($l->t('Ask about setup or training')); ?>
-			</a>
-			<a
-				class="<?php p($btnSecondary); ?> <?php p($prefix); ?>-support-us__cta"
-				href="<?php p($links['featureMailto']); ?>"
-			>
-				<?php p($l->t('Request a commissioned feature')); ?>
-			</a>
-			<?php if (!empty($links['hasOfficialMobileLicenses']) && !empty($links['licensePageUrl'])): ?>
+		<div class="<?php p($prefix); ?>-support-us__secondary" role="group" aria-label="<?php p($l->t('Additional invoiceable options')); ?>">
+			<div class="<?php p($prefix); ?>-support-us__option">
 				<a
 					class="<?php p($btnSecondary); ?> <?php p($prefix); ?>-support-us__cta"
-					href="<?php p($links['licensePageUrl']); ?>"
+					href="<?php p($links['onboardingMailto']); ?>"
 				>
-					<?php p($l->t('Official mobile & terminal licenses')); ?>
+					<?php p($l->t('Ask about setup or training')); ?>
 				</a>
+				<p class="<?php p($prefix); ?>-support-us__option-hint">
+					<?php p($l->t('Remote onboarding or a workshop so your team can roll out cleanly — billed as a service.')); ?>
+				</p>
+			</div>
+			<div class="<?php p($prefix); ?>-support-us__option">
+				<a
+					class="<?php p($btnSecondary); ?> <?php p($prefix); ?>-support-us__cta"
+					href="<?php p($links['featureMailto']); ?>"
+				>
+					<?php p($l->t('Request a commissioned feature')); ?>
+				</a>
+				<p class="<?php p($prefix); ?>-support-us__option-hint">
+					<?php p($l->t('A scoped change with acceptance criteria and a delivery date — billed as project work.')); ?>
+				</p>
+			</div>
+			<?php if ($hasMobile): ?>
+				<div class="<?php p($prefix); ?>-support-us__option">
+					<a
+						class="<?php p($btnSecondary); ?> <?php p($prefix); ?>-support-us__cta"
+						href="<?php p($links['licensePageUrl']); ?>"
+					>
+						<?php p($l->t('Official mobile & terminal licenses')); ?>
+					</a>
+					<p class="<?php p($prefix); ?>-support-us__option-hint">
+						<?php p($l->t('Named seats for the official apps — a software licence on invoice.')); ?>
+					</p>
+				</div>
 			<?php endif; ?>
 		</div>
 

@@ -68,7 +68,8 @@ class LaborLawProfileFactoryTest extends TestCase
 		$this->assertNull($profile->dailyAvgMaxHours, 'AT has no 8h daily average rule');
 		$this->assertSame(22, $profile->nightWindowStartHour);
 		$this->assertSame(5, $profile->nightWindowEndHour);
-		$this->assertSame(15, $profile->minBreakMinutes);
+		$this->assertSame(10, $profile->minBreakMinutes, 'AZG §11 portions may be 10 minutes');
+		$this->assertSame([[15, 15], [10, 10, 10]], $profile->allowedBreakSplitPatterns);
 
 		$this->assertSame(0, $profile->requiredBreakMinutes(5.5));
 		$this->assertSame(30, $profile->requiredBreakMinutes(6.0));
@@ -97,6 +98,7 @@ class LaborLawProfileFactoryTest extends TestCase
 		$this->assertSame(6, $profile->nightWindowEndHour);
 		$this->assertSame(20, $profile->vacationDaysSuggestion);
 		$this->assertSame(15, $profile->minBreakMinutes);
+		$this->assertNull($profile->allowedBreakSplitPatterns);
 
 		$this->assertSame(0, $profile->requiredBreakMinutes(5.49));
 		$this->assertSame(15, $profile->requiredBreakMinutes(5.5));
@@ -109,6 +111,67 @@ class LaborLawProfileFactoryTest extends TestCase
 		$this->assertSame('ArG Art. 15', $profile->lawLabel('breaks'));
 		$this->assertSame('ArG Art. 15a', $profile->lawLabel('rest'));
 		$this->assertSame('ArG Art. 18', $profile->lawLabel('sundayHoliday'));
+	}
+
+	public function testSwissWeeklyAbsoluteFiftyHourOverride(): void
+	{
+		$profile = LaborLawProfileFactory::profileForCountry('CH', 50.0);
+		$this->assertSame(50.0, $profile->weeklyAbsoluteMaxHours);
+
+		$invalid = LaborLawProfileFactory::profileForCountry('CH', 48.0);
+		$this->assertSame(45.0, $invalid->weeklyAbsoluteMaxHours, 'Non 45/50 values fall back to 45');
+	}
+
+	public function testResolveSwissWeeklyAbsoluteMaxFromConfig(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, $default = '') {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return 'CH';
+				}
+				if ($app === 'arbeitszeitcheck' && $key === LaborLawProfileFactory::CONFIG_KEY_WEEKLY_ABSOLUTE_MAX) {
+					return '50';
+				}
+				return $default;
+			}
+		);
+		$factory = new LaborLawProfileFactory($config);
+		$this->assertSame(50.0, $factory->resolveSwissWeeklyAbsoluteMax());
+		$this->assertSame(50.0, $factory->getProfile()->weeklyAbsoluteMaxHours);
+	}
+
+	public function testResolveSwissWeeklyAbsoluteMaxDefaultsToFortyFive(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, $default = '') {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return 'CH';
+				}
+				if ($app === 'arbeitszeitcheck' && $key === LaborLawProfileFactory::CONFIG_KEY_WEEKLY_ABSOLUTE_MAX) {
+					return '45';
+				}
+				return $default;
+			}
+		);
+		$factory = new LaborLawProfileFactory($config);
+		$this->assertSame(45.0, $factory->resolveSwissWeeklyAbsoluteMax());
+		$this->assertSame(45.0, $factory->getProfile()->weeklyAbsoluteMaxHours);
+
+		$bogus = $this->createMock(IConfig::class);
+		$bogus->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, $default = '') {
+				if ($app === 'arbeitszeitcheck' && $key === LaborLawProfileFactory::CONFIG_KEY_WEEKLY_ABSOLUTE_MAX) {
+					return '47';
+				}
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return 'CH';
+				}
+				return $default;
+			}
+		);
+		$this->assertSame(45.0, (new LaborLawProfileFactory($bogus))->resolveSwissWeeklyAbsoluteMax());
 	}
 
 	public function testLawLabelFallsBackToDailyForUnknownRule(): void
@@ -164,5 +227,50 @@ class LaborLawProfileFactoryTest extends TestCase
 		$second = $factory->getProfile();
 		$this->assertInstanceOf(LaborLawProfile::class, $second);
 		$this->assertSame('AT', $second->country);
+	}
+
+	public function testPerUserLaborLawCountryOverride(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, $default = '') {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return 'DE';
+				}
+				return $default;
+			}
+		);
+		$mapper = $this->createMock(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class);
+		$mapper->method('getStringSetting')->willReturnCallback(
+			static function (string $userId, string $key, string $default = '') {
+				if ($userId === 'commuter' && $key === LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY) {
+					return 'AT';
+				}
+				if ($userId === 'bogus' && $key === LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY) {
+					return 'FR';
+				}
+				return $default;
+			}
+		);
+		$factory = new LaborLawProfileFactory($config, $mapper);
+
+		$this->assertSame('DE', $factory->getEffectiveCountry());
+		$this->assertSame('DE', $factory->getEffectiveCountry(''));
+		$this->assertSame('AT', $factory->getEffectiveCountry('commuter'));
+		$this->assertSame('DE', $factory->getEffectiveCountry('bogus'), 'Invalid override falls back to instance');
+		$this->assertSame('DE', $factory->getEffectiveCountry('nobody'));
+
+		$this->assertSame('AT', $factory->getProfile('commuter')->country);
+		$this->assertSame(10, $factory->getProfile('commuter')->minBreakMinutes);
+		$this->assertSame('DE', $factory->getProfile('nobody')->country);
+	}
+
+	public function testWithoutUserSettingsMapperOverrideIsIgnored(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('DE');
+		$factory = new LaborLawProfileFactory($config, null);
+
+		$this->assertSame('DE', $factory->getEffectiveCountry('anyone'));
 	}
 }

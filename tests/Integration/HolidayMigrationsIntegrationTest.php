@@ -6,9 +6,9 @@ declare(strict_types=1);
  * Integration checks for the DACH Phase 0 holiday migrations against the real
  * database of this instance:
  *
- *  - B-1 ({@see Version1035Date20260724130000}): the unique index
- *    at_hol_st_dt_sc_u must actively reject duplicate (state, date, scope)
- *    rows, and a re-run of the dedupe pass on clean data must be a no-op.
+ *  - B-1 ({@see Version1035Date20260724130000}): the unique index on
+ *    (state, date, scope) must actively reject duplicate rows, and a re-run
+ *    of the dedupe pass on clean data must be a no-op.
  *  - B-2 ({@see Version1034Date20260724120000}): converting the legacy
  *    'holidays_initialized_state_years' flag must create per-date
  *    suppressions exactly once (idempotent re-run) and remove the key.
@@ -113,7 +113,7 @@ class HolidayMigrationsIntegrationTest extends TestCase
 					'Duplicate insert must fail with a unique-constraint violation'
 				);
 			}
-			$this->assertTrue($violated, 'at_hol_st_dt_sc_u must reject the duplicate row');
+			$this->assertTrue($violated, 'The unique (state, date, scope) index must reject the duplicate row');
 
 			// A different scope for the same state/date is still allowed.
 			$this->insertHoliday(self::TEST_STATE, $date, 'statutory');

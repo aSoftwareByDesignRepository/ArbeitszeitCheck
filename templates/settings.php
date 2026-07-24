@@ -102,7 +102,14 @@ $complianceProfile = is_array($_['complianceProfile'] ?? null) ? $_['complianceP
 						</label>
 					</div>
 					<p id="break-reminders-help" class="settings-form__help">
-						<?php p($l->t('Get a notification when it\'s time to take a required break. For example, if you work more than 6 hours, you\'ll get a reminder to take at least a 30-minute break.')); ?>
+						<?php
+						$azcBreakReminderHelp = match ($complianceProfile['country'] ?? 'DE') {
+							'AT' => $l->t('Get a notification when it\'s time to take a required break. For example, after more than 6 hours you\'ll get a reminder to take at least a 30-minute break (AZG).'),
+							'CH' => $l->t('Get a notification when it\'s time to take a required break. For example, after 5.5 hours you\'ll get a reminder to take at least a 15-minute break (ArG).'),
+							default => $l->t('Get a notification when it\'s time to take a required break. For example, if you work more than 6 hours, you\'ll get a reminder to take at least a 30-minute break.'),
+						};
+						p($azcBreakReminderHelp);
+						?>
 					</p>
 				</div>
 				<div class="settings-form__group">

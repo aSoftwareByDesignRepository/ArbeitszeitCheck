@@ -69,6 +69,8 @@ class CapabilitiesComplianceTest extends TestCase
 		$this->assertSame('DE', $block['country']);
 		$this->assertTrue($block['german-labor-law']);
 		$this->assertSame(10.0, $block['maxDailyHours']);
+		$this->assertSame(15, $block['minBreakMinutes']);
+		$this->assertNull($block['allowedBreakSplitPatterns']);
 		$this->assertSame('ArbZG §4', $block['lawLabels']['breaks']);
 		$this->assertContains('arbzg-compliance', $features);
 		$this->assertSame('1.6.0', $caps['arbeitszeitcheck']['version']);
@@ -84,6 +86,8 @@ class CapabilitiesComplianceTest extends TestCase
 		$this->assertSame('AT', $block['country']);
 		$this->assertFalse($block['german-labor-law']);
 		$this->assertSame(12.0, $block['maxDailyHours']);
+		$this->assertSame(10, $block['minBreakMinutes']);
+		$this->assertSame([[15, 15], [10, 10, 10]], $block['allowedBreakSplitPatterns']);
 		$this->assertSame('AZG §11', $block['lawLabels']['breaks']);
 		$this->assertContains('azg-compliance', $features);
 		$this->assertCount(1, $block['breakTiers']);
@@ -103,5 +107,47 @@ class CapabilitiesComplianceTest extends TestCase
 		$this->assertNotContains('arg-compliance', $features, 'Must not collide with Austrian ARG naming');
 		$this->assertCount(3, $block['breakTiers']);
 		$this->assertSame(5.5, $block['breakTiers'][0]['afterHours']);
+		$this->assertSame(45.0, $block['weeklyAbsoluteMaxHours']);
+	}
+
+	public function testSwissComplianceBlockHonoursFiftyHourWeeklyMaximum(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, $default = '') {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return RegionRegistry::COUNTRY_CH;
+				}
+				if ($app === 'arbeitszeitcheck' && $key === LaborLawProfileFactory::CONFIG_KEY_WEEKLY_ABSOLUTE_MAX) {
+					return '50';
+				}
+				return is_string($default) ? $default : (string)$default;
+			}
+		);
+
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getAppValueString')->willReturnCallback(
+			static fn (string $key, string $default = '') => $default
+		);
+		$appManager = $this->createMock(IAppManager::class);
+		$appManager->method('getAppVersion')->willReturn('1.6.0');
+		$appManager->method('isEnabledForUser')->willReturn(false);
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn(null);
+		$overtimeBank = $this->createMock(OvertimeBankService::class);
+		$overtimeBank->method('isEnabled')->willReturn(false);
+		$timeCapture = $this->createMock(TimeCaptureMethodService::class);
+
+		$caps = (new Capabilities(
+			$config,
+			$appConfig,
+			$overtimeBank,
+			$appManager,
+			$userSession,
+			$timeCapture,
+			new LaborLawProfileFactory($config),
+		))->getCapabilities();
+
+		$this->assertSame(50.0, $caps['arbeitszeitcheck']['compliance']['weeklyAbsoluteMaxHours']);
 	}
 }

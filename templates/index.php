@@ -36,7 +36,7 @@ $status = $_['status'] ?? [];
 $overtime = $_['overtime'] ?? [];
 $recentEntries = $_['recentEntries'] ?? [];
 try {
-	$azcMaxDefault = (string)\OCP\Server::get(LaborLawProfileFactory::class)->getProfile()->dailyMaxHoursDefault;
+	$azcMaxDefault = (string)\OCP\Server::get(LaborLawProfileFactory::class)->getProfileForCurrentUser()->dailyMaxHoursDefault;
 } catch (\Throwable) {
 	$azcMaxDefault = '10';
 }

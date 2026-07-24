@@ -1055,9 +1055,11 @@ class ManagerController extends Controller
 					true,
 				);
 				foreach ($result['users'] as $user) {
+					$uid = (string)$user->getUID();
 					$usersData[] = [
-						'userId' => (string)$user->getUID(),
+						'userId' => $uid,
 						'displayName' => (string)$user->getDisplayName(),
+						'minBreakMinutes' => $this->resolveMinBreakMinutesForUser($uid),
 					];
 				}
 			} else {
@@ -1073,6 +1075,7 @@ class ManagerController extends Controller
 					$usersData[] = [
 						'userId' => $uid,
 						'displayName' => $this->getDisplayName($uid),
+						'minBreakMinutes' => $this->resolveMinBreakMinutesForUser($uid),
 					];
 					if (count($usersData) >= $normalizedLimit) {
 						break;
@@ -1112,6 +1115,17 @@ class ManagerController extends Controller
 		$uid = mb_strtolower((string)$user->getUID());
 		$name = mb_strtolower((string)$user->getDisplayName());
 		return str_contains($uid, $needle) || str_contains($name, $needle);
+	}
+
+	private function resolveMinBreakMinutesForUser(string $userId): int
+	{
+		try {
+			$minutes = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)
+				->getProfile($userId)->minBreakMinutes;
+			return $minutes > 0 ? $minutes : 15;
+		} catch (\Throwable) {
+			return 15;
+		}
 	}
 
 	/**
@@ -1733,7 +1747,14 @@ class ManagerController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
-			$proposal = TimeEntryClockPayloadBuilder::mergeIntoProposal($params, []);
+			$minBreakMinutes = null;
+			try {
+				$minBreakMinutes = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)
+					->getProfile($targetUserId)->minBreakMinutes;
+			} catch (\Throwable) {
+				$minBreakMinutes = null;
+			}
+			$proposal = TimeEntryClockPayloadBuilder::mergeIntoProposal($params, [], $minBreakMinutes);
 			if (!isset($proposal['startTime'], $proposal['endTime'])) {
 				return new JSONResponse([
 					'success' => false,
@@ -2602,7 +2623,14 @@ class ManagerController extends Controller
 				$reason = mb_substr($reason, 0, 2000);
 			}
 
-			$proposal = TimeEntryClockPayloadBuilder::mergeIntoProposal($params, []);
+			$minBreakMinutes = null;
+			try {
+				$minBreakMinutes = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)
+					->getProfile($entry->getUserId())->minBreakMinutes;
+			} catch (\Throwable) {
+				$minBreakMinutes = null;
+			}
+			$proposal = TimeEntryClockPayloadBuilder::mergeIntoProposal($params, [], $minBreakMinutes);
 			if (array_key_exists('description', $params)) {
 				$proposal['description'] = $params['description'];
 			}

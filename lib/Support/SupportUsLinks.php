@@ -115,10 +115,11 @@ final class SupportUsLinks {
 
 	/**
 	 * Dedicated support page when published; always https under SITE_ORIGIN.
+	 * Deep-links to #packages so admins land on invoiceable SKUs / list prices.
 	 */
 	public function supportPageUrl(string $languageCode): string {
 		$path = $this->isGermanLocale($languageCode) ? '/de/support.html' : '/en/support.html';
-		return self::SITE_ORIGIN . $path;
+		return self::SITE_ORIGIN . $path . '#packages';
 	}
 
 	public function appsPageUrl(string $languageCode): string {
@@ -190,7 +191,9 @@ final class SupportUsLinks {
 		if (str_starts_with($url, '/')) {
 			// App-relative path (Nextcloud linkToRoute output is typically absolute URL;
 			// relative paths are allowed for in-app license jumps).
-			return !preg_match('/[\x00-\x1F\x7F\s]/', $url)
+			// "//host/..." is protocol-relative (external origin), not app-relative.
+			return !str_starts_with($url, '//')
+				&& !preg_match('/[\x00-\x1F\x7F\s]/', $url)
 				&& !str_contains($url, '://')
 				&& !str_contains($url, '\\')
 				&& !str_contains($url, '@');

@@ -13,7 +13,7 @@ use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 $l = $l ?? ($_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck'));
 
 try {
-	$azcLawProfile = \OCP\Server::get(LaborLawProfileFactory::class)->getProfile();
+	$azcLawProfile = \OCP\Server::get(LaborLawProfileFactory::class)->getProfileForCurrentUser();
 } catch (\Throwable) {
 	$azcLawProfile = LaborLawProfileFactory::profileForCountry(RegionRegistry::COUNTRY_DE);
 }

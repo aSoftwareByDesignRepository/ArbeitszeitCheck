@@ -241,6 +241,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService::class),
 				$c->query(\OCP\IL10N::class),
 				$c->query(IDBConnection::class),
+				$c->query(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class),
 			);
 		});
 
@@ -563,6 +564,7 @@ class Application extends App implements IBootstrap {
 		$context->registerService(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class, function($c) {
 			return new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory(
 				$c->query(\OCP\IConfig::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class),
 			);
 		});
 

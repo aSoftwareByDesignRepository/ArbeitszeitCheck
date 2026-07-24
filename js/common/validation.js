@@ -630,10 +630,16 @@ const ArbeitszeitCheckValidation = {
   /**
    * Validate break times
    */
+  getMinBreakMinutes() {
+    const raw = Number(window.ArbeitszeitCheck?.complianceParams?.minBreakMinutes);
+    return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 15;
+  },
+
   validateBreak(breakStartTime, breakEndTime, workStartDateTime, workEndDateTime, _index = 0) {
     const errors = [];
     const l10n = window.ArbeitszeitCheck?.l10n || {};
-    const minBreakDurationMs = 15 * 60 * 1000; // 15 minutes
+    const minBreakMinutes = this.getMinBreakMinutes();
+    const minBreakDurationMs = minBreakMinutes * 60 * 1000;
 
     // If both empty, skip (optional field)
     if (!breakStartTime && !breakEndTime) {
@@ -673,12 +679,12 @@ const ArbeitszeitCheckValidation = {
       errors.push(l10n.breakEndBeforeStart || t('Break end time must be after break start time.'));
     }
 
-    // Validate minimum duration (15 minutes - ArbZG §4)
+    // Validate minimum duration (profile floor: DE/CH 15, AT 10)
     const breakDurationMs = breakEnd - breakStart;
     if (breakDurationMs < minBreakDurationMs) {
       errors.push(
-        l10n.breakTooShort ||
-        t('Break must be at least 15 minutes long to count toward the legal break requirement. Your break is {minutes} minutes.', { minutes: String(Math.round(breakDurationMs / 60000)) })
+        (l10n.breakTooShortProfile && t(l10n.breakTooShortProfile, { min: String(minBreakMinutes), minutes: String(Math.round(breakDurationMs / 60000)) })) ||
+        t('Break must be at least {min} minutes long to count toward the legal break requirement. Your break is {minutes} minutes.', { min: String(minBreakMinutes), minutes: String(Math.round(breakDurationMs / 60000)) })
       );
     }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use OCA\ArbeitszeitCheck\Service\IconCatalog;
 use OCA\ArbeitszeitCheck\Support\BadgeVariant;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 /**
  * Time Entries template for arbeitszeitcheck app
  *
@@ -470,6 +472,14 @@ require __DIR__ . '/common/user-display-timezone.php';
                             <?php
                             $existingBreaks = [];
                             $autoBreakFormEnabled = false;
+                            try {
+                                $azcBreakFormProfile = \OCP\Server::get(LaborLawProfileFactory::class)->getProfileForCurrentUser();
+                            } catch (\Throwable) {
+                                $azcBreakFormProfile = LaborLawProfileFactory::profileForCountry(RegionRegistry::COUNTRY_DE);
+                            }
+                            $minBreakDurationSeconds = ($entry instanceof \OCA\ArbeitszeitCheck\Db\TimeEntry)
+                                ? $entry->resolveCountableMinBreakMinutes() * 60
+                                : max(1, (int)$azcBreakFormProfile->minBreakMinutes) * 60;
                             if ($entry) {
                                 $breaksJson = $entry->getBreaks();
                                 if ($breaksJson !== null && $breaksJson !== '') {
@@ -482,7 +492,7 @@ require __DIR__ . '/common/user-display-timezone.php';
                                             $breakStart = (new \DateTime($break['start']))->setTimezone($arbeitszeitCheckUserDisplayTz);
                                             $breakEnd = (new \DateTime($break['end']))->setTimezone($arbeitszeitCheckUserDisplayTz);
                                             $breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-                                            if ($breakDurationSeconds < 900) {
+                                            if ($breakDurationSeconds < $minBreakDurationSeconds) {
                                                 continue;
                                             }
                                             $isAutomatic = !empty($break['automatic']);
@@ -502,7 +512,7 @@ require __DIR__ . '/common/user-display-timezone.php';
                                     $breakStart = (clone $entry->getBreakStartTime())->setTimezone($arbeitszeitCheckUserDisplayTz);
                                     $breakEnd = (clone $entry->getBreakEndTime())->setTimezone($arbeitszeitCheckUserDisplayTz);
                                     $breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-                                    if ($breakDurationSeconds >= 900) {
+                                    if ($breakDurationSeconds >= $minBreakDurationSeconds) {
                                         $existingBreaks[] = [
                                             'start' => $breakStart->format('H:i'),
                                             'end' => $breakEnd->format('H:i'),
@@ -519,10 +529,25 @@ require __DIR__ . '/common/user-display-timezone.php';
                             }
                             $_['timeEntryFormBreakIndex'] = count($existingBreaks);
                             $_['timeEntryFormAutoBreakEnabled'] = $autoBreakFormEnabled;
+
+                            $azcBreakIntroLines = [];
+                            foreach ($azcBreakFormProfile->breakTiersAscending() as $azcTier) {
+                                $azcAfterHours = (float)$azcTier['afterHours'];
+                                $azcHoursLabel = abs($azcAfterHours - (int)$azcAfterHours) < 0.001
+                                    ? (string)(int)$azcAfterHours
+                                    : rtrim(rtrim(number_format($azcAfterHours, 1, '.', ''), '0'), '.');
+                                $azcBreakIntroLines[] = $l->t(
+                                    'From %1$s hours of work: at least %2$d minutes break (%3$s)',
+                                    [$azcHoursLabel, (int)$azcTier['breakMinutes'], $azcBreakFormProfile->lawLabel('breaks')]
+                                );
+                            }
+                            $azcBreakIntroText = $azcBreakIntroLines !== []
+                                ? implode(' ', $azcBreakIntroLines) . ' ' . $l->t('Enable automatic breaks or add times yourself.')
+                                : $l->t('Enable automatic breaks or add times yourself.');
                             ?>
                             <div class="azc-callout azc-semantic-panel azc-semantic-panel--info time-entry-form__break-intro" role="note">
                                 <span class="azc-callout__icon azc-notif-icon-well" aria-hidden="true"><?php print_unescaped(IconCatalog::render('coffee', 'azc-callout__icon-svg')); ?></span>
-                                <p class="azc-callout__text"><?php p($l->t('German law: 30 min break from 6 h work, 45 min from 9 h. Enable automatic breaks or add times yourself.')); ?></p>
+                                <p class="azc-callout__text"><?php p($azcBreakIntroText); ?></p>
                             </div>
 
                             <div class="auto-break-panel <?php p($autoBreakFormEnabled ? 'auto-break-panel--enabled' : 'auto-break-panel--disabled'); ?> azc-callout azc-semantic-panel azc-semantic-panel--success"
@@ -648,7 +673,7 @@ require __DIR__ . '/common/user-display-timezone.php';
                                             <?php if ($breakIsAutomatic): ?>
                                                 <p class="form-help auto-break-note" role="status"><small><?php
 							try {
-								$azcBreakLaw = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)->getProfile()->lawLabel('breaks');
+								$azcBreakLaw = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)->getProfileForCurrentUser()->lawLabel('breaks');
 							} catch (\Throwable) {
 								$azcBreakLaw = 'ArbZG §4';
 							}
@@ -903,9 +928,9 @@ require __DIR__ . '/common/user-display-timezone.php';
                                                             $breakEndDisp = clone $breakEnd;
                                                             $breakEndDisp->setTimezone($arbeitszeitCheckUserDisplayTz);
 
-                                                            // Only include breaks that are at least 15 minutes (ArbZG §4)
+                                                            // Only include breaks that meet the profile countable floor (DE/CH 15, AT 10)
                                                             $breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-                                                            $minBreakDurationSeconds = 900; // 15 minutes
+                                                            $minBreakDurationSeconds = $entry->resolveCountableMinBreakMinutes() * 60;
 
                                                             if ($breakDurationSeconds >= $minBreakDurationSeconds) {
                                                                 $breakTimes[] = $breakStartDisp->format('H:i') . ' - ' . $breakEndDisp->format('H:i');
@@ -924,9 +949,9 @@ require __DIR__ . '/common/user-display-timezone.php';
                                                 $breakStart->setTimezone($arbeitszeitCheckUserDisplayTz);
                                                 $breakEnd->setTimezone($arbeitszeitCheckUserDisplayTz);
 
-                                                // Only include breaks that are at least 15 minutes (ArbZG §4)
+                                                // Only include breaks that meet the profile countable floor (DE/CH 15, AT 10)
                                                 $breakDurationSeconds = $entry->getBreakEndTime()->getTimestamp() - $entry->getBreakStartTime()->getTimestamp();
-                                                $minBreakDurationSeconds = 900; // 15 minutes
+                                                $minBreakDurationSeconds = $entry->resolveCountableMinBreakMinutes() * 60;
 
                                                 if ($breakDurationSeconds >= $minBreakDurationSeconds) {
                                                     $breakTimes[] = $breakStart->format('H:i') . ' - ' . $breakEnd->format('H:i');
@@ -1261,7 +1286,15 @@ require __DIR__ . '/common/user-display-timezone.php';
 
                     <fieldset class="correction-fieldset correction-fieldset--breaks" aria-labelledby="correction-breaks-heading">
                         <legend id="correction-breaks-heading" class="correction-dialog__section-title"><?php p($l->t('Breaks (optional)')); ?></legend>
-                        <p class="correction-dialog__block-hint"><?php p($l->t('Leave empty to keep current breaks. Each break must be at least 15 minutes and within working hours.')); ?></p>
+                        <?php
+                        try {
+                            $azcCorrectionMinBreak = \OCP\Server::get(LaborLawProfileFactory::class)->getProfileForCurrentUser()->minBreakMinutes;
+                        } catch (\Throwable) {
+                            $azcCorrectionMinBreak = 15;
+                        }
+                        $azcCorrectionMinBreak = max(1, (int)$azcCorrectionMinBreak);
+                        ?>
+                        <p class="correction-dialog__block-hint"><?php p($l->t('Leave empty to keep current breaks. Each break must be at least %d minutes and within working hours.', [$azcCorrectionMinBreak])); ?></p>
                         <p id="correction-breaks-empty" class="correction-breaks-empty"><?php p($l->t('No breaks added — current breaks will be kept.')); ?></p>
                             <p class="time-pair-matrix__intro time-pair-matrix__intro--breaks" id="correction-breaks-intro"><?php p($l->t('Break times')); ?></p>
                             <div class="time-pair-matrix time-pair-matrix--breaks" role="group" aria-labelledby="correction-breaks-intro">

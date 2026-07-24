@@ -245,26 +245,14 @@ class ComplianceServiceTest extends TestCase
 		$this->timeEntryMapper->method('findLastPausedWithinHours')
 			->willReturn(null);
 
-		$tz = new \DateTimeZone('Europe/Berlin');
-		$now = new \DateTime('now', $tz);
-		$dayStart = (clone $now)->setTime(0, 0, 0);
-		$hoursSinceMidnight = ($now->getTimestamp() - $dayStart->getTimestamp()) / 3600.0;
-		if ($hoursSinceMidnight < 10.2) {
-			$this->markTestSkipped('Need enough of the calendar day elapsed to build a >10h completed block ending in the past.');
-		}
+		// Decouple from wall-clock calendar clipping (midnight flake).
+		$dailyHours = $this->createMock(\OCA\ArbeitszeitCheck\Service\DailyWorkingHoursCalculator::class);
+		$dailyHours->method('getWorkingHoursForToday')->willReturn(10.5);
+		$ref = new \ReflectionClass($this->service);
+		$prop = $ref->getProperty('dailyWorkingHoursCalculator');
+		$prop->setAccessible(true);
+		$prop->setValue($this->service, $dailyHours);
 
-		// End in the past: future ends are clipped to "now" for §3 totals.
-		$end = (clone $now)->modify('-5 minutes');
-		$start = (clone $end)->modify('-10 hours -12 minutes');
-		$heavy = new TimeEntry();
-		$heavy->setId(99);
-		$heavy->setUserId($userId);
-		$heavy->setStatus(TimeEntry::STATUS_COMPLETED);
-		$heavy->setStartTime($start);
-		$heavy->setEndTime($end);
-		$heavy->setBreaks(json_encode([]));
-
-		$this->timeEntryMapper->method('findOverlapping')->willReturn([$heavy]);
 		$this->timeEntryMapper->expects($this->once())
 			->method('getTotalHoursByUserAndDateRange')
 			->willReturn(240.0);
@@ -1284,5 +1272,130 @@ class ComplianceServiceTest extends TestCase
 
 		$this->assertTrue($result['valid']);
 		$this->assertNull($result['message']);
+	}
+
+	public function testAustrianBreakAcceptsTwoTimesFifteenMinutes(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$timeEntry = new TimeEntry();
+		$timeEntry->setUserId('at-user');
+		$timeEntry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2024-01-15 15:00:00')); // 7h
+		$timeEntry->setBreaks(json_encode([
+			['start' => '2024-01-15T10:00:00+00:00', 'end' => '2024-01-15T10:15:00+00:00'],
+			['start' => '2024-01-15T12:00:00+00:00', 'end' => '2024-01-15T12:15:00+00:00'],
+		]));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
+	}
+
+	public function testAustrianBreakAcceptsThreeTimesTenMinutes(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$timeEntry = new TimeEntry();
+		$timeEntry->setUserId('at-user');
+		$timeEntry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2024-01-15 15:00:00'));
+		$timeEntry->setBreaks(json_encode([
+			['start' => '2024-01-15T09:00:00+00:00', 'end' => '2024-01-15T09:10:00+00:00'],
+			['start' => '2024-01-15T11:00:00+00:00', 'end' => '2024-01-15T11:10:00+00:00'],
+			['start' => '2024-01-15T13:00:00+00:00', 'end' => '2024-01-15T13:10:00+00:00'],
+		]));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
+	}
+
+	public function testAustrianBreakRejectsTwentyPlusTenWithoutWorksAgreementPattern(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$timeEntry = new TimeEntry();
+		$timeEntry->setUserId('at-user');
+		$timeEntry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2024-01-15 15:00:00'));
+		$timeEntry->setBreaks(json_encode([
+			['start' => '2024-01-15T10:00:00+00:00', 'end' => '2024-01-15T10:20:00+00:00'],
+			['start' => '2024-01-15T12:00:00+00:00', 'end' => '2024-01-15T12:10:00+00:00'],
+		]));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$issues = $this->service->blockingIssuesForCompletedEntry($timeEntry);
+		$this->assertNotEmpty($issues);
+		$this->assertStringContainsString('AZG §11', $issues[0]);
+	}
+
+	public function testAustrianBreakAcceptsContinuousThirtyMinutes(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$timeEntry = new TimeEntry();
+		$timeEntry->setUserId('at-user');
+		$timeEntry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2024-01-15 15:00:00'));
+		$timeEntry->setBreaks(json_encode([
+			['start' => '2024-01-15T12:00:00+00:00', 'end' => '2024-01-15T12:30:00+00:00'],
+		]));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
+	}
+
+	public function testPerUserLaborLawCountryUsesAustrianBreakRulesOnGermanInstance(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, string $default = ''): string {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return 'DE';
+				}
+				return $default;
+			}
+		);
+		$userSettings = $this->createMock(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class);
+		$userSettings->method('getStringSetting')->willReturnCallback(
+			static function (string $userId, string $key, string $default = '') {
+				if ($userId === 'commuter' && $key === \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY) {
+					return 'AT';
+				}
+				return $default;
+			}
+		);
+		$this->config = $config;
+		$this->timeZoneService = $this->buildTimeZoneService($this->config);
+		$dailyHoursCalculator = new \OCA\ArbeitszeitCheck\Service\DailyWorkingHoursCalculator(
+			$this->timeEntryMapper,
+			$this->timeZoneService,
+		);
+		$this->service = new ComplianceService(
+			$this->timeEntryMapper,
+			$this->violationMapper,
+			$this->workingTimeModelMapper,
+			$this->userWorkingTimeModelMapper,
+			$this->userManager,
+			$this->l10n,
+			$this->notificationService,
+			$this->holidayCalendarService,
+			$this->config,
+			$this->permissionService,
+			$this->timeZoneService,
+			$dailyHoursCalculator,
+			new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($this->config, $userSettings),
+		);
+
+		$timeEntry = new TimeEntry();
+		$timeEntry->setUserId('commuter');
+		$timeEntry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2024-01-15 18:30:00')); // 10.5h gross
+		$timeEntry->setBreaks(json_encode([
+			['start' => '2024-01-15T12:00:00+00:00', 'end' => '2024-01-15T12:30:00+00:00'],
+		]));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		// DE would require 45 min for >9h; AT only needs 30 — override must win.
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
 	}
 }

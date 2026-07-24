@@ -22,6 +22,7 @@ use OCA\ArbeitszeitCheck\BusinessRuleCode;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
+use OCA\ArbeitszeitCheck\Support\BreakCountable;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\IConfig;
 use OCP\IDBConnection;
@@ -95,16 +96,16 @@ class TimeTrackingService
 			$l10n,
 		);
 		$this->lawProfileFactory = $lawProfileFactory
-			?? new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($config);
+			?? new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($config, $userSettingsMapper);
 	}
 
 	/**
-	 * Instance-wide country working-time law profile (also consumed by the
-	 * dashboard widgets for law citations in labels).
+	 * Working-time law profile for the instance, or for a specific user when
+	 * an optional per-user labour-law country override is set (E-9).
 	 */
-	public function lawProfile(): \OCA\ArbeitszeitCheck\Support\LaborLawProfile
+	public function lawProfile(?string $userId = null): \OCA\ArbeitszeitCheck\Support\LaborLawProfile
 	{
-		return $this->lawProfileFactory->getProfile();
+		return $this->lawProfileFactory->getProfile($userId);
 	}
 
 	/**
@@ -373,7 +374,7 @@ class TimeTrackingService
 					throw new BusinessRuleException(
 						$this->l10n->t(
 							'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (%3$s).',
-							[(int)$maxDailyHours, $todayHours, $this->lawProfile()->lawLabel('daily')]
+							[(int)$maxDailyHours, $todayHours, $this->lawProfile($userId)->lawLabel('daily')]
 						),
 						BusinessRuleCode::DAILY_HOURS_LIMIT,
 					);
@@ -549,7 +550,7 @@ class TimeTrackingService
 			throw new BusinessRuleException(
 				$this->l10n->t(
 					'Cannot clock in: Maximum daily working hours (%1$dh) already reached. You have already worked %2$.1f hours today (%3$s).',
-					[(int)$maxDailyHours, $todayHours, $this->lawProfile()->lawLabel('daily')]
+					[(int)$maxDailyHours, $todayHours, $this->lawProfile($userId)->lawLabel('daily')]
 				),
 				BusinessRuleCode::DAILY_HOURS_LIMIT,
 			);
@@ -1042,15 +1043,16 @@ class TimeTrackingService
 
 	/**
 	 * Calculate required break duration based on working hours, using the
-	 * country profile's break tiers (DE ArbZG §4: 6h→30min, 9h→45min;
-	 * AT AZG §11: 6h→30min).
+	 * effective country profile for the user (E-9): DE ArbZG §4, AT AZG §11,
+	 * CH ArG Art. 15.
 	 *
 	 * @param float $hoursWorked Total hours worked today (including current session)
+	 * @param string|null $userId User whose labour-law country applies (null = instance)
 	 * @return int Required break duration in minutes
 	 */
-	public function calculateRequiredBreakMinutes(float $hoursWorked): int
+	public function calculateRequiredBreakMinutes(float $hoursWorked, ?string $userId = null): int
 	{
-		return $this->lawProfile()->requiredBreakMinutes($hoursWorked);
+		return $this->lawProfile($userId)->requiredBreakMinutes($hoursWorked);
 	}
 
 	/**
@@ -1123,8 +1125,8 @@ class TimeTrackingService
 			$timeEntry->getId(),
 		);
 
-		// Calculate required break based on peak calendar-day working hours (ArbZG §4)
-		$requiredBreakMinutes = $this->calculateRequiredBreakMinutes($totalWorkingHoursForDay);
+		// Peak calendar-day working hours → required break for this user's law profile
+		$requiredBreakMinutes = $this->calculateRequiredBreakMinutes($totalWorkingHoursForDay, $userId);
 
 		// If no break is required, nothing to do
 		if ($requiredBreakMinutes <= 0) {
@@ -1152,7 +1154,7 @@ class TimeTrackingService
 			'end' => $breakEndTime->format('c'),
 			'duration_minutes' => $requiredBreakMinutes,
 			'automatic' => true, // Mark as automatically generated
-			'reason' => $this->l10n->t('Automatically added: Legal break requirement (%s)', [$this->lawProfile()->lawLabel('breaks')])
+			'reason' => $this->l10n->t('Automatically added: Legal break requirement (%s)', [$this->lawProfile($userId)->lawLabel('breaks')])
 		];
 
 		$timeEntry->setBreaks(json_encode($breaks));
@@ -1227,14 +1229,14 @@ class TimeTrackingService
 
 		if ($totalDailyWorkingHours >= $maxWorkingHours) {
 			$oldValues = $timeEntry->getSummary();
-			$oldValues['_reason'] = $this->lawProfile()->lawLabel('daily') . ': Auto-completing due to daily maximum (' . (int)$maxWorkingHours . 'h)';
+			$oldValues['_reason'] = $this->lawProfile($userId)->lawLabel('daily') . ': Auto-completing due to daily maximum (' . (int)$maxWorkingHours . 'h)';
 
 			// Maximum working hours this session may still add on today's calendar day.
 			$maxAllowedWorkingHoursForEntry = max(0, $maxWorkingHours - $totalWorkingHoursFromPreviousEntries);
 			
 			// End instant on today's calendar day (not from original clock-in if that was yesterday).
 			$totalDailyWorkingHoursWithThisEntry = $totalWorkingHoursFromPreviousEntries + $maxAllowedWorkingHoursForEntry;
-			$requiredBreakMinutes = $this->calculateRequiredBreakMinutes($totalDailyWorkingHoursWithThisEntry);
+			$requiredBreakMinutes = $this->calculateRequiredBreakMinutes($totalDailyWorkingHoursWithThisEntry, $userId);
 
 			if ($maxAllowedWorkingHoursForEntry <= 0) {
 				$newEndTime = (new \DateTime())->setTimestamp($entryStartOnDayTs);
@@ -1292,7 +1294,7 @@ class TimeTrackingService
 			]);
 
 			$newValues = $timeEntry->getSummary();
-			$newValues['_reason'] = $this->lawProfile()->lawLabel('daily') . ': Auto-completed at daily maximum (' . (int)$maxWorkingHours . 'h)';
+			$newValues['_reason'] = $this->lawProfile($userId)->lawLabel('daily') . ': Auto-completed at daily maximum (' . (int)$maxWorkingHours . 'h)';
 			$this->auditLogMapper->logAction(
 				$userId,
 				'time_entry_auto_completed_daily_max',
@@ -1421,11 +1423,11 @@ class TimeTrackingService
 			// getTodayHours already includes active session duration if a session is running.
 			$hoursWorked = $this->getTodayHours($userId);
 
-			$requiredBreak = $this->calculateRequiredBreakMinutes($hoursWorked);
+			$requiredBreak = $this->calculateRequiredBreakMinutes($hoursWorked, $userId);
 			$takenBreak = $this->calculateTakenBreakMinutes($userId);
 			$remainingBreak = max(0, $requiredBreak - $takenBreak);
 			
-			$warningLevel = $this->getBreakWarningLevel($hoursWorked, $takenBreak, $requiredBreak);
+			$warningLevel = $this->getBreakWarningLevel($hoursWorked, $takenBreak, $requiredBreak, $userId);
 			
 			return [
 				'hours_worked' => round($hoursWorked, 2),
@@ -1456,7 +1458,12 @@ class TimeTrackingService
 	 *
 	 * @return string Warning level: 'none', 'info', 'warning', 'critical'
 	 */
-	private function getBreakWarningLevel(float $hoursWorked, float $takenBreak, int $requiredBreak): string
+	private function getBreakWarningLevel(
+		float $hoursWorked,
+		float $takenBreak,
+		int $requiredBreak,
+		?string $userId = null,
+	): string
 	{
 		if ($requiredBreak === 0) {
 			return 'none';
@@ -1467,14 +1474,15 @@ class TimeTrackingService
 			return 'none';
 		}
 
-		$tiers = $this->lawProfile()->breakTiersAscending();
+		$tiers = $this->lawProfile($userId)->breakTiersAscending();
 		if ($tiers === []) {
 			return 'info';
 		}
 
 		$lowest = $tiers[0];
 		$highest = $tiers[count($tiers) - 1];
-		$minChunk = max(15, (int)floor($highest['breakMinutes'] / 2));
+		$minBreakFloor = max(1, $this->lawProfile($userId)->minBreakMinutes);
+		$minChunk = max($minBreakFloor, (int)floor($highest['breakMinutes'] / 2));
 
 		// Critical: at/past the highest tier and still missing a meaningful chunk.
 		if ($hoursWorked >= $highest['afterHours'] && $remainingBreak >= $minChunk) {
@@ -1483,7 +1491,7 @@ class TimeTrackingService
 
 		// Warning: at/past the lowest tier with a meaningful deficit, or within
 		// 30 minutes of the next (higher) tier when that tier's break is already required.
-		if ($hoursWorked >= $lowest['afterHours'] && $remainingBreak >= 15) {
+		if ($hoursWorked >= $lowest['afterHours'] && $remainingBreak >= $minBreakFloor) {
 			return 'warning';
 		}
 		if (count($tiers) > 1
@@ -1619,7 +1627,7 @@ class TimeTrackingService
 				'Session was automatically completed at %1$s because the maximum daily working hours were reached (%2$s).',
 				[
 					$this->timeZoneService->formatForDisplay($now, 'd.m.Y H:i', $userId),
-					$this->lawProfile()->lawLabel('daily'),
+					$this->lawProfile($userId)->lawLabel('daily'),
 				]
 			);
 			$this->config->setUserValue($userId, 'arbeitszeitcheck', 'auto_clockout_notice', json_encode([
@@ -1920,6 +1928,9 @@ class TimeTrackingService
 					);
 				}
 
+				$entry->setCountableMinBreakMinutes(
+					BreakCountable::minMinutes($this->lawProfileFactory->getProfile($userId)->minBreakMinutes)
+				);
 				$errors = $entry->validate();
 				if (!empty($errors)) {
 					throw new BusinessRuleException($this->l10n->t('Validation failed: %s', [implode('; ', array_map('strval', $errors))]));

@@ -6,8 +6,24 @@
 	const Components = window.ArbeitszeitCheckComponents || {};
 	const cfg = window.ArbeitszeitCheck || {};
 	const MODAL_ID = 'time-entry-correction-modal';
-	const MIN_BREAK_SECONDS = 900;
 	const MIN_JUSTIFICATION_LENGTH = 10;
+
+	function resolveMinBreakSeconds(overrideMinutes) {
+		const ClockForm = window.ArbeitszeitCheckClockForm;
+		if (ClockForm && typeof ClockForm.resolveMinBreakSeconds === 'function') {
+			return ClockForm.resolveMinBreakSeconds(overrideMinutes);
+		}
+		const Validation = window.ArbeitszeitCheckValidation;
+		if (Validation && typeof Validation.getMinBreakMinutes === 'function' && overrideMinutes === undefined) {
+			return Validation.getMinBreakMinutes() * 60;
+		}
+		const fromOverride = Number(overrideMinutes);
+		if (Number.isFinite(fromOverride) && fromOverride > 0) {
+			return Math.round(fromOverride) * 60;
+		}
+		const raw = Number(cfg.complianceParams?.minBreakMinutes);
+		return (Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 15) * 60;
+	}
 
 	let correctionFormTemplate = null;
 	let wizardBound = false;
@@ -543,7 +559,12 @@
 					bEnd += 86400000;
 				}
 				const durationSec = (bEnd - bStart) / 1000;
-				if (durationSec < MIN_BREAK_SECONDS) {
+				const minBreakSeconds = resolveMinBreakSeconds(
+					wizardState && wizardState.minBreakMinutes !== undefined
+						? wizardState.minBreakMinutes
+						: undefined
+				);
+				if (durationSec < minBreakSeconds) {
 					return t('correctionErrorBreakMinDuration');
 				}
 				if (bStart < startMs || bEnd > endMs) {
@@ -666,6 +687,7 @@
 		wizardState = {
 			statusEl,
 			originalSummary: null,
+			minBreakMinutes: undefined,
 			resetForm: resetFormFields,
 			openWizard(summary) {
 				const modalEl = ensureCorrectionModal();
@@ -675,6 +697,9 @@
 				}
 
 				wizardState.originalSummary = summary;
+				wizardState.minBreakMinutes = summary && summary.minBreakMinutes !== undefined
+					? summary.minBreakMinutes
+					: undefined;
 
 				if (entryIdInput) {
 					entryIdInput.value = String(summary.id || '');

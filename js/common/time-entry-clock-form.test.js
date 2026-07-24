@@ -104,4 +104,105 @@ describe('ArbeitszeitCheckClockForm', () => {
     expect(result.payload.endTime).toBe('17:00')
     expect(result.payload.reason).toBe('Adjusted after audit review.')
   })
+
+  it('accepts AZG 10-minute break portions when minBreakMinutes is 10', () => {
+    window.ArbeitszeitCheck = {
+      complianceParams: { minBreakMinutes: 10 },
+    }
+    const ClockForm = window.ArbeitszeitCheckClockForm
+    const idPrefix = 'test-at-break'
+    const root = document.createElement('div')
+    root.innerHTML = ClockForm.buildFormHtml(idPrefix, {
+      intro: 'Intro',
+      workingDayLegend: 'Day',
+      date: 'Date',
+      required: 'required',
+      datePlaceholder: 'dd.mm.yyyy',
+      today: 'Today',
+      dateHelp: 'Help',
+      workingHours: 'Working Hours',
+      startTime: 'Start Time',
+      endTime: 'End Time',
+      start: 'Start',
+      end: 'End',
+      nightShiftHint: 'Night',
+      breaksOptional: 'Breaks',
+      breaksHelp: 'Break help',
+      breaksEmpty: 'No breaks',
+      actions: 'Actions',
+      addBreak: 'Add break',
+      reason: 'Reason',
+      reasonHelp: 'Reason help',
+      breakTooShort: 'Each break must be at least 10 minutes.',
+      invalidWorkTimes: 'invalid work',
+      invalidBreakTimes: 'invalid break',
+      breakOutsideWork: 'outside',
+      breaksOverlap: 'overlap',
+      reasonRequired: 'reason',
+      invalidDate: 'date',
+    })
+    document.body.appendChild(root)
+
+    const api = ClockForm.bindForm(root, idPrefix, {
+      startTime: '2026-05-20T08:00:00+02:00',
+      endTime: '2026-05-20T16:00:00+02:00',
+      breaks: [{ start: '12:00', end: '12:10' }],
+      minBreakMinutes: 10,
+    }, (key, fallback) => fallback || key)
+
+    root.querySelector('#' + idPrefix + '-reason').value = 'AZG three-times-ten pattern check.'
+    const result = api.validateAndCollect()
+    expect(result.ok).toBe(true)
+    expect(result.payload.breaks).toEqual([{ start: '12:00', end: '12:10' }])
+  })
+
+  it('rejects 10-minute breaks when floor stays at DE 15', () => {
+    window.ArbeitszeitCheck = {
+      complianceParams: { minBreakMinutes: 15 },
+    }
+    const ClockForm = window.ArbeitszeitCheckClockForm
+    const idPrefix = 'test-de-break'
+    const root = document.createElement('div')
+    root.innerHTML = ClockForm.buildFormHtml(idPrefix, {
+      intro: 'Intro',
+      workingDayLegend: 'Day',
+      date: 'Date',
+      required: 'required',
+      datePlaceholder: 'dd.mm.yyyy',
+      today: 'Today',
+      dateHelp: 'Help',
+      workingHours: 'Working Hours',
+      startTime: 'Start Time',
+      endTime: 'End Time',
+      start: 'Start',
+      end: 'End',
+      nightShiftHint: 'Night',
+      breaksOptional: 'Breaks',
+      breaksHelp: 'Break help',
+      breaksEmpty: 'No breaks',
+      actions: 'Actions',
+      addBreak: 'Add break',
+      reason: 'Reason',
+      reasonHelp: 'Reason help',
+      breakTooShort: 'Each break must be at least 15 minutes.',
+      invalidWorkTimes: 'invalid work',
+      invalidBreakTimes: 'invalid break',
+      breakOutsideWork: 'outside',
+      breaksOverlap: 'overlap',
+      reasonRequired: 'reason',
+      invalidDate: 'date',
+    })
+    document.body.appendChild(root)
+
+    const api = ClockForm.bindForm(root, idPrefix, {
+      startTime: '2026-05-20T08:00:00+02:00',
+      endTime: '2026-05-20T16:00:00+02:00',
+      breaks: [{ start: '12:00', end: '12:10' }],
+    }, (key, fallback) => fallback || key)
+
+    root.querySelector('#' + idPrefix + '-reason').value = 'Should fail under ArbZG floor.'
+    const result = api.validateAndCollect()
+    expect(result.ok).toBe(false)
+    expect(String(result.error)).toMatch(/15/)
+  })
 })

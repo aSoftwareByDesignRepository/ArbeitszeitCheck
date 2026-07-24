@@ -337,11 +337,13 @@
 
 
     function userDetailUrl(userId) {
-        const tpl = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminUsersConfig
-            && window.ArbeitszeitCheck.adminUsersConfig.userDetailUrlTemplate)
-            || '/apps/arbeitszeitcheck/admin/users/__USER_ID__';
-        const path = String(tpl).split('__USER_ID__').join(encodeURIComponent(String(userId || '')));
-        return buildApiUrl(path);
+        const encodedId = encodeURIComponent(String(userId || ''));
+        const tpl = window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminUsersConfig
+            && window.ArbeitszeitCheck.adminUsersConfig.userDetailUrlTemplate;
+        if (tpl) {
+            return buildApiUrl(String(tpl).split('__USER_ID__').join(encodedId));
+        }
+        return buildApiUrl('/apps/arbeitszeitcheck/admin/users/' + encodedId);
     }
 
 

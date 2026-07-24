@@ -425,7 +425,7 @@ class TimeTrackingServiceTest extends TestCase {
 		$this->assertSame(TimeEntry::STATUS_ACTIVE, $result->getStatus());
 	}
 
-	public function testClockInResumeFailsWhenMaxDailyHoursWouldBeExceeded(): void
+	public function testClockInFailsWhenMaxDailyHoursAlreadyReached(): void
 	{
 		$userId = 'testuser';
 
@@ -433,36 +433,18 @@ class TimeTrackingServiceTest extends TestCase {
 		$this->timeEntryMapper->method('findOnBreakByUser')->willReturn(null);
 		$this->timeEntryMapper->method('findPausedOrUnfinishedTodayByUser')->willReturn(null);
 
-		$start = (new \DateTime())->setTime(9, 0, 0);
-		$pausedAt = (new \DateTime())->setTime(18, 0, 0); // 9 hours duration
-
-		$pausedEntry = new TimeEntry();
-		$pausedEntry->setId(123);
-		$pausedEntry->setUserId($userId);
-		$pausedEntry->setStatus(TimeEntry::STATUS_PAUSED);
-		$pausedEntry->setStartTime($start);
-		$pausedEntry->setUpdatedAt($pausedAt);
-		$pausedEntry->setBreaks('');
-		$pausedEntry->setIsManualEntry(false);
-		$pausedEntry->setCreatedAt(new \DateTime());
-
-		$tz = new \DateTimeZone('Europe/Berlin');
-		$now = new \DateTime('now', $tz);
-		// Fully completed span ending in the past so daily-hours clipping does not shrink it.
-		$end = (clone $now)->modify('-30 minutes');
-		$startHeavy = (clone $end)->modify('-10 hours -30 minutes');
-		$heavy = new TimeEntry();
-		$heavy->setId(1);
-		$heavy->setUserId($userId);
-		$heavy->setStatus(TimeEntry::STATUS_COMPLETED);
-		$heavy->setStartTime($startHeavy);
-		$heavy->setEndTime($end);
-		$heavy->setBreaks(json_encode([]));
-		$this->timeEntryMapper->method('findOverlapping')->willReturn([$heavy]);
+		// Decouple from wall-clock calendar clipping (midnight flake): assert the
+		// clock-in gate against an already-reached daily total.
+		$dailyHours = $this->createMock(DailyWorkingHoursCalculator::class);
+		$dailyHours->method('getWorkingHoursForToday')->willReturn(10.5);
+		$ref = new \ReflectionClass($this->service);
+		$prop = $ref->getProperty('dailyWorkingHoursCalculator');
+		$prop->setAccessible(true);
+		$prop->setValue($this->service, $dailyHours);
 
 		$this->l10n->method('t')->willReturnCallback(static fn ($s) => $s);
 
-		$this->expectException(\Exception::class);
+		$this->expectException(BusinessRuleException::class);
 		$this->expectExceptionMessage('Maximum daily working hours');
 
 		$this->service->clockIn($userId);

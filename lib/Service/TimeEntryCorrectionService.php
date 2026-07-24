@@ -9,6 +9,8 @@ use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
 use OCA\ArbeitszeitCheck\Service\AppLocalNaiveDateTimeNormalizer;
+use OCA\ArbeitszeitCheck\Support\BreakCountable;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\IConfig;
 use OCP\IL10N;
 
@@ -28,7 +30,18 @@ class TimeEntryCorrectionService
 		private readonly IL10N $l10n,
 		private readonly ProjectCheckIntegrationService $projectCheckIntegration,
 		private readonly ProjectCheckLaborTimeSyncService $projectCheckLaborSync,
+		private readonly ?LaborLawProfileFactory $lawProfileFactory = null,
 	) {
+	}
+
+	private function countableMinBreakMinutes(TimeEntry $entry): int
+	{
+		try {
+			$factory = $this->lawProfileFactory ?? \OCP\Server::get(LaborLawProfileFactory::class);
+			return BreakCountable::minMinutes($factory->getProfile($entry->getUserId())->minBreakMinutes);
+		} catch (\Throwable) {
+			return BreakCountable::DEFAULT_MIN_MINUTES;
+		}
 	}
 
 	public function applyProposal(TimeEntry $entry, array $proposal): void
@@ -85,7 +98,7 @@ class TimeEntryCorrectionService
 	 * Semantics (explicit so the auditor can read it once and trust it):
 	 *  - An empty input list clears all break fields.
 	 *  - Each break must have `start`/`end` (or legacy `start_time`/`end_time`).
-	 *  - Items shorter than 15 minutes (ArbZG §4) are dropped silently.
+	 *  - Items shorter than the profile floor (DE/CH 15, AT 10) are dropped silently.
 	 *  - If after filtering the list is empty, all break fields are cleared too —
 	 *    this matches the user's intent ("I sent breaks; none survived validation"),
 	 *    avoids leaving stale legacy fields, and is symmetric with the empty-input case.
@@ -94,6 +107,7 @@ class TimeEntryCorrectionService
 	 */
 	private function applyBreaksJson(TimeEntry $entry, array $breaks): void
 	{
+		$minSeconds = BreakCountable::minSeconds($this->countableMinBreakMinutes($entry));
 		$validBreaks = [];
 		foreach ($breaks as $break) {
 			if (!is_array($break)) {
@@ -111,7 +125,7 @@ class TimeEntryCorrectionService
 					$breakEnd->modify('+1 day');
 				}
 				$durationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-				if ($durationSeconds >= 900) {
+				if ($durationSeconds >= $minSeconds) {
 					$validBreaks[] = [
 						'start' => $breakStart->format('c'),
 						'end' => $breakEnd->format('c'),
@@ -171,10 +185,18 @@ class TimeEntryCorrectionService
 			}
 		}
 
-		$errors = $candidate->validate();
+		$errors = $candidate->validate($this->countableMinBreakMinutes($candidate));
 		if ($errors !== []) {
 			$firstError = reset($errors);
 			return $this->l10n->t((string)$firstError);
+		}
+
+		// Fail-closed labour-law break gate (ArbZG §4 / AZG §11 splits / ArG Art. 15).
+		// Same gate as employee portal saves — manager create/correct and correction
+		// approve must not persist illegal AT splits (e.g. 20+10).
+		$blocking = $this->complianceService->blockingIssuesForCompletedEntry($candidate);
+		if ($blocking !== []) {
+			return (string)$blocking[0];
 		}
 
 		if ($this->projectCheckIntegration->isProjectCheckAvailable()) {

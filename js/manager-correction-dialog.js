@@ -235,8 +235,11 @@
 			startTime: summary.startTime,
 			endTime: summary.endTime,
 			breaks: summary.breaks || [],
+			minBreakMinutes: summary.minBreakMinutes,
 		};
-		const formApi = ClockForm.bindForm(modal, idPrefix, initial, t);
+		const formApi = ClockForm.bindForm(modal, idPrefix, initial, t, {
+			minBreakMinutes: summary.minBreakMinutes,
+		});
 
 		if (projectSelect && !projectOptionsReady && saveBtn) {
 			saveBtn.disabled = true;

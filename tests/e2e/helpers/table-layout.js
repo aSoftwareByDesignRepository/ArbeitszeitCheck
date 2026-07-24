@@ -27,9 +27,22 @@ export async function collectDesktopTableMetrics(page, tableSelector) {
 		const shellStyle = window.getComputedStyle(shell)
 		const thead = table.querySelector('thead')
 		const theadStyle = thead ? window.getComputedStyle(thead) : null
-		const actionBtn = table.querySelector(
-			'td.actions-cell .btn, td.azc-table-actions-col .btn, .azc-table-actions .btn',
-		)
+		// Prefer desktop panel buttons; skip mobile-only toggles that are
+		// display:none above the card breakpoint (otherwise metrics always fail).
+		const actionCandidates = [
+			...table.querySelectorAll(
+				'td.actions-cell .azc-table-actions .btn, td.azc-table-actions-col .btn, .azc-table-actions .btn, td.actions-cell .btn',
+			),
+		]
+		const isLaidOut = (el) => {
+			const cs = window.getComputedStyle(el)
+			const r = el.getBoundingClientRect()
+			return cs.display !== 'none'
+				&& cs.visibility !== 'hidden'
+				&& r.width > 0
+				&& r.height > 0
+		}
+		const actionBtn = actionCandidates.find(isLaidOut) || null
 
 		const shellRect = shell.getBoundingClientRect()
 		const containerRect = container.getBoundingClientRect()

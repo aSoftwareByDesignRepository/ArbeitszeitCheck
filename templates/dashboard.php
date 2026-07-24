@@ -25,7 +25,7 @@ $weekOvertime = is_array($_['weekOvertime'] ?? null) ? $_['weekOvertime'] : [];
 $overtimeBank = is_array($_['overtimeBank'] ?? null) ? $_['overtimeBank'] : ['enabled' => false];
 $overtimeTrafficLight = is_array($_['overtimeTrafficLight'] ?? null) ? $_['overtimeTrafficLight'] : ['enabled' => false, 'state' => 'green'];
 try {
-	$azcMaxDefault = (string)\OCP\Server::get(LaborLawProfileFactory::class)->getProfile()->dailyMaxHoursDefault;
+	$azcMaxDefault = (string)\OCP\Server::get(LaborLawProfileFactory::class)->getProfileForCurrentUser()->dailyMaxHoursDefault;
 } catch (\Throwable) {
 	$azcMaxDefault = '10';
 }
@@ -858,9 +858,9 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                             $breakEnd = clone $entry->getBreakEndTime();
                                             $breakEnd->setTimezone($arbeitszeitCheckUserDisplayTz);
 
-                                            // Only include breaks that are at least 15 minutes (ArbZG §4)
+                                            // Only include breaks that meet the profile countable floor (DE/CH 15, AT 10)
                                             $breakDurationSeconds = $entry->getBreakEndTime()->getTimestamp() - $entry->getBreakStartTime()->getTimestamp();
-                                            $minBreakDurationSeconds = 900; // 15 minutes
+                                            $minBreakDurationSeconds = $entry->resolveCountableMinBreakMinutes() * 60;
 
                                             if ($breakDurationSeconds >= $minBreakDurationSeconds) {
                                                 $breakTimes[] = $breakStart->format('H:i') . ' - ' . $breakEnd->format('H:i');

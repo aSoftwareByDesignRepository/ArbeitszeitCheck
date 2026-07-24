@@ -283,10 +283,7 @@ class TimeEntryFormManager {
 			}
 
 			const workDurationHours = workDurationMs / (1000 * 60 * 60);
-			const requiredBreakMinutes = (typeof ArbeitszeitCheckValidation !== 'undefined'
-				&& typeof ArbeitszeitCheckValidation.calculateRequiredBreakMinutes === 'function')
-				? ArbeitszeitCheckValidation.calculateRequiredBreakMinutes(workDurationHours)
-				: this.requiredBreakMinutesFromProfile(workDurationHours);
+			const requiredBreakMinutes = this.resolveRequiredBreakMinutes(workDurationHours);
 
 			if (requiredBreakMinutes === 0) {
 				this.removeAutoAddedBreaks();
@@ -306,6 +303,18 @@ class TimeEntryFormManager {
 		} catch (error) {
 			console.warn('Error in auto-break calculation:', error);
 		}
+	}
+
+	/**
+	 * Required break minutes for the shift, preferring the shared validation
+	 * module (same complianceParams source) with the local profile fallback.
+	 */
+	resolveRequiredBreakMinutes(workingHours) {
+		const validation = window.ArbeitszeitCheckValidation;
+		if (validation && typeof validation.calculateRequiredBreakMinutes === 'function') {
+			return validation.calculateRequiredBreakMinutes(workingHours);
+		}
+		return this.requiredBreakMinutesFromProfile(workingHours);
 	}
 
 	requiredBreakMinutesFromProfile(workingHours) {
@@ -331,7 +340,8 @@ class TimeEntryFormManager {
 
 		let totalBreakMinutes = 0;
 		const breakEntries = this.breaksContainer.querySelectorAll('.break-entry:not([data-auto-break])');
-		const minBreakMs = 15 * 60 * 1000;
+		const minBreakMinutes = Number(window.ArbeitszeitCheck?.complianceParams?.minBreakMinutes);
+		const minBreakMs = (Number.isFinite(minBreakMinutes) && minBreakMinutes > 0 ? minBreakMinutes : 15) * 60 * 1000;
 
 		breakEntries.forEach((breakEntry) => {
 			try {
@@ -993,7 +1003,8 @@ class TimeEntryFormManager {
 			// Calculate breaks
 			const breaks = [];
 			const breakEntries = this.breaksContainer ? this.breaksContainer.querySelectorAll('.break-entry') : [];
-			const minBreakDurationMs = 15 * 60 * 1000;
+			const profileMinBreak = Number(window.ArbeitszeitCheck?.complianceParams?.minBreakMinutes);
+			const minBreakDurationMs = (Number.isFinite(profileMinBreak) && profileMinBreak > 0 ? profileMinBreak : 15) * 60 * 1000;
 
 			breakEntries.forEach((breakEntry) => {
 				try {
@@ -1013,7 +1024,7 @@ class TimeEntryFormManager {
 
 						const breakDurationMs = breakEnd - breakStart;
 
-						// Only include valid breaks (minimum 15 minutes)
+						// Only include countable breaks (profile floor: DE/CH 15, AT 10).
 						if (breakDurationMs >= minBreakDurationMs && breakDurationMs > 0) {
 							breaks.push({
 								start: breakStart.toISOString(),
@@ -1086,10 +1097,7 @@ class TimeEntryFormManager {
 	updateComplianceStatus(workingHours, breakHours) {
 		if (!this.complianceStatus) return;
 
-		const requiredBreakMinutes = (typeof ArbeitszeitCheckValidation !== 'undefined'
-			&& typeof ArbeitszeitCheckValidation.calculateRequiredBreakMinutes === 'function')
-			? ArbeitszeitCheckValidation.calculateRequiredBreakMinutes(workingHours)
-			: this.requiredBreakMinutesFromProfile(workingHours);
+		const requiredBreakMinutes = this.resolveRequiredBreakMinutes(workingHours);
 		const requiredBreakHours = requiredBreakMinutes / 60;
 		const hasRequiredBreak = breakHours >= requiredBreakHours;
 
@@ -1118,10 +1126,7 @@ class TimeEntryFormManager {
 			const hasAutoBreak = this.breaksContainer
 				? this.breaksContainer.querySelector('.break-entry[data-auto-break]')
 				: false;
-			const requiredMinutes = (typeof ArbeitszeitCheckValidation !== 'undefined'
-				&& typeof ArbeitszeitCheckValidation.calculateRequiredBreakMinutes === 'function')
-				? ArbeitszeitCheckValidation.calculateRequiredBreakMinutes(workingHours)
-				: this.requiredBreakMinutesFromProfile(workingHours);
+			const requiredMinutes = this.resolveRequiredBreakMinutes(workingHours);
 
 			if (requiredMinutes <= 0) {
 				statusText = t('complianceShortShift');
@@ -1399,10 +1404,7 @@ class TimeEntryFormManager {
 			return;
 		}
 
-		const requiredMinutes = (typeof ArbeitszeitCheckValidation !== 'undefined'
-			&& typeof ArbeitszeitCheckValidation.calculateRequiredBreakMinutes === 'function')
-			? ArbeitszeitCheckValidation.calculateRequiredBreakMinutes(workingHours)
-			: this.requiredBreakMinutesFromProfile(workingHours);
+		const requiredMinutes = this.resolveRequiredBreakMinutes(workingHours);
 
 		let requirementText = '';
 		if (requiredMinutes <= 0) {

@@ -121,7 +121,7 @@ $currentYear = date('Y');
                     <h3 class="footer__section-title"><?php p($l->t('Legal and compliance')); ?></h3>
                     <?php
                     try {
-                        $azcFooterProfile = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)->getProfile();
+                        $azcFooterProfile = \OCP\Server::get(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class)->getProfileForCurrentUser();
                     } catch (\Throwable) {
                         $azcFooterProfile = \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry('DE');
                     }

@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Db;
 
+use OCA\ArbeitszeitCheck\Support\BreakCountable;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\AppFramework\Db\Entity;
 
 /**
@@ -132,6 +134,13 @@ class TimeEntry extends Entity
 	protected $approvedAt;
 
 	/**
+	 * Not persisted. Profile floor for countable breaks (DE/CH 15, AT 10).
+	 * When null, {@see resolveCountableMinBreakMinutes()} uses the profile
+	 * for this entry's user when the container is available, else 15.
+	 */
+	private ?int $countableMinBreakMinutes = null;
+
+	/**
 	 * TimeEntry constructor
 	 */
 	public function __construct()
@@ -155,6 +164,47 @@ class TimeEntry extends Entity
 		$this->addType('approvedBy', 'integer');
 		$this->addType('approvedByUserId', 'string');
 		$this->addType('approvedAt', 'datetime');
+	}
+
+	/**
+	 * Pin the countable break floor for this in-memory instance (AT: 10, DE/CH: 15).
+	 */
+	public function setCountableMinBreakMinutes(?int $minutes): void
+	{
+		$this->countableMinBreakMinutes = ($minutes === null || $minutes <= 0)
+			? null
+			: $minutes;
+	}
+
+	public function getCountableMinBreakMinutes(): ?int
+	{
+		return $this->countableMinBreakMinutes;
+	}
+
+	/**
+	 * Effective minimum break length in minutes for validate/duration filters.
+	 */
+	public function resolveCountableMinBreakMinutes(): int
+	{
+		if ($this->countableMinBreakMinutes !== null && $this->countableMinBreakMinutes > 0) {
+			return $this->countableMinBreakMinutes;
+		}
+
+		$userId = $this->userId ?? null;
+		if (is_string($userId) && $userId !== '') {
+			try {
+				$factory = \OCP\Server::get(LaborLawProfileFactory::class);
+				$minutes = $factory->getProfile($userId)->minBreakMinutes;
+				if ($minutes > 0) {
+					$this->countableMinBreakMinutes = $minutes;
+					return $minutes;
+				}
+			} catch (\Throwable) {
+				// Unit tests / early bootstrap — fall through to DE default.
+			}
+		}
+
+		return BreakCountable::DEFAULT_MIN_MINUTES;
 	}
 
 	/**
@@ -195,24 +245,23 @@ class TimeEntry extends Entity
 
 	/**
 	 * Get the break duration in hours (including all breaks)
-	 * 
-	 * IMPORTANT: According to ArbZG §4, only breaks of at least 15 minutes count
-	 * toward the legal break requirement. Breaks shorter than 15 minutes are
-	 * excluded from the calculation.
-	 * 
-	 * This method correctly handles overlapping breaks by merging them.
-	 * Overlapping time periods are counted only once, not multiple times.
 	 *
-	 * @param bool $countOnlyValidBreaks If true, only breaks >= 15 minutes count (ArbZG §4). Default: true.
+	 * When $countOnlyValidBreaks is true, only portions at least
+	 * {@see resolveCountableMinBreakMinutes()} long count (DE/CH: 15, AT: 10).
+	 * Overlapping periods are merged so overlap is not double-counted.
+	 *
+	 * @param bool $countOnlyValidBreaks If true, apply the profile countable floor. Default: true.
+	 * @param int|null $minBreakMinutes Explicit floor; null uses the resolved profile floor.
 	 * @return float
 	 */
-	public function getBreakDurationHours(bool $countOnlyValidBreaks = true): float
+	public function getBreakDurationHours(bool $countOnlyValidBreaks = true, ?int $minBreakMinutes = null): float
 	{
 		$breakPeriods = [];
-		
-		// Minimum break duration in seconds (15 minutes = 900 seconds) - ArbZG §4
-		$minBreakDurationSeconds = $countOnlyValidBreaks ? 900 : 0;
-		
+
+		$minBreakDurationSeconds = $countOnlyValidBreaks
+			? BreakCountable::minSeconds($minBreakMinutes ?? $this->resolveCountableMinBreakMinutes())
+			: 0;
+
 		// Collect all break periods from stored breaks (JSON)
 		if ($this->breaks !== null && $this->breaks !== '') {
 			$breaks = json_decode($this->breaks, true) ?? [];
@@ -225,8 +274,7 @@ class TimeEntry extends Entity
 						continue; // Skip invalid break date strings
 					}
 					$durationSeconds = $end->getTimestamp() - $start->getTimestamp();
-					
-					// Only include breaks that meet the minimum duration requirement (ArbZG §4)
+
 					if ($durationSeconds >= $minBreakDurationSeconds) {
 						$breakPeriods[] = [
 							'start' => $start->getTimestamp(),
@@ -236,13 +284,12 @@ class TimeEntry extends Entity
 				}
 			}
 		}
-		
+
 		// Add current active break if exists
 		if ($this->breakStartTime !== null) {
 			$endTime = $this->breakEndTime ?? new \DateTime();
 			$durationSeconds = $endTime->getTimestamp() - $this->breakStartTime->getTimestamp();
-			
-			// Only include breaks that meet the minimum duration requirement (ArbZG §4)
+
 			if ($durationSeconds >= $minBreakDurationSeconds) {
 				$breakPeriods[] = [
 					'start' => $this->breakStartTime->getTimestamp(),
@@ -250,24 +297,24 @@ class TimeEntry extends Entity
 				];
 			}
 		}
-		
+
 		// If no breaks, return 0
 		if (empty($breakPeriods)) {
 			return 0.0;
 		}
-		
+
 		// Sort breaks by start time
-		usort($breakPeriods, function($a, $b) {
+		usort($breakPeriods, function ($a, $b) {
 			return $a['start'] <=> $b['start'];
 		});
-		
+
 		// Merge overlapping breaks
 		$mergedPeriods = [];
 		$currentPeriod = $breakPeriods[0];
-		
+
 		for ($i = 1; $i < count($breakPeriods); $i++) {
 			$nextPeriod = $breakPeriods[$i];
-			
+
 			// If periods overlap or are adjacent, merge them
 			if ($nextPeriod['start'] <= $currentPeriod['end']) {
 				// Merge: extend current period to include next period
@@ -279,13 +326,13 @@ class TimeEntry extends Entity
 			}
 		}
 		$mergedPeriods[] = $currentPeriod;
-		
+
 		// Calculate total duration from merged periods
 		$totalBreakHours = 0.0;
 		foreach ($mergedPeriods as $period) {
 			$totalBreakHours += ($period['end'] - $period['start']) / 3600;
 		}
-		
+
 		return $totalBreakHours;
 	}
 
@@ -332,9 +379,10 @@ class TimeEntry extends Entity
 	/**
 	 * Validate the time entry data
 	 *
+	 * @param int|null $minBreakMinutes Profile floor; null resolves via {@see resolveCountableMinBreakMinutes()}.
 	 * @return array Array of validation errors
 	 */
-	public function validate(): array
+	public function validate(?int $minBreakMinutes = null): array
 	{
 		$errors = [];
 
@@ -385,6 +433,9 @@ class TimeEntry extends Entity
 			// If end date is after start date (next day), that's allowed (night shift)
 		}
 
+		$minMinutes = BreakCountable::minMinutes($minBreakMinutes ?? $this->resolveCountableMinBreakMinutes());
+		$minBreakDurationSeconds = BreakCountable::minSeconds($minMinutes);
+
 		// Validate break times
 		if ($this->breakStartTime && $this->breakEndTime) {
 			if ($this->breakEndTime <= $this->breakStartTime) {
@@ -396,32 +447,33 @@ class TimeEntry extends Entity
 			if ($this->endTime && $this->breakEndTime > $this->endTime) {
 				$errors['breakEndTime'] = 'Break end time cannot be after work end time';
 			}
-			
-			// Minimum countable break duration (15 minutes for DE/AT profiles).
+
 			$breakDurationSeconds = $this->breakEndTime->getTimestamp() - $this->breakStartTime->getTimestamp();
-			$minBreakDurationSeconds = 900; // 15 minutes = 900 seconds
 			if ($breakDurationSeconds < $minBreakDurationSeconds) {
-				$errors['breakEndTime'] = 'Break must be at least 15 minutes long to count toward the legal break requirement';
+				$errors['breakEndTime'] = sprintf(
+					'Break must be at least %d minutes long to count toward the legal break requirement',
+					$minMinutes
+				);
 			}
 		}
-		
+
 		// Validate breaks in JSON array (multiple breaks)
 		if ($this->breaks !== null && $this->breaks !== '') {
 			$breaks = json_decode($this->breaks, true) ?? [];
-			$minBreakDurationSeconds = 900; // 15 minutes = 900 seconds
-			
+
 			foreach ($breaks as $index => $break) {
 				if (isset($break['start']) && isset($break['end'])) {
 					try {
 						$breakStart = new \DateTime($break['start']);
 						$breakEnd = new \DateTime($break['end']);
 						$breakDurationSeconds = $breakEnd->getTimestamp() - $breakStart->getTimestamp();
-						
+
 						if ($breakDurationSeconds < $minBreakDurationSeconds) {
 							$errors['breaks'] = sprintf(
-								'Break #%d must be at least 15 minutes long to count toward the legal break requirement. Current duration: %d minutes',
+								'Break #%d must be at least %d minutes long to count toward the legal break requirement. Current duration: %d minutes',
 								$index + 1,
-								round($breakDurationSeconds / 60)
+								$minMinutes,
+								(int)round($breakDurationSeconds / 60)
 							);
 						}
 					} catch (\Exception $e) {
@@ -592,6 +644,8 @@ class TimeEntry extends Entity
 			'durationHours' => $this->getDurationHours(),
 			'breakDurationHours' => $this->getBreakDurationHours(),
 			'workingDurationHours' => $this->getWorkingDurationHours(),
+			/** Effective countable break floor for this entry's user (DE/CH: 15, AT: 10). */
+			'minBreakMinutes' => $this->resolveCountableMinBreakMinutes(),
 			'description' => $this->getDescription(),
 			'projectCheckProjectId' => $this->getProjectCheckProjectId(),
 			'projectCheckTimeEntryId' => $this->getProjectCheckTimeEntryId(),

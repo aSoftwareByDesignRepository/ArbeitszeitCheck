@@ -3,11 +3,10 @@
 declare(strict_types=1);
 
 /**
- * Compliance service for DACH working-time law (DE ArbZG, AT AZG/ARG) and
- * GDPR requirements. All country-specific limits, break tiers, averaging
- * windows, night windows, and law citations come from the instance-wide
- * LaborLawProfile (see LaborLawProfileFactory); explicitly configured admin
- * values still override the profile defaults.
+ * Compliance service for DACH working-time law (DE ArbZG, AT AZG/ARG, CH ArG)
+ * and GDPR requirements. Country-specific limits come from LaborLawProfile
+ * (instance country, or optional per-user labor_law_country override — E-9).
+ * Explicitly configured admin values still override profile defaults.
  *
  * @copyright Copyright (c) 2024, Nextcloud GmbH
  * @license AGPL-3.0-or-later
@@ -21,6 +20,7 @@ use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolation;
+use OCA\ArbeitszeitCheck\Support\BreakSplitValidator;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfile;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\IConfig;
@@ -76,9 +76,9 @@ class ComplianceService
         $this->lawProfileFactory = $lawProfileFactory;
     }
 
-    private function profile(): LaborLawProfile
+    private function profile(?string $userId = null): LaborLawProfile
     {
-        return $this->lawProfileFactory->getProfile();
+        return $this->lawProfileFactory->getProfile($userId);
     }
 
     /**
@@ -99,47 +99,132 @@ class ComplianceService
         return $this->timeZoneService->formatForDisplay($dt, 'd.m.Y', $userId);
     }
 
-    private function getMaxDailyHours(): float
+    private function getMaxDailyHours(?string $userId = null): float
     {
-        $default = (string)$this->profile()->dailyMaxHoursDefault;
+        $default = (string)$this->profile($userId)->dailyMaxHoursDefault;
 
         return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'max_daily_hours', $default)));
     }
 
-    private function getMinRestPeriod(): float
+    private function getMinRestPeriod(?string $userId = null): float
     {
-        $default = (string)$this->profile()->minRestHoursDefault;
+        $default = (string)$this->profile($userId)->minRestHoursDefault;
 
         return max(1.0, min(24.0, (float)$this->config->getAppValue('arbeitszeitcheck', 'min_rest_period', $default)));
     }
 
     /**
      * First break tier whose threshold the shift reached but whose required
-     * break minutes are not met — or null when the entry is compliant.
-     * Tiers come from the country profile (DE: 9h/45min then 6h/30min;
-     * AT: 6h/30min).
+     * break minutes (and AZG split patterns, when configured) are not met —
+     * or null when the entry is compliant.
      *
      * @return array{afterHours: float, breakMinutes: int}|null
      */
-    private function findViolatedBreakTier(float $durationHours, float $breakDurationHours): ?array
+    private function findViolatedBreakTier(TimeEntry $timeEntry): ?array
     {
-        foreach ($this->profile()->breakTiers as $tier) {
+        $userId = $timeEntry->getUserId();
+        $profile = $this->profile($userId);
+        $timeEntry->setCountableMinBreakMinutes($profile->minBreakMinutes);
+        $durationHours = $timeEntry->getDurationHours();
+
+        foreach ($profile->breakTiers as $tier) {
             if ($durationHours >= $tier['afterHours']) {
-                return ($breakDurationHours < $tier['breakMinutes'] / 60.0) ? $tier : null;
+                $portions = $this->breakPortionMinutes($timeEntry, $profile->minBreakMinutes);
+                $ok = BreakSplitValidator::meetsRequirement(
+                    $portions,
+                    (int)$tier['breakMinutes'],
+                    $profile->allowedBreakSplitPatterns,
+                );
+
+                return $ok ? null : $tier;
             }
         }
 
         return null;
     }
 
-    private function missingBreakMessage(array $tier): string
+    /**
+     * Non-overlapping break lengths in whole minutes, ignoring portions shorter
+     * than the country minimum (DE/CH: 15; AT: 10 so AZG 3×10 is countable).
+     *
+     * @return list<int>
+     */
+    private function breakPortionMinutes(TimeEntry $timeEntry, int $minBreakMinutes): array
+    {
+        $minSeconds = max(0, $minBreakMinutes) * 60;
+        $breakPeriods = [];
+
+        $breaksJson = $timeEntry->getBreaks();
+        if ($breaksJson !== null && $breaksJson !== '') {
+            $breaks = json_decode($breaksJson, true) ?? [];
+            if (is_array($breaks)) {
+                foreach ($breaks as $break) {
+                    if (!isset($break['start'], $break['end'])) {
+                        continue;
+                    }
+                    try {
+                        $start = new \DateTime((string)$break['start']);
+                        $end = new \DateTime((string)$break['end']);
+                    } catch (\Throwable) {
+                        continue;
+                    }
+                    $durationSeconds = $end->getTimestamp() - $start->getTimestamp();
+                    if ($durationSeconds >= $minSeconds) {
+                        $breakPeriods[] = [
+                            'start' => $start->getTimestamp(),
+                            'end' => $end->getTimestamp(),
+                        ];
+                    }
+                }
+            }
+        }
+
+        if ($timeEntry->getBreakStartTime() !== null) {
+            $endTime = $timeEntry->getBreakEndTime() ?? new \DateTime();
+            $durationSeconds = $endTime->getTimestamp() - $timeEntry->getBreakStartTime()->getTimestamp();
+            if ($durationSeconds >= $minSeconds) {
+                $breakPeriods[] = [
+                    'start' => $timeEntry->getBreakStartTime()->getTimestamp(),
+                    'end' => $endTime->getTimestamp(),
+                ];
+            }
+        }
+
+        if ($breakPeriods === []) {
+            return [];
+        }
+
+        usort($breakPeriods, static fn (array $a, array $b): int => $a['start'] <=> $b['start']);
+
+        $merged = [];
+        $current = $breakPeriods[0];
+        for ($i = 1; $i < count($breakPeriods); $i++) {
+            $next = $breakPeriods[$i];
+            if ($next['start'] <= $current['end']) {
+                $current['end'] = max($current['end'], $next['end']);
+            } else {
+                $merged[] = $current;
+                $current = $next;
+            }
+        }
+        $merged[] = $current;
+
+        $portions = [];
+        foreach ($merged as $period) {
+            $portions[] = (int)round(($period['end'] - $period['start']) / 60);
+        }
+
+        return $portions;
+    }
+
+    private function missingBreakMessage(array $tier, ?string $userId = null): string
     {
         return $this->l10n->t(
             'Mandatory %1$d-minute break missing after %2$d hours of work (%3$s)',
             [
                 (int)$tier['breakMinutes'],
                 (int)$tier['afterHours'],
-                $this->profile()->lawLabel('breaks'),
+                $this->profile($userId)->lawLabel('breaks'),
             ]
         );
     }
@@ -166,7 +251,7 @@ class ComplianceService
 
         // Check daily working hours limit
         if (!$this->checkDailyWorkingHoursLimit($userId)) {
-            $maxDaily = (int)$this->getMaxDailyHours();
+            $maxDaily = (int)$this->getMaxDailyHours($userId);
             $issues[] = [
                 'type' => ComplianceViolation::TYPE_DAILY_HOURS_LIMIT_EXCEEDED,
                 'severity' => ComplianceViolation::SEVERITY_ERROR,
@@ -176,13 +261,14 @@ class ComplianceService
 
         // Check weekly working hours average (skipped when the country has no
         // averaging rule — CH weeklyAvgMaxHours = null).
-        if ($this->profile()->weeklyAvgMaxHours !== null && !$this->checkWeeklyWorkingHoursLimit($userId)) {
+        $profile = $this->profile($userId);
+        if ($profile->weeklyAvgMaxHours !== null && !$this->checkWeeklyWorkingHoursLimit($userId)) {
             $issues[] = [
                 'type' => ComplianceViolation::TYPE_WEEKLY_HOURS_LIMIT_EXCEEDED,
                 'severity' => ComplianceViolation::SEVERITY_WARNING,
                 'message' => $this->l10n->t(
                     'Weekly working hours average limit (%1$d hours) exceeded (%2$s)',
-                    [(int)$this->profile()->weeklyAvgMaxHours, $this->profile()->lawLabel('weekly')]
+                    [(int)$profile->weeklyAvgMaxHours, $profile->lawLabel('weekly')]
                 )
             ];
         }
@@ -305,9 +391,9 @@ class ComplianceService
         }
 
         $issues = [];
-        $tier = $this->findViolatedBreakTier($timeEntry->getDurationHours(), $timeEntry->getBreakDurationHours());
+        $tier = $this->findViolatedBreakTier($timeEntry);
         if ($tier !== null) {
-            $issues[] = $this->missingBreakMessage($tier);
+            $issues[] = $this->missingBreakMessage($tier, $timeEntry->getUserId());
         }
 
         return $issues;
@@ -338,8 +424,9 @@ class ComplianceService
 
         // Daily-average gate (DE only: ArbZG §3 allows 10-hour days only while
         // the averaging-window daily average stays ≤ 8 h). Countries without
-        // that rule (AT) have dailyAvgMaxHours = null and skip this check.
-        $dailyAvgLimit = $this->profile()->dailyAvgMaxHours;
+        // that rule (AT/CH) have dailyAvgMaxHours = null and skip this check.
+        $profile = $this->profile($userId);
+        $dailyAvgLimit = $profile->dailyAvgMaxHours;
         $workingHours = $timeEntry->getWorkingDurationHours();
         if ($dailyAvgLimit !== null && $workingHours !== null && $workingHours >= $dailyAvgLimit) {
             // Only check when the day approaches the daily maximum
@@ -358,9 +445,8 @@ class ComplianceService
             }
         }
 
-        // Absolute weekly maximum (AT: 60 h per AZG §9; DE has no absolute
-        // weekly cap, weeklyAbsoluteMaxHours = null skips the check).
-        if ($this->profile()->weeklyAbsoluteMaxHours !== null) {
+        // Absolute weekly maximum (AT: 60 h; CH: 45/50; DE: null skips).
+        if ($profile->weeklyAbsoluteMaxHours !== null) {
             $absoluteCheck = $this->checkAbsoluteWeeklyHours($userId, $entryDate);
             if (!$absoluteCheck['valid'] && !isset($warningsSentToday[$cacheKey . '_weekabs'])) {
                 if ($this->notificationService) {
@@ -377,7 +463,7 @@ class ComplianceService
 
         // Check weekly hours average (DE/AT). Countries without an averaging
         // window (CH) set weeklyAvgMaxHours = null and skip.
-        if ($this->profile()->weeklyAvgMaxHours !== null) {
+        if ($profile->weeklyAvgMaxHours !== null) {
             $weeklyCheck = $this->checkWeeklyHoursAverage($userId, $entryDate);
             if (!$weeklyCheck['valid'] && !isset($warningsSentToday[$cacheKey . '_weekly'])) {
                 // Send warning to manager (non-blocking)
@@ -404,12 +490,12 @@ class ComplianceService
     {
         // Break requirements per country profile (DE ArbZG §4: 9h→45min, 6h→30min;
         // AT AZG §11: 6h→30min). Highest violated tier only.
-        $tier = $this->findViolatedBreakTier($timeEntry->getDurationHours(), $timeEntry->getBreakDurationHours());
+        $tier = $this->findViolatedBreakTier($timeEntry);
         if ($tier === null) {
             return [];
         }
 
-        $message = $this->missingBreakMessage($tier);
+        $message = $this->missingBreakMessage($tier, $timeEntry->getUserId());
         if (!$persistViolations) {
             return [[
                 'type' => ComplianceViolation::TYPE_MISSING_BREAK,
@@ -474,7 +560,7 @@ class ComplianceService
         }
 
         $userId = $timeEntry->getUserId();
-        $maxDaily = $this->getMaxDailyHours();
+        $maxDaily = $this->getMaxDailyHours($userId);
         $exceedingDays = $this->dailyWorkingHoursCalculator->findAllCalendarDaysExceedingMaximum(
             $userId,
             $timeEntry,
@@ -501,7 +587,7 @@ class ComplianceService
                     $this->displayDate($dayStart, $userId),
                     (int)$maxDaily,
                     $day['hours'],
-                    $this->profile()->lawLabel('daily'),
+                    $this->profile($userId)->lawLabel('daily'),
                 ]
             );
 
@@ -595,7 +681,7 @@ class ComplianceService
     {
         $now = $this->timeZoneService->nowInStorage();
         $lastEndTime = $this->resolveRestPeriodAnchor($userId, $now);
-        $minRest = $this->getMinRestPeriod();
+        $minRest = $this->getMinRestPeriod($userId);
 
         if ($lastEndTime === null) {
             return [
@@ -625,7 +711,7 @@ class ComplianceService
                 'Minimum %1$d-hour rest period required between shifts (%2$s). Your last shift ended on %3$s at %4$s. You can clock in after %5$s (in %6$.1f hours).',
                 [
                     (int)$minRest,
-                    $this->profile()->lawLabel('rest'),
+                    $this->profile($userId)->lawLabel('rest'),
                     $this->displayDate($lastEndTime, $userId),
                     $this->displayClock($lastEndTime, $userId),
                     $this->timeZoneService->formatForDisplay($earliestClockIn, 'd.m.Y H:i', $userId),
@@ -652,7 +738,7 @@ class ComplianceService
             return $lastEndTime;
         }
 
-        $minRest = $this->getMinRestPeriod();
+        $minRest = $this->getMinRestPeriod($userId);
         $lookbackHours = max(48, (int)ceil($minRest * 2));
         $lastPaused = $this->timeEntryMapper->findLastPausedWithinHours($userId, $lookbackHours);
         $pausedAt = $lastPaused?->getUpdatedAt();
@@ -732,7 +818,7 @@ class ComplianceService
 		// fall through to the exact timestamp check below.
 		// Example: last end = Jan 15 23:30, new start = Jan 16 00:30 → only 1 h rest → must fail.
 
-        $minRest = $this->getMinRestPeriod();
+        $minRest = $this->getMinRestPeriod($userId);
         $hoursSinceLastEntry = ($startTime->getTimestamp() - $lastEndTime->getTimestamp()) / 3600;
 
         if ($hoursSinceLastEntry >= $minRest) {
@@ -753,7 +839,7 @@ class ComplianceService
                 'Minimum %1$d-hour rest period required between shifts (%2$s). Your last shift ended on %3$s at %4$s. This entry cannot start before %5$s (%6$.1f hours required).',
                 [
                     (int)$minRest,
-                    $this->profile()->lawLabel('rest'),
+                    $this->profile($userId)->lawLabel('rest'),
                     $lastEndDateFormatted,
                     $this->displayClock($lastEndTime, $userId),
                     $earliestStartDateFormatted,
@@ -773,7 +859,7 @@ class ComplianceService
     private function checkDailyWorkingHoursLimit(string $userId): bool
     {
         $todayHours = $this->dailyWorkingHoursCalculator->getWorkingHoursForToday($userId);
-        return $todayHours < $this->getMaxDailyHours();
+        return $todayHours < $this->getMaxDailyHours($userId);
     }
 
     /**
@@ -785,7 +871,7 @@ class ComplianceService
      */
     private function checkWeeklyWorkingHoursLimit(string $userId): bool
     {
-        $profile = $this->profile();
+        $profile = $this->profile($userId);
         if ($profile->weeklyAvgMaxHours === null || $profile->avgWindowWeeks <= 0) {
             return true;
         }
@@ -814,7 +900,7 @@ class ComplianceService
      */
     private function checkSixMonthAverage(string $userId, \DateTime $entryDate): array
     {
-        $profile = $this->profile();
+        $profile = $this->profile($userId);
         $limit = $profile->dailyAvgMaxHours;
         if ($limit === null) {
             // Country without a daily-average rule (AT) — callers gate on the
@@ -876,7 +962,7 @@ class ComplianceService
      */
     private function checkWeeklyHoursAverage(string $userId, \DateTime $entryDate): array
     {
-        $profile = $this->profile();
+        $profile = $this->profile($userId);
         $limit = $profile->weeklyAvgMaxHours;
         if ($limit === null || $profile->avgWindowWeeks <= 0) {
             return ['valid' => true, 'message' => null, 'average' => 0.0, 'limit' => 0.0];
@@ -930,7 +1016,7 @@ class ComplianceService
      */
     private function checkAbsoluteWeeklyHours(string $userId, \DateTime $entryDate): array
     {
-        $profile = $this->profile();
+        $profile = $this->profile($userId);
         $limit = $profile->weeklyAbsoluteMaxHours;
         if ($limit === null) {
             return ['valid' => true, 'message' => null, 'average' => 0.0, 'limit' => 0.0];
@@ -1012,13 +1098,13 @@ class ComplianceService
             return;
         }
 
-        $nightHours = $this->calculateNightHours($startTime, $endTime);
+        $nightHours = $this->calculateNightHours($startTime, $endTime, $timeEntry->getUserId());
 
         if ($nightHours <= 0.0) {
             return;
         }
 
-        $profile = $this->profile();
+        $profile = $this->profile($userId);
 
         // CRITICAL: pass $nightHours as a parameter to t() so the L10NString carries
         // the value into its internal vsprintf(). Calling sprintf() on the OUTSIDE of
@@ -1077,7 +1163,7 @@ class ComplianceService
                     ComplianceViolation::TYPE_SUNDAY_WORK,
                     $this->l10n->t(
                         'Work performed on Sunday (%s)',
-                        [$this->profile()->lawLabel('sundayHoliday')]
+                        [$this->profile($userId)->lawLabel('sundayHoliday')]
                     ),
                     $occurredAt,
                     $entryId,
@@ -1101,7 +1187,7 @@ class ComplianceService
                     ComplianceViolation::TYPE_HOLIDAY_WORK,
                     $this->l10n->t(
                         'Work performed on public holiday (%s)',
-                        [$this->profile()->lawLabel('sundayHoliday')]
+                        [$this->profile($userId)->lawLabel('sundayHoliday')]
                     ),
                     $occurredAt,
                     $entryId,
@@ -1133,13 +1219,13 @@ class ComplianceService
      * @param \DateTime $end   Exclusive end of the work span.
      * @return float Hours of work that fell inside any night window (≥ 0).
      */
-    private function calculateNightHours(\DateTime $start, \DateTime $end): float
+    private function calculateNightHours(\DateTime $start, \DateTime $end, ?string $userId = null): float
     {
         if ($end <= $start) {
             return 0.0;
         }
 
-        $profile = $this->profile();
+        $profile = $this->profile($userId);
         $windowStartHour = $profile->nightWindowStartHour;
         $windowEndHour = $profile->nightWindowEndHour;
 
@@ -1274,9 +1360,9 @@ class ComplianceService
                         $this->l10n->t(
                             'Weekly working hours average limit (%1$d hours) exceeded over the last %2$d weeks (%3$s)',
                             [
-                                (int)$this->profile()->weeklyAvgMaxHours,
-                                $this->profile()->avgWindowWeeks,
-                                $this->profile()->lawLabel('weekly'),
+                                (int)$this->profile($userId)->weeklyAvgMaxHours,
+                                $this->profile($userId)->avgWindowWeeks,
+                                $this->profile($userId)->lawLabel('weekly'),
                             ]
                         ),
                         $yesterday,

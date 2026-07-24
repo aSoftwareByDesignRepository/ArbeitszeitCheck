@@ -59,6 +59,7 @@ class TimeEntryCorrectionServiceTest extends TestCase
 		$this->monthClosureGuard = $this->createMock(MonthClosureGuard::class);
 		$this->complianceService = $this->createMock(ComplianceService::class);
 		$this->complianceService->method('checkRestPeriodForStartTime')->willReturn(['valid' => true]);
+		$this->complianceService->method('blockingIssuesForCompletedEntry')->willReturn([]);
 		$this->timeTrackingService = $this->createMock(TimeTrackingService::class);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->auditLogMapper = $this->createMock(AuditLogMapper::class);
@@ -301,6 +302,44 @@ class TimeEntryCorrectionServiceTest extends TestCase
 		$reflection->invoke($this->service, $entry, ['breaks' => []]);
 
 		$this->assertNull($entry->getBreaks());
+	}
+
+	public function testValidateProposalBlocksIllegalAustrianBreakSplit(): void
+	{
+		$entry = $this->buildEntry();
+		$mapper = $this->createMock(TimeEntryMapper::class);
+		$mapper->method('findOverlapping')->willReturn([]);
+
+		$compliance = $this->createMock(ComplianceService::class);
+		$compliance->method('checkRestPeriodForStartTime')->willReturn(['valid' => true]);
+		$compliance->expects($this->once())
+			->method('blockingIssuesForCompletedEntry')
+			->willReturn(['Break requirement not met (AZG §11): portions must be continuous ≥30, 2×15, or 3×10.']);
+
+		$service = new TimeEntryCorrectionService(
+			$mapper,
+			$this->monthClosureGuard,
+			$compliance,
+			$this->timeTrackingService,
+			$this->notificationService,
+			$this->auditLogMapper,
+			$this->config,
+			$this->l10n,
+			$this->createMock(\OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService::class),
+			$this->createMock(\OCA\ArbeitszeitCheck\Service\ProjectCheckLaborTimeSyncService::class),
+		);
+
+		$error = $service->validateProposal($entry, [
+			'startTime' => '2026-01-15T08:00:00+00:00',
+			'endTime' => '2026-01-15T15:00:00+00:00',
+			'breaks' => [
+				['start' => '2026-01-15T10:00:00+00:00', 'end' => '2026-01-15T10:20:00+00:00'],
+				['start' => '2026-01-15T12:00:00+00:00', 'end' => '2026-01-15T12:10:00+00:00'],
+			],
+		], 'manager1');
+
+		$this->assertNotNull($error);
+		$this->assertStringContainsString('AZG', (string)$error);
 	}
 
 	public function testValidateProposalInfersCompletedStatusForNewEntries(): void

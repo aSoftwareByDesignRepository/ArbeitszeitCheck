@@ -72,7 +72,7 @@
 	 * @param {number} [options.minQueryLength=2] Minimum typed characters before searching
 	 * @param {string[]} [options.excludeUserIds] User IDs to hide from suggestions
 	 * @param {object} [options.l10n]
-	 * @param {function(string): void} [options.onChange] Called when selection cleared or set
+	 * @param {function(string, object=): void} [options.onChange] Called when selection cleared or set
 	 */
 	function initAdminUserPicker(options) {
 		const hidden = queryOne(options.hiddenSelector);
@@ -98,6 +98,7 @@
 			});
 		}
 		const onChange = typeof options.onChange === 'function' ? options.onChange : function () {};
+		let selectedMeta = null;
 
 		if (!hidden || !search || !list || !baseUrl) {
 			return null;
@@ -226,7 +227,7 @@
 				.catch(onFail);
 		}
 
-		function selectUser(uid, displayName) {
+		function selectUser(uid, displayName, meta) {
 			const id = String(uid || '').trim();
 			if (id === '') {
 				return;
@@ -235,22 +236,24 @@
 			hidden.value = id;
 			selectedLabel = name + ' (' + id + ')';
 			search.value = selectedLabel;
+			selectedMeta = meta && typeof meta === 'object' ? meta : null;
 			closeList();
 			const tpl = l10n.employeeSelected || 'Selected: %s';
 			const selectedMsg = tpl.indexOf('%s') >= 0
 				? tpl.replace('%s', selectedLabel)
 				: (tpl + ' ' + selectedLabel);
 			setStatus(selectedMsg);
-			onChange(id);
+			onChange(id, selectedMeta || {});
 		}
 
 		function clearSelection() {
 			hidden.value = '';
 			selectedLabel = '';
 			search.value = '';
+			selectedMeta = null;
 			closeList();
 			setStatus(l10n.allEmployees || '');
-			onChange('');
+			onChange('', {});
 		}
 
 		function setSelection(uid, displayName) {
@@ -282,8 +285,12 @@
 				const uid = u.userId || u.uid || '';
 				const name = (u.displayName && String(u.displayName).trim()) ? String(u.displayName) : uid;
 				const optId = idPrefix + '-opt-' + index;
+				const minBreak = Number(u.minBreakMinutes);
+				const minBreakAttr = Number.isFinite(minBreak) && minBreak > 0
+					? ' data-min-break-minutes="' + escapeText(String(Math.round(minBreak))) + '"'
+					: '';
 				return '<div role="option" id="' + escapeText(optId) + '" tabindex="-1" class="user-picker__item" data-user-id="'
-					+ escapeText(uid) + '" aria-selected="false">'
+					+ escapeText(uid) + '"' + minBreakAttr + ' aria-selected="false">'
 					+ '<span class="user-picker__name">' + escapeText(name) + '</span>'
 					+ '<span class="user-picker__meta">' + escapeText(uid) + '</span></div>';
 			}).join('');
@@ -309,7 +316,11 @@
 				bind(item, 'click', function () {
 					const uid = item.getAttribute('data-user-id') || '';
 					const nameEl = item.querySelector('.user-picker__name');
-					selectUser(uid, nameEl ? nameEl.textContent : uid);
+					const rawMin = Number(item.getAttribute('data-min-break-minutes'));
+					const meta = Number.isFinite(rawMin) && rawMin > 0
+						? { minBreakMinutes: Math.round(rawMin) }
+						: {};
+					selectUser(uid, nameEl ? nameEl.textContent : uid, meta);
 				});
 			});
 		}
@@ -339,14 +350,22 @@
 				const item = items[activeIndex];
 				const uid = item.getAttribute('data-user-id') || '';
 				const nameEl = item.querySelector('.user-picker__name');
-				selectUser(uid, nameEl ? nameEl.textContent : uid);
+				const rawMin = Number(item.getAttribute('data-min-break-minutes'));
+				const meta = Number.isFinite(rawMin) && rawMin > 0
+					? { minBreakMinutes: Math.round(rawMin) }
+					: {};
+				selectUser(uid, nameEl ? nameEl.textContent : uid, meta);
 				return true;
 			}
 			if (items.length === 1) {
 				const item = items[0];
 				const uid = item.getAttribute('data-user-id') || '';
 				const nameEl = item.querySelector('.user-picker__name');
-				selectUser(uid, nameEl ? nameEl.textContent : uid);
+				const rawMin = Number(item.getAttribute('data-min-break-minutes'));
+				const meta = Number.isFinite(rawMin) && rawMin > 0
+					? { minBreakMinutes: Math.round(rawMin) }
+					: {};
+				selectUser(uid, nameEl ? nameEl.textContent : uid, meta);
 				return true;
 			}
 			return false;
@@ -356,7 +375,8 @@
 			if (search.value !== selectedLabel) {
 				hidden.value = '';
 				selectedLabel = '';
-				onChange('');
+				selectedMeta = null;
+				onChange('', {});
 			}
 			clearTimeout(debounceTimer);
 			debounceTimer = setTimeout(function () {
@@ -424,6 +444,9 @@
 			setSelection: setSelection,
 			getUserId: function () {
 				return String(hidden.value || '').trim();
+			},
+			getSelectedMeta: function () {
+				return selectedMeta && typeof selectedMeta === 'object' ? Object.assign({}, selectedMeta) : {};
 			},
 			destroy: function () {
 				clearTimeout(debounceTimer);

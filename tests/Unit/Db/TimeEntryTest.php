@@ -18,7 +18,7 @@ class TimeEntryTest extends TestCase
 		// Breaks:
 		// - 10:00–10:20 (20m)
 		// - 10:10–10:30 (20m) overlaps -> merged 10:00–10:30 (30m)
-		// - 11:00–11:10 (10m) should be ignored (min 15m)
+		// - 11:00–11:10 (10m) should be ignored (min 15m DE default)
 		$entry->setBreaks(json_encode([
 			['start' => '2024-01-01T10:00:00+00:00', 'end' => '2024-01-01T10:20:00+00:00'],
 			['start' => '2024-01-01T10:10:00+00:00', 'end' => '2024-01-01T10:30:00+00:00'],
@@ -27,6 +27,41 @@ class TimeEntryTest extends TestCase
 
 		$this->assertEqualsWithDelta(0.5, $entry->getBreakDurationHours(), 0.0001); // 30m = 0.5h
 		$this->assertEqualsWithDelta(7.5, $entry->getDurationHours(), 0.0001); // 8h total - 0.5h break
+	}
+
+	public function testAzgTenMinutePortionsCountWhenFloorIsTen(): void
+	{
+		$entry = new TimeEntry();
+		$entry->setUserId('at-user');
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime(new \DateTime('2024-01-01 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-01 17:00:00'));
+		$entry->setCountableMinBreakMinutes(10);
+		$entry->setBreaks(json_encode([
+			['start' => '2024-01-01T11:00:00+00:00', 'end' => '2024-01-01T11:10:00+00:00'],
+			['start' => '2024-01-01T13:00:00+00:00', 'end' => '2024-01-01T13:10:00+00:00'],
+			['start' => '2024-01-01T15:00:00+00:00', 'end' => '2024-01-01T15:10:00+00:00'],
+		]));
+
+		$this->assertEqualsWithDelta(0.5, $entry->getBreakDurationHours(), 0.0001);
+		$this->assertSame([], $entry->validate(10));
+	}
+
+	public function testValidateRejectsTenMinuteBreakOnGermanFloor(): void
+	{
+		$entry = new TimeEntry();
+		$entry->setUserId('de-user');
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime(new \DateTime('2024-01-01 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-01 17:00:00'));
+		$entry->setCountableMinBreakMinutes(15);
+		$entry->setBreaks(json_encode([
+			['start' => '2024-01-01T12:00:00+00:00', 'end' => '2024-01-01T12:10:00+00:00'],
+		]));
+
+		$errors = $entry->validate(15);
+		$this->assertArrayHasKey('breaks', $errors);
+		$this->assertStringContainsString('15 minutes', $errors['breaks']);
 	}
 
 	public function testCanDeleteManualCompletedEntry(): void

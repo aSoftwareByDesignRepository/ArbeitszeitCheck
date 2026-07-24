@@ -2,12 +2,22 @@
 
 declare(strict_types=1);
 
+use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
+use OCA\ArbeitszeitCheck\Support\RegionRegistry;
+
 /**
  * Server-translated strings for js/time-entry-correction.js.
  *
  * @var \OCP\IL10N $l
  */
 $l = $l ?? ($_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck'));
+
+try {
+	$azcCorrLawProfile = \OCP\Server::get(LaborLawProfileFactory::class)->getProfileForCurrentUser();
+} catch (\Throwable) {
+	$azcCorrLawProfile = LaborLawProfileFactory::profileForCountry(RegionRegistry::COUNTRY_DE);
+}
+$azcCorrMinBreak = max(1, (int)$azcCorrLawProfile->minBreakMinutes);
 
 $correctionL10n = [
 	'correctionModalTitle' => $l->t('Request Time Entry Correction'),
@@ -26,7 +36,7 @@ $correctionL10n = [
 	'correctionErrorValidTimes' => $l->t('Please enter valid start and end times.'),
 	'correctionErrorPartialBreak' => $l->t('Each break must have both a start and end time, or leave the row empty.'),
 	'correctionErrorValidBreakTimes' => $l->t('Please enter valid break times.'),
-	'correctionErrorBreakMinDuration' => $l->t('Each break must be at least 15 minutes.'),
+	'correctionErrorBreakMinDuration' => $l->t('Each break must be at least %d minutes.', [$azcCorrMinBreak]),
 	'correctionErrorBreakWithinWork' => $l->t('Breaks must fall within your working hours.'),
 	'correctionErrorBreakOverlap' => $l->t('Break times must not overlap.'),
 	'correctionErrorValidDate' => $l->t('Please enter a valid date (dd.mm.yyyy).'),

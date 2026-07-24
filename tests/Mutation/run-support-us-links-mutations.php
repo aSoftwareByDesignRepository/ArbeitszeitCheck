@@ -74,6 +74,10 @@ $mutations = [
 		'from' => "&& !str_contains(\$url, '\\\\')\n\t\t\t\t&& !str_contains(\$url, '@');",
 		'to' => "&& !str_contains(\$url, '\\\\');",
 	],
+	'allow_protocol_relative_license_url' => [
+		'from' => "return !str_starts_with(\$url, '//')\n\t\t\t\t&& !preg_match('/[\\x00-\\x1F\\x7F\\s]/', \$url)",
+		'to' => "return !preg_match('/[\\x00-\\x1F\\x7F\\s]/', \$url)",
+	],
 ];
 
 $failedToKill = [];

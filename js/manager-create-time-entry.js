@@ -44,7 +44,7 @@
 				'Night shift: if end is earlier than start (e.g. 22:00–06:00), end counts as the next day.'
 			),
 			breaksOptional: t('correctionBreaksOptional', 'Breaks (optional)'),
-			breaksHelp: t('managerCorrectionBreaksHelp', 'Each break must be at least 15 minutes and within working hours.'),
+			breaksHelp: t('managerCorrectionBreaksHelp', 'Adjust breaks if needed. Each break must be at least 15 minutes and within working hours.'),
 			breaksEmpty: t('correctionBreaksEmpty', 'No breaks added.'),
 			actions: t('Actions', 'Actions'),
 			addBreak: t('correctionAddBreak', 'Add break'),
@@ -164,7 +164,8 @@
 				meta.appendChild(projWrap);
 			}
 
-			const formApi = ClockForm.bindForm(modal, idPrefix, {}, t);
+			const bindOpts = { minBreakMinutes: undefined };
+			const formApi = ClockForm.bindForm(modal, idPrefix, {}, t, bindOpts);
 			const initPicker = window.ArbeitszeitCheck?.initManagerScopedEmployeePicker;
 			let employeePicker = null;
 			if (initPicker) {
@@ -176,8 +177,12 @@
 					statusSelector: `#${empPrefix}-status`,
 					idPrefix: empPrefix,
 					allowAll: false,
-					onChange: (userId) => {
+					onChange: (userId, meta) => {
 						loadProjectOptions(projSel, userId);
+						const raw = Number(meta && meta.minBreakMinutes);
+						bindOpts.minBreakMinutes = Number.isFinite(raw) && raw > 0
+							? Math.round(raw)
+							: undefined;
 					},
 				});
 			}

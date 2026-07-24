@@ -13,7 +13,7 @@ use OCA\ArbeitszeitCheck\Util\TemplateL10n;
 $l = $l ?? ($_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck'));
 
 try {
-	$azcLawProfile = \OCP\Server::get(LaborLawProfileFactory::class)->getProfile();
+	$azcLawProfile = \OCP\Server::get(LaborLawProfileFactory::class)->getProfileForCurrentUser();
 } catch (\Throwable) {
 	$azcLawProfile = LaborLawProfileFactory::profileForCountry('DE');
 }
@@ -70,7 +70,7 @@ $timeEntryFormMessageIds = [
 	'workMin15' => 'Work period must be at least 15 minutes',
 	'workMax16' => 'Work period cannot exceed 16 hours',
 	'breaksExceedWork' => 'Total break time cannot exceed work time',
-	'breakRequiredNone' => 'No breaks required for shifts under 6 hours',
+	'breakRequiredNone' => 'No breaks required for shifts under %s hours',
 	'breakRequired30' => '30 minutes break required (%s)',
 	'breakRequired45' => '45 minutes break required (%s)',
 	'savedSuccess' => 'Time entry saved successfully',
@@ -100,7 +100,14 @@ $timeEntryFormL10n['complianceBreakNotMet'] = sprintf($timeEntryFormL10n['compli
 $timeEntryFormL10n['breakRequired30'] = sprintf($timeEntryFormL10n['breakRequired30'], $azcBreakLaw);
 $timeEntryFormL10n['breakRequired45'] = sprintf($timeEntryFormL10n['breakRequired45'], $azcBreakLaw);
 
-foreach ($azcLawProfile->breakTiersAscending() as $tier) {
+$azcAscendingTiers = $azcLawProfile->breakTiersAscending();
+$azcFirstTierHours = $azcAscendingTiers !== [] ? (float)$azcAscendingTiers[0]['afterHours'] : 6.0;
+$azcFirstTierHoursLabel = abs($azcFirstTierHours - (int)$azcFirstTierHours) < 0.001
+	? (string)(int)$azcFirstTierHours
+	: rtrim(rtrim(number_format($azcFirstTierHours, 1, '.', ''), '0'), '.');
+$timeEntryFormL10n['breakRequiredNone'] = sprintf($timeEntryFormL10n['breakRequiredNone'], $azcFirstTierHoursLabel);
+
+foreach ($azcAscendingTiers as $tier) {
 	$minutes = (int)$tier['breakMinutes'];
 	$timeEntryFormL10n['breakRequired' . $minutes] = TemplateL10n::translate(
 		$l,

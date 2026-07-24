@@ -898,7 +898,9 @@ class PageController extends Controller
 	 */
 	private function buildComplianceProfileForSettings(): array
 	{
-		$profile = $this->timeTrackingService->lawProfile();
+		$user = $this->userSession->getUser();
+		$userId = $user !== null ? $user->getUID() : null;
+		$profile = $this->timeTrackingService->lawProfile($userId);
 		$maxDaily = max(1.0, min(24.0, (float)$this->config->getAppValue(
 			'arbeitszeitcheck',
 			'max_daily_hours',

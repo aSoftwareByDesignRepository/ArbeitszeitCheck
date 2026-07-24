@@ -54,7 +54,8 @@ class Capabilities implements ICapability {
 
 		$projectCheckAvailable = $this->appManager->isEnabledForUser('projectcheck');
 
-		$profile = $this->lawProfileFactory->getProfile();
+		$user = $this->userSession->getUser();
+		$profile = $this->lawProfileFactory->getProfile($user !== null ? $user->getUID() : null);
 		$featureTag = match ($profile->country) {
 			RegionRegistry::COUNTRY_AT => 'azg-compliance',
 			RegionRegistry::COUNTRY_CH => 'swiss-arg-compliance',
@@ -111,6 +112,8 @@ class Capabilities implements ICapability {
 					'maxDailyHours' => $maxDailyHours,
 					'minRestHours' => $minRestHours,
 					'minBreakMinutes' => $profile->minBreakMinutes,
+					'allowedBreakSplitPatterns' => $profile->allowedBreakSplitPatterns,
+					'weeklyAbsoluteMaxHours' => $profile->weeklyAbsoluteMaxHours,
 					'german-labor-law' => $isGermany,
 					'gdpr' => true,
 					'audit-logging' => true,

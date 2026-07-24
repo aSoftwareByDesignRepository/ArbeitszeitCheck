@@ -62,7 +62,7 @@
 			idPrefix: options.idPrefix,
 			excludeUserIds: options.excludeUserIds,
 			l10n: l10n,
-			onChange: function (userId) {
+			onChange: function (userId, meta) {
 				if (options.clearButtonSelector) {
 					const clearBtn = document.querySelector(options.clearButtonSelector);
 					if (clearBtn) {
@@ -70,7 +70,7 @@
 					}
 				}
 				if (typeof options.onChange === 'function') {
-					options.onChange(userId);
+					options.onChange(userId, meta || {});
 				}
 			},
 		});

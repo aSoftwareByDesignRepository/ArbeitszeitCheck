@@ -351,6 +351,7 @@
 				startTime: entry.displayStartTime || entry.startTime || null,
 				endTime: entry.displayEndTime || entry.endTime || null,
 				breaks: entry.displayBreaks || entry.breaks || null,
+				minBreakMinutes: entry.minBreakMinutes,
 			};
 			const summaryJson = Utils.encodeAttributeJson(summaryPayload);
 			const actionCell = canCorrect
