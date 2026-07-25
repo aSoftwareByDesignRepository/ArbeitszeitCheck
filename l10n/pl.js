@@ -2764,6 +2764,7 @@ OC.L10N.register(
 	"Recent violations" : "Recente naruszenia",
 	"Recipient input is too long. Please reduce the number of addresses." : "Invoer dla ontvangers is te lang. Verminder het aantal adressen.",
 	"recommended" : "zalecany",
+	"Recommended" : "Recommended",
 	"Recommended: 120 to 240 minutes. After this threshold, an open break is automatically finalized by clocking out." : "Recommended: 120 to 240 minutes. After this threshold, an open przerwa is automatically finalized by clocking out.",
 	"Record absence" : "Record nieobecność",
 	"Record approved absence for an employee" : "Record zatwierdzony nieobecność for an employee",

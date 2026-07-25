@@ -48,8 +48,10 @@
   vertical-align: baseline;
 }
 
-/* Navigation menu alignment */
-#app-navigation .nav-menu a {
+/* Navigation menu alignment — top-level links only.
+ * Must NOT match .nav-submenu > li > a: a padding shorthand here used to
+ * defeat submenu indent (ID specificity beat .nav-submenu li a). */
+#app-navigation .nav-menu > li > a {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -193,8 +195,8 @@
   padding-left: 0 !important;
 }
 
-/* Link Reset */
-#app-content-wrapper a {
+/* Link Reset — exclude button anchors so azc-btn / btn keep their fills */
+#app-content-wrapper a:not(.btn):not(.azc-btn) {
   color: inherit;
   text-decoration: inherit;
   background-color: transparent;
@@ -579,19 +581,19 @@ button:disabled {
   opacity: 0.75;
 }
 
-/* Link Base Styles */
-#app-content-wrapper a {
+/* Link Base Styles — exclude button anchors (.btn / .azc-btn) */
+#app-content-wrapper a:not(.btn):not(.azc-btn) {
   color: var(--arbeitszeitcheck-color-primary);
   text-decoration: none;
   transition: color 0.15s ease-in-out;
 }
 
-#app-content-wrapper a:hover {
+#app-content-wrapper a:not(.btn):not(.azc-btn):hover {
   color: var(--arbeitszeitcheck-color-primary-hover);
   text-decoration: underline;
 }
 
-#app-content-wrapper a:focus {
+#app-content-wrapper a:not(.btn):not(.azc-btn):focus {
   outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
   outline-offset: 2px;
 }

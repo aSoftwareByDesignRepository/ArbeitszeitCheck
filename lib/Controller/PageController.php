@@ -29,6 +29,7 @@ use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\OvertimeDisplayService;
 use OCA\ArbeitszeitCheck\Service\OvertimeBankService;
 use OCA\ArbeitszeitCheck\Service\OvertimePayoutService;
+use OCA\ArbeitszeitCheck\Support\LaborLawProfile;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\RedirectResponse;
@@ -914,13 +915,13 @@ class PageController extends Controller
 
 		$breakLines = [];
 		foreach ($profile->breakTiersAscending() as $tier) {
-			$afterHours = (float)$tier['afterHours'];
-			$hoursLabel = abs($afterHours - (int)$afterHours) < 0.001
-				? (string)(int)$afterHours
-				: rtrim(rtrim(number_format($afterHours, 1, '.', ''), '0'), '.');
 			$breakLines[] = $this->l10n->t(
 				'From %1$s hours of work: at least %2$d minutes break (%3$s)',
-				[$hoursLabel, (int)$tier['breakMinutes'], $profile->lawLabel('breaks')]
+				[
+					LaborLawProfile::formatHoursLabel((float)$tier['afterHours']),
+					(int)$tier['breakMinutes'],
+					$profile->lawLabel('breaks'),
+				]
 			);
 		}
 

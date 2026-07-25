@@ -87,6 +87,8 @@ $isAdminAuditLog = $pageId === 'admin-audit-log'
 	|| ($pageId === '' && strpos($currentPage, '/admin/audit-log') !== false);
 $isAdminSettingsPage = $pageId === 'admin-settings'
 	|| ($pageId === '' && strpos($currentPage, '/admin/settings') !== false);
+$isAdminSupportUsPage = $pageId === 'admin-support-us'
+	|| ($pageId === '' && strpos($currentPage, '/admin/support-us') !== false);
 $isAdminLicensePage = $pageId === 'admin-license'
 	|| ($pageId === '' && strpos($currentPage, '/admin/license') !== false);
 $isAdminKioskPage = $pageId === 'admin-kiosk'
@@ -207,12 +209,13 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
             <?php if ($showAdminNav): ?>
                 <li class="nav-section-divider" role="separator" aria-hidden="true"></li>
                 <li class="nav-item-has-children <?php p($isAdmin ? 'is-open' : ''); ?>">
-                    <button class="nav-parent-toggle"
+                    <button class="nav-parent-toggle app-navigation-entry-button"
                         type="button"
                         aria-expanded="<?php p($isAdmin ? 'true' : 'false'); ?>"
                         aria-controls="admin-subnav">
                         <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('shield')); ?></span>
                         <span><?php p($l->t('Administration')); ?></span>
+                        <span class="nav-parent-chevron" aria-hidden="true"></span>
                     </button>
                     <ul id="admin-subnav" class="nav-submenu" <?php p($isAdmin ? '' : 'hidden'); ?>>
                         <li class="<?php p($isAdminDashboard ? 'active' : ''); ?>" <?php p($isAdminDashboard ? 'aria-current="page"' : ''); ?>>
@@ -313,18 +316,26 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                                 <span><?php p($l->t('Global settings')); ?></span>
                             </a>
                         </li>
+                        <li class="<?php p($isAdminSupportUsPage ? 'active' : ''); ?>" <?php p($isAdminSupportUsPage ? 'aria-current="page"' : ''); ?>>
+                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.supportUs')); ?>"
+                                title="<?php p($l->t('Partner care, workshops, commissioned features, and voluntary sponsors')); ?>"
+                                aria-label="<?php p($l->t('Open Support and us')); ?>">
+                                <span><?php p($l->t('Support & us')); ?></span>
+                            </a>
+                        </li>
                     </ul>
                 </li>
             <?php endif; ?>
             <?php if ($showManagerLink): ?>
                 <li class="nav-section-divider" role="separator" aria-hidden="true"></li>
                 <li class="nav-item-has-children <?php p($isManagerPage ? 'is-open' : ''); ?>">
-                    <button class="nav-parent-toggle"
+                    <button class="nav-parent-toggle app-navigation-entry-button"
                         type="button"
                         aria-expanded="<?php p($isManagerPage ? 'true' : 'false'); ?>"
                         aria-controls="manager-subnav">
                         <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('users')); ?></span>
                         <span><?php p($l->t('Manager')); ?></span>
+                        <span class="nav-parent-chevron" aria-hidden="true"></span>
                     </button>
                     <ul id="manager-subnav" class="nav-submenu" <?php p($isManagerPage ? '' : 'hidden'); ?>>
                         <li class="<?php p($isManagerDashboard ? 'active' : ''); ?>" <?php p($isManagerDashboard ? 'aria-current="page"' : ''); ?>>

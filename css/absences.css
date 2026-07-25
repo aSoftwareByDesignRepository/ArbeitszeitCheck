@@ -180,10 +180,29 @@
 	border-top: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
 }
 
-/* Past-record badges: css/common/badges.css (.badge--past-record) */
+/*
+ * Type + past-record sit on one line (table cell and detail hero).
+ * Do not use margin-top on past-record — that stacked the badge under the type.
+ */
+.absence-type-badges {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem;
+	max-width: 100%;
+	vertical-align: middle;
+}
+
 .badge--past-record,
 .absence-past-record-badge {
-	margin-top: var(--space-2, 0.5rem);
+	margin-top: 0;
+}
+
+#app-content.azc-app--absences .absences-table .badge--past-record,
+#app-content.azc-app--absences .absences-table .absence-past-record-badge,
+#app-content.azc-app--absences .absence-detail-badges .badge--past-record {
+	margin-top: 0;
+	margin-inline-start: 0;
 }
 
 /* Visually-disabled form section used to dim the substitute selector for
@@ -197,9 +216,6 @@
 	cursor: not-allowed;
 }
 
-.absence-detail-badges .badge--past-record {
-	margin-top: 0;
-}
 .form-help--status {
 	color: var(--arbeitszeitcheck-color-text-maxcontrast);
 	font-style: italic;

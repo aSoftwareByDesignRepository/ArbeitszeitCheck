@@ -94,4 +94,17 @@ final class LaborLawProfile
 
 		return $tiers;
 	}
+
+	/**
+	 * Human-readable hours for UI / compliance messages.
+	 * Keeps fractional Swiss thresholds (5.5) intact — never truncate with (int).
+	 */
+	public static function formatHoursLabel(float $hours): string
+	{
+		if (abs($hours - round($hours)) < 0.001) {
+			return (string)(int)round($hours);
+		}
+
+		return rtrim(rtrim(number_format($hours, 1, '.', ''), '0'), '.');
+	}
 }

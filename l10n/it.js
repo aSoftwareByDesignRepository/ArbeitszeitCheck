@@ -2764,6 +2764,7 @@ OC.L10N.register(
 	"Recent violations" : "Violazioni recenti",
 	"Recipient input is too long. Please reduce the number of addresses." : "L'input dei destinatari è troppo lungo. Riducete il numero di indirizzi.",
 	"recommended" : "consigliato",
+	"Recommended" : "Recommended",
 	"Recommended: 120 to 240 minutes. After this threshold, an open break is automatically finalized by clocking out." : "Consigliato: 120–240 minuti. Oltre questa soglia, una pausa aperta viene finalizzata automaticamente con la timbratura di uscita.",
 	"Record absence" : "Registrare assenza",
 	"Record approved absence for an employee" : "Registrare assenza approvata per un dipendente",

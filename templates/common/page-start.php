@@ -54,11 +54,12 @@ $pageIcons = [
 	'admin-teams' => 'building-2',
 	'admin-vacation-layers' => 'layers',
 	'admin-audit-log' => 'scroll-text',
-	'admin-license' => 'key',
-	'admin-kiosk' => 'tablet',
-	'admin-settings' => 'shield',
-	'access-denied' => 'lock',
-];
+		'admin-license' => 'key',
+		'admin-kiosk' => 'tablet',
+		'admin-settings' => 'shield',
+		'admin-support-us' => 'heart-handshake',
+		'access-denied' => 'lock',
+	];
 $headerIconName = $pageIcons[$pageId] ?? 'layout-grid';
 
 $urlsJson = htmlspecialchars(json_encode($urls, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');

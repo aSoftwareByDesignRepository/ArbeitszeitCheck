@@ -166,7 +166,7 @@
 
 		body.innerHTML = entries.map((entry) => {
 			const pastBadge = isPastRecord(entry)
-				? ` <span class="badge badge--past-record">${escapeHtml(t('Past record', 'Past record'))}</span>`
+				? `<span class="badge badge--past-record">${escapeHtml(t('Past record', 'Past record'))}</span>`
 				: '';
 			const statusLabel = entry.statusLabel || entry.status || '-';
 			const statusVariant = Utils.badgeVariantForAbsenceStatus
@@ -175,6 +175,7 @@
 			const statusBadge = Utils.renderBadgeHtml
 				? Utils.renderBadgeHtml(statusLabel, statusVariant)
 				: `<span class="badge badge--${escapeHtml(statusVariant)}">${escapeHtml(statusLabel)}</span>`;
+			const statusCell = `<span class="absence-type-badges">${statusBadge}${pastBadge}</span>`;
 			const td = (label, html, cls = '') => Utils.responsiveTd
 				? Utils.responsiveTd(label, html, cls)
 				: `<td${cls ? ` class="${cls}"` : ''}>${html}</td>`;
@@ -185,7 +186,7 @@
 			td(t('Start date', 'Start date'), escapeHtml(formatDate(entry.startDate))),
 			td(t('End date', 'End date'), escapeHtml(formatDate(entry.endDate))),
 			td(t('Days', 'Days'), escapeHtml(formatDays(entry.days))),
-			td(t('Status', 'Status'), `${statusBadge}${pastBadge}`),
+			td(t('Status', 'Status'), statusCell),
 			td(t('Reason', 'Reason'), escapeHtml(entry.reason || t('No reason', 'No reason')), 'reason-cell'),
 			'</tr>',
 			].join('');

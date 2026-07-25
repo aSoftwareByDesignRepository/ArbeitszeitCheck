@@ -116,6 +116,14 @@ $mutations = [
 		'to' => "if (\$minBreakMinutes === null || \$minBreakMinutes <= 0) {\n\t\t\treturn self::DEFAULT_MIN_MINUTES;\n\t\t}\n\n\t\treturn self::DEFAULT_MIN_MINUTES;",
 		'filters' => ['BreakCountableTest', 'TimeEntryClockPayloadBuilderTest', 'TimeEntryTest'],
 	],
+	[
+		// CH ArG 5.5 h must not become "5" in employee-facing messages.
+		'name' => 'format_hours_truncates_fraction',
+		'file' => 'lib/Support/LaborLawProfile.php',
+		'from' => "if (abs(\$hours - round(\$hours)) < 0.001) {\n\t\t\treturn (string)(int)round(\$hours);\n\t\t}\n\n\t\treturn rtrim(rtrim(number_format(\$hours, 1, '.', ''), '0'), '.');",
+		'to' => "return (string)(int)\$hours;",
+		'filters' => ['LaborLawProfileFactoryTest'],
+	],
 ];
 
 $failedToKill = [];

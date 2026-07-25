@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 1.6.0 - 2026-07-24
 
+### Fixed
+
+- **Sidebar submenu hierarchy:** Administration/Manager child labels now nest past the parent text column. Two cascade bugs: (1) `#app-navigation .nav-menu a { padding }` wiped submenu indent; (2) `.nav-menu span { flex: 1 }` stretched icon spans (~100px) so labels started mid-sidebar and children looked left-aligned with icons. Icons are fixed-size; indent uses shared tokens + a non-colour nest rail.
+- **Swiss 5.5 h break message:** compliance violations for the ArG Art. 15 half-hour threshold no longer truncate to “after 5 hours” (`%2$d` / `(int)` cast). Hours labels are shared via `LaborLawProfile::formatHoursLabel()`.
+- **Admin DACH help copy:** daily-max / rest / compliance help texts mention Switzerland (ArG) alongside Germany and Austria.
+
 ### Added
 
 - **Austria (DACH phase 1):** the instance can now be configured for Austria. New "Country and region" card in the admin settings (accessible radio cards for Germany/Austria with a country-filtered region picker), all nine Austrian Bundesländer as holiday regions (`AT-B` … `AT-W`), and a complete Austrian statutory holiday catalog (13 nationwide days per ARG §7, Easter-linked days included).

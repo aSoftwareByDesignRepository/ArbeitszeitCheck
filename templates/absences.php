@@ -660,27 +660,29 @@ $absenceFormEndDisplay = ($mode === 'create')
                                     <?php $isPastAbsence = $absence->getEndDate() < $today; ?>
                                     <tr data-absence-id="<?php p($absence->getId()); ?>" data-status="<?php p($absence->getStatus()); ?>">
                                         <td data-label="<?php p($l->t('Type')); ?>">
-                                            <span class="absence-type-badge type-<?php p($absence->getType()); ?>">
-                                                <?php 
-                                                $typeKey = $absence->getType();
-                                                $typeLabel = match($typeKey) {
-                                                    'vacation' => $l->t('Vacation'),
-                                                    'sick' => $l->t('Sick Leave'),
-                                                    'sick_leave' => $l->t('Sick Leave'),
-                                                    'personal_leave' => $l->t('Personal Leave'),
-                                                    'parental_leave' => $l->t('Parental Leave'),
-                                                    'special_leave' => $l->t('Special Leave'),
-                                                    'unpaid_leave' => $l->t('Unpaid Leave'),
-                                                    'home_office' => $l->t('Home Office'),
-                                                    'business_trip' => $l->t('Business Trip'),
-                                                    default => $l->t('Absence')
-                                                };
-                                                p($typeLabel);
-                                                ?>
+                                            <span class="absence-type-badges">
+                                                <span class="absence-type-badge type-<?php p($absence->getType()); ?>">
+                                                    <?php
+                                                    $typeKey = $absence->getType();
+                                                    $typeLabel = match($typeKey) {
+                                                        'vacation' => $l->t('Vacation'),
+                                                        'sick' => $l->t('Sick Leave'),
+                                                        'sick_leave' => $l->t('Sick Leave'),
+                                                        'personal_leave' => $l->t('Personal Leave'),
+                                                        'parental_leave' => $l->t('Parental Leave'),
+                                                        'special_leave' => $l->t('Special Leave'),
+                                                        'unpaid_leave' => $l->t('Unpaid Leave'),
+                                                        'home_office' => $l->t('Home Office'),
+                                                        'business_trip' => $l->t('Business Trip'),
+                                                        default => $l->t('Absence')
+                                                    };
+                                                    p($typeLabel);
+                                                    ?>
+                                                </span>
+                                                <?php if ($isPastAbsence): ?>
+                                                    <span class="badge badge--past-record absence-past-record-badge"><?php p($l->t('Past record')); ?></span>
+                                                <?php endif; ?>
                                             </span>
-                                            <?php if ($isPastAbsence): ?>
-                                                <span class="badge badge--past-record absence-past-record-badge"><?php p($l->t('Past record')); ?></span>
-                                            <?php endif; ?>
                                         </td>
                                         <td data-label="<?php p($l->t('Start Date')); ?>"><?php p($absence->getStartDate()->format('d.m.Y')); ?></td>
                                         <td data-label="<?php p($l->t('End Date')); ?>"><?php p($absence->getEndDate()->format('d.m.Y')); ?></td>

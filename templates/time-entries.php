@@ -532,13 +532,13 @@ require __DIR__ . '/common/user-display-timezone.php';
 
                             $azcBreakIntroLines = [];
                             foreach ($azcBreakFormProfile->breakTiersAscending() as $azcTier) {
-                                $azcAfterHours = (float)$azcTier['afterHours'];
-                                $azcHoursLabel = abs($azcAfterHours - (int)$azcAfterHours) < 0.001
-                                    ? (string)(int)$azcAfterHours
-                                    : rtrim(rtrim(number_format($azcAfterHours, 1, '.', ''), '0'), '.');
                                 $azcBreakIntroLines[] = $l->t(
                                     'From %1$s hours of work: at least %2$d minutes break (%3$s)',
-                                    [$azcHoursLabel, (int)$azcTier['breakMinutes'], $azcBreakFormProfile->lawLabel('breaks')]
+                                    [
+                                        \OCA\ArbeitszeitCheck\Support\LaborLawProfile::formatHoursLabel((float)$azcTier['afterHours']),
+                                        (int)$azcTier['breakMinutes'],
+                                        $azcBreakFormProfile->lawLabel('breaks'),
+                                    ]
                                 );
                             }
                             $azcBreakIntroText = $azcBreakIntroLines !== []

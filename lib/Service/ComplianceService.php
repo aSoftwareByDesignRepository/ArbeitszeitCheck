@@ -219,11 +219,14 @@ class ComplianceService
 
     private function missingBreakMessage(array $tier, ?string $userId = null): string
     {
+        // %2$s (not %2$d): CH ArG Art. 15 uses a 5.5 h threshold — (int)5.5 === 5
+        // would lie to employees and auditors. Keep the legacy %2$d msgid unused
+        // but present in l10n for one release (parallel keys).
         return $this->l10n->t(
-            'Mandatory %1$d-minute break missing after %2$d hours of work (%3$s)',
+            'Mandatory %1$d-minute break missing after %2$s hours of work (%3$s)',
             [
                 (int)$tier['breakMinutes'],
-                (int)$tier['afterHours'],
+                LaborLawProfile::formatHoursLabel((float)$tier['afterHours']),
                 $this->profile($userId)->lawLabel('breaks'),
             ]
         );

@@ -297,14 +297,15 @@ header {
   color: var(--arbeitszeitcheck-color-text-secondary);
 }
 
-/* Links: sufficient contrast, scoped to app so we don't override Nextcloud UI */
-#app-content-wrapper a:not(.btn) {
+/* Links: sufficient contrast, scoped to app so we don't override Nextcloud UI.
+ * Button-styled anchors must keep solid fills (not link underline chrome). */
+#app-content-wrapper a:not(.btn):not(.azc-btn) {
   color: var(--arbeitszeitcheck-color-primary);
   text-decoration: underline;
 }
 
-#app-content-wrapper a:not(.btn):hover,
-#app-content-wrapper a:not(.btn):focus {
+#app-content-wrapper a:not(.btn):not(.azc-btn):hover,
+#app-content-wrapper a:not(.btn):not(.azc-btn):focus {
   color: var(--arbeitszeitcheck-color-primary-hover);
   text-decoration: underline;
 }

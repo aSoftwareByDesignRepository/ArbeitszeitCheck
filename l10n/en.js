@@ -2793,6 +2793,7 @@ OC.L10N.register(
 	"Recent violations" : "Recent violations",
 	"Recipient input is too long. Please reduce the number of addresses." : "Recipient input is too long. Please reduce the number of addresses.",
 	"recommended" : "recommended",
+	"Recommended" : "Recommended",
 	"Recommended: 120 to 240 minutes. After this threshold, an open break is automatically finalized by clocking out." : "Recommended: 120 to 240 minutes. After this threshold, an open break is automatically finalized by clocking out.",
 	"Record absence" : "Record absence",
 	"Record approved absence for an employee" : "Record approved absence for an employee",

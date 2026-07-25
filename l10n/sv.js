@@ -2764,6 +2764,7 @@ OC.L10N.register(
 	"Recent violations" : "Seneste överträdelser",
 	"Recipient input is too long. Please reduce the number of addresses." : "Modtagerens input er för langt. Reducer antallet av adresser.",
 	"recommended" : "anbefales",
+	"Recommended" : "Recommended",
 	"Recommended: 120 to 240 minutes. After this threshold, an open break is automatically finalized by clocking out." : "Rekommenderat: 120 till 240 minuter. Efter denna tröskel avslutas en öppen rast automatiskt genom utstämpling.",
 	"Record absence" : "Rekord frånvaro",
 	"Record approved absence for an employee" : "Registrer godkänd frånvaro för en medarbetare",

@@ -104,6 +104,7 @@ class AdminSettings implements ISettings
 			'urlGenerator' => $this->urlGenerator,
 			'settingsShell' => 'nextcloud',
 			'inAppAdminSettingsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings'),
+			'supportUsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.supportUs'),
 			'projectCheckAvailable' => $projectCheckAvailable,
 			'requesttoken' => Util::callRegister(),
 		]);

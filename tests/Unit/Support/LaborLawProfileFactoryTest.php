@@ -122,6 +122,16 @@ class LaborLawProfileFactoryTest extends TestCase
 		$this->assertSame(45.0, $invalid->weeklyAbsoluteMaxHours, 'Non 45/50 values fall back to 45');
 	}
 
+	public function testFormatHoursLabelPreservesSwissHalfHourThreshold(): void
+	{
+		$this->assertSame('5.5', LaborLawProfile::formatHoursLabel(5.5));
+		$this->assertSame('6', LaborLawProfile::formatHoursLabel(6.0));
+		$this->assertSame('9', LaborLawProfile::formatHoursLabel(9.0));
+		$this->assertSame('7', LaborLawProfile::formatHoursLabel(7.0));
+		// Float noise near integers must still render as whole hours.
+		$this->assertSame('6', LaborLawProfile::formatHoursLabel(5.999999));
+	}
+
 	public function testResolveSwissWeeklyAbsoluteMaxFromConfig(): void
 	{
 		$config = $this->createMock(IConfig::class);

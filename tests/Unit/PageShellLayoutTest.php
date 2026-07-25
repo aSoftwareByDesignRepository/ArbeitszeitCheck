@@ -21,6 +21,7 @@ class PageShellLayoutTest extends TestCase
 		foreach ([
 			'admin-users',
 			'admin-kiosk',
+			'admin-support-us',
 			'time-entries',
 			'absences',
 			'manager-time-entries',

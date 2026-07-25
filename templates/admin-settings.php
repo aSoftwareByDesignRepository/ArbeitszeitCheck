@@ -85,10 +85,10 @@ $cancelUrl = $isNcAdminShell
                     ['href' => '#section-regional-heading', 'label' => $l->t('Region and holidays')],
                     ['href' => '#section-retention-heading', 'label' => $l->t('Data retention')],
                     ['href' => '#section-projectcheck-heading', 'label' => $l->t('ProjectCheck connection')],
-                    ['href' => '#azc-support-us-title', 'label' => $l->t('Support & us')],
                 ];
                 include __DIR__ . '/common/azc-jump-nav.php';
                 ?>
+            <div class="azc-settings-layout__main">
             <form id="admin-settings-form" class="form admin-settings-form" method="post" action="#" novalidate
                   data-initial-country="<?php p($settings['country'] ?? \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_DE); ?>">
                 <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
@@ -224,7 +224,7 @@ $cancelUrl = $isNcAdminShell
                         </label>
                     </div>
                     <p id="autoComplianceCheck-help" class="form-help">
-                        <?php p($l->t('The system will automatically check if working hours follow the configured country labour law (ArbZG or AZG). For example, it will warn when required breaks are missing.')); ?>
+                        <?php p($l->t('The system will automatically check if working hours follow the configured country labour law (ArbZG, AZG/ARG or ArG). For example, it will warn when required breaks are missing.')); ?>
                     </p>
                 </div>
 
@@ -645,7 +645,7 @@ $cancelUrl = $isNcAdminShell
                            aria-describedby="maxDailyHours-help <?php echo isset($_['errors']['maxDailyHours']) ? 'maxDailyHours-error' : ''; ?>"
                            aria-invalid="<?php echo isset($_['errors']['maxDailyHours']) ? 'true' : 'false'; ?>">
                     <p id="maxDailyHours-help" class="form-help">
-                        <?php p($l->t('Upper limit of daily working time in hours. The suggested default comes from the selected country profile (Germany ArbZG: up to 10; Austria AZG: up to 12). Changing the country does not overwrite a value you already set.')); ?>
+                        <?php p($l->t('Upper limit of daily working time in hours. The suggested default comes from the selected country profile (Germany ArbZG: up to 10; Austria AZG: up to 12; Switzerland ArG: up to 10). Changing the country does not overwrite a value you already set.')); ?>
                     </p>
                     <?php if (isset($_['errors']['maxDailyHours'])): ?>
                         <?php 
@@ -672,7 +672,7 @@ $cancelUrl = $isNcAdminShell
                            required
                            aria-describedby="minRestPeriod-help">
                     <p id="minRestPeriod-help" class="form-help">
-                        <?php p($l->t('Hours of rest between end of work and next start. German law requires at least 11 hours.')); ?>
+                        <?php p($l->t('Hours of rest between end of work and next start. DACH labour laws (ArbZG, AZG, ArG) generally require at least 11 hours.')); ?>
                     </p>
                 </div>
 
@@ -881,19 +881,19 @@ $cancelUrl = $isNcAdminShell
                 </div>
             </form>
                 <?php
-                // Support & Us — informational CTAs only; never gates AGPL use.
-                $supportUsLanguageCode = method_exists($l, 'getLanguageCode') ? (string)$l->getLanguageCode() : 'en';
-                $supportUsCssPrefix = 'azc';
-                $supportUsBtnPrimaryClass = 'azc-btn azc-btn--primary';
-                $supportUsBtnSecondaryClass = 'azc-btn azc-btn--secondary';
-                $supportUsLinks = new \OCA\ArbeitszeitCheck\Support\SupportUsLinks(
-                	'ArbeitszeitCheck',
-                	true,
-                	$urlGenerator->linkToRoute('arbeitszeitcheck.license_admin.index')
-                );
-                include __DIR__ . '/parts/support-us-section.php';
+                $supportUsUrl = (string)($_['supportUsUrl'] ?? '');
+                if ($supportUsUrl !== ''):
                 ?>
-            </div>
+                <aside class="azc-admin-settings__support-link" aria-labelledby="azc-admin-settings-support-heading">
+                    <h2 id="azc-admin-settings-support-heading" class="visually-hidden"><?php p($l->t('Support & us')); ?></h2>
+                    <p>
+                        <?php p($l->t('Need partner care, a workshop, or a commissioned feature?')); ?>
+                        <a href="<?php p($supportUsUrl); ?>"><?php p($l->t('Open Support & us')); ?></a>
+                    </p>
+                </aside>
+                <?php endif; ?>
+            </div><!-- /.azc-settings-layout__main -->
+            </div><!-- /.azc-settings-layout -->
 <script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
 window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
 window.ArbeitszeitCheck.adminSettingsApiUrl = <?php echo json_encode($apiSettingsUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

@@ -55,6 +55,17 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertStringContainsString('role="group"', $src);
 		self::assertStringContainsString('Support & us', $src);
 		self::assertStringContainsString('aria-hidden="true"', $src);
+		self::assertStringContainsString('card__header', $src);
+		self::assertStringContainsString('-card__header', $src);
+		self::assertStringNotContainsString('-section__header', $src);
+		self::assertStringContainsString('card__body', $src);
+		self::assertStringContainsString('-card__body', $src);
+		self::assertStringContainsString('card__lead', $src);
+		self::assertStringContainsString('admin-settings-section', $src);
+		self::assertStringContainsString('support-us__secondary-title', $src);
+		self::assertStringContainsString('Recommended', $src);
+		self::assertStringContainsString("supportUsPresentation === 'page'", $src);
+		self::assertStringContainsString('data-support-us-presentation', $src);
 	}
 
 	public function testMobileLicenseBlockIsConditional(): void {
@@ -79,6 +90,7 @@ final class SupportUsSectionContractTest extends TestCase {
 		$candidates = [
 			$root . '/css/app.css',
 			$root . '/css/admin-settings.css',
+			$root . '/css/admin-support-us.css',
 			$root . '/css/stockcheck.css',
 		];
 		$css = '';
@@ -88,11 +100,61 @@ final class SupportUsSectionContractTest extends TestCase {
 			}
 		}
 		self::assertStringContainsString('azc-support-us', $css);
+		self::assertStringContainsString('azc-support-us-page', $css);
 		self::assertStringContainsString(':focus-visible', $css);
 		self::assertStringContainsString('prefers-reduced-motion', $css);
 		self::assertStringContainsString('min-height: 2.75rem', $css);
 		self::assertStringContainsString('support-us__option', $css);
 		self::assertStringContainsString('support-us__benefit', $css);
 		self::assertStringContainsString('support-us__coverage', $css);
+		self::assertStringContainsString('support-us__options', $css);
+		self::assertStringContainsString('support-us__eyebrow', $css);
+		self::assertStringContainsString('support-us__primary-actions', $css);
+		self::assertStringContainsString('azc-support-us-page__logo', $css);
+		self::assertStringContainsString('width: min(17.5rem, 88vw)', $css);
+		self::assertStringContainsString('aspect-ratio: 354.24 / 114.56', $css);
+		self::assertStringContainsString(
+			'a.azc-support-us__cta.azc-btn--primary',
+			$css,
+			'Page-scoped primary CTA reinforcement must remain'
+		);
+		self::assertMatchesRegularExpression(
+			'/a\.azc-support-us__cta\.azc-btn--primary\s*\{[^}]*background-color:[^;]*!important/s',
+			$css
+		);
+		self::assertStringContainsString('background-color: #ffffff !important', $css);
+	}
+
+	public function testSupportUsLivesOnDedicatedAdminPageNotSettingsEmbed(): void {
+		$root = dirname(__DIR__, 3);
+		$settings = (string)file_get_contents($root . '/templates/admin-settings.php');
+		$page = (string)file_get_contents($root . '/templates/admin-support-us.php');
+		$routes = (string)file_get_contents($root . '/appinfo/routes.php');
+		$nav = (string)file_get_contents($root . '/templates/common/navigation.php');
+
+		self::assertStringNotContainsString('support-us-section.php', $settings);
+		self::assertStringNotContainsString('#azc-support-us-title', $settings);
+		self::assertStringContainsString('supportUsUrl', $settings);
+		self::assertStringContainsString('Open Support & us', $settings);
+
+		self::assertStringContainsString('support-us-section.php', $page);
+		self::assertStringContainsString("supportUsPresentation = 'page'", $page);
+		self::assertStringContainsString('azc-support-us-page__hero', $page);
+		self::assertStringContainsString('SupportUsLinks', $page);
+		self::assertStringContainsString('vendor-logo-sbd.svg', $page);
+		self::assertStringContainsString('data-azc-vendor-logo="1"', $page);
+		self::assertStringContainsString('rel="noopener noreferrer"', $page);
+		$section = (string)file_get_contents($root . '/templates/parts/support-us-section.php');
+		self::assertStringContainsString('support-us__cta--primary', $section);
+		self::assertStringContainsString('support-us__cta--secondary', $section);
+		self::assertFileExists($root . '/img/vendor-logo-sbd.svg');
+		$logo = (string)file_get_contents($root . '/img/vendor-logo-sbd.svg');
+		self::assertStringContainsString('Software by Design', $logo);
+		self::assertStringNotContainsString('<script', $logo);
+
+		self::assertStringContainsString("admin#supportUs", $routes);
+		self::assertStringContainsString('/admin/support-us', $routes);
+		self::assertStringContainsString('admin.supportUs', $nav);
+		self::assertStringContainsString('admin-support-us', $nav);
 	}
 }

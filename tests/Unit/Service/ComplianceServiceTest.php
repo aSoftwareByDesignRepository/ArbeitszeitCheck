@@ -1182,7 +1182,10 @@ class ComplianceServiceTest extends TestCase
 		$issues = $this->service->blockingIssuesForCompletedEntry($short);
 		$this->assertNotEmpty($issues);
 		$this->assertStringContainsString('ArG Art. 15', $issues[0]);
-		$this->assertStringContainsString('15', $issues[0]);
+		$this->assertStringContainsString('15-minute', $issues[0]);
+		// Must preserve the fractional 5.5 h ArG threshold — (int)5.5 === 5 would lie.
+		$this->assertStringContainsString('5.5', $issues[0]);
+		$this->assertStringNotContainsString('after 5 hours', $issues[0]);
 
 		$ok = new TimeEntry();
 		$ok->setUserId('ch-user');

@@ -93,9 +93,20 @@
 	box-sizing: border-box;
 }
 
+#app-content.azc-app--manager-time-entries .manager-scope-page .absence-type-badges,
+#app-content.azc-app--manager-absences .manager-scope-page .absence-type-badges {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem;
+	max-width: 100%;
+	vertical-align: middle;
+}
+
 #app-content.azc-app--manager-time-entries .manager-scope-page .badge--past-record,
 #app-content.azc-app--manager-absences .manager-scope-page .badge--past-record {
-	margin-left: 0.35rem;
+	margin-top: 0;
+	margin-inline-start: 0;
 }
 
 @media (max-width: 768px) {

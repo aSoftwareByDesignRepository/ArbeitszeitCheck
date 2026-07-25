@@ -848,8 +848,34 @@ class AdminController extends Controller
 				'urlGenerator' => $this->urlGenerator,
 				'settingsShell' => 'app',
 				'inAppAdminSettingsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings'),
+				'supportUsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.supportUs'),
 				'projectCheckAvailable' => $projectCheckAvailable,
 				'requesttoken' => Util::callRegister(),
+			],
+		));
+		return $this->configureCSP($response, 'admin');
+	}
+
+	/**
+	 * Support & us — partner care / invoiceable options (admin-only; informational CTAs).
+	 *
+	 * Security: AppAdminMiddleware gates all AdminController methods. This page
+	 * never gates AGPL use; it only surfaces mailto/https CTAs with noopener on
+	 * external targets.
+	 */
+	#[NoCSRFRequired]
+	public function supportUs(): TemplateResponse
+	{
+		$this->registerFrontEndAssets('', 'admin-support-us');
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-support-us', array_merge(
+			$this->buildAdminShellParams(
+				'admin-support-us',
+				$this->l10n->t('Support & us'),
+				$this->l10n->t('Partner care, workshops, commissioned features, and voluntary sponsors — the app stays free under AGPL.'),
+			),
+			[
+				'urlGenerator' => $this->urlGenerator,
 			],
 		));
 		return $this->configureCSP($response, 'admin');

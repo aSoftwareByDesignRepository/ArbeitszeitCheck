@@ -122,6 +122,23 @@ class TableConventionTest extends TestCase
 		$absences = (string)file_get_contents(__DIR__ . '/../../templates/absences.php');
 		$this->assertStringContainsString('azc-table-actions', $timeEntries);
 		$this->assertStringContainsString('azc-table-actions', $absences);
+		// Type + Past record must share one inline flex group (not stacked siblings).
+		$this->assertStringContainsString('class="absence-type-badges"', $absences);
+		$this->assertStringNotContainsString('class="absence-type-badges-', $absences);
+		$typeCellPos = strpos($absences, 'class="absence-type-badges"');
+		$pastPos = strpos($absences, 'absence-past-record-badge');
+		$this->assertNotFalse($typeCellPos);
+		$this->assertNotFalse($pastPos);
+		$this->assertLessThan($pastPos, $typeCellPos);
+		$css = (string)file_get_contents(__DIR__ . '/../../css/absences.css');
+		$this->assertStringContainsString('.absence-type-badges {', $css);
+		$this->assertMatchesRegularExpression(
+			'/\.badge--past-record,\s*\n\.absence-past-record-badge \{\s*\n\tmargin-top: 0;/',
+			$css
+		);
+		$managerJs = (string)file_get_contents(__DIR__ . '/../../js/manager-absences.js');
+		$this->assertStringContainsString('class="absence-type-badges"', $managerJs);
+		$this->assertStringContainsString('badge--past-record', $managerJs);
 	}
 
 	public function testUtilsExposeResponsiveTableHelpers(): void

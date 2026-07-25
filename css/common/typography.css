@@ -149,19 +149,20 @@
   margin-bottom: 0;
 }
 
-/* Link Styles - Scoped to app content only to avoid affecting Nextcloud navigation */
-#app-content-wrapper a {
+/* Link Styles - Scoped to app content only to avoid affecting Nextcloud navigation.
+ * Exclude button-styled anchors (.btn / .azc-btn) so CTAs keep solid fills. */
+#app-content-wrapper a:not(.btn):not(.azc-btn) {
   color: var(--arbeitszeitcheck-link-color);
   text-decoration: var(--arbeitszeitcheck-link-decoration);
   transition: var(--arbeitszeitcheck-link-transition);
 }
 
-#app-content-wrapper a:hover {
+#app-content-wrapper a:not(.btn):not(.azc-btn):hover {
   color: var(--arbeitszeitcheck-link-color-hover);
   text-decoration: var(--arbeitszeitcheck-link-decoration-hover);
 }
 
-#app-content-wrapper a:focus {
+#app-content-wrapper a:not(.btn):not(.azc-btn):focus {
   outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
   outline-offset: 2px;
 }
