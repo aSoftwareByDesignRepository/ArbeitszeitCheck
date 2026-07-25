@@ -783,7 +783,7 @@ $cancelUrl = $isNcAdminShell
                         ?>
                     </select>
                     <p id="germanState-help" class="form-help">
-                        <?php p($l->t('Used for statutory holidays and compliance when no specific region is configured for employees or teams.')); ?>
+                        <?php p($l->t('Used for statutory holidays and compliance when no specific region is configured for employees.')); ?>
                     </p>
                 </div>
 

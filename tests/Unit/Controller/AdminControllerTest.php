@@ -2563,6 +2563,29 @@ class AdminControllerTest extends TestCase
 		$this->assertSame('AT-W', $data['settings']['germanState']);
 	}
 
+	/**
+	 * Orphan pairs (country=AT, german_state=NW) must heal even when the
+	 * request does not touch country — self-heal after concurrent races.
+	 */
+	public function testUpdateAdminSettingsHealsOrphanRegionWithoutCountryChange(): void
+	{
+		$store = &$this->wireAppConfigStore([
+			'country' => 'AT',
+			'german_state' => 'NW',
+		]);
+		$this->request->method('getParams')->willReturn([
+			'retentionPeriod' => 3,
+		]);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('AT', $store['country']);
+		$this->assertSame('AT-W', $store['german_state'], 'Orphan NW under AT must heal on any settings write');
+		$this->assertSame('AT-W', $data['settings']['germanState']);
+	}
+
 	public function testUpdateAdminSettingsAcceptsSwissCountryWithMatchingCanton(): void
 	{
 		$store = &$this->wireAppConfigStore(['german_state' => 'NW']);
@@ -2732,7 +2755,29 @@ class AdminControllerTest extends TestCase
 		$this->assertTrue($byDate['2026-04-03']['exists'], 'Existing date must be flagged');
 		$this->assertArrayHasKey('2026-12-24', $byDate, 'Christmas Eve must be suggested');
 		$this->assertFalse($byDate['2026-12-24']['exists']);
+		$this->assertSame('half', $byDate['2026-12-24']['kind'], 'AT Dec 24 company suggestion defaults to half-day');
+		$this->assertArrayHasKey('2026-12-31', $byDate, 'New Year\'s Eve must be suggested');
+		$this->assertSame('half', $byDate['2026-12-31']['kind'], 'AT Dec 31 company suggestion defaults to half-day');
 		$this->assertArrayHasKey('2026-11-15', $byDate, 'St. Leopold (Vienna patron) must be suggested');
+		$this->assertSame('full', $byDate['2026-11-15']['kind'], 'Patron day remains full-day');
+	}
+
+	public function testGetHolidaySuggestionsSwissDec24And31AreHalf(): void
+	{
+		$this->holidayCalendarService->method('getHolidaysForRange')->willReturn([]);
+
+		$response = $this->controller->getHolidaySuggestions('CH-ZH', 2026);
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+		$this->assertSame('CH', $data['country']);
+
+		$byDate = [];
+		foreach ($data['suggestions'] as $suggestion) {
+			$byDate[$suggestion['date']] = $suggestion;
+		}
+		$this->assertSame('half', $byDate['2026-12-24']['kind'] ?? null);
+		$this->assertSame('half', $byDate['2026-12-31']['kind'] ?? null);
 	}
 
 	public function testGetHolidaySuggestionsForGermanRegionIsEmpty(): void

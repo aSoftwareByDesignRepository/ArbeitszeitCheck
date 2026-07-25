@@ -208,4 +208,26 @@ final class RegionRegistry
 	{
 		return self::allRegions()[strtoupper(trim($regionCode))] ?? $regionCode;
 	}
+
+	/**
+	 * Resolve a stored default region against the organisation country.
+	 * Invalid codes OR regions of another country fall back to the country default
+	 * (prevents orphan pairs like country=AT + german_state=NW after races / legacy).
+	 */
+	public static function resolveDefaultRegionForCountry(string $country, string $storedRegion): string
+	{
+		$country = strtoupper(trim($country));
+		if (!self::isSupportedCountry($country)) {
+			$country = self::COUNTRY_DE;
+		}
+		$fallback = self::defaultRegionForCountry($country);
+		$region = strtoupper(trim($storedRegion));
+		if ($region === ''
+			|| !self::isValidRegion($region)
+			|| self::countryOf($region) !== $country) {
+			return $fallback;
+		}
+
+		return $region;
+	}
 }

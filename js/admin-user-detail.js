@@ -443,7 +443,7 @@
         const noModelLabel = t('noModel', 'No Model Assigned');
         const germanStateLabel = t('germanStateLabel', 'Region for public holidays');
         const germanStateHelp = t('germanStateHelp', 'Select the region whose holiday calendar applies to this person. If not set, the instance default region is used.');
-        const germanStateDefault = t('germanStateDefault', 'Use global default state');
+        const germanStateDefault = t('germanStateDefault', 'Instance default (currently: %s)');
         const datePlaceholder = Utils.escapeHtml(t('ddmmYYYY', 'dd.mm.yyyy'));
 
         const DEFAULT_VACATION_DAYS = (typeof window.ArbeitszeitCheck !== 'undefined'
@@ -525,12 +525,13 @@
 
         const instanceCountry = user.instanceCountry || (window.ArbeitszeitCheck && window.ArbeitszeitCheck.holidayRegionContext && window.ArbeitszeitCheck.holidayRegionContext.country) || 'DE';
         const currentLaborLaw = user.laborLawCountry || '';
-        const laborLawDefault = t('laborLawCountryDefault', 'Same as organisation (%s)').replace('%s', instanceCountry);
         const countryLabels = {
             DE: t('countryGermany', 'Germany'),
             AT: t('countryAustria', 'Austria'),
             CH: t('countrySwitzerland', 'Switzerland'),
         };
+        const laborLawDefault = t('laborLawCountryDefault', 'Same as organisation (%s)')
+            .replace('%s', countryLabels[instanceCountry] || instanceCountry);
         let laborLawOptions = `<option value="">${Utils.escapeHtml(laborLawDefault)}</option>`;
         ['DE', 'AT', 'CH'].forEach(code => {
             const selected = currentLaborLaw === code ? 'selected' : '';
@@ -811,9 +812,10 @@
             });
         }
 
-        // Cross-border note: visible while the selected region belongs to a
-        // different country than the instance (holidays vs. working time law).
+        // Cross-border note: visible when holiday region country differs from the
+        // effective labour-law country (instance default OR per-user override).
         const regionSelectEl = document.getElementById('user-german-state');
+        const laborLawSelectEl = document.getElementById('user-labor-law-country');
         const crossBorderNoteEl = document.getElementById('user-german-state-crossborder');
         if (regionSelectEl && crossBorderNoteEl) {
             const instanceCountry = (window.ArbeitszeitCheck
@@ -825,9 +827,13 @@
             };
             const syncCrossBorderNote = () => {
                 const code = String(regionSelectEl.value || '');
-                crossBorderNoteEl.hidden = code === '' || countryOfRegion(code) === instanceCountry;
+                const lawCountry = String((laborLawSelectEl && laborLawSelectEl.value) || '').toUpperCase() || instanceCountry;
+                crossBorderNoteEl.hidden = code === '' || countryOfRegion(code) === lawCountry;
             };
             regionSelectEl.addEventListener('change', syncCrossBorderNote);
+            if (laborLawSelectEl) {
+                laborLawSelectEl.addEventListener('change', syncCrossBorderNote);
+            }
             syncCrossBorderNote();
         }
 

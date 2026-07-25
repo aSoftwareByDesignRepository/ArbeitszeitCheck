@@ -783,7 +783,7 @@ class AdminController extends Controller
 	#[NoCSRFRequired]
 	public function settings(): TemplateResponse
 	{
-		$this->registerFrontEndAssets('admin-settings', 'admin-settings', ['common/projectcheck'], ['common/settings-jump-nav', 'common/admin-user-picker']);
+		$this->registerFrontEndAssets('admin-settings', 'admin-settings', ['common/projectcheck', 'common/country-region'], ['common/settings-jump-nav', 'common/admin-user-picker']);
 
 
 
@@ -971,10 +971,12 @@ class AdminController extends Controller
 	private function getConfiguredDefaultRegion(): string
 	{
 		$country = $this->getConfiguredCountry();
-		$fallback = RegionRegistry::defaultRegionForCountry($country);
-		$region = strtoupper(trim($this->appConfig->getAppValueString('german_state', $fallback)));
+		$stored = $this->appConfig->getAppValueString(
+			'german_state',
+			RegionRegistry::defaultRegionForCountry($country)
+		);
 
-		return RegionRegistry::isValidRegion($region) ? $region : $fallback;
+		return RegionRegistry::resolveDefaultRegionForCountry($country, $stored);
 	}
 
 	/**
@@ -988,7 +990,7 @@ class AdminController extends Controller
 		// One-time legacy migration: import old company_holidays JSON into at_holidays
 		$this->migrateLegacyCompanyHolidaysIfNeeded();
 
-		$this->registerFrontEndAssets('admin-holidays', 'admin-holidays', [], ['common/datepicker']);
+		$this->registerFrontEndAssets('admin-holidays', 'admin-holidays', ['common/country-region'], ['common/datepicker']);
 
 		$defaultState = $this->getConfiguredDefaultRegion();
 		$statutoryAutoReseed = $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1';
@@ -1279,10 +1281,12 @@ class AdminController extends Controller
 			}
 
 			$suggestions = [];
+			$country = RegionRegistry::countryOf($state);
 			foreach ($suggested as $date => $msgid) {
 				$suggestions[] = [
 					'date' => $date,
 					'name' => $this->l10n->t($msgid),
+					'kind' => $this->suggestedCompanyHolidayKind((string)$date, $country),
 					'exists' => isset($existingByDate[$date]),
 				];
 			}
@@ -1291,7 +1295,7 @@ class AdminController extends Controller
 				'success' => true,
 				'state' => $state,
 				'year' => $year,
-				'country' => RegionRegistry::countryOf($state),
+				'country' => $country,
 				'suggestions' => $suggestions,
 			]);
 		} catch (\Throwable $e) {
@@ -1300,6 +1304,20 @@ class AdminController extends Controller
 				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * Default kind when promoting a catalog suggestion to a company holiday.
+	 * AT/CH 24 Dec and 31 Dec are almost always half-days in practice.
+	 */
+	private function suggestedCompanyHolidayKind(string $date, string $country): string
+	{
+		if (($country === RegionRegistry::COUNTRY_AT || $country === RegionRegistry::COUNTRY_CH)
+			&& preg_match('/^\d{4}-12-(24|31)$/', $date) === 1) {
+			return 'half';
+		}
+
+		return 'full';
 	}
 
 	/**
@@ -2065,12 +2083,14 @@ class AdminController extends Controller
 								'error' => $this->l10n->t('Invalid region code')
 							], Http::STATUS_BAD_REQUEST);
 						}
-						// Default region must belong to the instance country
-						// (per-user regions may cross the border, the instance
-						// default must not).
+						// Re-read country at write time (not only from request params) so a
+						// concurrent country-change cannot validate NW against stale DE.
 						$targetCountry = isset($params['country'])
 							? strtoupper(trim((string)$params['country']))
 							: $this->getConfiguredCountry();
+						if (!RegionRegistry::isSupportedCountry($targetCountry)) {
+							$targetCountry = $this->getConfiguredCountry();
+						}
 						if (RegionRegistry::countryOf($value) !== $targetCountry) {
 							return new JSONResponse([
 								'success' => false,
@@ -2126,24 +2146,20 @@ class AdminController extends Controller
 				}
 			}
 
-			// Consistency: after a country change the default region must belong
-			// to the new country. If not (and no explicit region was supplied in
-			// the same request), reset it to the country's default region so
-			// holiday lookups never silently fall back (plan §3.4).
-			if (isset($updatedSettings['country']) || isset($updatedSettings['weeklyAbsoluteMaxHours'])) {
-				$country = isset($updatedSettings['country'])
-					? (string)$updatedSettings['country']
-					: $this->getConfiguredCountry();
-				if (isset($updatedSettings['country'])) {
-					$currentRegion = strtoupper($this->appConfig->getAppValueString('german_state', ''));
-					if ($currentRegion === ''
-						|| !RegionRegistry::isValidRegion($currentRegion)
-						|| RegionRegistry::countryOf($currentRegion) !== $country) {
-						$defaultRegion = RegionRegistry::defaultRegionForCountry($country);
-						$this->appConfig->setAppValueString('german_state', $defaultRegion);
-						$updatedSettings['germanState'] = $defaultRegion;
-					}
-				}
+			// Consistency: default region must always belong to the configured
+			// country. Runs after every settings write (not only on country change)
+			// so interleaved region-only + country POSTs cannot leave orphan pairs
+			// like country=AT + german_state=NW.
+			$effectiveCountry = isset($updatedSettings['country'])
+				? (string)$updatedSettings['country']
+				: $this->getConfiguredCountry();
+			$currentRegion = strtoupper($this->appConfig->getAppValueString('german_state', ''));
+			$resolvedRegion = RegionRegistry::resolveDefaultRegionForCountry($effectiveCountry, $currentRegion);
+			if ($resolvedRegion !== $currentRegion) {
+				$this->appConfig->setAppValueString('german_state', $resolvedRegion);
+				$updatedSettings['germanState'] = $resolvedRegion;
+			}
+			if (isset($updatedSettings['country']) || isset($updatedSettings['weeklyAbsoluteMaxHours']) || isset($updatedSettings['germanState'])) {
 				// Drop request-cached labour-law profile so same-request readers
 				// (compliance, capabilities) see the new country / weekly cap immediately.
 				$this->clearLaborLawProfileCache();
@@ -3288,9 +3304,10 @@ class AdminController extends Controller
 			// Get all available working time models
 			$allModels = $this->workingTimeModelMapper->findAll();
 
-			// Resolve Bundesland / holiday calendar for this user:
-			// per-user setting (german_state) falls back to global default.
-			$defaultState = $this->appConfig->getAppValueString('german_state', 'NW');
+			// Resolve holiday region for this user: per-user setting falls back
+			// to the country-aware organisation default (never hardcode NW —
+			// AT/CH instances must surface AT-W / CH-ZH when config is empty).
+			$defaultState = $this->getConfiguredDefaultRegion();
 			$userGermanState = $this->userSettingsMapper->getStringSetting($userId, 'german_state', $defaultState);
 			$userLaborLawCountry = $this->userSettingsMapper->getStringSetting(
 				$userId,

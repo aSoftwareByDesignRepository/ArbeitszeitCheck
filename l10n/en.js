@@ -4308,6 +4308,12 @@ OC.L10N.register(
 	"Absolute weekly hours maximum exceeded" : "Absolute weekly hours maximum exceeded",
 	"Absolute weekly working hours maximum (%1$d hours) already exceeded (%2$s)" : "Absolute weekly working hours maximum (%1$d hours) already exceeded (%2$s)",
 	"Suggested annual vacation days" : "Suggested annual vacation days",
-	"When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany\/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically." : "When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany\/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically."
+	"When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany\/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically." : "When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany\/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically.",
+	"Country and region were saved." : "Country and region were saved.",
+	"The country and region could not be saved." : "The country and region could not be saved.",
+	"Changing the country updates working time rules for the whole organisation. Daily hour and rest limits you already set are kept — review them under Settings after switching." : "Changing the country updates working time rules for the whole organisation. Daily hour and rest limits you already set are kept — review them under Settings after switching.",
+	"Region changes are saved automatically. Country changes ask for confirmation first." : "Region changes are saved automatically. Country changes ask for confirmation first.",
+	"Used for statutory holidays and compliance when no specific region is configured for employees." : "Used for statutory holidays and compliance when no specific region is configured for employees.",
+	"This region is used automatically when no specific region is set for employees." : "This region is used automatically when no specific region is set for employees."
 	}
 );

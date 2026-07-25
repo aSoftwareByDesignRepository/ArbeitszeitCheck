@@ -29,6 +29,30 @@
 	max-width: 28rem;
 }
 
+#app-content.azc-app--admin-holidays .admin-holidays .form-fieldset {
+	margin: 0 0 var(--azc-space-3, 0.75rem);
+	padding: 0;
+	border: 0;
+	min-width: 0;
+}
+
+#app-content.azc-app--admin-holidays .admin-holidays .form-legend {
+	padding: 0;
+	margin: 0 0 var(--azc-space-2, 0.5rem);
+	font-weight: 600;
+	color: var(--color-main-text);
+	float: none;
+	width: 100%;
+}
+
+#app-content.azc-app--admin-holidays .admin-holidays .form-help {
+	margin: 0;
+	max-width: 70ch;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: var(--azc-line-base, 1.5);
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
 /* Toolbar: state + year + add (shared azc-filter-grid from page-patterns.css) */
 #app-content.azc-app--admin-holidays .admin-holidays__filter-grid {
 	grid-template-columns:

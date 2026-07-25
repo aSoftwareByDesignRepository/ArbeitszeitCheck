@@ -22,6 +22,77 @@ test.describe('DACH country & region (admin)', () => {
 		}
 	})
 
+	test('holidays UI: country radios, AT regions, confirm on country change (E-8)', async ({ page }) => {
+		await login(page, credsFromEnv('ADMIN'))
+		// Ensure known baseline before opening the page.
+		await api(page, 'POST', '/apps/arbeitszeitcheck/api/admin/settings', {
+			data: { country: 'DE', germanState: 'NW' },
+		})
+		await page.goto('/apps/arbeitszeitcheck/admin/holidays')
+		await assertArbeitszeitcheckLoaded(page)
+		await page.waitForSelector('#holiday-country-region-title', { timeout: 30000 })
+
+		await expect(page.locator('#holiday-country-de')).toBeVisible()
+		await expect(page.locator('#holiday-country-at')).toBeVisible()
+		await expect(page.locator('#holiday-country-ch')).toBeVisible()
+		await expect(page.locator('#holiday-country-de')).toBeChecked()
+
+		const defaultRegion = page.locator('#holiday-default-state')
+		await expect(defaultRegion).toBeVisible()
+		const deOptions = await defaultRegion.locator('option').evaluateAll((opts) =>
+			opts.map((o) => /** @type {HTMLOptionElement} */ (o).value)
+		)
+		expect(deOptions.every((code) => !String(code).includes('-'))).toBe(true)
+		expect(deOptions).toContain('NW')
+
+		// Calendar viewer still lists all DACH regions via optgroups.
+		const calendarRegion = page.locator('#holiday-state-select')
+		await expect(calendarRegion.locator('optgroup')).toHaveCount(3)
+
+		page.once('dialog', async (dialog) => {
+			// Fail closed: native dialogs must not appear (confirmDialog only).
+			await dialog.dismiss()
+		})
+
+		await page.locator('#holiday-country-at').check()
+		// E-8 confirm dialog (AzcComponents) — not native window.confirm.
+		const confirmDialog = page.locator('.confirm-dialog[role="alertdialog"], .confirm-dialog[role="dialog"]')
+		await expect(confirmDialog).toBeVisible({ timeout: 10000 })
+		await expect(confirmDialog).toContainText(/working time|Arbeitszeit|country|Land/i)
+
+		// Cancel restores Germany.
+		await confirmDialog.locator('.confirm-dialog__cancel').click()
+		await expect(page.locator('#holiday-country-de')).toBeChecked()
+		await expect(defaultRegion).toHaveValue('NW')
+
+		// Accept Austria → persists country + AT-W default.
+		await page.locator('#holiday-country-at').check()
+		await expect(confirmDialog).toBeVisible({ timeout: 10000 })
+		await confirmDialog.locator('.confirm-dialog__confirm').click()
+
+		await expect.poll(async () => {
+			const settings = await api(page, 'GET', '/apps/arbeitszeitcheck/api/admin/settings')
+			return settings.settings?.country
+		}, { timeout: 15000 }).toBe('AT')
+
+		const atOptions = await defaultRegion.locator('option').evaluateAll((opts) =>
+			opts.map((o) => /** @type {HTMLOptionElement} */ (o).value)
+		)
+		expect(atOptions.every((code) => String(code).startsWith('AT-'))).toBe(true)
+		expect(atOptions).toContain('AT-W')
+		await expect(defaultRegion).toHaveValue('AT-W')
+
+		const live = page.locator('#holiday-country-region-live')
+		await expect(live).toHaveAttribute('aria-live', 'polite')
+
+		const axe = await new AxeBuilder({ page })
+			.include('#holiday-country-region-title')
+			.include('.admin-holidays')
+			.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+			.analyze()
+		expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([])
+	})
+
 	test('settings UI: country radios, region filter, aria-live (keyboard)', async ({ page }) => {
 		await login(page, credsFromEnv('ADMIN'))
 		await page.goto('/apps/arbeitszeitcheck/admin/settings')

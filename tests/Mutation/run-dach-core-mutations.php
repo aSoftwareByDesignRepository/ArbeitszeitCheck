@@ -51,6 +51,9 @@ $suiteFilters = [
 	'TimeEntryTest',
 	'ComplianceServiceTest',
 	'RegionListDedupGuardTest',
+	'AdminSettingsDachParityTest',
+	'SwissCantonL10nGuardTest',
+	'ComplianceControllerTest::testDashboardLeadFollowsUserLaborLawCountryOverride',
 ];
 
 echo "== baseline DACH core unit tests ==\n";
@@ -133,6 +136,27 @@ $mutations = [
 		'from' => "if (abs(\$hours - round(\$hours)) < 0.001) {\n\t\t\treturn (string)(int)round(\$hours);\n\t\t}\n\n\t\treturn rtrim(rtrim(number_format(\$hours, 1, '.', ''), '0'), '.');",
 		'to' => "return (string)(int)\$hours;",
 		'filters' => ['LaborLawProfileFactoryTest'],
+	],
+	[
+		'name' => 'resolve_default_region_ignores_country_match',
+		'file' => 'lib/Support/RegionRegistry.php',
+		'from' => "if (\$region === ''\n\t\t\t|| !self::isValidRegion(\$region)\n\t\t\t|| self::countryOf(\$region) !== \$country) {\n\t\t\treturn \$fallback;\n\t\t}",
+		'to' => "if (\$region === ''\n\t\t\t|| !self::isValidRegion(\$region)) {\n\t\t\treturn \$fallback;\n\t\t}",
+		'filters' => ['RegionRegistryTest::testResolveDefaultRegionForCountryRejectsCrossBorderOrphans'],
+	],
+	[
+		'name' => 'nc_admin_settings_drops_swiss_weekly_cap',
+		'file' => 'lib/Settings/AdminSettings.php',
+		'from' => "'weeklyAbsoluteMaxHours' => \$this->readConfiguredSwissWeeklyAbsoluteMax(),",
+		'to' => "'weeklyAbsoluteMaxHours' => 45,",
+		'filters' => ['AdminSettingsDachParityTest::testSwissFiftyHourCapSurvivesNcAdminSettingsPayload'],
+	],
+	[
+		'name' => 'compliance_lead_ignores_user_override',
+		'file' => 'lib/Controller/ComplianceController.php',
+		'from' => "\$country = \$userId !== null && \$userId !== ''\n\t\t\t? \$this->laborLawProfileFactory->getEffectiveCountry(\$userId)\n\t\t\t: \$this->laborLawProfileFactory->getConfiguredCountry();",
+		'to' => "\$country = \$this->laborLawProfileFactory->getConfiguredCountry();",
+		'filters' => ['ComplianceControllerTest::testDashboardLeadFollowsUserLaborLawCountryOverride'],
 	],
 ];
 

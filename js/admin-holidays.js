@@ -66,7 +66,7 @@
         if (holidaysPageConfig !== null) {
             return holidaysPageConfig;
         }
-        holidaysPageConfig = { statutoryAutoReseed: true, settingsUrl: '', country: 'DE' };
+        holidaysPageConfig = { statutoryAutoReseed: true, settingsUrl: '', country: 'DE', defaultState: 'NW' };
         const el = document.getElementById(HOLIDAYS_CONFIG_JSON_ID);
         if (el && el.textContent && el.textContent.trim()) {
             try {
@@ -76,6 +76,7 @@
                         statutoryAutoReseed: parsed.statutoryAutoReseed !== false,
                         settingsUrl: typeof parsed.settingsUrl === 'string' ? parsed.settingsUrl : '',
                         country: typeof parsed.country === 'string' && parsed.country !== '' ? parsed.country : 'DE',
+                        defaultState: typeof parsed.defaultState === 'string' && parsed.defaultState !== '' ? parsed.defaultState : 'NW',
                     };
                 }
             } catch (e) {
@@ -90,6 +91,57 @@
         const value = String(code || '');
         const idx = value.indexOf('-');
         return idx === -1 ? 'DE' : value.slice(0, idx);
+    }
+
+    /**
+     * Rebuild a <select> from region data for the given country.
+     * Prefers preferredRegion when it belongs to the country; otherwise the country default.
+     *
+     * @param {HTMLSelectElement} select
+     * @param {string} country
+     * @param {{regionsByCountry?: Object, defaultRegionByCountry?: Object}} regionData
+     * @param {string} [preferredRegion]
+     * @returns {string} selected region code
+     */
+    function rebuildRegionSelect(select, country, regionData, preferredRegion) {
+        const regionsByCountry = (regionData && regionData.regionsByCountry) || {};
+        const defaultByCountry = (regionData && regionData.defaultRegionByCountry) || {};
+        const regions = regionsByCountry[country] || [];
+        if (!select || regions.length === 0) {
+            return preferredRegion || '';
+        }
+        const target = regions.some(function(r) { return r.code === preferredRegion; })
+            ? preferredRegion
+            : (defaultByCountry[country] || regions[0].code);
+        select.textContent = '';
+        regions.forEach(function(region) {
+            const option = document.createElement('option');
+            option.value = region.code;
+            option.textContent = region.label;
+            option.selected = region.code === target;
+            select.appendChild(option);
+        });
+        select.value = target;
+        return target;
+    }
+
+    function parseRegionDataFromDom() {
+        const dataEl = document.getElementById('azc-holidays-region-data');
+        if (!dataEl || !dataEl.textContent || !dataEl.textContent.trim()) {
+            return { regionsByCountry: {}, defaultRegionByCountry: {} };
+        }
+        try {
+            const parsed = JSON.parse(dataEl.textContent);
+            if (parsed && typeof parsed === 'object') {
+                return {
+                    regionsByCountry: parsed.regionsByCountry || {},
+                    defaultRegionByCountry: parsed.defaultRegionByCountry || {},
+                };
+            }
+        } catch (e) {
+            console.error('[admin-holidays] Could not parse region data', e);
+        }
+        return { regionsByCountry: {}, defaultRegionByCountry: {} };
     }
 
     function isStatutoryAutoReseedEnabled() {
@@ -111,13 +163,27 @@
     }
 
     let initialized = false;
+    let regionDataCache = null;
+    let persistedCountry = 'DE';
+    let savingCountryRegion = false;
 
     function init() {
         if (initialized) {
             return;
         }
+        if (!Utils || typeof Utils.$ !== 'function') {
+            // Shared utils not loaded yet (or Vitest unit harness) — skip page boot.
+            return;
+        }
         initialized = true;
         ensureHolidaysUiStrings();
+        regionDataCache = parseRegionDataFromDom();
+        const cfg = getHolidaysPageConfig();
+        persistedCountry = String(cfg.country || 'DE').toUpperCase();
+        const card = document.querySelector('[data-initial-country]');
+        if (card) {
+            persistedCountry = String(card.getAttribute('data-initial-country') || persistedCountry).toUpperCase();
+        }
         bindEvents();
         loadExistingHolidays();
     }
@@ -136,7 +202,55 @@
         return Number.isNaN(val) ? (new Date().getFullYear()) : val;
     }
 
+    function setCountryRegionControlsBusy(busy) {
+        const defaultStateSelect = Utils.$('#holiday-default-state');
+        if (defaultStateSelect) {
+            defaultStateSelect.disabled = !!busy;
+            if (busy) {
+                defaultStateSelect.setAttribute('aria-busy', 'true');
+            } else {
+                defaultStateSelect.removeAttribute('aria-busy');
+            }
+        }
+        const radios = document.querySelectorAll('input[name="holidayCountry"]');
+        radios.forEach(function(radio) {
+            radio.disabled = !!busy;
+        });
+    }
+
+    function announceRegionLive(regionCode) {
+        const live = Utils.$('#holiday-country-region-live');
+        if (!live) {
+            return;
+        }
+        const select = Utils.$('#holiday-default-state');
+        let label = regionCode || '';
+        if (select && select.options && select.selectedIndex >= 0) {
+            label = select.options[select.selectedIndex].textContent || label;
+        }
+        live.textContent = tAzc('Region list updated. Default region: %s').replace('%s', label);
+    }
+
+    function syncCalendarViewerToRegion(regionCode) {
+        const calendarSelect = Utils.$('#holiday-state-select');
+        if (!calendarSelect || !regionCode) {
+            return;
+        }
+        const option = Array.prototype.find.call(calendarSelect.options || [], function(opt) {
+            return opt.value === regionCode;
+        });
+        if (!option) {
+            return;
+        }
+        calendarSelect.value = regionCode;
+        calendarSelect.setAttribute('data-last-value', regionCode);
+        loadExistingHolidays();
+    }
+
     function bindEvents() {
+        if (!Utils || typeof Utils.$ !== 'function') {
+            return;
+        }
         const filterForm = Utils.$('#holiday-calendar-filters');
         if (filterForm) {
             Utils.on(filterForm, 'submit', function(event) {
@@ -166,6 +280,175 @@
                 saveDefaultState(defaultStateSelect);
             });
         }
+        bindCountryRadios();
+    }
+
+    function bindCountryRadios() {
+        const radios = document.querySelectorAll('input[name="holidayCountry"]');
+        if (radios.length === 0) {
+            return;
+        }
+        radios.forEach(function(radio) {
+            Utils.on(radio, 'change', function() {
+                if (!this.checked) {
+                    return;
+                }
+                handleCountryChange(this);
+            });
+        });
+    }
+
+    /**
+     * Country change on the holidays page (E-8). Confirm first, then persist
+     * country + default region together. Esc/Cancel restores the previous radio.
+     */
+    async function handleCountryChange(radio) {
+        const nextCountry = String(radio.value || '').toUpperCase();
+        const previousCountry = persistedCountry;
+        if (nextCountry === previousCountry) {
+            return;
+        }
+        if (savingCountryRegion || countryConfirmInFlight) {
+            revertCountryRadio(previousCountry);
+            return;
+        }
+
+        const Components = window.AzcComponents || window.ArbeitszeitCheckComponents;
+        if (!Components || typeof Components.confirmDialog !== 'function') {
+            revertCountryRadio(previousCountry);
+            showUserError(tAzc('Could not show the country-change confirmation. Please reload the page and try again.'));
+            return;
+        }
+
+        countryConfirmInFlight = true;
+        setCountryRegionControlsBusy(true);
+
+        const message = [
+            tAzc('Working time rules will follow the newly selected country from now on.'),
+            tAzc('The default holiday region is reset when it does not belong to the new country. Existing holiday calendars of other countries stay in the database.'),
+            tAzc('Daily hour and rest limits you already set are kept. You can switch back to another country later the same way.'),
+        ].join('\n\n');
+
+        let accepted = false;
+        try {
+            const result = await Components.confirmDialog({
+                title: tAzc('Change working time country?'),
+                message: message,
+                confirmLabel: tAzc('Change country'),
+                cancelLabel: tAzc('Cancel'),
+                variant: 'info',
+            });
+            accepted = result === true || !!(result && result.confirmed);
+        } finally {
+            countryConfirmInFlight = false;
+            setCountryRegionControlsBusy(false);
+        }
+
+        if (!accepted) {
+            revertCountryRadio(previousCountry);
+            return;
+        }
+
+        const defaultStateSelect = Utils.$('#holiday-default-state');
+        const nextRegion = rebuildRegionSelect(
+            defaultStateSelect,
+            nextCountry,
+            regionDataCache || parseRegionDataFromDom(),
+            defaultStateSelect ? defaultStateSelect.value : ''
+        );
+        announceRegionLive(nextRegion);
+        await persistCountryAndRegion(nextCountry, nextRegion, previousCountry);
+    }
+
+    function revertCountryRadio(country) {
+        const target = document.getElementById('holiday-country-' + String(country || 'DE').toLowerCase());
+        if (target) {
+            target.checked = true;
+        } else {
+            const radios = document.querySelectorAll('input[name="holidayCountry"]');
+            radios.forEach(function(r) {
+                r.checked = String(r.value).toUpperCase() === String(country).toUpperCase();
+            });
+        }
+    }
+
+    function persistCountryAndRegion(country, region, previousCountry) {
+        if (savingCountryRegion) {
+            return Promise.resolve(false);
+        }
+        savingCountryRegion = true;
+        setCountryRegionControlsBusy(true);
+
+        const url = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/settings');
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'requesttoken': OC.requestToken
+            },
+            body: JSON.stringify({ country: country, germanState: region })
+        }).then(function(response) {
+            return response.json().catch(function() { return null; });
+        }).then(function(data) {
+            savingCountryRegion = false;
+            setCountryRegionControlsBusy(false);
+
+            if (data && data.success) {
+                const savedCountry = data.settings && data.settings.country
+                    ? String(data.settings.country).toUpperCase()
+                    : country;
+                const savedRegion = data.settings && data.settings.germanState
+                    ? String(data.settings.germanState)
+                    : region;
+                persistedCountry = savedCountry;
+                holidaysPageConfig = holidaysPageConfig || getHolidaysPageConfig();
+                holidaysPageConfig.country = savedCountry;
+                holidaysPageConfig.defaultState = savedRegion;
+                const card = document.querySelector('[data-initial-country]');
+                if (card) {
+                    card.setAttribute('data-initial-country', savedCountry);
+                }
+                const defaultStateSelect = Utils.$('#holiday-default-state');
+                if (defaultStateSelect) {
+                    if (defaultStateSelect.value !== savedRegion) {
+                        rebuildRegionSelect(defaultStateSelect, savedCountry, regionDataCache || parseRegionDataFromDom(), savedRegion);
+                    }
+                    defaultStateSelect.setAttribute('data-last-value', savedRegion);
+                }
+                showUserSuccess(tAzc('Country and region were saved.'));
+                syncCalendarViewerToRegion(savedRegion);
+                return true;
+            }
+
+            revertCountryRadio(previousCountry);
+            const defaultStateSelect = Utils.$('#holiday-default-state');
+            if (defaultStateSelect) {
+                rebuildRegionSelect(
+                    defaultStateSelect,
+                    previousCountry,
+                    regionDataCache || parseRegionDataFromDom(),
+                    defaultStateSelect.getAttribute('data-last-value') || ''
+                );
+            }
+            const errorMsg = (data && data.error) || tAzc('The country and region could not be saved.');
+            showUserError(errorMsg);
+            return false;
+        }).catch(function() {
+            savingCountryRegion = false;
+            setCountryRegionControlsBusy(false);
+            revertCountryRadio(previousCountry);
+            const defaultStateSelect = Utils.$('#holiday-default-state');
+            if (defaultStateSelect) {
+                rebuildRegionSelect(
+                    defaultStateSelect,
+                    previousCountry,
+                    regionDataCache || parseRegionDataFromDom(),
+                    defaultStateSelect.getAttribute('data-last-value') || ''
+                );
+            }
+            showUserError(tAzc('The country and region could not be saved.'));
+            return false;
+        });
     }
 
     /**
@@ -212,7 +495,7 @@
     let savingDefaultState = false;
 
     function saveDefaultState(select) {
-        if (!select || savingDefaultState) {
+        if (!select || savingDefaultState || savingCountryRegion) {
             return;
         }
         const value = select.value;
@@ -221,9 +504,15 @@
             return;
         }
 
+        // Guard: default region must belong to the persisted organisation country.
+        if (countryOfRegion(value) !== persistedCountry) {
+            select.value = previous;
+            showUserError(tAzc('The selected region does not belong to the selected country'));
+            return;
+        }
+
         savingDefaultState = true;
-        select.disabled = true;
-        select.setAttribute('aria-busy', 'true');
+        setCountryRegionControlsBusy(true);
 
         const url = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/settings');
         fetch(url, {
@@ -237,12 +526,15 @@
             return response.json().catch(function() { return null; });
         }).then(function(data) {
             savingDefaultState = false;
-            select.disabled = false;
-            select.removeAttribute('aria-busy');
+            setCountryRegionControlsBusy(false);
 
             if (data && data.success) {
                 select.setAttribute('data-last-value', value);
+                if (holidaysPageConfig) {
+                    holidaysPageConfig.defaultState = value;
+                }
                 showUserSuccess(tAzc('Default region was saved.'));
+                syncCalendarViewerToRegion(value);
             } else {
                 select.value = previous;
                 const errorMsg = (data && data.error) || tAzc('The default region could not be saved.');
@@ -250,8 +542,7 @@
             }
         }).catch(function() {
             savingDefaultState = false;
-            select.disabled = false;
-            select.removeAttribute('aria-busy');
+            setCountryRegionControlsBusy(false);
             select.value = previous;
             showUserError(tAzc('The default region could not be saved.'));
         });
@@ -432,6 +723,9 @@
         }
     }
 
+    let holidaysLoadSeq = 0;
+    let countryConfirmInFlight = false;
+
     function loadExistingHolidays() {
         const tbody = Utils.$('#holiday-tbody');
         if (!tbody) {
@@ -442,6 +736,7 @@
         const year = getSelectedYear();
         const url = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/state-holidays') +
             '?state=' + encodeURIComponent(state) + '&year=' + encodeURIComponent(String(year));
+        const seq = ++holidaysLoadSeq;
 
         tbody.innerHTML = '';
         setResultsBusy(true);
@@ -454,6 +749,9 @@
         }).then(function(response) {
             return response.json();
         }).then(function(data) {
+            if (seq !== holidaysLoadSeq) {
+                return; // Stale response — a newer region/year load is in flight.
+            }
             setResultsBusy(false);
             if (!data || data.success !== true || !Array.isArray(data.holidays)) {
                 renderEmptyHolidaysRow(tbody);
@@ -475,6 +773,9 @@
                 appendExistingHolidayRow(tbody, item);
             });
         }).catch(function() {
+            if (seq !== holidaysLoadSeq) {
+                return;
+            }
             setResultsBusy(false);
             renderEmptyHolidaysRow(tbody);
             showUserError(tAzc('Holidays could not be loaded.'));
@@ -580,7 +881,7 @@
                     state: state,
                     date: suggestion.date,
                     name: suggestion.name,
-                    kind: 'full',
+                    kind: (suggestion.kind === 'half') ? 'half' : 'full',
                     scope: 'company'
                 })
             }).then(function(response) {
@@ -682,79 +983,29 @@
                         : tAzc('Statutory holiday removal is permanent because auto-restore is disabled in settings.');
                 }
 
-                const body = extra ? (extra + '<br><br>' + baseMessage) : baseMessage;
-
-                if (window.ArbeitszeitCheckComponents && window.ArbeitszeitCheckComponents.createModal) {
-                    const Components = window.ArbeitszeitCheckComponents;
-                    const content = `
-                        <div class="modal-section">
-                            <h2 id="holiday-delete-title" class="modal-title">${title}</h2>
-                            <p id="holiday-delete-body" class="modal-text">${body}</p>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="azc-btn azc-btn--secondary" data-action="close-modal">
-                                ${tAzc('Cancel')}
-                            </button>
-                            <button type="button" class="azc-btn azc-btn--danger" data-action="confirm-delete-holiday">
-                                ${tAzc('Remove')}
-                            </button>
-                        </div>
-                    `;
-
-                    const modal = Components.createModal({
-                        id: 'delete-holiday-modal',
+                // Plain-text message only — confirmDialog escapes HTML (no XSS via holiday names).
+                const message = extra ? (extra + '\n\n' + baseMessage) : baseMessage;
+                const Components = window.AzcComponents || window.ArbeitszeitCheckComponents;
+                let confirmed = false;
+                if (Components && typeof Components.confirmDialog === 'function') {
+                    const result = await Components.confirmDialog({
                         title: title,
-                        content: content,
-                        size: 'md',
-                        closable: true,
-                        ariaLabelledBy: 'holiday-delete-title',
-                        ariaDescribedBy: 'holiday-delete-body',
-                        onClose: function() {
-                            const el = document.getElementById('delete-holiday-modal');
-                            if (el && el.parentNode) {
-                                el.parentNode.remove();
-                            }
-                        }
+                        message: message,
+                        confirmLabel: tAzc('Remove'),
+                        cancelLabel: tAzc('Cancel'),
+                        variant: 'destructive',
                     });
-
-                    document.body.appendChild(modal);
-                    Components.openModal('delete-holiday-modal');
-
-                    const modalEl = document.getElementById('delete-holiday-modal');
-                    if (!modalEl) {
-                        return;
-                    }
-
-                    const cancelBtn = modalEl.querySelector('[data-action="close-modal"]');
-                    const confirmBtn = modalEl.querySelector('[data-action="confirm-delete-holiday"]');
-
-                    if (cancelBtn) {
-                        cancelBtn.addEventListener('click', function() {
-                            Components.closeModal(modalEl);
-                        });
-                    }
-
-                    if (confirmBtn) {
-                        confirmBtn.addEventListener('click', function() {
-                            Components.closeModal(modalEl);
-                            deleteHoliday(item.id, row, item.scope);
-                        });
-                        confirmBtn.focus();
-                    }
-                } else {
-                    const confirmMsg = body.replace(/<br\s*\/?>/gi, '\n\n');
-                    const Utils = window.ArbeitszeitCheckUtils;
-                    const confirmed = Utils?.confirmDestructiveAction
-                        ? await Utils.confirmDestructiveAction({
-                            title: title,
-                            message: confirmMsg,
-                            confirmLabel: tAzc('Remove'),
-                            variant: 'destructive',
-                        })
-                        : null;
-                    if (confirmed) {
-                        deleteHoliday(item.id, row, item.scope);
-                    }
+                    confirmed = result === true || !!(result && result.confirmed);
+                } else if (window.ArbeitszeitCheckUtils && typeof window.ArbeitszeitCheckUtils.confirmDestructiveAction === 'function') {
+                    confirmed = !!(await window.ArbeitszeitCheckUtils.confirmDestructiveAction({
+                        title: title,
+                        message: message,
+                        confirmLabel: tAzc('Remove'),
+                        variant: 'destructive',
+                    }));
+                }
+                if (confirmed) {
+                    deleteHoliday(item.id, row, item.scope);
                 }
             });
             const actionsWrap = document.createElement('div');
@@ -822,6 +1073,18 @@
                 Messaging.showError(msg);
             }
         });
+    }
+
+    // Test surface for Vitest (pure helpers only — no DOM side effects required).
+    if (typeof window !== 'undefined') {
+        window.__ArbeitszeitCheckAdminHolidaysTestables = {
+            countryOfRegion: countryOfRegion,
+            rebuildRegionSelect: rebuildRegionSelect,
+            parseRegionDataFromDom: parseRegionDataFromDom,
+            suggestedKindFromPayload: function(suggestion) {
+                return (suggestion && suggestion.kind === 'half') ? 'half' : 'full';
+            },
+        };
     }
 
     // Robust initialisierung: sowohl beim DOMContentLoaded-Event als auch,

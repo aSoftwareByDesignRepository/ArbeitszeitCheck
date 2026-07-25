@@ -126,12 +126,13 @@ class HolidayService
 	private function getDefaultState(): string
 	{
 		$country = $this->getConfiguredCountry();
-		$fallback = RegionRegistry::defaultRegionForCountry($country);
-		$state = $this->config->getAppValue('arbeitszeitcheck', 'german_state', $fallback);
-		if (!RegionRegistry::isValidRegion($state)) {
-			return $fallback;
-		}
-		return $state;
+		$stored = $this->config->getAppValue(
+			'arbeitszeitcheck',
+			'german_state',
+			RegionRegistry::defaultRegionForCountry($country)
+		);
+
+		return RegionRegistry::resolveDefaultRegionForCountry($country, (string)$stored);
 	}
 
 	private function getConfiguredCountry(): string

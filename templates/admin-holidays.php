@@ -34,6 +34,32 @@ foreach (RegionRegistry::supportedCountries() as $groupCountry) {
 	];
 }
 
+$countryCards = [
+	RegionRegistry::COUNTRY_DE => [
+		'title' => $l->t('Germany'),
+		'text' => $l->t('Working time rules follow the German Working Time Act (ArbZG).'),
+	],
+	RegionRegistry::COUNTRY_AT => [
+		'title' => $l->t('Austria'),
+		'text' => $l->t('Working time rules follow the Austrian Working Time Act (AZG) and Rest Act (ARG).'),
+	],
+	RegionRegistry::COUNTRY_CH => [
+		'title' => $l->t('Switzerland'),
+		'text' => $l->t('Working time rules follow the Swiss Labour Act (ArG). Public holidays follow the selected canton.'),
+	],
+];
+
+$regionData = ['defaultRegionByCountry' => [], 'regionsByCountry' => []];
+foreach (RegionRegistry::supportedCountries() as $countryCode) {
+	$regionData['defaultRegionByCountry'][$countryCode] =
+		RegionRegistry::defaultRegionForCountry($countryCode);
+	$regions = [];
+	foreach (RegionRegistry::regionsForCountry($countryCode) as $regionCode => $regionMsgid) {
+		$regions[] = ['code' => $regionCode, 'label' => $l->t($regionMsgid)];
+	}
+	$regionData['regionsByCountry'][$countryCode] = $regions;
+}
+
 $holidaysUiStrings = [
 	'dd.mm.yyyy' => $l->t('dd.mm.yyyy'),
 	'Full-day holiday' => $l->t('Full-day holiday'),
@@ -63,6 +89,8 @@ $holidaysUiStrings = [
 	'An error occurred while removing the holiday.' => $l->t('An error occurred while removing the holiday.'),
 	'Default region was saved.' => $l->t('Default region was saved.'),
 	'The default region could not be saved.' => $l->t('The default region could not be saved.'),
+	'Country and region were saved.' => $l->t('Country and region were saved.'),
+	'The country and region could not be saved.' => $l->t('The country and region could not be saved.'),
 	'Add as company holiday' => $l->t('Add as company holiday'),
 	'Already in the calendar' => $l->t('Already in the calendar'),
 	'Add {name} ({date}) as a company holiday' => $l->t('Add {name} ({date}) as a company holiday'),
@@ -72,6 +100,14 @@ $holidaysUiStrings = [
 	'Working time rules are not affected — they follow the country configured for the whole organisation.' => $l->t('Working time rules are not affected — they follow the country configured for the whole organisation.'),
 	'You can switch back to any other region at any time.' => $l->t('You can switch back to any other region at any time.'),
 	'Show region' => $l->t('Show region'),
+	'Change working time country?' => $l->t('Change working time country?'),
+	'Change country' => $l->t('Change country'),
+	'Working time rules will follow the newly selected country from now on.' => $l->t('Working time rules will follow the newly selected country from now on.'),
+	'The default holiday region is reset when it does not belong to the new country. Existing holiday calendars of other countries stay in the database.' => $l->t('The default holiday region is reset when it does not belong to the new country. Existing holiday calendars of other countries stay in the database.'),
+	'Daily hour and rest limits you already set are kept. You can switch back to another country later the same way.' => $l->t('Daily hour and rest limits you already set are kept. You can switch back to another country later the same way.'),
+	'Could not show the country-change confirmation. Please reload the page and try again.' => $l->t('Could not show the country-change confirmation. Please reload the page and try again.'),
+	'Region list updated. Default region: %s' => $l->t('Region list updated. Default region: %s', ['%s']),
+	'The selected region does not belong to the selected country' => $l->t('The selected region does not belong to the selected country'),
 ];
 ?>
 
@@ -86,23 +122,51 @@ $holidaysUiStrings = [
 	'statutoryAutoReseed' => $statutoryAutoReseed,
 	'settingsUrl' => $settingsUrl,
 	'country' => $country,
+	'defaultState' => $defaultState,
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+	</script>
+	<script type="application/json" nonce="<?php p($_['cspNonce'] ?? ''); ?>" id="azc-holidays-region-data">
+<?php echo json_encode($regionData, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
 	</script>
 
 	<div class="admin-holidays">
 
-		<section class="azc-card" aria-labelledby="holiday-default-state-title">
+		<section class="azc-card" aria-labelledby="holiday-country-region-title" data-initial-country="<?php p($country); ?>">
 			<header class="azc-card__header">
 				<div class="azc-card__header-text">
-					<h2 id="holiday-default-state-title" class="azc-card__title"><?php p($l->t('Default region for public holidays')); ?></h2>
+					<h2 id="holiday-country-region-title" class="azc-card__title"><?php p($l->t('Country and region')); ?></h2>
 					<p class="azc-card__lead">
-						<?php p($l->t('This region is used automatically when no specific region is set for employees or teams.')); ?>
+						<?php p($l->t('First pick the country whose working time law applies, then the default region for public holidays.')); ?>
 					</p>
 				</div>
 			</header>
 			<div class="azc-card__body">
+				<fieldset class="form-fieldset" aria-labelledby="holiday-country-legend" aria-describedby="holiday-country-help">
+					<legend id="holiday-country-legend" class="form-legend"><?php p($l->t('In which country does your organisation work?')); ?></legend>
+					<div class="azc-country-grid">
+						<?php foreach ($countryCards as $countryCode => $card): ?>
+						<label class="azc-country-card" for="holiday-country-<?php p(strtolower($countryCode)); ?>">
+							<input type="radio"
+								   id="holiday-country-<?php p(strtolower($countryCode)); ?>"
+								   name="holidayCountry"
+								   value="<?php p($countryCode); ?>"
+								   class="azc-country-card__radio"
+								   <?php echo ($country === $countryCode) ? 'checked' : ''; ?>
+								   aria-describedby="holiday-country-help">
+							<span class="azc-country-card__body">
+								<span class="azc-country-card__title"><?php p($card['title']); ?></span>
+								<span class="azc-country-card__text"><?php p($card['text']); ?></span>
+							</span>
+						</label>
+						<?php endforeach; ?>
+					</div>
+					<p id="holiday-country-help" class="form-help">
+						<?php p($l->t('Changing the country updates working time rules for the whole organisation. Daily hour and rest limits you already set are kept — review them under Settings after switching.')); ?>
+					</p>
+				</fieldset>
+				<div id="holiday-country-region-live" class="form-help azc-country-region-live" role="status" aria-live="polite" aria-atomic="true"></div>
 				<div class="azc-filter-field admin-holidays__default-state-field">
-					<label for="holiday-default-state" class="azc-filter-field__label"><?php p($l->t('Select default region')); ?></label>
+					<label for="holiday-default-state" class="azc-filter-field__label"><?php p($l->t('Default region for public holidays')); ?></label>
 					<div class="azc-filter-field__control">
 						<select id="holiday-default-state" name="holidayDefaultState" class="form-select" aria-describedby="holiday-default-state-help">
 							<?php foreach ($instanceRegions as $code => $name): ?>
@@ -112,7 +176,7 @@ $holidaysUiStrings = [
 					</div>
 				</div>
 				<p id="holiday-default-state-help" class="admin-holidays__help">
-					<strong><?php p($l->t('Your selection is saved automatically.')); ?></strong>
+					<strong><?php p($l->t('Region changes are saved automatically. Country changes ask for confirmation first.')); ?></strong>
 					<?php
 					$usersUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.users');
 					print_unescaped($l->t(
@@ -123,7 +187,6 @@ $holidaysUiStrings = [
 						]
 					));
 					?>
-					<?php p($l->t('The country for working time rules is configured in Settings under “Country and region”.')); ?>
 				</p>
 			</div>
 		</section>

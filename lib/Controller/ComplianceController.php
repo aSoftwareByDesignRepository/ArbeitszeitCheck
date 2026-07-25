@@ -88,11 +88,16 @@ class ComplianceController extends Controller
 	}
 
 	/**
-	 * Country-aware lead copy for the compliance dashboard (DE ArbZG / AT AZG).
+	 * Country-aware lead copy for the compliance dashboard (DE ArbZG / AT AZG / CH ArG).
+	 * Uses the viewing user's effective labour-law country (E-9), not only the
+	 * organisation default — otherwise a DE-instance user with AT override still
+	 * sees the German lead while compliance checks already follow AZG.
 	 */
-	private function complianceDashboardLead(): string
+	private function complianceDashboardLead(?string $userId = null): string
 	{
-		$country = $this->laborLawProfileFactory->getConfiguredCountry();
+		$country = $userId !== null && $userId !== ''
+			? $this->laborLawProfileFactory->getEffectiveCountry($userId)
+			: $this->laborLawProfileFactory->getConfiguredCountry();
 		return match ($country) {
 			RegionRegistry::COUNTRY_AT => $this->l10n->t('Check if your working time follows Austrian labour law and see any problems that need fixing'),
 			RegionRegistry::COUNTRY_CH => $this->l10n->t('Check if your working time follows Swiss labour law and see any problems that need fixing'),
@@ -182,7 +187,7 @@ class ComplianceController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-dashboard', $this->buildShellParams(
 				'compliance',
 				$this->l10n->t('Compliance Dashboard'),
-				$this->complianceDashboardLead(),
+				$this->complianceDashboardLead($userId),
 				$navFlags,
 			) + [
 				'complianceStatus' => $complianceStatus,
@@ -195,10 +200,16 @@ class ComplianceController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Compliance dashboard error: ' . $e->getMessage(), ['exception' => $e]);
 			$navFlags = $this->getNavigationFlagsForSession();
+			$leadUserId = null;
+			try {
+				$leadUserId = $this->getUserId();
+			} catch (\Throwable) {
+				$leadUserId = null;
+			}
 			$response = new TemplateResponse('arbeitszeitcheck', 'compliance-dashboard', $this->buildShellParams(
 				'compliance',
 				$this->l10n->t('Compliance Dashboard'),
-				$this->complianceDashboardLead(),
+				$this->complianceDashboardLead($leadUserId),
 				$navFlags,
 			) + [
 				'complianceStatus' => [

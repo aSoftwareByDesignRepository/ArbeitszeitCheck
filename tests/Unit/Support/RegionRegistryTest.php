@@ -108,4 +108,19 @@ class RegionRegistryTest extends TestCase
 		}
 		$this->assertSame('Switzerland', $labels['CH']);
 	}
+
+	public function testResolveDefaultRegionForCountryRejectsCrossBorderOrphans(): void
+	{
+		$this->assertSame('AT-W', RegionRegistry::resolveDefaultRegionForCountry('AT', 'NW'));
+		$this->assertSame('AT-W', RegionRegistry::resolveDefaultRegionForCountry('AT', ''));
+		$this->assertSame('AT-W', RegionRegistry::resolveDefaultRegionForCountry('AT', 'XX'));
+		$this->assertSame('AT-OOE', RegionRegistry::resolveDefaultRegionForCountry('AT', 'AT-OOE'));
+		$this->assertSame('CH-ZH', RegionRegistry::resolveDefaultRegionForCountry('CH', 'NW'));
+		$this->assertSame('CH-BE', RegionRegistry::resolveDefaultRegionForCountry('CH', 'CH-BE'));
+		$this->assertSame('NW', RegionRegistry::resolveDefaultRegionForCountry('DE', 'NW'));
+		$this->assertSame('BY', RegionRegistry::resolveDefaultRegionForCountry('DE', 'BY'));
+		$this->assertSame('NW', RegionRegistry::resolveDefaultRegionForCountry('DE', 'AT-W'));
+		// Unknown country → DE fallback chain.
+		$this->assertSame('NW', RegionRegistry::resolveDefaultRegionForCountry('FR', 'AT-W'));
+	}
 }

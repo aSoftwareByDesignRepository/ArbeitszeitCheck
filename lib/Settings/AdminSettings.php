@@ -50,13 +50,23 @@ class AdminSettings implements ISettings
 	 * Render the admin settings form that appears in the global
 	 * Nextcloud “Administration → ArbeitszeitCheck” area.
 	 *
-	 * This uses the same template and data structure as the in‑app
+	 * This uses the same template and data structure as the in-app
 	 * admin settings route so admins see a single, consistent place
-	 * for all core configuration (including Bundesland and holidays).
+	 * for all core configuration (including country, region, and holidays).
+	 *
+	 * Parity contract: every field the in-app settings page posts
+	 * (country, germanState, weeklyAbsoluteMaxHours, vacationDaysSuggestion,
+	 * break auto-fallback, time-entry approval flags, …)
+	 * MUST be present here — otherwise a save from NC Admin silently resets
+	 * real config (e.g. Swiss 50h → 45h, break fallback off → on).
 	 */
 	public function getForm(): TemplateResponse
 	{
-		FrontEndAssetService::registerPage('admin-settings', 'admin-settings', ['common/projectcheck']);
+		FrontEndAssetService::registerPage(
+			'admin-settings',
+			'admin-settings',
+			['common/projectcheck', 'common/country-region'],
+		);
 
 		$requireSubstituteJson = $this->appConfig->getAppValueString('require_substitute_types', '[]');
 		$requireSubstituteTypes = json_decode($requireSubstituteJson, true);
@@ -64,11 +74,16 @@ class AdminSettings implements ISettings
 			$requireSubstituteTypes = [];
 		}
 
+		$country = $this->readConfiguredCountry();
 		$settings = [
 			'autoComplianceCheck' => $this->appConfig->getAppValueString('auto_compliance_check', '1') === '1',
 			'realtimeComplianceCheck' => $this->appConfig->getAppValueString('realtime_compliance_check', '1') === '1',
 			'complianceStrictMode' => $this->appConfig->getAppValueString('compliance_strict_mode', '0') === '1',
 			'enableViolationNotifications' => $this->appConfig->getAppValueString('enable_violation_notifications', '1') === '1',
+			'breakAutoFallbackEnabled' => $this->appConfig->getAppValueString('break_auto_fallback_enabled', '1') === '1',
+			'breakAutoFallbackMinutes' => max(15, min(720, (int)$this->appConfig->getAppValueString('break_auto_fallback_minutes', '180'))),
+			'breakAutoFallbackFlexWindowStart' => max(0, min(23, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_start', '11'))),
+			'breakAutoFallbackFlexWindowEnd' => max(1, min(24, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_end', '16'))),
 			'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
 			'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
 			'monthClosureGraceDaysAfterEom' => max(0, min(90, (int)$this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM, '0'))),
@@ -81,11 +96,15 @@ class AdminSettings implements ISettings
 			'sendEmailSubstituteApprovedToManager' => $this->appConfig->getAppValueString('send_email_substitute_approved_to_manager', '1') === '1',
 			'maxDailyHours' => (float)$this->appConfig->getAppValueString('max_daily_hours', $this->profileMaxDailyHoursDefault()),
 			'minRestPeriod' => (float)$this->appConfig->getAppValueString('min_rest_period', $this->profileMinRestHoursDefault()),
-			'country' => $this->readConfiguredCountry(),
+			'country' => $country,
 			'germanState' => $this->readConfiguredDefaultRegion(),
+			'weeklyAbsoluteMaxHours' => $this->readConfiguredSwissWeeklyAbsoluteMax(),
+			'vacationDaysSuggestion' => LaborLawProfileFactory::profileForCountry($country)->vacationDaysSuggestion,
 			'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
+			'timeEntryChangesRequireApproval' => $this->appConfig->getAppValueString(Constants::CONFIG_TIME_ENTRY_CHANGES_REQUIRE_APPROVAL, '0') === '1',
+			'manualTimeEntriesRequireApproval' => $this->appConfig->getAppValueString(Constants::CONFIG_MANUAL_TIME_ENTRIES_REQUIRE_APPROVAL, '0') === '1',
 			'clockStampingEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_CLOCK_STAMPING_ENABLED, '1') === '1',
 			'manualTimeEntryEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MANUAL_TIME_ENTRY_ENABLED, '1') === '1',
 			'accessAllowedGroups' => $this->readAccessAllowedGroups(),
@@ -117,6 +136,20 @@ class AdminSettings implements ISettings
 		return RegionRegistry::isSupportedCountry($country) ? $country : RegionRegistry::COUNTRY_DE;
 	}
 
+	/**
+	 * Swiss ArG Art. 9: only 45 or 50 are valid; anything else → 45.
+	 * Must match AdminController::getConfiguredSwissWeeklyAbsoluteMax().
+	 */
+	private function readConfiguredSwissWeeklyAbsoluteMax(): int
+	{
+		$raw = (int)$this->appConfig->getAppValueString(
+			LaborLawProfileFactory::CONFIG_KEY_WEEKLY_ABSOLUTE_MAX,
+			'45'
+		);
+
+		return $raw === 50 ? 50 : 45;
+	}
+
 	private function profileMaxDailyHoursDefault(): string
 	{
 		return (string)LaborLawProfileFactory::profileForCountry($this->readConfiguredCountry())->dailyMaxHoursDefault;
@@ -129,10 +162,13 @@ class AdminSettings implements ISettings
 
 	private function readConfiguredDefaultRegion(): string
 	{
-		$fallback = RegionRegistry::defaultRegionForCountry($this->readConfiguredCountry());
-		$region = strtoupper(trim($this->appConfig->getAppValueString('german_state', $fallback)));
+		$country = $this->readConfiguredCountry();
+		$stored = $this->appConfig->getAppValueString(
+			'german_state',
+			RegionRegistry::defaultRegionForCountry($country)
+		);
 
-		return RegionRegistry::isValidRegion($region) ? $region : $fallback;
+		return RegionRegistry::resolveDefaultRegionForCountry($country, $stored);
 	}
 
 	public function getSection(): string

@@ -88,6 +88,7 @@ class ComplianceControllerTest extends TestCase
 		$this->userSession = $this->createMock(IUserSession::class);
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->cspService = $this->createMock(CSPService::class);
+		$this->cspService->method('applyPolicyWithNonce')->willReturnArgument(0);
 		$this->urlGenerator = $this->createMock(IURLGenerator::class);
 		$this->urlGenerator->method('linkToRoute')->willReturnCallback(fn ($r, $p = []) => '/compliance');
 		$this->l10n = $this->createMock(IL10N::class);
@@ -165,6 +166,72 @@ class ComplianceControllerTest extends TestCase
 		$response = $this->controller->dashboard();
 
 		$this->assertInstanceOf(TemplateResponse::class, $response);
+	}
+
+	public function testDashboardLeadFollowsUserLaborLawCountryOverride(): void
+	{
+		$userSettings = $this->createMock(\OCA\ArbeitszeitCheck\Db\UserSettingsMapper::class);
+		$userSettings->method('getStringSetting')->willReturnCallback(
+			static function (string $userId, string $key, string $default = '') {
+				if ($userId === 'alice' && $key === LaborLawProfileFactory::USER_SETTING_LABOR_LAW_COUNTRY) {
+					return RegionRegistry::COUNTRY_AT;
+				}
+				return $default;
+			}
+		);
+
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, mixed $default = ''): string {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return RegionRegistry::COUNTRY_DE;
+				}
+				return is_string($default) ? $default : (string)$default;
+			}
+		);
+		$factory = new LaborLawProfileFactory($config, $userSettings);
+
+		$localeFormat = $this->createMock(LocaleFormatService::class);
+		$localeFormat->method('clientHints')->willReturn([
+			'locale' => 'en-US',
+			'htmlLang' => 'en-US',
+			'timezone' => 'Europe/Berlin',
+		]);
+
+		$controller = new ComplianceController(
+			'arbeitszeitcheck',
+			$this->request,
+			$this->complianceService,
+			$this->violationMapper,
+			$this->auditLogMapper,
+			$this->permissionService,
+			$this->userSession,
+			$this->userManager,
+			$this->urlGenerator,
+			$this->cspService,
+			$localeFormat,
+			$this->l10n,
+			$this->createNavigationFlagsService(),
+			$factory,
+		);
+
+		$this->mockAuthenticatedUser('alice');
+		$this->complianceService->method('getComplianceStatus')->willReturn([
+			'compliant' => true,
+			'score' => 100,
+			'has_data' => true,
+		]);
+		$this->violationMapper->method('findByUser')->willReturn([]);
+
+		$response = $controller->dashboard();
+		$this->assertInstanceOf(TemplateResponse::class, $response);
+		$params = $response->getParams();
+		$this->assertIsArray($params);
+		$this->assertSame(
+			'Check if your working time follows Austrian labour law and see any problems that need fixing',
+			$params['pageHelp'] ?? null,
+			'E-9: dashboard lead must follow per-user labor_law_country, not only instance country'
+		);
 	}
 
 	/**
