@@ -152,7 +152,7 @@ class AdminUserProfileUpdateService
 			$newModel = new UserWorkingTimeModel();
 			$newModel->setUserId($userId);
 			$newModel->setWorkingTimeModelId($workingTimeModelId);
-			$newModel->setVacationDaysPerYear($vacationDaysPerYear ?? Constants::DEFAULT_VACATION_DAYS_PER_YEAR);
+			$newModel->setVacationDaysPerYear($vacationDaysPerYear ?? $this->defaultVacationDaysSuggestion());
 			$newModel->setStartDate(new \DateTime($startDate ? (string)$startDate : 'now'));
 			if ($endDate) {
 				$newModel->setEndDate(new \DateTime((string)$endDate));
@@ -856,5 +856,18 @@ class AdminUserProfileUpdateService
 			'startDate' => $start ? $start->format('Y-m-d') : null,
 			'endDate' => $end ? $end->format('Y-m-d') : null,
 		];
+	}
+
+	/**
+	 * Country-profile vacation suggestion for new assignments (CH → 20, DE/AT → 25).
+	 * Falls back to {@see Constants::DEFAULT_VACATION_DAYS_PER_YEAR} when no factory is wired.
+	 */
+	private function defaultVacationDaysSuggestion(): int
+	{
+		if ($this->laborLawProfileFactory !== null) {
+			return $this->laborLawProfileFactory->getProfile()->vacationDaysSuggestion;
+		}
+
+		return Constants::DEFAULT_VACATION_DAYS_PER_YEAR;
 	}
 }

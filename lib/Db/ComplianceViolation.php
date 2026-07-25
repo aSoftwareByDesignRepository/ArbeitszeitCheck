@@ -48,6 +48,8 @@ class ComplianceViolation extends Entity
 	public const TYPE_INSUFFICIENT_REST_PERIOD = 'insufficient_rest_period';
 	public const TYPE_DAILY_HOURS_LIMIT_EXCEEDED = 'daily_hours_limit_exceeded';
 	public const TYPE_WEEKLY_HOURS_LIMIT_EXCEEDED = 'weekly_hours_limit_exceeded';
+	/** Absolute calendar-week cap (AT AZG §9: 60 h; CH ArG Art. 9: 45/50). */
+	public const TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED = 'weekly_absolute_hours_exceeded';
 	public const TYPE_MISSING_BREAK = 'missing_break';
 	public const TYPE_EXCESSIVE_WORKING_HOURS = 'excessive_working_hours';
 	public const TYPE_NIGHT_WORK = 'night_work';
@@ -120,6 +122,7 @@ class ComplianceViolation extends Entity
 			self::TYPE_INSUFFICIENT_REST_PERIOD,
 			self::TYPE_DAILY_HOURS_LIMIT_EXCEEDED,
 			self::TYPE_WEEKLY_HOURS_LIMIT_EXCEEDED,
+			self::TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED,
 			self::TYPE_MISSING_BREAK,
 			self::TYPE_EXCESSIVE_WORKING_HOURS,
 			self::TYPE_NIGHT_WORK,

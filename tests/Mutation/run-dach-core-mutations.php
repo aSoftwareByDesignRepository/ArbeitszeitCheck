@@ -49,6 +49,8 @@ $suiteFilters = [
 	'BreakCountableTest',
 	'TimeEntryClockPayloadBuilderTest',
 	'TimeEntryTest',
+	'ComplianceServiceTest',
+	'RegionListDedupGuardTest',
 ];
 
 echo "== baseline DACH core unit tests ==\n";
@@ -60,6 +62,14 @@ if ($baseline !== 0) {
 
 /** @var list<array{name:string,file:string,from:string,to:string,filters?:list<string>}> $mutations */
 $mutations = [
+	[
+		'name' => 'skip_absolute_weekly_clock_in',
+		'file' => 'lib/Service/ComplianceService.php',
+		'from' => "if (\$profile->weeklyAbsoluteMaxHours !== null && !\$this->checkAbsoluteWeeklyHoursLimit(\$userId)) {",
+		'to' => "if (false && \$profile->weeklyAbsoluteMaxHours !== null && !\$this->checkAbsoluteWeeklyHoursLimit(\$userId)) {",
+		'filters' => ['ComplianceServiceTest::testSwissAbsoluteWeeklyWarnsAtClockIn'],
+	],
+
 	[
 		'name' => 'sum_only_always_true',
 		'file' => 'lib/Support/BreakSplitValidator.php',

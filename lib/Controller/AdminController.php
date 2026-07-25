@@ -710,6 +710,7 @@ class AdminController extends Controller
 				'holidayRegionContext' => [
 					'country' => $this->getConfiguredCountry(),
 					'defaultRegion' => $this->getConfiguredDefaultRegion(),
+					'vacationDaysSuggestion' => LaborLawProfileFactory::profileForCountry($this->getConfiguredCountry())->vacationDaysSuggestion,
 				],
 			],
 		));
@@ -765,6 +766,7 @@ class AdminController extends Controller
 				'holidayRegionContext' => [
 					'country' => $this->getConfiguredCountry(),
 					'defaultRegion' => $this->getConfiguredDefaultRegion(),
+					'vacationDaysSuggestion' => LaborLawProfileFactory::profileForCountry($this->getConfiguredCountry())->vacationDaysSuggestion,
 				],
 			],
 		));
@@ -815,6 +817,7 @@ class AdminController extends Controller
 			'country' => $this->getConfiguredCountry(),
 			'germanState' => $this->getConfiguredDefaultRegion(),
 			'weeklyAbsoluteMaxHours' => $this->getConfiguredSwissWeeklyAbsoluteMax(),
+			'vacationDaysSuggestion' => LaborLawProfileFactory::profileForCountry($this->getConfiguredCountry())->vacationDaysSuggestion,
 			'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 			'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 			'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),
@@ -1902,6 +1905,7 @@ class AdminController extends Controller
 				'country' => $this->getConfiguredCountry(),
 				'germanState' => $this->getConfiguredDefaultRegion(),
 				'weeklyAbsoluteMaxHours' => $this->getConfiguredSwissWeeklyAbsoluteMax(),
+				'vacationDaysSuggestion' => LaborLawProfileFactory::profileForCountry($this->getConfiguredCountry())->vacationDaysSuggestion,
 				'statutoryAutoReseed' => $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1',
 				'retentionPeriod' => (int)$this->appConfig->getAppValueString('retention_period', '2'),
 				'defaultWorkingHours' => (float)$this->appConfig->getAppValueString('default_working_hours', '8'),

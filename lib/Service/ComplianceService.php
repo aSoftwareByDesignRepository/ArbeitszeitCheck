@@ -276,6 +276,20 @@ class ComplianceService
             ];
         }
 
+        // Absolute weekly maximum (AT 60 h / CH 45|50). Soft warn at clock-in —
+        // do not block stamping (same posture as the weekly average), but surface
+        // the legal cap so employees and auditors see it before more hours accrue.
+        if ($profile->weeklyAbsoluteMaxHours !== null && !$this->checkAbsoluteWeeklyHoursLimit($userId)) {
+            $issues[] = [
+                'type' => ComplianceViolation::TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED,
+                'severity' => ComplianceViolation::SEVERITY_WARNING,
+                'message' => $this->l10n->t(
+                    'Absolute weekly working hours maximum (%1$d hours) already exceeded (%2$s)',
+                    [(int)$profile->weeklyAbsoluteMaxHours, $profile->lawLabel('weekly')]
+                ),
+            ];
+        }
+
         return $issues;
     }
 
@@ -449,18 +463,28 @@ class ComplianceService
         }
 
         // Absolute weekly maximum (AT: 60 h; CH: 45/50; DE: null skips).
+        // Persist a first-class violation for the calendar week (deduped) and
+        // notify the manager once per day — soft path must not be notify-only.
         if ($profile->weeklyAbsoluteMaxHours !== null) {
             $absoluteCheck = $this->checkAbsoluteWeeklyHours($userId, $entryDate);
-            if (!$absoluteCheck['valid'] && !isset($warningsSentToday[$cacheKey . '_weekabs'])) {
-                if ($this->notificationService) {
-                    $this->notificationService->notifyManagerWorkingTimeWarning($userId, 'weekly_hours_absolute', [
-                        'message' => $absoluteCheck['message'],
-                        'current_value' => $absoluteCheck['average'],
-                        'limit' => $absoluteCheck['limit'],
-                        'date' => $todayKey
-                    ]);
+            if (!$absoluteCheck['valid']) {
+                $this->ensureAbsoluteWeeklyViolation(
+                    $userId,
+                    $entryDate,
+                    (string)$absoluteCheck['message'],
+                    null
+                );
+                if (!isset($warningsSentToday[$cacheKey . '_weekabs'])) {
+                    if ($this->notificationService) {
+                        $this->notificationService->notifyManagerWorkingTimeWarning($userId, 'weekly_hours_absolute', [
+                            'message' => $absoluteCheck['message'],
+                            'current_value' => $absoluteCheck['average'],
+                            'limit' => $absoluteCheck['limit'],
+                            'date' => $todayKey
+                        ]);
+                    }
+                    $warningsSentToday[$cacheKey . '_weekabs'] = true;
                 }
-                $warningsSentToday[$cacheKey . '_weekabs'] = true;
             }
         }
 
@@ -890,6 +914,56 @@ class ComplianceService
         $averageWeeklyHours = $totalHours / $profile->avgWindowWeeks;
 
         return $averageWeeklyHours <= $profile->weeklyAvgMaxHours;
+    }
+
+    /**
+     * Absolute calendar-week hour cap (AT/CH). True when under the limit or when
+     * the profile has no absolute weekly rule (DE).
+     */
+    private function checkAbsoluteWeeklyHoursLimit(string $userId): bool
+    {
+        $profile = $this->profile($userId);
+        if ($profile->weeklyAbsoluteMaxHours === null) {
+            return true;
+        }
+        $now = $this->timeZoneService->nowInStorage();
+        $check = $this->checkAbsoluteWeeklyHours($userId, $now);
+
+        return $check['valid'];
+    }
+
+    /**
+     * Persist at most one unresolved absolute-weekly violation per calendar week.
+     * Race-safe enough for production: unique-ish by (user, type, week window)
+     * via the pre-read; duplicate inserts are acceptable noise, not double-count
+     * of hours (the hours query is the source of truth).
+     */
+    private function ensureAbsoluteWeeklyViolation(
+        string $userId,
+        \DateTime $referenceDate,
+        string $message,
+        ?int $timeEntryId = null,
+    ): void {
+        $weekStart = (clone $referenceDate)->modify('monday this week')->setTime(0, 0, 0);
+        $weekEnd = (clone $weekStart)->modify('+7 days');
+
+        $existing = $this->violationMapper->findByDateRange($weekStart, $weekEnd, $userId);
+        foreach ($existing as $row) {
+            if ($row->getViolationType() === ComplianceViolation::TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED
+                && !$row->getResolved()) {
+                return;
+            }
+        }
+
+        $violationDate = (clone $referenceDate)->setTime(0, 0, 0);
+        $this->violationMapper->createViolation(
+            $userId,
+            ComplianceViolation::TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED,
+            $message,
+            $violationDate,
+            $timeEntryId,
+            ComplianceViolation::SEVERITY_WARNING
+        );
     }
 
     /**
@@ -1373,6 +1447,18 @@ class ComplianceService
                         ComplianceViolation::SEVERITY_WARNING
                     );
                 }
+            }
+
+            // Absolute weekly maximum (AT 60 / CH 45|50) — first-class for CH
+            // where there is no averaging window at all.
+            $absoluteCheck = $this->checkAbsoluteWeeklyHours($userId, $yesterday);
+            if (!$absoluteCheck['valid']) {
+                $this->ensureAbsoluteWeeklyViolation(
+                    $userId,
+                    $yesterday,
+                    (string)$absoluteCheck['message'],
+                    null
+                );
             }
 
             // Count violations after checks to see how many were created

@@ -154,7 +154,8 @@
 	user-select: none;
 }
 #app-content.azc-app .azc-breadcrumb__link {
-	color: var(--color-primary-element, #0082c9);
+	/* Explicit main-text colour: NC `#body-user a` primary blue fails AA on dark themes. */
+	color: var(--azc-text) !important;
 	font-weight: 600;
 	text-decoration: none;
 	border-radius: var(--azc-radius-sm);
@@ -738,7 +739,9 @@
 	padding: var(--azc-space-2) var(--azc-space-3);
 	border: 1px solid transparent;
 	border-radius: var(--azc-radius-sm);
-	color: var(--color-primary-element, #0082c9);
+	/* Use body text colour — NC primary blue fails WCAG AA on dark themes (#00679e on #171717 ≈ 2.9:1).
+	   !important beats core `#body-user a` / visited-link primary colour. */
+	color: var(--azc-text) !important;
 	font-size: var(--azc-fs-sm);
 	font-weight: 500;
 	line-height: 1.35;

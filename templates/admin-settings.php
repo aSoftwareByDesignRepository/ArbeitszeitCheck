@@ -740,7 +740,7 @@ $cancelUrl = $isNcAdminShell
                 <script type="application/json" id="azc-region-data"><?php print_unescaped(json_encode($azcRegionData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)); ?></script>
                 <fieldset class="form-fieldset" aria-labelledby="country-legend" aria-describedby="country-help">
                     <legend id="country-legend" class="form-legend"><?php p($l->t('In which country does your organisation work?')); ?></legend>
-                    <div class="azc-country-grid" role="radiogroup" aria-labelledby="country-legend">
+                    <div class="azc-country-grid">
                         <?php foreach ($azcCountryCards as $azcCountryCode => $azcCard): ?>
                         <label class="azc-country-card" for="country-<?php p(strtolower($azcCountryCode)); ?>">
                             <input type="radio"
@@ -792,8 +792,11 @@ $cancelUrl = $isNcAdminShell
                 if ($azcWeeklyAbs !== 50) {
                 	$azcWeeklyAbs = 45;
                 }
+                $azcShowWeeklyAbs = $azcCurrentCountry === \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH;
+                $azcVacationSuggestion = (int)($settings['vacationDaysSuggestion']
+                    ?? \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry($azcCurrentCountry)->vacationDaysSuggestion);
                 ?>
-                <div class="form-group" id="weekly-absolute-max-group" <?php echo $azcCurrentCountry === \OCA\ArbeitszeitCheck\Support\RegionRegistry::COUNTRY_CH ? '' : 'hidden'; ?>
+                <div class="form-group" id="weekly-absolute-max-group" <?php echo $azcShowWeeklyAbs ? '' : 'hidden'; ?>
                      data-show-for-country="CH">
                     <label for="weeklyAbsoluteMaxHours" class="form-label">
                         <?php p($l->t('Weekly working time maximum (Switzerland)')); ?>
@@ -801,12 +804,27 @@ $cancelUrl = $isNcAdminShell
                     <select id="weeklyAbsoluteMaxHours"
                             name="weeklyAbsoluteMaxHours"
                             class="form-select"
-                            aria-describedby="weeklyAbsoluteMaxHours-help">
+                            aria-describedby="weeklyAbsoluteMaxHours-help"
+                            <?php echo $azcShowWeeklyAbs ? '' : 'disabled'; ?>>
                         <option value="45" <?php echo $azcWeeklyAbs === 45 ? 'selected' : ''; ?>><?php p($l->t('45 hours (general ArG Art. 9)')); ?></option>
                         <option value="50" <?php echo $azcWeeklyAbs === 50 ? 'selected' : ''; ?>><?php p($l->t('50 hours (sector exception under ArG Art. 9)')); ?></option>
                     </select>
                     <p id="weeklyAbsoluteMaxHours-help" class="form-help">
                         <?php p($l->t('Swiss labour law allows 45 hours as the general weekly maximum, or 50 hours for certain sectors. Pick the rule that applies to your organisation.')); ?>
+                    </p>
+                </div>
+
+                <div class="azc-callout azc-callout--info" id="vacation-days-suggestion-callout" role="note"
+                     data-suggestion-de="25" data-suggestion-at="25" data-suggestion-ch="20"
+                     data-current-suggestion="<?php p((string)$azcVacationSuggestion); ?>">
+                    <p class="azc-callout__title"><?php p($l->t('Suggested annual vacation days')); ?></p>
+                    <p class="azc-callout__body" id="vacation-days-suggestion-text">
+                        <?php
+                        p($l->t(
+                            'When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically.',
+                            [$azcVacationSuggestion]
+                        ));
+                        ?>
                     </p>
                 </div>
 

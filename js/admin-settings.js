@@ -130,8 +130,22 @@
                 }
                 rebuildRegions(this.value, regionSelect.value);
                 const weeklyGroup = Utils.$('#weekly-absolute-max-group');
+                const weeklySelect = Utils.$('#weeklyAbsoluteMaxHours');
+                const isCh = this.value === 'CH';
                 if (weeklyGroup) {
-                    weeklyGroup.hidden = this.value !== 'CH';
+                    weeklyGroup.hidden = !isCh;
+                }
+                if (weeklySelect) {
+                    weeklySelect.disabled = !isCh;
+                }
+                const vacationCallout = Utils.$('#vacation-days-suggestion-callout');
+                const vacationText = Utils.$('#vacation-days-suggestion-text');
+                if (vacationCallout && vacationText) {
+                    const key = 'data-suggestion-' + String(this.value).toLowerCase();
+                    const suggestion = parseInt(vacationCallout.getAttribute(key) || '25', 10);
+                    vacationCallout.setAttribute('data-current-suggestion', String(suggestion));
+                    const template = t('When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically.');
+                    vacationText.textContent = template.replace('%1$d', String(suggestion));
                 }
                 if (liveRegion) {
                     const selectedLabel = regionSelect.options[regionSelect.selectedIndex]
@@ -417,8 +431,13 @@
         formData.retentionPeriod = int(formData.retentionPeriod, 2);
         const graceInput = Utils.$('#monthClosureGraceDaysAfterEom');
         formData.monthClosureGraceDaysAfterEom = graceInput ? int(graceInput.value, 0) : int(formData.monthClosureGraceDaysAfterEom, 0);
-        if (formData.weeklyAbsoluteMaxHours !== undefined) {
+        // Only submit the Swiss weekly absolute max when country is CH — a
+        // disabled select is omitted from FormData; also strip stale values.
+        const nextCountryForWeekly = formData.country ? String(formData.country).toUpperCase() : 'DE';
+        if (nextCountryForWeekly === 'CH' && formData.weeklyAbsoluteMaxHours !== undefined) {
             formData.weeklyAbsoluteMaxHours = int(formData.weeklyAbsoluteMaxHours, 45);
+        } else {
+            delete formData.weeklyAbsoluteMaxHours;
         }
 
         const liveRegion = Utils.$('#admin-settings-live');

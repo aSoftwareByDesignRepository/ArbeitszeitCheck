@@ -115,6 +115,7 @@
             insufficient_rest_period: cvT('Insufficient rest period'),
             daily_hours_limit_exceeded: cvT('Daily hours limit exceeded'),
             weekly_hours_limit_exceeded: cvT('Weekly hours limit exceeded'),
+            weekly_absolute_hours_exceeded: cvT('Absolute weekly hours maximum exceeded'),
             night_work: cvT('Night work'),
             sunday_work: cvT('Sunday work'),
             holiday_work: cvT('Holiday work'),

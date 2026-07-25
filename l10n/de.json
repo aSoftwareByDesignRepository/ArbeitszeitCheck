@@ -4312,6 +4312,10 @@
 		"Choose work schedule and region for holidays": "Arbeitszeitmodell und Region für Feiertage wählen",
 		"Number of vacation days per year (organisation default often 20–25 days in DACH)": "Anzahl der Urlaubstage pro Jahr (Organisationsstandard oft 20–25 Tage in DACH)",
 		"Common example in Germany: 31 March (month 3, day 31). Austria and Switzerland may use a different date. If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically.": "Häufiges Beispiel in Deutschland: 31. März (Monat 3, Tag 31). Österreich und die Schweiz können ein anderes Datum nutzen. Existiert der Tag im Monat nicht (z. B. 31. Februar), wird automatisch der letzte Tag des Monats verwendet.",
-		"Full months (Zwölftelung, common DE default)": "Volle Monate (Zwölftelung, üblicher DE-Standard)"
+		"Full months (Zwölftelung, common DE default)": "Volle Monate (Zwölftelung, üblicher DE-Standard)",
+		"Absolute weekly hours maximum exceeded": "Absolutes Wochenarbeitszeit-Maximum überschritten",
+		"Absolute weekly working hours maximum (%1$d hours) already exceeded (%2$s)": "Absolutes Wochenarbeitszeit-Maximum (%1$d Stunden) bereits überschritten (%2$s)",
+		"Suggested annual vacation days": "Empfohlene Jahresurlaubstage",
+		"When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically.": "Beim Zuweisen von Arbeitszeitmodellen ist der vorgeschlagene Standard %1$d Urlaubstage pro Jahr für das gewählte Land (Deutschland/Österreich üblicherweise 25; Schweiz üblicherweise 20). Bestehende Zuweisungen werden nie automatisch geändert."
 	}
 }

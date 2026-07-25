@@ -164,6 +164,7 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
                                         'insufficient_rest_period' => $l->t('Insufficient rest period'),
                                         'daily_hours_limit_exceeded' => $l->t('Daily hours limit exceeded'),
                                         'weekly_hours_limit_exceeded' => $l->t('Weekly hours limit exceeded'),
+                                        'weekly_absolute_hours_exceeded' => $l->t('Absolute weekly hours maximum exceeded'),
                                         'night_work' => $l->t('Night work'),
                                         'sunday_work' => $l->t('Sunday work'),
                                         'holiday_work' => $l->t('Holiday work'),

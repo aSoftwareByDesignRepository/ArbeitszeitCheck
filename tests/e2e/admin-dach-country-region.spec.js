@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { login, credsFromEnv } from './helpers/auth.js'
 import { api } from './helpers/api.js'
 import { assertArbeitszeitcheckLoaded } from './helpers/app-config.js'
@@ -59,6 +60,25 @@ test.describe('DACH country & region (admin)', () => {
 		const settings = await api(page, 'GET', '/apps/arbeitszeitcheck/api/admin/settings')
 		expect(settings.success).toBe(true)
 		expect(settings.settings?.country ?? 'DE').toBe('DE')
+
+		// Nested radiogroup removed — fieldset owns the relationship (1.3.1).
+		await expect(page.locator('.azc-country-grid[role="radiogroup"]')).toHaveCount(0)
+
+		const vacationCallout = page.locator('#vacation-days-suggestion-callout')
+		await expect(vacationCallout).toBeVisible()
+		await expect(vacationCallout).toContainText('25')
+
+		await page.locator('#country-ch').check()
+		await expect(page.locator('#weekly-absolute-max-group')).toBeVisible()
+		await expect(page.locator('#weeklyAbsoluteMaxHours')).toBeEnabled()
+		await expect(vacationCallout).toHaveAttribute('data-current-suggestion', '20')
+
+		const axe = await new AxeBuilder({ page })
+			.include('#section-regional-heading')
+			.include('#admin-settings-form')
+			.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+			.analyze()
+		expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([])
 	})
 
 	test('API: Austria country + OOE statutory catalog (no Good Friday seed)', async ({ page }) => {

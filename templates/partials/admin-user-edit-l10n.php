@@ -38,8 +38,14 @@ $holidayRegionContextForJs = [
 	'defaultRegion' => $holidayRegionContext['defaultRegion'],
 	'defaultRegionLabel' => $l->t(RegionRegistry::regionLabel((string)$holidayRegionContext['defaultRegion'])),
 ];
+$vacationDaysSuggestion = isset($holidayRegionContext['vacationDaysSuggestion'])
+	? (int)$holidayRegionContext['vacationDaysSuggestion']
+	: \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry(
+		(string)$holidayRegionContext['country']
+	)->vacationDaysSuggestion;
 ?>
 window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
+    window.ArbeitszeitCheck.vacationDaysSuggestion = <?php echo (int)$vacationDaysSuggestion; ?>;
     window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
     window.ArbeitszeitCheck.l10n.editUser = <?php echo json_encode($l->t('Edit User'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.save = <?php echo json_encode($l->t('Save'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

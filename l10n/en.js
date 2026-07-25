@@ -4304,6 +4304,10 @@ OC.L10N.register(
 	"Choose work schedule and region for holidays" : "Choose work schedule and region for holidays",
 	"Number of vacation days per year (organisation default often 20–25 days in DACH)" : "Number of vacation days per year (organisation default often 20–25 days in DACH)",
 	"Common example in Germany: 31 March (month 3, day 31). Austria and Switzerland may use a different date. If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically." : "Common example in Germany: 31 March (month 3, day 31). Austria and Switzerland may use a different date. If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically.",
-	"Full months (Zwölftelung, common DE default)" : "Full months (Zwölftelung, common DE default)"
+	"Full months (Zwölftelung, common DE default)" : "Full months (Zwölftelung, common DE default)",
+	"Absolute weekly hours maximum exceeded" : "Absolute weekly hours maximum exceeded",
+	"Absolute weekly working hours maximum (%1$d hours) already exceeded (%2$s)" : "Absolute weekly working hours maximum (%1$d hours) already exceeded (%2$s)",
+	"Suggested annual vacation days" : "Suggested annual vacation days",
+	"When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany\/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically." : "When assigning working time models, the suggested default is %1$d vacation days per year for the selected country (Germany\/Austria typically 25; Switzerland typically 20). Existing assignments are never changed automatically."
 	}
 );

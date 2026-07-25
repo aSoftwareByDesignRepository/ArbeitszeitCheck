@@ -446,7 +446,11 @@
         const germanStateDefault = t('germanStateDefault', 'Use global default state');
         const datePlaceholder = Utils.escapeHtml(t('ddmmYYYY', 'dd.mm.yyyy'));
 
-        const DEFAULT_VACATION_DAYS = 25; // German standard; must match Constants::DEFAULT_VACATION_DAYS_PER_YEAR
+        const DEFAULT_VACATION_DAYS = (typeof window.ArbeitszeitCheck !== 'undefined'
+            && Number.isFinite(Number(window.ArbeitszeitCheck.vacationDaysSuggestion))
+            && Number(window.ArbeitszeitCheck.vacationDaysSuggestion) > 0)
+            ? Math.round(Number(window.ArbeitszeitCheck.vacationDaysSuggestion))
+            : 25; // Profile suggestion (DE/AT 25, CH 20); must match LaborLawProfileFactory
         const vacation = user.vacationDaysPerYear ?? user.userWorkingTimeModel?.vacationDaysPerYear ?? DEFAULT_VACATION_DAYS;
         const carryover = user.vacationCarryoverDays != null ? String(user.vacationCarryoverDays) : '0';
         const carryYear = user.vacationCarryoverYear != null ? String(user.vacationCarryoverYear) : String(new Date().getFullYear());

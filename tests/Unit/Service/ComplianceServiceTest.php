@@ -1401,4 +1401,117 @@ class ComplianceServiceTest extends TestCase
 		// DE would require 45 min for >9h; AT only needs 30 — override must win.
 		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
 	}
+
+	public function testSwissAbsoluteWeeklyWarnsAtClockIn(): void
+	{
+		$this->rebuildServiceForCountry('CH');
+
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')->willReturn(null);
+		$this->timeEntryMapper->method('findLastPausedWithinHours')->willReturn(null);
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
+
+		$dailyHours = $this->createMock(\OCA\ArbeitszeitCheck\Service\DailyWorkingHoursCalculator::class);
+		$dailyHours->method('getWorkingHoursForToday')->willReturn(0.0);
+		$ref = new \ReflectionClass($this->service);
+		$prop = $ref->getProperty('dailyWorkingHoursCalculator');
+		$prop->setAccessible(true);
+		$prop->setValue($this->service, $dailyHours);
+
+		// Absolute weekly uses getTotalHours for the current calendar week.
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(46.0);
+
+		$issues = $this->service->checkComplianceBeforeClockIn('ch-user');
+		$absolute = array_values(array_filter(
+			$issues,
+			static fn (array $i): bool => ($i['type'] ?? '') === ComplianceViolation::TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED
+		));
+		$this->assertCount(1, $absolute);
+		$this->assertSame(ComplianceViolation::SEVERITY_WARNING, $absolute[0]['severity']);
+		$this->assertStringContainsString('45', $absolute[0]['message']);
+		$this->assertStringContainsString('ArG', $absolute[0]['message']);
+	}
+
+	public function testGermanClockInDoesNotEmitAbsoluteWeeklyWarning(): void
+	{
+		$this->rebuildServiceForCountry('DE');
+
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')->willReturn(null);
+		$this->timeEntryMapper->method('findLastPausedWithinHours')->willReturn(null);
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
+
+		$dailyHours = $this->createMock(\OCA\ArbeitszeitCheck\Service\DailyWorkingHoursCalculator::class);
+		$dailyHours->method('getWorkingHoursForToday')->willReturn(0.0);
+		$ref = new \ReflectionClass($this->service);
+		$prop = $ref->getProperty('dailyWorkingHoursCalculator');
+		$prop->setAccessible(true);
+		$prop->setValue($this->service, $dailyHours);
+
+		// Weekly average path may query hours; absolute must stay silent for DE.
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(50.0);
+
+		$issues = $this->service->checkComplianceBeforeClockIn('de-user');
+		$absolute = array_values(array_filter(
+			$issues,
+			static fn (array $i): bool => ($i['type'] ?? '') === ComplianceViolation::TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED
+		));
+		$this->assertSame([], $absolute, 'DE has no absolute weekly cap');
+	}
+
+	public function testAbsoluteWeeklyPersistsViolationOncePerWeekOnClockOut(): void
+	{
+		$this->rebuildServiceForCountry('AT');
+
+		$this->violationMapper->method('findByDateRange')->willReturn([]);
+		$this->violationMapper->expects($this->once())
+			->method('createViolation')
+			->with(
+				'at-user',
+				ComplianceViolation::TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED,
+				$this->stringContains('60'),
+				$this->isInstanceOf(\DateTime::class),
+				null,
+				ComplianceViolation::SEVERITY_WARNING
+			)
+			->willReturn(new ComplianceViolation());
+
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(61.0);
+
+		$entry = new TimeEntry();
+		$entry->setId(42);
+		$entry->setUserId('at-user');
+		$entry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 18:00:00'));
+		$entry->setBreaks(json_encode([[
+			'start' => '2024-01-15T12:00:00+00:00',
+			'end' => '2024-01-15T12:30:00+00:00',
+		]]));
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$method = new \ReflectionMethod(ComplianceService::class, 'checkSixMonthAverageAndWeeklyHours');
+		$method->setAccessible(true);
+		$method->invoke($this->service, $entry);
+	}
+
+	public function testAbsoluteWeeklyDedupesExistingUnresolvedViolation(): void
+	{
+		$this->rebuildServiceForCountry('CH');
+
+		$existing = new ComplianceViolation();
+		$existing->setViolationType(ComplianceViolation::TYPE_WEEKLY_ABSOLUTE_HOURS_EXCEEDED);
+		$existing->setResolved(false);
+
+		$this->violationMapper->method('findByDateRange')->willReturn([$existing]);
+		$this->violationMapper->expects($this->never())->method('createViolation');
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(50.0);
+
+		$entry = new TimeEntry();
+		$entry->setUserId('ch-user');
+		$entry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 18:00:00'));
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$method = new \ReflectionMethod(ComplianceService::class, 'checkSixMonthAverageAndWeeklyHours');
+		$method->setAccessible(true);
+		$method->invoke($this->service, $entry);
+	}
 }
