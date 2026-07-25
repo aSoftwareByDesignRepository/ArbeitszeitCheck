@@ -1,6 +1,6 @@
 {
 	"name": "nextcloud/arbeitszeitcheck",
-	"description": "Legally compliant time tracking system for German labor law (ArbZG) and GDPR",
+	"description": "DACH labour-law compliant time tracking (ArbZG / AZG / ArG) and GDPR for Nextcloud",
 	"type": "project",
 	"license": "AGPL-3.0-or-later",
 	"authors": [

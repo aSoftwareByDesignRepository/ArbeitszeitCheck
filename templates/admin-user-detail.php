@@ -94,7 +94,7 @@ $kioskCredentialsUrl = (string)($_['kioskCredentialsUrl'] ?? ($urlGenerator
 			<div class="admin-user-detail__howto-body">
 				<p><?php p($l->t('Go through each section below. Open a section heading for a short explanation. When you are done, press Save at the bottom.')); ?></p>
 				<ol class="admin-user-detail__howto-list">
-					<li><?php p($l->t('Choose work schedule and state for holidays')); ?></li>
+					<li><?php p($l->t('Choose work schedule and region for holidays')); ?></li>
 					<li><?php p($l->t('Choose vacation calculation mode')); ?></li>
 					<li><?php p($l->t('Check preview, then save')); ?></li>
 				</ol>

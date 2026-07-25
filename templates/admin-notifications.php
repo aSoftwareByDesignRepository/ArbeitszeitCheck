@@ -87,7 +87,7 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 							</div>
 						</div>
 						<p id="vacation-carryover-expiry-help" class="form-help">
-							<?php p($l->t('Typical value in Germany: 31 March (month 3, day 31). If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically.')); ?>
+							<?php p($l->t('Common example in Germany: 31 March (month 3, day 31). Austria and Switzerland may use a different date. If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically.')); ?>
 						</p>
 						<div class="form-group">
 							<label for="vacationCarryoverMaxDays" class="form-label"><?php p($l->t('Maximum carryover days (optional)')); ?></label>
@@ -131,7 +131,7 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 							<label for="vacationProrationMethod" class="form-label"><?php p($l->t('Proration method')); ?></label>
 							<?php $prorationMethod = (string)($settings['vacationProrationMethod'] ?? 'twelfths'); ?>
 							<select class="form-select" id="vacationProrationMethod" name="vacationProrationMethod" aria-describedby="vacation-proration-help">
-								<option value="twelfths" <?php echo $prorationMethod === 'daily' ? '' : 'selected'; ?>><?php p($l->t('Full months (Zwölftelung, German default)')); ?></option>
+								<option value="twelfths" <?php echo $prorationMethod === 'daily' ? '' : 'selected'; ?>><?php p($l->t('Full months (Zwölftelung, common DE default)')); ?></option>
 								<option value="daily" <?php echo $prorationMethod === 'daily' ? 'selected' : ''; ?>><?php p($l->t('Exact days')); ?></option>
 							</select>
 							<p id="vacation-proration-help" class="form-help">

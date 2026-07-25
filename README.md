@@ -1,17 +1,17 @@
-## ArbeitszeitCheck (TimeGuard) – ArbZG- und DSGVO-konforme Zeiterfassung für Nextcloud
+## ArbeitszeitCheck (TimeGuard) – DACH- & DSGVO-konforme Zeiterfassung für Nextcloud
 
-**ArbeitszeitCheck** ist eine Zeiterfassungs‑App für Nextcloud, die explizit auf **deutsches Arbeitszeitgesetz (ArbZG)** und **DSGVO/ GDPR** ausgerichtet ist.  
+**ArbeitszeitCheck** ist eine Zeiterfassungs‑App für Nextcloud für **Deutschland, Österreich und die Schweiz (DACH)** — mit Länderprofilen für **ArbZG**, **AZG/ARG** und **ArG** sowie **DSGVO/GDPR**.  
 Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instanz – keine externen Cloud‑Dienste, keine Telemetrie.
 
 ### Kernfunktionen
 
 - **Rechtskonforme Zeiterfassung**: Kommen/Gehen, Pausen, manuelle Einträge mit Begründung
   - Robuster Paused-Entry-Flow: pausierte Tages-Einträge werden bei erneutem Clock-In fortgesetzt (kein Duplikat), sind im Edit-Fenster wieder zugreifbar und werden bei Korrektur mit Endzeit sauber finalisiert
-- **ArbZG‑Compliance**:
-  - Max. tägliche Arbeitszeit (8h, erweiterbar auf 10h, reine Arbeitszeit ohne Pausen)
-  - Wöchentliche 48‑Stunden‑Durchschnittsprüfung (6‑Monats‑Zeitraum, Manager‑Warnungen)
-  - Automatische Pausenberechnung nach ArbZG §4 (30/45 Minuten, nur Pausen ≥ 15 Minuten)
-  - Ruhezeiten (11h) mit Blockierung von Clock‑In und manuellen Einträgen
+- **Arbeitsrechts-Compliance (DACH)**:
+  - Länderprofil wählbar: Deutschland (ArbZG), Österreich (AZG/ARG) oder Schweiz (ArG)
+  - Feiertagsregionen: deutsche Bundesländer, österreichische Bundesländer, Schweizer Kantone
+  - Max. tägliche Arbeitszeit und Ruhezeiten laut Profil (Admin-Grenzwerte überschreiben Defaults)
+  - Pausenstufen und – wo vorgesehen – Wochen-/Durchschnittsprüfungen je Land (z. B. ArbZG 30/45 Min., AZG, ArG 15/30/60)
   - Erkennung von Nacht‑, Sonn‑ und Feiertagsarbeit inkl. Dokumentation
 - **Abwesenheitsmanagement**: Urlaub, Krankheit, Sonderurlaub, unbezahlter Urlaub mit Genehmigungsworkflow; **Resturlaub / Vorjahres‑Tage** mit konfigurierbarem Ablaufdatum (z. B. 31.03.), FIFO‑Verbrauch, Admin‑Pflege und optional CSV‑Import (`occ arbeitszeitcheck:import-vacation-balance`)
 - **Urlaubsanspruch-Engine (neu erweitert)**: Pro Mitarbeitenden konfigurierbarer Modus (manuell, modellbasiert oder tarif-/regelbasiert), zeitlich gültige Policy-Zuordnungen (L3), optional **geschichtete Defaults** für Organisation (L0), Arbeitszeitmodell (L1) und Team (L2) mit deterministischer Reihenfolge und Prüf-Trace; aktive Regelwerk-Versionierung; Snapshot-Ablage für Auswertungen. **Rückwärtskompatibel:** ohne Konfiguration der neuen Layer oder bei App-Config `layered_entitlements_enabled = 0` gilt das bisherige L3- plus Legacy-Fallback-Verhalten (siehe `docs/Developer-Documentation.en.md`).
@@ -23,7 +23,7 @@ Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instan
 - **DSGVO‑Support**: Exporte, Löschkonzepte (unter Beachtung der gesetzlichen Aufbewahrung), DPIA‑/Verarbeitungsverzeichnis‑Vorlagen
 
 > **Rechtlicher Hinweis (DE):**  
-> ArbeitszeitCheck unterstützt Arbeitgeber und Administratoren bei der technisch sauberen Umsetzung von ArbZG‑ und DSGVO‑Anforderungen (z. B. Höchstarbeitszeit, Pausen, Ruhezeiten, Aufzeichnungspflichten).  
+> ArbeitszeitCheck unterstützt Arbeitgeber und Administratoren bei der technisch sauberen Umsetzung der jeweils geltenden DACH-Arbeitszeitvorgaben (ArbZG, AZG/ARG, ArG) und der DSGVO (z. B. Höchstarbeitszeit, Pausen, Ruhezeiten, Aufzeichnungspflichten).  
 > Die App ersetzt **keine** individuelle Rechtsberatung. Arbeitgeber bleiben rechtlich dafür verantwortlich,
 > - wie Arbeitszeitmodelle, Betriebsvereinbarungen und Tarifverträge gestaltet sind,  
 > - wie Konfigurationen (Grenzwerte, Ausnahmen, Aufbewahrungsfristen) gewählt werden und  
@@ -31,7 +31,7 @@ Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instan
 > Prüfen Sie Konfiguration, Prozesse und Texte bei Bedarf mit Ihrer Rechtsabteilung oder einem Fachanwalt für Arbeitsrecht.
 
 > **Legal notice (EN):**  
-> ArbeitszeitCheck helps organizations implement technical controls for German working time law (ArbZG) and GDPR (e.g. maximum working hours, breaks, rest periods, record‑keeping).  
+> ArbeitszeitCheck helps organizations implement technical controls for applicable DACH working-time rules (ArbZG, AZG/ARG, ArG) and GDPR (e.g. maximum working hours, breaks, rest periods, record‑keeping).  
 > The app is **not** a substitute for legal advice. Employers remain legally responsible for:
 > - the design of working time models, collective agreements and internal policies,  
 > - the chosen configuration (limits, exceptions, retention periods), and  
@@ -72,7 +72,7 @@ Index und Kurzbeschreibungen: **`docs/README.md`**. Mitgelieferte Dokumente im O
 - **Nutzer**
   - `User-Manual.de.md` / `User-Manual.en.md` — Kurzanleitung (u. a. Kalenderansicht in der App vs. Nextcloud-Kalender-App; keine CalDAV-Synchronisation)
 - **Compliance**
-  - `Compliance-Implementation.de.md` / `Compliance-Implementation.en.md` — technische Umsetzung der ArbZG‑Regeln
+  - `Compliance-Implementation.de.md` / `Compliance-Implementation.en.md` — technische Umsetzung der DACH-Arbeitszeitregeln (ArbZG / AZG / ArG)
   - `GDPR-Compliance-Guide.en.md` — Betrieb der App im Einklang mit DSGVO/GDPR
 - **Entwicklung**
   - `Developer-Documentation.en.md` — Architekturüberblick und Hinweise für Beitragende

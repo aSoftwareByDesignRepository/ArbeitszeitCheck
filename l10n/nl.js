@@ -4288,7 +4288,11 @@ OC.L10N.register(
 	"Get a notification when it's time to take a required break. For example, after more than 6 hours you'll get a reminder to take at least a 30-minute break (AZG)." : "Get a notification when it's time to take a required break. For example, after more than 6 hours you'll get a reminder to take at least a 30-minute break (AZG).",
 	"Get a notification when it's time to take a required break. For example, after 5.5 hours you'll get a reminder to take at least a 15-minute break (ArG)." : "Get a notification when it's time to take a required break. For example, after 5.5 hours you'll get a reminder to take at least a 15-minute break (ArG).",
 	"Could not show the country-change confirmation. Please reload the page and try again." : "Could not show the country-change confirmation. Please reload the page and try again.",
-	"No breaks required for shifts under %s hours" : "No breaks required for shifts under %s hours"
+	"No breaks required for shifts under %s hours" : "No breaks required for shifts under %s hours",
+	"Choose work schedule and region for holidays" : "Kies werkrooster en regio voor feestdagen",
+	"Number of vacation days per year (organisation default often 20–25 days in DACH)" : "Aantal vakantiedagen per jaar (organisatiestandaard vaak 20–25 dagen in DACH)",
+	"Common example in Germany: 31 March (month 3, day 31). Austria and Switzerland may use a different date. If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically." : "Veelvoorkomend voorbeeld in Duitsland: 31 maart (maand 3, dag 31). Oostenrijk en Zwitserland kunnen een andere datum gebruiken. Als die dag niet bestaat in een maand (bijv. 31 februari), wordt automatisch de laatste dag van die maand gebruikt.",
+	"Full months (Zwölftelung, common DE default)" : "Volle maanden (Zwölftelung, gebruikelijke DE-standaard)"
 	},
 	"nplurals=2; plural=(n != 1);"
 );

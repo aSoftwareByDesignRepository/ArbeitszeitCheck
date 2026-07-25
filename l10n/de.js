@@ -2715,7 +2715,7 @@ OC.L10N.register(
 	"production" : "produktion",
 	"Professional time tracking and compliance management for German labor law." : "Professionelle Zeiterfassung und Compliance-Verwaltung für deutsches Arbeitsrecht.",
 	"Professional time tracking and compliance management for Germany and Austria (DACH)." : "Professionelle Zeiterfassung und Compliance-Verwaltung für Deutschland und Österreich (DACH).",
-	"Professional time tracking and compliance management for Germany, Austria and Switzerland (DACH)." : "Professional time tracking and compliance management for Germany, Austria and Switzerland (DACH).",
+	"Professional time tracking and compliance management for Germany, Austria and Switzerland (DACH)." : "Professionelle Zeiterfassung und Compliance-Verwaltung für Deutschland, Österreich und die Schweiz (DACH).",
 	"Project" : "Projekt",
 	"project" : "projekt",
 	"Project #%s" : "Projekt #%s",
@@ -4300,6 +4300,10 @@ OC.L10N.register(
 	"Get a notification when it's time to take a required break. For example, after more than 6 hours you'll get a reminder to take at least a 30-minute break (AZG)." : "Erhalten Sie eine Benachrichtigung, wenn es Zeit für eine Pflichtpause ist. Beispiel: Nach mehr als 6 Stunden erhalten Sie eine Erinnerung an mindestens 30 Minuten Pause (AZG).",
 	"Get a notification when it's time to take a required break. For example, after 5.5 hours you'll get a reminder to take at least a 15-minute break (ArG)." : "Erhalten Sie eine Benachrichtigung, wenn es Zeit für eine Pflichtpause ist. Beispiel: Nach 5,5 Stunden erhalten Sie eine Erinnerung an mindestens 15 Minuten Pause (ArG).",
 	"Could not show the country-change confirmation. Please reload the page and try again." : "Die Bestätigung zum Länderwechsel konnte nicht angezeigt werden. Bitte laden Sie die Seite neu und versuchen Sie es erneut.",
-	"No breaks required for shifts under %s hours" : "Für Schichten unter %s Stunden sind keine Pausen erforderlich"
+	"No breaks required for shifts under %s hours" : "Für Schichten unter %s Stunden sind keine Pausen erforderlich",
+	"Choose work schedule and region for holidays" : "Arbeitszeitmodell und Region für Feiertage wählen",
+	"Number of vacation days per year (organisation default often 20–25 days in DACH)" : "Anzahl der Urlaubstage pro Jahr (Organisationsstandard oft 20–25 Tage in DACH)",
+	"Common example in Germany: 31 March (month 3, day 31). Austria and Switzerland may use a different date. If that day does not exist in a month (e.g. 31 February), the last day of that month is used automatically." : "Häufiges Beispiel in Deutschland: 31. März (Monat 3, Tag 31). Österreich und die Schweiz können ein anderes Datum nutzen. Existiert der Tag im Monat nicht (z. B. 31. Februar), wird automatisch der letzte Tag des Monats verwendet.",
+	"Full months (Zwölftelung, common DE default)" : "Volle Monate (Zwölftelung, üblicher DE-Standard)"
 	}
 );
