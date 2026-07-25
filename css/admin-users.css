@@ -74,7 +74,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4, 1rem);
-  max-width: 52rem;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
 }
 
 .admin-user-detail__back {
@@ -337,6 +339,8 @@
 
 .admin-user-detail .form-group {
   margin-bottom: 0;
+  /* Keep form controls readable on ultrawide; page root stays full-bleed. */
+  max-width: min(40rem, 100%);
 }
 
 .admin-user-detail .entitlement-preview {

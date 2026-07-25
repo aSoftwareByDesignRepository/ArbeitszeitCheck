@@ -28,7 +28,6 @@ trait PageShellTrait
 {
 	/** Page IDs that keep a readable max width (dense single-entity forms). */
 	private const CONSTRAINED_SHELL_PAGE_IDS = [
-		'admin-user-detail',
 	];
 
 	/** Page IDs that use full-width shell (tables, dashboards, dense admin/manager lists). */
@@ -50,6 +49,7 @@ trait PageShellTrait
 		'manager-month-closures',
 		'admin-dashboard',
 		'admin-users',
+		'admin-user-detail',
 		'admin-notifications',
 		'admin-license',
 		'admin-settings',

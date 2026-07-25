@@ -438,9 +438,14 @@ template {
     text-shadow: none !important;
   }
 
-  a,
-  a:visited {
+  a:not(.btn):not(.azc-btn),
+  a:not(.btn):not(.azc-btn):visited {
     text-decoration: underline;
+  }
+
+  a.btn,
+  a.azc-btn {
+    text-decoration: none !important;
   }
 
   a[href]:after {

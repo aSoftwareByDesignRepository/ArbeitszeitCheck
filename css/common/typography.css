@@ -512,9 +512,14 @@ i {
     widows: 3;
   }
 
-  a {
+  a:not(.btn):not(.azc-btn) {
     color: var(--arbeitszeitcheck-text-color-primary) !important;
     text-decoration: underline !important;
+  }
+
+  a.btn,
+  a.azc-btn {
+    text-decoration: none !important;
   }
 
   a[href^="http"]:after {

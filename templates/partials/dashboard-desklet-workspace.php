@@ -25,7 +25,7 @@ $l10n = is_array($config['l10n'] ?? null) ? $config['l10n'] : [];
 
 	<div id="dz-error-panel" class="dz-error-panel" role="alert" aria-live="assertive" hidden>
 		<p id="dz-error" class="dz-error-panel__text"></p>
-		<button type="button" class="btn btn-secondary dz-retry" id="dz-retry"><?php p($l10n['tryAgain'] ?? $l->t('Try again')); ?></button>
+		<button type="button" class="azc-btn azc-btn--secondary dz-retry" id="dz-retry"><?php p($l10n['tryAgain'] ?? $l->t('Try again')); ?></button>
 	</div>
 
 	<p id="dz-feedback" class="dz-feedback" role="status" hidden></p>
@@ -61,10 +61,10 @@ $l10n = is_array($config['l10n'] ?? null) ? $config['l10n'] : [];
 		</article>
 
 		<div class="dz-button-row" role="group" aria-label="<?php p($l->t('Time tracking actions')); ?>">
-			<button type="button" class="btn btn-primary" id="dz-clock-in"><?php p($l10n['clockIn'] ?? $l->t('Clock In')); ?></button>
-			<button type="button" class="btn btn-secondary" id="dz-start-break"><?php p($l10n['startBreak'] ?? $l->t('Start Break')); ?></button>
-			<button type="button" class="btn btn-secondary" id="dz-end-break"><?php p($l10n['endBreak'] ?? $l->t('End Break')); ?></button>
-			<button type="button" class="btn btn-danger" id="dz-clock-out"><?php p($l10n['clockOut'] ?? $l->t('Clock Out')); ?></button>
+			<button type="button" class="azc-btn azc-btn--primary" id="dz-clock-in"><?php p($l10n['clockIn'] ?? $l->t('Clock In')); ?></button>
+			<button type="button" class="azc-btn azc-btn--secondary" id="dz-start-break"><?php p($l10n['startBreak'] ?? $l->t('Start Break')); ?></button>
+			<button type="button" class="azc-btn azc-btn--secondary" id="dz-end-break"><?php p($l10n['endBreak'] ?? $l->t('End Break')); ?></button>
+			<button type="button" class="azc-btn azc-btn--danger" id="dz-clock-out"><?php p($l10n['clockOut'] ?? $l->t('Clock Out')); ?></button>
 		</div>
 
 		<p id="dz-last-updated" class="dz-last-updated" aria-live="polite"></p>
@@ -89,7 +89,7 @@ $l10n = is_array($config['l10n'] ?? null) ? $config['l10n'] : [];
 	<?php endif; ?>
 
 	<nav class="dz-link-row" aria-label="<?php p($l->t('Quick navigation')); ?>">
-		<a class="btn btn-secondary" href="<?php p($config['dashboardUrl'] ?? ''); ?>"><?php p($l10n['openDashboard'] ?? $l->t('Open full dashboard')); ?></a>
-		<a class="btn btn-secondary" href="<?php p($config['timeEntriesUrl'] ?? ''); ?>"><?php p($l10n['openTimeEntries'] ?? $l->t('Open time entries')); ?></a>
+		<a class="azc-btn azc-btn--secondary" href="<?php p($config['dashboardUrl'] ?? ''); ?>"><?php p($l10n['openDashboard'] ?? $l->t('Open full dashboard')); ?></a>
+		<a class="azc-btn azc-btn--secondary" href="<?php p($config['timeEntriesUrl'] ?? ''); ?>"><?php p($l10n['openTimeEntries'] ?? $l->t('Open time entries')); ?></a>
 	</nav>
 </div>

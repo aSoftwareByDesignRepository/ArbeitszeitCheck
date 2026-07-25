@@ -418,17 +418,17 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 					<button type="button" id="azc-kiosk-pin-copy" class="azc-btn azc-btn--primary">
 						<?php p($l->t('Copy PIN')); ?>
 					</button>
-					<button type="button" id="azc-kiosk-pin-share" class="azc-btn" hidden>
+					<button type="button" id="azc-kiosk-pin-share" class="azc-btn azc-btn--secondary" hidden>
 						<?php p($l->t('Share…')); ?>
 					</button>
-					<a id="azc-kiosk-pin-email" class="azc-btn" href="#" hidden>
+					<a id="azc-kiosk-pin-email" class="azc-btn azc-btn--secondary" href="#" hidden>
 						<?php p($l->t('Send by email')); ?>
 					</a>
 				</div>
 				<p id="azc-kiosk-pin-share-status" class="azc-kiosk-pin-share-status" role="status" aria-live="polite"></p>
 			</div>
 			<footer class="azc-kiosk-modal__footer">
-				<button type="button" id="azc-kiosk-pin-close" class="azc-btn" data-azc-modal-close>
+				<button type="button" id="azc-kiosk-pin-close" class="azc-btn azc-btn--secondary" data-azc-modal-close>
 					<?php p($l->t('Done')); ?>
 				</button>
 			</footer>

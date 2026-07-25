@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.1 - 2026-07-25
+
+### Fixed
+
+- **Support & us layout:** the Administration page now uses the full content width with a two-column hero (copy + trust panel), a full-bleed Check Partner spotlight, and titled option cards (setup, commissioned feature, mobile & terminal). Cache-bust via app version so `immutable` CSS refreshes in browsers.
+
 ## 1.6.0 - 2026-07-24
 
 ### Fixed

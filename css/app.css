@@ -261,6 +261,7 @@
 #app-content.azc-app .azc-btn,
 #app-content-wrapper .azc-btn,
 .azc-nc-admin-settings .azc-btn,
+.azc-nc-settings-panel .azc-btn,
 .azc-app .btn {
 	display: inline-flex;
 	align-items: center;
@@ -286,6 +287,7 @@
 #app-content.azc-app .azc-btn:focus-visible,
 #app-content-wrapper .azc-btn:focus-visible,
 .azc-nc-admin-settings .azc-btn:focus-visible,
+.azc-nc-settings-panel .azc-btn:focus-visible,
 .azc-app .btn:focus-visible {
 	outline: 3px solid var(--color-primary-element, #0082c9);
 	outline-offset: 2px;
@@ -294,6 +296,7 @@
 #app-content.azc-app .azc-btn--primary,
 #app-content-wrapper .azc-btn--primary,
 .azc-nc-admin-settings .azc-btn--primary,
+.azc-nc-settings-panel .azc-btn--primary,
 .azc-app .btn--primary {
 	/* !important: link + theme cascades must not flatten CTAs to underlined text. */
 	background-color: var(--color-primary-element, #0082c9) !important;
@@ -304,6 +307,7 @@
 #app-content.azc-app .azc-btn--primary:hover,
 #app-content-wrapper .azc-btn--primary:hover,
 .azc-nc-admin-settings .azc-btn--primary:hover,
+.azc-nc-settings-panel .azc-btn--primary:hover,
 .azc-app .btn--primary:hover {
 	background-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
 	border-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
@@ -313,6 +317,7 @@
 #app-content.azc-app .azc-btn--primary:active,
 #app-content-wrapper .azc-btn--primary:active,
 .azc-nc-admin-settings .azc-btn--primary:active,
+.azc-nc-settings-panel .azc-btn--primary:active,
 .azc-app .btn--primary:active {
 	background-color: var(--color-primary-element, #0082c9) !important;
 	border-color: var(--color-primary-element, #0082c9) !important;
@@ -322,6 +327,7 @@
 #app-content.azc-app .azc-btn--secondary,
 #app-content-wrapper .azc-btn--secondary,
 .azc-nc-admin-settings .azc-btn--secondary,
+.azc-nc-settings-panel .azc-btn--secondary,
 .azc-app .btn--secondary {
 	background-color: color-mix(in srgb, var(--color-main-background) 82%, var(--color-main-text) 18%) !important;
 	border-color: var(--color-border-dark, var(--azc-border-strong, var(--color-border))) !important;
@@ -331,6 +337,7 @@
 #app-content.azc-app .azc-btn--secondary:hover,
 #app-content-wrapper .azc-btn--secondary:hover,
 .azc-nc-admin-settings .azc-btn--secondary:hover,
+.azc-nc-settings-panel .azc-btn--secondary:hover,
 .azc-app .btn--secondary:hover {
 	background-color: color-mix(in srgb, var(--color-main-background) 70%, var(--color-main-text) 30%) !important;
 	border-color: var(--color-primary-element, var(--azc-border-strong)) !important;
@@ -340,6 +347,7 @@
 #app-content.azc-app .azc-btn--danger,
 #app-content-wrapper .azc-btn--danger,
 .azc-nc-admin-settings .azc-btn--danger,
+.azc-nc-settings-panel .azc-btn--danger,
 .azc-app .btn--danger {
 	background-color: var(--color-error, #cc4646) !important;
 	border-color: var(--color-error, #cc4646) !important;
@@ -349,6 +357,7 @@
 #app-content.azc-app .azc-btn--danger:hover,
 #app-content-wrapper .azc-btn--danger:hover,
 .azc-nc-admin-settings .azc-btn--danger:hover,
+.azc-nc-settings-panel .azc-btn--danger:hover,
 .azc-app .btn--danger:hover {
 	background-color: var(--color-error-hover, var(--color-error)) !important;
 	border-color: var(--color-error-hover, var(--color-error)) !important;
@@ -357,15 +366,28 @@
 
 #app-content.azc-app .azc-btn--ghost,
 #app-content-wrapper .azc-btn--ghost,
-.azc-nc-admin-settings .azc-btn--ghost {
+.azc-nc-admin-settings .azc-btn--ghost,
+.azc-nc-settings-panel .azc-btn--ghost {
 	background-color: transparent;
 	color: var(--azc-text, var(--color-main-text));
 	border-color: transparent;
+	text-decoration: none !important;
 }
 
 #app-content.azc-app .azc-btn--sm,
 #app-content-wrapper .azc-btn--sm,
-.azc-nc-admin-settings .azc-btn--sm {
+.azc-nc-admin-settings .azc-btn--sm,
+.azc-nc-settings-panel .azc-btn--sm {
+	min-height: 2.25rem;
+	padding: 0.35rem 0.85rem;
+	font-size: var(--azc-fs-sm);
+}
+
+/* Alias used by kiosk/license — keep in sync with --sm. */
+#app-content.azc-app .azc-btn--small,
+#app-content-wrapper .azc-btn--small,
+.azc-nc-admin-settings .azc-btn--small,
+.azc-nc-settings-panel .azc-btn--small {
 	min-height: 2.25rem;
 	padding: 0.35rem 0.85rem;
 	font-size: var(--azc-fs-sm);
@@ -373,7 +395,8 @@
 
 #app-content.azc-app .azc-btn[aria-busy="true"],
 #app-content-wrapper .azc-btn[aria-busy="true"],
-.azc-nc-admin-settings .azc-btn[aria-busy="true"] {
+.azc-nc-admin-settings .azc-btn[aria-busy="true"],
+.azc-nc-settings-panel .azc-btn[aria-busy="true"] {
 	opacity: 0.7;
 	pointer-events: none;
 }
@@ -382,6 +405,7 @@
 	#app-content.azc-app .azc-btn,
 	#app-content-wrapper .azc-btn,
 	.azc-nc-admin-settings .azc-btn,
+	.azc-nc-settings-panel .azc-btn,
 	.azc-app .btn {
 		transition: none;
 	}
@@ -1053,6 +1077,7 @@
 	margin-block: var(--azc-space-5) var(--azc-space-2);
 	font-size: var(--azc-fs-md, 1rem);
 }
+.azc-nc-settings-panel .azc-btn + .azc-btn,
 .azc-nc-settings-panel .btn + .btn {
 	margin-inline-start: var(--azc-space-2);
 }

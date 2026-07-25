@@ -96,18 +96,20 @@ if ($presentation === 'embed') {
 			class="<?php p($prefix); ?>-support-us__primary"
 			aria-labelledby="<?php p($partnerTitleId); ?>"
 		>
-			<p class="<?php p($prefix); ?>-support-us__eyebrow">
-				<?php p($l->t('Recommended')); ?>
-			</p>
-			<h3 id="<?php p($partnerTitleId); ?>" class="<?php p($prefix); ?>-support-us__offer-title">
-				<?php p($l->t('Check Partner')); ?>
-			</h3>
-			<p class="<?php p($prefix); ?>-support-us__benefit">
-				<?php p($l->t('Annual hour packs — Small, Standard, or Premium — with priority email for your organisation. This is invoiceable service — not a donation. See packages on our support page.')); ?>
-			</p>
-			<p class="<?php p($prefix); ?>-support-us__coverage">
-				<?php p($l->t('List prices on our site apply to published Check apps. For this app, ask for an individual partner offer — we invoice only after you accept a quote.')); ?>
-			</p>
+			<div class="<?php p($prefix); ?>-support-us__primary-copy">
+				<p class="<?php p($prefix); ?>-support-us__eyebrow">
+					<?php p($l->t('Recommended')); ?>
+				</p>
+				<h3 id="<?php p($partnerTitleId); ?>" class="<?php p($prefix); ?>-support-us__offer-title">
+					<?php p($l->t('Check Partner')); ?>
+				</h3>
+				<p class="<?php p($prefix); ?>-support-us__benefit">
+					<?php p($l->t('Annual hour packs — Small, Standard, or Premium — with priority email for your organisation. This is invoiceable service — not a donation. See packages on our support page.')); ?>
+				</p>
+				<p class="<?php p($prefix); ?>-support-us__coverage">
+					<?php p($l->t('List prices on our site apply to published Check apps. For this app, ask for an individual partner offer — we invoice only after you accept a quote.')); ?>
+				</p>
+			</div>
 			<div class="<?php p($prefix); ?>-support-us__primary-actions">
 				<a
 					class="<?php p($btnPrimary); ?> <?php p($prefix); ?>-support-us__cta <?php p($prefix); ?>-support-us__cta--primary"
@@ -136,6 +138,9 @@ if ($presentation === 'embed') {
 			</h3>
 			<div class="<?php p($prefix); ?>-support-us__options">
 				<div class="<?php p($prefix); ?>-support-us__option">
+					<h4 class="<?php p($prefix); ?>-support-us__option-title">
+						<?php p($l->t('Setup & training')); ?>
+					</h4>
 					<p class="<?php p($prefix); ?>-support-us__option-hint">
 						<?php p($l->t('Remote onboarding or a workshop so your team can roll out cleanly — billed as a service.')); ?>
 					</p>
@@ -147,6 +152,9 @@ if ($presentation === 'embed') {
 					</a>
 				</div>
 				<div class="<?php p($prefix); ?>-support-us__option">
+					<h4 class="<?php p($prefix); ?>-support-us__option-title">
+						<?php p($l->t('Commissioned feature')); ?>
+					</h4>
 					<p class="<?php p($prefix); ?>-support-us__option-hint">
 						<?php p($l->t('A scoped change with acceptance criteria and a delivery date — billed as project work.')); ?>
 					</p>
@@ -159,6 +167,9 @@ if ($presentation === 'embed') {
 				</div>
 				<?php if ($hasMobile): ?>
 					<div class="<?php p($prefix); ?>-support-us__option">
+						<h4 class="<?php p($prefix); ?>-support-us__option-title">
+							<?php p($l->t('Mobile & terminal')); ?>
+						</h4>
 						<p class="<?php p($prefix); ?>-support-us__option-hint">
 							<?php p($l->t('Named seats for the official apps — a software licence on invoice.')); ?>
 						</p>

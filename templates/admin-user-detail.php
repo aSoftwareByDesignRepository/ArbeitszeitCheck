@@ -53,7 +53,7 @@ $kioskCredentialsUrl = (string)($_['kioskCredentialsUrl'] ?? ($urlGenerator
 					</p>
 				<?php endif; ?>
 				<p>
-					<a class="btn btn--primary" href="<?php p($employeesListUrl); ?>">
+					<a class="azc-btn azc-btn--primary" href="<?php p($employeesListUrl); ?>">
 						<?php p($l->t('Back to employees')); ?>
 					</a>
 				</p>
@@ -126,7 +126,7 @@ $kioskCredentialsUrl = (string)($_['kioskCredentialsUrl'] ?? ($urlGenerator
 				<?php p($l->t('Kiosk badges (RFID/NFC) and PINs are managed in Kiosk administration, together with the foyer tablets. Open that page to allow kiosk access, generate a PIN, or scan a badge for this employee.')); ?>
 			</p>
 			<p class="admin-user-detail__kiosk-xref-actions">
-				<a class="btn btn--secondary" href="<?php p($kioskCredentialsUrl); ?>">
+				<a class="azc-btn azc-btn--secondary" href="<?php p($kioskCredentialsUrl); ?>">
 					<?php p($l->t('Manage badges & PIN for this employee')); ?>
 				</a>
 			</p>

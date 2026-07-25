@@ -11,6 +11,8 @@ use PHPUnit\Framework\TestCase;
  *
  * Historic bug: #app-content-wrapper a rules (base/typography/a11y) were more
  * specific than .azc-btn--primary and wiped background + forced underline.
+ * Follow-up: NC personal-settings panel and dashboard desklet sat outside the
+ * hardened scopes / lacked button CSS entirely.
  */
 final class AzcBtnCascadeContractTest extends TestCase {
 	public function testLinkResetsExcludeAzcBtn(): void {
@@ -50,5 +52,79 @@ final class AzcBtnCascadeContractTest extends TestCase {
 			'Secondary fill must use !important against link demotion'
 		);
 		self::assertStringContainsString('min-height: 2.75rem', $css);
+	}
+
+	public function testNcPersonalSettingsPanelIsHardenedLikeAppShell(): void {
+		$css = (string)file_get_contents(dirname(__DIR__, 2) . '/css/app.css');
+		self::assertStringContainsString('.azc-nc-settings-panel .azc-btn', $css);
+		self::assertStringContainsString('.azc-nc-settings-panel .azc-btn--primary', $css);
+		self::assertStringContainsString('.azc-nc-settings-panel .azc-btn--secondary', $css);
+		self::assertMatchesRegularExpression(
+			'/\.azc-nc-settings-panel \.azc-btn--primary[\s\S]*?background-color:[^;]*!important/',
+			$css,
+			'Personal settings CTAs live outside #app-content and need their own solid fills'
+		);
+
+		$template = (string)file_get_contents(dirname(__DIR__, 2) . '/templates/personal-settings.php');
+		self::assertStringContainsString('azc-nc-settings-panel', $template);
+		self::assertStringContainsString('azc-btn azc-btn--primary', $template);
+		self::assertStringContainsString('azc-btn azc-btn--secondary', $template);
+	}
+
+	public function testDeskletUsesAzcBtnTaxonomyWithScopedFills(): void {
+		$root = dirname(__DIR__, 2);
+		$partial = (string)file_get_contents($root . '/templates/partials/dashboard-desklet-workspace.php');
+		self::assertStringContainsString('azc-btn azc-btn--primary', $partial);
+		self::assertStringContainsString('azc-btn azc-btn--secondary', $partial);
+		self::assertStringContainsString('azc-btn azc-btn--danger', $partial);
+		self::assertStringNotContainsString('btn-primary', $partial);
+		self::assertStringNotContainsString('btn-secondary', $partial);
+		self::assertStringNotContainsString('btn-danger', $partial);
+
+		$css = (string)file_get_contents($root . '/css/dashboard-widgets.css');
+		self::assertStringContainsString('.dz-workspace .azc-btn--primary', $css);
+		self::assertMatchesRegularExpression(
+			'/\.dz-workspace \.azc-btn--primary,\s*\n\.dz-workspace \.btn-primary,\s*\n\.dz-workspace \.btn--primary \{\s*\n\tbackground-color:\s*var\(--color-primary-element[^)]*\)\s*!important;/',
+			$css,
+			'Desklet does not load app.css — base primary fill must live in dashboard-widgets.css'
+		);
+		self::assertMatchesRegularExpression(
+			'/\.dz-workspace \.azc-btn--secondary,\s*\n\.dz-workspace \.btn-secondary,\s*\n\.dz-workspace \.btn--secondary \{\s*\n\tbackground-color:[^;]*!important;/',
+			$css
+		);
+	}
+
+	public function testSmallAliasMirrorsSmSizing(): void {
+		$css = (string)file_get_contents(dirname(__DIR__, 2) . '/css/app.css');
+		self::assertStringContainsString('.azc-btn--small', $css);
+		self::assertMatchesRegularExpression(
+			'/\.azc-btn--small[\s\S]*?min-height:\s*2\.25rem/',
+			$css
+		);
+	}
+
+	public function testPrintStylesDoNotUnderlineButtonAnchors(): void {
+		$root = dirname(__DIR__, 2);
+		$base = (string)file_get_contents($root . '/css/common/base.css');
+		$typo = (string)file_get_contents($root . '/css/common/typography.css');
+		self::assertMatchesRegularExpression(
+			'/@media print[\s\S]*a:not\(\.btn\):not\(\.azc-btn\),\s*\n\s*a:not\(\.btn\):not\(\.azc-btn\):visited \{/',
+			$base,
+			'Print must not underline button anchors (base.css)'
+		);
+		self::assertStringContainsString("a.azc-btn {\n    text-decoration: none !important;", $base);
+		self::assertMatchesRegularExpression(
+			'/@media print[\s\S]*a:not\(\.btn\):not\(\.azc-btn\) \{\s*\n\s*color:[^;]+!important;\s*\n\s*text-decoration:\s*underline !important;/',
+			$typo,
+			'Print must not underline button anchors (typography.css)'
+		);
+		self::assertStringContainsString("a.azc-btn {\n    text-decoration: none !important;", $typo);
+	}
+
+	public function testKioskPinActionsUseButtonVariants(): void {
+		$kiosk = (string)file_get_contents(dirname(__DIR__, 2) . '/templates/admin-kiosk.php');
+		self::assertStringContainsString('id="azc-kiosk-pin-email" class="azc-btn azc-btn--secondary"', $kiosk);
+		self::assertStringContainsString('id="azc-kiosk-pin-share" class="azc-btn azc-btn--secondary"', $kiosk);
+		self::assertStringContainsString('id="azc-kiosk-pin-close" class="azc-btn azc-btn--secondary"', $kiosk);
 	}
 }

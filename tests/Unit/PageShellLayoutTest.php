@@ -56,7 +56,10 @@ class PageShellLayoutTest extends TestCase
 		$this->assertIsArray($constrained);
 		$this->assertContains('settings', $wide);
 		$this->assertNotContains('settings', $constrained);
-		$this->assertContains('admin-user-detail', $constrained);
+		$this->assertContains('admin-user-detail', $wide);
+		$this->assertNotContains('admin-user-detail', $constrained);
+		$this->assertContains('admin-license', $wide);
+		$this->assertContains('admin-support-us', $wide);
 	}
 
 	public function testAdminUserDetailControllerMergesShellParams(): void
@@ -97,5 +100,38 @@ class PageShellLayoutTest extends TestCase
 
 		$this->assertStringContainsString('azc-kiosk-open-create', $template);
 		$this->assertStringContainsString('azc-kiosk-create-modal', $template);
+	}
+
+	public function testAdminLicenseAndSupportUsPageRootsAreFullWidth(): void
+	{
+		$license = (string)file_get_contents(__DIR__ . '/../../css/admin-license.css');
+		$this->assertMatchesRegularExpression(
+			'/\.azc-license-page\s*\{[^}]*max-width:\s*none/s',
+			$license,
+			'License page root must fill the wide shell (no 56rem page cap)'
+		);
+		$this->assertStringNotContainsString('max-width: 56rem', $license);
+
+		$support = (string)file_get_contents(__DIR__ . '/../../css/admin-support-us.css');
+		$this->assertMatchesRegularExpression(
+			'/\.azc-support-us-page\s*\{[^}]*max-width:\s*none/s',
+			$support,
+			'Support Us page root must fill the wide shell'
+		);
+		// Prose measure is OK; page-root 56rem is not.
+		$this->assertDoesNotMatchRegularExpression(
+			'/\.azc-support-us-page\s*\{[^}]*max-width:\s*56rem/s',
+			$support
+		);
+
+		$detail = (string)file_get_contents(__DIR__ . '/../../css/admin-users.css');
+		$this->assertMatchesRegularExpression(
+			'/\.admin-user-detail\s*\{[^}]*max-width:\s*none/s',
+			$detail
+		);
+
+		$patterns = (string)file_get_contents(__DIR__ . '/../../css/common/page-patterns.css');
+		$this->assertStringContainsString('#azc-main-content > .azc-page-stack', $patterns);
+		$this->assertStringContainsString('max-width: none', $patterns);
 	}
 }

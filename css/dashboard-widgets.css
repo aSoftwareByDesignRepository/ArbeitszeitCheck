@@ -252,28 +252,101 @@
 }
 
 /*
-   Disabled buttons: visually dimmed + not-allowed cursor.
-   We rely on the `disabled` attribute (set by JS) rather than a CSS class
-   so that assistive technologies correctly report the state.
+   Desklet loads only dashboard-widgets.css (not app.css). Button fills must
+   live here so clock-in CTAs are never demoted to naked browser buttons.
 */
+.dz-workspace .azc-btn,
+.dz-workspace .btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	min-height: 44px;
+	min-width: 44px;
+	padding: 0.55rem 1.05rem;
+	border-radius: var(--azc-radius-md, 12px);
+	font-size: var(--arbeitszeitcheck-font-size-sm, 0.9375rem);
+	font-weight: 600;
+	line-height: 1.25;
+	text-decoration: none !important;
+	cursor: pointer;
+	border: 1px solid transparent;
+	box-sizing: border-box;
+	box-shadow: none;
+}
+
+.dz-workspace .azc-btn--primary,
+.dz-workspace .btn-primary,
+.dz-workspace .btn--primary {
+	background-color: var(--color-primary-element, #0082c9) !important;
+	border-color: var(--color-primary-element, #0082c9) !important;
+	color: var(--color-primary-element-text, #fff) !important;
+}
+
+.dz-workspace .azc-btn--primary:hover:not(:disabled),
+.dz-workspace .btn-primary:hover:not(:disabled),
+.dz-workspace .btn--primary:hover:not(:disabled) {
+	background-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
+	border-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
+	color: var(--color-primary-element-text, #fff) !important;
+}
+
+.dz-workspace .azc-btn--secondary,
+.dz-workspace .btn-secondary,
+.dz-workspace .btn--secondary {
+	background-color: color-mix(in srgb, var(--color-main-background) 82%, var(--color-main-text) 18%) !important;
+	border-color: var(--color-border-dark, var(--color-border)) !important;
+	color: var(--color-main-text) !important;
+}
+
+.dz-workspace .azc-btn--secondary:hover:not(:disabled),
+.dz-workspace .btn-secondary:hover:not(:disabled),
+.dz-workspace .btn--secondary:hover:not(:disabled) {
+	background-color: color-mix(in srgb, var(--color-main-background) 70%, var(--color-main-text) 30%) !important;
+	border-color: var(--color-primary-element, var(--color-border)) !important;
+	color: var(--color-main-text) !important;
+}
+
+.dz-workspace .azc-btn--danger,
+.dz-workspace .btn-danger,
+.dz-workspace .btn--danger {
+	background-color: var(--color-error, #cc4646) !important;
+	border-color: var(--color-error, #cc4646) !important;
+	color: var(--color-primary-text, #fff) !important;
+}
+
+.dz-workspace .azc-btn--danger:hover:not(:disabled),
+.dz-workspace .btn-danger:hover:not(:disabled),
+.dz-workspace .btn--danger:hover:not(:disabled) {
+	background-color: var(--color-error-hover, var(--color-error)) !important;
+	border-color: var(--color-error-hover, var(--color-error)) !important;
+	color: var(--color-primary-text, #fff) !important;
+}
+
+.dz-button-row .azc-btn,
 .dz-button-row .btn {
 	min-height: 44px;
 }
 
+.dz-button-row .azc-btn:disabled,
+.dz-button-row .azc-btn[aria-disabled="true"],
 .dz-button-row .btn:disabled,
 .dz-button-row .btn[aria-disabled="true"] {
 	opacity: 0.45;
 	cursor: not-allowed;
 }
 
+.dz-button-row .azc-btn:focus-visible,
+.dz-link-row .azc-btn:focus-visible,
 .dz-button-row .btn:focus-visible,
 .dz-link-row .btn:focus-visible {
-	outline: 2px solid var(--color-primary-element);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
 /* High-contrast mode: add a visible border so disabled is clear */
 @media (prefers-contrast: high) {
+	.dz-button-row .azc-btn:disabled,
 	.dz-button-row .btn:disabled {
 		border: 2px dashed var(--color-border);
 	}
@@ -289,6 +362,7 @@
 	border-top: 1px solid var(--color-border);
 }
 
+.dz-link-row .azc-btn,
 .dz-link-row .btn {
 	min-height: 44px;
 }

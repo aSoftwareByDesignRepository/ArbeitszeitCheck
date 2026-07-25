@@ -5,11 +5,14 @@
  * @license AGPL-3.0-or-later
  */
 
+/* ── Page: use full shell width (match kiosk / tables) ───────── */
 #app-content.azc-app .azc-license-page {
 	display: flex;
 	flex-direction: column;
 	gap: var(--azc-space-5, 1.25rem);
-	max-width: 56rem;
+	width: 100%;
+	max-width: none;
+	min-width: 0;
 }
 
 /* ── Visible feedback banner ─────────────────────────────────── */

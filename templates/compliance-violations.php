@@ -30,7 +30,7 @@ $total = $_['total'] ?? 0;
                     <?php p($l->t('Showing violations for %s.', [$_['filterDisplayName'] ?? $_['filterUserId']])); ?>
                 </p>
                 <p class="callout__actions">
-                    <a class="btn btn--secondary btn--sm" href="<?php p($_['urlGenerator']->linkToRoute('arbeitszeitcheck.compliance.violations')); ?>">
+                    <a class="azc-btn azc-btn--secondary azc-btn--sm" href="<?php p($_['urlGenerator']->linkToRoute('arbeitszeitcheck.compliance.violations')); ?>">
                         <?php p($l->t('Show all my visible violations')); ?>
                     </a>
                 </p>

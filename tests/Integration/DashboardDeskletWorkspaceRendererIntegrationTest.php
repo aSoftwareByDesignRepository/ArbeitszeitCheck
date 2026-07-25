@@ -34,5 +34,8 @@ class DashboardDeskletWorkspaceRendererIntegrationTest extends TestCase
 		$this->assertStringContainsString('dz-error-panel', $html);
 		$this->assertStringContainsString('dz-retry', $html);
 		$this->assertStringContainsString('dz-status-section', $html);
+		$this->assertStringContainsString('azc-btn azc-btn--primary', $html);
+		$this->assertStringContainsString('id="dz-clock-in"', $html);
+		$this->assertStringNotContainsString('btn-primary', $html);
 	}
 }

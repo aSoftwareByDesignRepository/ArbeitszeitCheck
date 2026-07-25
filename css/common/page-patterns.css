@@ -27,6 +27,20 @@
 	align-items: stretch;
 	gap: var(--azc-space-5);
 	width: 100%;
+	max-width: none;
+	min-width: 0;
+}
+
+/*
+ * Contract: page roots fill the shell. Reading measure belongs on
+ * prose / form controls (leads, textareas, search fields) — never on
+ * the page container itself (historic license/support-us 56rem bug).
+ */
+#app-content.azc-app #azc-main-content > .azc-page-stack,
+#app-content.azc-app #azc-main-content > [class*="-page"],
+#app-content.azc-app #azc-main-content > .admin-user-detail {
+	width: 100%;
+	max-width: none;
 	min-width: 0;
 }
 

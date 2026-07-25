@@ -44,7 +44,11 @@ final class SupportUsSectionRenderTest extends TestCase {
 		self::assertStringNotContainsString('<script', $html);
 		self::assertStringContainsString('support-us__eyebrow', $html);
 		self::assertStringContainsString('support-us__secondary-title', $html);
+		self::assertStringContainsString('support-us__primary-copy', $html);
 		self::assertStringContainsString('support-us__primary-actions', $html);
+		self::assertStringContainsString('support-us__option-title', $html);
+		self::assertStringContainsString('Setup &amp; training', $html);
+		self::assertStringContainsString('Commissioned feature', $html);
 		self::assertStringContainsString('support-us__options', $html);
 		self::assertStringContainsString('Additional invoiceable options', $html);
 		self::assertSame(1, substr_count($html, 'role="group"'));

@@ -124,7 +124,7 @@ $urlGenerator = $_['urlGenerator'] ?? null;
                                         </td>
                                         <td class="actions-cell" data-label="<?php p($l->t('Actions')); ?>">
                                             <div class="user-actions azc-table-actions" role="group" aria-label="<?php p($l->t('Actions for %s', [$user['displayName']])); ?>">
-                                                <a class="btn btn--sm btn--tertiary"
+                                                <a class="azc-btn azc-btn--sm azc-btn--ghost"
                                                         href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.userDetail', ['userId' => $user['userId']])); ?>#assignment-history"
                                                         data-action="history-user"
                                                         data-user-id="<?php p($user['userId']); ?>"
@@ -132,7 +132,7 @@ $urlGenerator = $_['urlGenerator'] ?? null;
                                                         title="<?php p($l->t('View model assignment history')); ?>">
                                                     <?php p($l->t('History')); ?>
                                                 </a>
-                                                <a class="btn btn--sm btn--secondary"
+                                                <a class="azc-btn azc-btn--sm azc-btn--secondary"
                                                         href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.userDetail', ['userId' => $user['userId']])); ?>"
                                                         data-action="edit-user"
                                                         data-user-id="<?php p($user['userId']); ?>"

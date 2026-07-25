@@ -87,10 +87,43 @@ $mutations = [
 	],
 	'drop_vendor_logo_from_support_us_page' => [
 		'file' => 'templates/admin-support-us.php',
-		'from' => "vendor-logo-sbd.svg",
-		'to' => "vendor-logo-missing.svg",
+		'from' => "vendor-logo-mark.png",
+		'to' => "vendor-logo-missing.png",
 		'filters' => [
 			'SupportUsSectionContractTest::testSupportUsLivesOnDedicatedAdminPageNotSettingsEmbed',
+		],
+	],
+	'reindent_support_us_trust_chips' => [
+		'file' => 'css/admin-support-us.css',
+		'from' => "#app-content.azc-app--admin-support-us ul.azc-support-us-page__trust",
+		'to' => ".azc-support-us-page__trust",
+		'filters' => [
+			'SupportUsSectionContractTest::testCssContractHasFocusAndReducedMotion',
+		],
+	],
+	'reconstrain_support_us_page_root' => [
+		'file' => 'css/admin-support-us.css',
+		'from' => "#app-content.azc-app--admin-support-us .azc-support-us-page,\n.azc-support-us-page {\n\tdisplay: flex;\n\tflex-direction: column;\n\tgap: var(--azc-space-6, 2rem);\n\twidth: 100%;\n\tmax-width: none;",
+		'to' => "#app-content.azc-app--admin-support-us .azc-support-us-page,\n.azc-support-us-page {\n\tdisplay: flex;\n\tflex-direction: column;\n\tgap: var(--azc-space-6, 2rem);\n\twidth: 100%;\n\tmax-width: 56rem;",
+		'filters' => [
+			'SupportUsSectionContractTest::testCssContractHasFocusAndReducedMotion',
+			'PageShellLayoutTest::testAdminLicenseAndSupportUsPageRootsAreFullWidth',
+		],
+	],
+	'reconstrain_partner_spotlight' => [
+		'file' => 'css/admin-support-us.css',
+		'from' => ".azc-support-us--page .azc-support-us__primary {\n\tmax-width: none;",
+		'to' => ".azc-support-us--page .azc-support-us__primary {\n\tmax-width: 48rem;",
+		'filters' => [
+			'SupportUsSectionContractTest::testCssContractHasFocusAndReducedMotion',
+		],
+	],
+	'drop_option_titles' => [
+		'file' => 'templates/parts/support-us-section.php',
+		'from' => "support-us__option-title",
+		'to' => "support-us__option-label",
+		'filters' => [
+			'SupportUsSectionContractTest::testAccessibilityHooksPresent',
 		],
 	],
 	'reallow_azc_btn_link_cascade' => [

@@ -63,6 +63,11 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertStringContainsString('card__lead', $src);
 		self::assertStringContainsString('admin-settings-section', $src);
 		self::assertStringContainsString('support-us__secondary-title', $src);
+		self::assertStringContainsString('support-us__option-title', $src);
+		self::assertStringContainsString('support-us__primary-copy', $src);
+		self::assertStringContainsString('Setup & training', $src);
+		self::assertStringContainsString('Commissioned feature', $src);
+		self::assertStringContainsString('Mobile & terminal', $src);
 		self::assertStringContainsString('Recommended', $src);
 		self::assertStringContainsString("supportUsPresentation === 'page'", $src);
 		self::assertStringContainsString('data-support-us-presentation', $src);
@@ -105,14 +110,35 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertStringContainsString('prefers-reduced-motion', $css);
 		self::assertStringContainsString('min-height: 2.75rem', $css);
 		self::assertStringContainsString('support-us__option', $css);
+		self::assertStringContainsString('support-us__option-title', $css);
 		self::assertStringContainsString('support-us__benefit', $css);
 		self::assertStringContainsString('support-us__coverage', $css);
 		self::assertStringContainsString('support-us__options', $css);
 		self::assertStringContainsString('support-us__eyebrow', $css);
 		self::assertStringContainsString('support-us__primary-actions', $css);
-		self::assertStringContainsString('azc-support-us-page__logo', $css);
-		self::assertStringContainsString('width: min(17.5rem, 88vw)', $css);
-		self::assertStringContainsString('aspect-ratio: 354.24 / 114.56', $css);
+		self::assertStringContainsString('support-us__primary-copy', $css);
+		self::assertStringContainsString('azc-support-us-page__hero-main', $css);
+		self::assertStringContainsString('azc-support-us-page__lockup', $css);
+		self::assertStringContainsString('azc-support-us-page__wordmark-by', $css);
+		self::assertStringContainsString(
+			'#app-content.azc-app--admin-support-us ul.azc-support-us-page__trust',
+			$css,
+			'Trust list must beat #app-content-wrapper ul padding-left'
+		);
+		self::assertMatchesRegularExpression(
+			'/#app-content\.azc-app--admin-support-us ul\.azc-support-us-page__trust\s*\{[^}]*list-style:\s*none/s',
+			$css
+		);
+		self::assertMatchesRegularExpression(
+			'/#app-content\.azc-app--admin-support-us \.azc-support-us-page\s*,\s*\.azc-support-us-page\s*\{[^}]*max-width:\s*none/s',
+			$css,
+			'Support Us page root must fill the shell'
+		);
+		self::assertMatchesRegularExpression(
+			'/\.azc-support-us--page \.azc-support-us__primary\s*\{[^}]*max-width:\s*none/s',
+			$css,
+			'Page partner spotlight must not stay capped at 48rem'
+		);
 		self::assertStringContainsString(
 			'a.azc-support-us__cta.azc-btn--primary',
 			$css,
@@ -140,13 +166,18 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertStringContainsString('support-us-section.php', $page);
 		self::assertStringContainsString("supportUsPresentation = 'page'", $page);
 		self::assertStringContainsString('azc-support-us-page__hero', $page);
+		self::assertStringContainsString('azc-support-us-page__hero-main', $page);
+		self::assertStringContainsString('data-azc-support-us-layout="offer-grid"', $page);
 		self::assertStringContainsString('SupportUsLinks', $page);
-		self::assertStringContainsString('vendor-logo-sbd.svg', $page);
+		self::assertStringContainsString('vendor-logo-mark.png', $page);
 		self::assertStringContainsString('data-azc-vendor-logo="1"', $page);
+		self::assertStringContainsString('azc-support-us-page__wordmark-by', $page);
+		self::assertStringContainsString('BY DESIGN', $page);
 		self::assertStringContainsString('rel="noopener noreferrer"', $page);
 		$section = (string)file_get_contents($root . '/templates/parts/support-us-section.php');
 		self::assertStringContainsString('support-us__cta--primary', $section);
 		self::assertStringContainsString('support-us__cta--secondary', $section);
+		self::assertFileExists($root . '/img/vendor-logo-mark.png');
 		self::assertFileExists($root . '/img/vendor-logo-sbd.svg');
 		$logo = (string)file_get_contents($root . '/img/vendor-logo-sbd.svg');
 		self::assertStringContainsString('Software by Design', $logo);

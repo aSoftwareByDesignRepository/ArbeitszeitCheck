@@ -20,22 +20,65 @@ test.describe('Admin Support & Us page', () => {
 		await hero.waitFor({ state: 'visible', timeout: 30000 })
 		await section.waitFor({ state: 'visible', timeout: 30000 })
 
-		const logo = page.locator('img[data-azc-vendor-logo="1"]')
-		await expect(logo).toBeVisible()
-		await expect(logo).toHaveAttribute('src', /vendor-logo-sbd\.svg/)
-		await expect(logo).toHaveAttribute('alt', /Software by Design/i)
-		const logoBox = await logo.evaluate((el) => {
-			const r = el.getBoundingClientRect()
+		await expect(page.locator('.azc-support-us-page')).toHaveAttribute(
+			'data-azc-support-us-layout',
+			'offer-grid',
+		)
+
+		const brand = page.locator('[data-azc-vendor-logo="1"]')
+		await expect(brand).toBeVisible()
+		await expect(page.locator('.azc-support-us-page__wordmark-by')).toHaveText(/BY DESIGN/)
+		await expect(page.locator('.azc-support-us-page__mark')).toHaveAttribute('src', /vendor-logo-mark\.png/)
+		await expect(page.locator('.azc-support-us-page__hero-main')).toBeVisible()
+		await expect(page.locator('.azc-support-us__option-title')).toHaveCount(3)
+
+		const layoutMetrics = await page.evaluate(() => {
+			const pageRoot = document.querySelector('.azc-support-us-page')
+			const main = document.querySelector('#azc-main-content')
+			const heroEl = document.querySelector('.azc-support-us-page__hero')
+			const heroMain = document.querySelector('.azc-support-us-page__hero-main')
+			const trust = document.querySelector('.azc-support-us-page__trust')
+			const primary = document.querySelector('.azc-support-us__primary')
+			const options = document.querySelector('.azc-support-us__options')
+			const optionTitles = document.querySelectorAll('.azc-support-us__option-title')
+			if (!pageRoot || !main || !heroEl || !heroMain || !trust || !primary || !options) {
+				return { ok: false }
+			}
+			const rootR = pageRoot.getBoundingClientRect()
+			const mainR = main.getBoundingClientRect()
+			const heroMainR = heroMain.getBoundingClientRect()
+			const trustR = trust.getBoundingClientRect()
+			const primaryR = primary.getBoundingClientRect()
+			const optionsR = options.getBoundingClientRect()
+			const trustStyle = getComputedStyle(trust)
 			return {
-				clientWidth: r.width,
-				naturalWidth: el.naturalWidth,
-				complete: el.complete,
+				ok: true,
+				rootMax: getComputedStyle(pageRoot).maxWidth,
+				primaryMax: getComputedStyle(primary).maxWidth,
+				rootWidth: rootR.width,
+				mainWidth: mainR.width,
+				primaryWidth: primaryR.width,
+				optionsWidth: optionsR.width,
+				trustListStyle: trustStyle.listStyleType,
+				trustPadL: parseFloat(trustStyle.paddingLeft) || 0,
+				heroIsGrid: getComputedStyle(heroEl).display === 'grid',
+				trustBesideHero:
+					Math.abs(trustR.top - heroMainR.top) < 48
+					&& trustR.left > heroMainR.right - 8,
+				optionTitleCount: optionTitles.length,
 			}
 		})
-		expect(logoBox.complete).toBe(true)
-		expect(logoBox.naturalWidth).toBeGreaterThan(200)
-		// Wordmark must not be clipped by a too-narrow plate (historic "BY DESIG" bug).
-		expect(logoBox.clientWidth).toBeGreaterThan(200)
+		expect(layoutMetrics.ok).toBe(true)
+		expect(layoutMetrics.rootMax).toBe('none')
+		expect(layoutMetrics.primaryMax).toBe('none')
+		expect(layoutMetrics.rootWidth).toBeGreaterThan(layoutMetrics.mainWidth - 24)
+		expect(layoutMetrics.primaryWidth).toBeGreaterThan(layoutMetrics.rootWidth - 40)
+		expect(layoutMetrics.optionsWidth).toBeGreaterThan(layoutMetrics.rootWidth - 40)
+		expect(layoutMetrics.primaryWidth).toBeGreaterThan(800)
+		expect(layoutMetrics.trustListStyle).toBe('none')
+		expect(layoutMetrics.heroIsGrid).toBe(true)
+		expect(layoutMetrics.trustBesideHero).toBe(true)
+		expect(layoutMetrics.optionTitleCount).toBe(3)
 
 		const brandLink = page.locator('a.azc-support-us-page__brand-link')
 		await expect(brandLink).toHaveAttribute('rel', 'noopener noreferrer')
@@ -147,19 +190,27 @@ test.describe('Admin Support & Us page', () => {
 		const overflow = await page.evaluate(() => {
 			const doc = document.documentElement
 			const el = document.getElementById('azc-support-us')
-			if (!el) {
+			const hero = document.querySelector('.azc-support-us-page__hero')
+			const trust = document.querySelector('.azc-support-us-page__trust')
+			const heroMain = document.querySelector('.azc-support-us-page__hero-main')
+			if (!el || !hero || !trust || !heroMain) {
 				return { ok: false }
 			}
+			const trustR = trust.getBoundingClientRect()
+			const mainR = heroMain.getBoundingClientRect()
 			return {
 				ok: true,
 				scrollWidth: doc.scrollWidth,
 				clientWidth: doc.clientWidth,
 				ctaWidth: el.querySelector('.azc-support-us__cta--primary')?.getBoundingClientRect().width ?? 0,
+				// Stacked: trust sits below hero copy (not beside it).
+				trustBelow: trustR.top >= mainR.bottom - 4,
 			}
 		})
 
 		expect(overflow.ok).toBe(true)
 		expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1)
 		expect(overflow.ctaWidth).toBeGreaterThan(120)
+		expect(overflow.trustBelow).toBe(true)
 	})
 })
