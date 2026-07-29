@@ -145,9 +145,22 @@
 #admin-notifications-form .checkbox input[type="checkbox"]{
   flex-shrink: 0;
   margin: 0;
+  padding: 0;
   width: 1.25rem;
   height: 1.25rem;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
+  max-width: 1.25rem;
+  max-height: 1.25rem;
   cursor: pointer;
+  box-sizing: border-box;
+  accent-color: var(--color-primary-element);
+  background-color: var(--arbeitszeitcheck-color-form-background, var(--color-main-background));
+  border: 1px solid var(--arbeitszeitcheck-color-form-border, var(--color-border));
+  border-radius: 3px;
+  color-scheme: inherit;
+  appearance: auto;
+  -webkit-appearance: auto;
 }
 
 #admin-settings-form .form-checkbox .form-label,

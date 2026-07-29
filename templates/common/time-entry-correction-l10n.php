@@ -39,6 +39,7 @@ $correctionL10n = [
 	'correctionErrorBreakMinDuration' => $l->t('Each break must be at least %d minutes.', [$azcCorrMinBreak]),
 	'correctionErrorBreakWithinWork' => $l->t('Breaks must fall within your working hours.'),
 	'correctionErrorBreakOverlap' => $l->t('Break times must not overlap.'),
+	'correctionErrorBreakSplitInvalid' => $l->t('Breaks must be one continuous block of the required length, or 2×15 minutes, or 3×10 minutes (AZG §11)'),
 	'correctionErrorValidDate' => $l->t('Please enter a valid date (dd.mm.yyyy).'),
 	'correctionErrorStartEndRequired' => $l->t('Please enter both start and end time.'),
 	'correctionErrorEndAfterStart' => $l->t('End time must be after start time.'),

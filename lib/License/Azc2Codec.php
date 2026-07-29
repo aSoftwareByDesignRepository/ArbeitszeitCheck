@@ -118,6 +118,14 @@ final class Azc2Codec
 		if ($mobile + $terminal <= 0) {
 			return false;
 		}
+		// Reject foreign product markers (e.g. DKC2 product=deskcheck re-prefixed
+		// as AZC2). Historical AZC2 keys omit product and stay valid.
+		if (array_key_exists('product', $payload)) {
+			$product = $payload['product'];
+			if (!is_string($product) || $product !== 'arbeitszeitcheck') {
+				return false;
+			}
+		}
 		if (array_key_exists('bundle', $payload) && $payload['bundle'] !== true) {
 			return false;
 		}
@@ -153,6 +161,9 @@ final class Azc2Codec
 			'mobileSeats' => (int)$payload['mobileSeats'],
 			'terminalDevices' => (int)$payload['terminalDevices'],
 		];
+		if (!empty($payload['product']) && is_string($payload['product'])) {
+			$ordered['product'] = $payload['product'];
+		}
 		if (!empty($payload['instanceId']) && is_string($payload['instanceId'])) {
 			$ordered['instanceId'] = $payload['instanceId'];
 		}

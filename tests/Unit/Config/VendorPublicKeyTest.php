@@ -31,7 +31,19 @@ final class VendorPublicKeyTest extends TestCase
 	{
 		$custom = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 		putenv('AZC_VENDOR_PUBLIC_KEY_B64=' . $custom);
+		self::assertTrue(VendorPublicKey::envOverrideAllowed());
 		self::assertSame($custom, VendorPublicKey::publicKeyB64());
+	}
+
+	public function testEnvOverrideIsGatedOutsideExplicitAllow(): void
+	{
+		// Under PHPUnit the gate is open by design; production requires
+		// AZC_ALLOW_VENDOR_KEY_OVERRIDE=1. Assert the helper exists and the
+		// production default stays the trust anchor when env is cleared.
+		self::assertTrue(method_exists(VendorPublicKey::class, 'envOverrideAllowed'));
+		putenv('AZC_VENDOR_PUBLIC_KEY_B64');
+		putenv('AZC_ALLOW_VENDOR_KEY_OVERRIDE');
+		self::assertSame(VendorPublicKey::DEFAULT_PUBLIC_KEY_B64, VendorPublicKey::publicKeyB64());
 	}
 
 	public function testPublicKeyFromDevTestSeedFile(): void

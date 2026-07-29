@@ -11,8 +11,10 @@ namespace OCA\ArbeitszeitCheck\Config;
  * ~/ops/azc/.azc-signing-key). Customer servers and stock app builds need no
  * env configuration — licenses just verify.
  *
- * Optional override: AZC_VENDOR_PUBLIC_KEY_B64 (PHPUnit fixture key, local
- * experiments). Mobile uses the same default via @arbeitszeitcheck/licensing.
+ * Env override AZC_VENDOR_PUBLIC_KEY_B64 is allowed only under PHPUnit or when
+ * AZC_ALLOW_VENDOR_KEY_OVERRIDE=1 — a compromised env must not swap the trust
+ * anchor on a live Nextcloud instance (parity with DeskCheck / other Check apps).
+ * Mobile uses the same default via @arbeitszeitcheck/licensing.
  */
 final class VendorPublicKey
 {
@@ -33,11 +35,21 @@ final class VendorPublicKey
 
 	public static function publicKeyB64(): string
 	{
-		$fromEnv = getenv('AZC_VENDOR_PUBLIC_KEY_B64');
-		if (is_string($fromEnv) && trim($fromEnv) !== '') {
-			return trim($fromEnv);
+		if (self::envOverrideAllowed()) {
+			$fromEnv = getenv('AZC_VENDOR_PUBLIC_KEY_B64');
+			if (is_string($fromEnv) && trim($fromEnv) !== '') {
+				return trim($fromEnv);
+			}
 		}
 		return self::DEFAULT_PUBLIC_KEY_B64;
+	}
+
+	public static function envOverrideAllowed(): bool
+	{
+		if (defined('PHPUNIT_COMPOSER_INSTALL') || defined('PHPUNIT_RUNNING') || defined('PHPUNIT_RUN')) {
+			return true;
+		}
+		return getenv('AZC_ALLOW_VENDOR_KEY_OVERRIDE') === '1';
 	}
 
 	public static function bytes(): string

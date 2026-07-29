@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.2 - 2026-07-27
+
+### Fixed
+
+- **Austrian break-split UX (web):** the time-entry form and correction dialog no longer show “Compliant” for illegal AZG §11 splits that still sum to 30 minutes (e.g. 20+10). Client validation mirrors `BreakSplitValidator`; the server remains authoritative. Bootstrap `complianceParams` now includes `allowedBreakSplitPatterns` like the mobile capabilities block.
+- **Admin settings region consistency:** country→region repair uses values written in the same request and skips no-op POSTs (empty body still returns 400), so unit mocks and concurrent saves cannot wipe a just-saved region.
+- **Compliance PDF export honesty:** `format=pdf` for compliance reports returns HTTP 422 with a clear error (same as time-entry/absence exports) instead of silently downloading CSV.
+- **Capabilities accessibility claim:** advertise WCAG **AA** (matches product/E2E target), not AAA.
+- **License trust anchor:** `AZC_VENDOR_PUBLIC_KEY_B64` env override is gated to PHPUnit / explicit `AZC_ALLOW_VENDOR_KEY_OVERRIDE=1` so a compromised environment cannot swap the vendor public key on a live instance.
+- **Cross-product license rejection:** AZC2 payloads that carry a foreign `product` marker (e.g. deskcheck) are rejected even if the wire prefix and signature verify.
+
+### Added
+
+- Vitest coverage for client break-split evaluation; PHPUnit contract that AT web bootstrap exposes split patterns; suite legacy-isolation unit + integration guards.
+
 ## 1.6.1 - 2026-07-25
 
 ### Fixed

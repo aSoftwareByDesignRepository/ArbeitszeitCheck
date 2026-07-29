@@ -1032,6 +1032,27 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 	align-items: start;
 }
 
+/*
+ * Neutralise Nextcloud core apps.css definition-list chrome
+ * (dt { width: 130px; text-align: end } / inline-block + padding).
+ */
+#app-content.azc-app .absence-detail-list dt,
+#app-content.azc-app .absence-detail-list dd,
+#app-content.azc-app .absence-detail-label,
+#app-content.azc-app .absence-detail-value,
+.azc-app .absence-detail-list dt,
+.azc-app .absence-detail-list dd,
+.azc-app .absence-detail-label,
+.azc-app .absence-detail-value {
+	display: block;
+	float: none;
+	width: auto;
+	max-width: 100%;
+	padding: 0;
+	text-align: start;
+	white-space: normal;
+}
+
 .absence-detail-label {
 	margin: 0;
 	font-size: 0.875rem;

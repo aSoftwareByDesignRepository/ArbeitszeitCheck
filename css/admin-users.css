@@ -130,6 +130,23 @@
   min-width: 0;
 }
 
+/*
+ * Neutralise Nextcloud core apps.css definition-list chrome
+ * (dt { width: 130px; text-align: end } / inline-block + padding).
+ */
+#app-content.azc-app .admin-user-detail__meta-item dt,
+#app-content.azc-app .admin-user-detail__meta-item dd,
+.azc-app .admin-user-detail__meta-item dt,
+.azc-app .admin-user-detail__meta-item dd {
+  display: block;
+  float: none;
+  width: auto;
+  max-width: 100%;
+  padding: 0;
+  text-align: start;
+  white-space: normal;
+}
+
 .admin-user-detail__meta-item dt {
   margin: 0 0 var(--space-1, 0.25rem);
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);

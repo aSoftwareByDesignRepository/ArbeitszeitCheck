@@ -2147,17 +2147,23 @@ class AdminController extends Controller
 			}
 
 			// Consistency: default region must always belong to the configured
-			// country. Runs after every settings write (not only on country change)
+			// country. Runs after a non-empty settings write (not on no-op POSTs)
 			// so interleaved region-only + country POSTs cannot leave orphan pairs
-			// like country=AT + german_state=NW.
-			$effectiveCountry = isset($updatedSettings['country'])
-				? (string)$updatedSettings['country']
-				: $this->getConfiguredCountry();
-			$currentRegion = strtoupper($this->appConfig->getAppValueString('german_state', ''));
-			$resolvedRegion = RegionRegistry::resolveDefaultRegionForCountry($effectiveCountry, $currentRegion);
-			if ($resolvedRegion !== $currentRegion) {
-				$this->appConfig->setAppValueString('german_state', $resolvedRegion);
-				$updatedSettings['germanState'] = $resolvedRegion;
+			// like country=AT + german_state=NW. Prefer values written in this
+			// request — AppConfig mocks (and same-request readers) may not see
+			// a just-set key via getAppValueString yet.
+			if (!empty($updatedSettings)) {
+				$effectiveCountry = isset($updatedSettings['country'])
+					? (string)$updatedSettings['country']
+					: $this->getConfiguredCountry();
+				$currentRegion = isset($updatedSettings['germanState'])
+					? strtoupper((string)$updatedSettings['germanState'])
+					: strtoupper($this->appConfig->getAppValueString('german_state', ''));
+				$resolvedRegion = RegionRegistry::resolveDefaultRegionForCountry($effectiveCountry, $currentRegion);
+				if ($resolvedRegion !== $currentRegion) {
+					$this->appConfig->setAppValueString('german_state', $resolvedRegion);
+					$updatedSettings['germanState'] = $resolvedRegion;
+				}
 			}
 			if (isset($updatedSettings['country']) || isset($updatedSettings['weeklyAbsoluteMaxHours']) || isset($updatedSettings['germanState'])) {
 				// Drop request-cached labour-law profile so same-request readers

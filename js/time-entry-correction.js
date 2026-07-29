@@ -579,6 +579,19 @@
 					return t('correctionErrorBreakOverlap');
 				}
 			}
+
+			const Validation = window.ArbeitszeitCheckValidation || window.ArbeitszeitCheck?.Validation;
+			if (Validation && typeof Validation.evaluateBreakCompliance === 'function') {
+				const portions = intervals.map((iv) => Math.round((iv.end - iv.start) / 60000));
+				const netWorkingHours = Math.max(0, (endMs - startMs) / 3600000
+					- portions.reduce((s, m) => s + m, 0) / 60);
+				const evalResult = Validation.evaluateBreakCompliance(portions, netWorkingHours);
+				if (!evalResult.ok) {
+					return evalResult.splitInvalid
+						? t('correctionErrorBreakSplitInvalid')
+						: (evalResult.message || t('correctionErrorBreakSplitInvalid'));
+				}
+			}
 			return null;
 		}
 

@@ -120,7 +120,7 @@ class Capabilities implements ICapability {
 					'data-retention' => true,
 				],
 				'accessibility' => [
-					'wcag-level' => 'AAA',
+					'wcag-level' => 'AA',
 					'screen-reader' => true,
 					'keyboard-navigation' => true,
 					'high-contrast' => true,

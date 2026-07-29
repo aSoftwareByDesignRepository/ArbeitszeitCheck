@@ -635,6 +635,117 @@ const ArbeitszeitCheckValidation = {
     return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 15;
   },
 
+  /**
+   * AZG §11 allowed split patterns from bootstrap, or null for sum-only (DE/CH).
+   * Mirrors server LaborLawProfile::allowedBreakSplitPatterns.
+   * @returns {number[][]|null}
+   */
+  getAllowedBreakSplitPatterns() {
+    const raw = window.ArbeitszeitCheck?.complianceParams?.allowedBreakSplitPatterns;
+    if (raw == null) {
+      return null;
+    }
+    if (!Array.isArray(raw)) {
+      return null;
+    }
+    const patterns = raw
+      .filter((p) => Array.isArray(p) && p.length > 0)
+      .map((p) => p.map((m) => Math.round(Number(m))).filter((m) => Number.isFinite(m) && m > 0));
+    return patterns.length > 0 ? patterns : null;
+  },
+
+  /**
+   * Client mirror of BreakSplitValidator::meetsRequirement (server remains authoritative).
+   * @param {number[]} portionMinutes
+   * @param {number} requiredMinutes
+   * @param {number[][]|null|undefined} allowedPatterns
+   * @returns {boolean}
+   */
+  meetsBreakSplitRequirement(portionMinutes, requiredMinutes, allowedPatterns) {
+    const required = Math.round(Number(requiredMinutes));
+    if (!Number.isFinite(required) || required <= 0) {
+      return true;
+    }
+
+    const portions = (Array.isArray(portionMinutes) ? portionMinutes : [])
+      .map((m) => Math.max(0, Math.round(Number(m))))
+      .filter((m) => Number.isFinite(m));
+
+    let total = 0;
+    for (const minutes of portions) {
+      total += minutes;
+    }
+    if (total < required) {
+      return false;
+    }
+
+    if (allowedPatterns == null) {
+      return true;
+    }
+
+    for (const minutes of portions) {
+      if (minutes >= required) {
+        return true;
+      }
+    }
+
+    for (const pattern of allowedPatterns) {
+      if (!Array.isArray(pattern) || pattern.length === 0) {
+        continue;
+      }
+      if (this.portionsMatchBreakPattern(portions, pattern)) {
+        return true;
+      }
+    }
+
+    return false;
+  },
+
+  /**
+   * @param {number[]} portionMinutes
+   * @param {number[]} patternMins
+   * @returns {boolean}
+   */
+  portionsMatchBreakPattern(portionMinutes, patternMins) {
+    if (portionMinutes.length !== patternMins.length) {
+      return false;
+    }
+    const sortedPortions = portionMinutes.slice().sort((a, b) => b - a);
+    const sortedPattern = patternMins.map((m) => Math.round(Number(m))).sort((a, b) => b - a);
+    for (let i = 0; i < sortedPattern.length; i++) {
+      if (sortedPortions[i] < sortedPattern[i]) {
+        return false;
+      }
+    }
+    return true;
+  },
+
+  /**
+   * @param {number[]} portionMinutes Whole-minute break lengths
+   * @param {number} workingHours Net working hours (breaks already subtracted)
+   * @returns {{ ok: boolean, requiredMinutes: number, splitInvalid: boolean, message: string|null }}
+   */
+  evaluateBreakCompliance(portionMinutes, workingHours) {
+    const requiredMinutes = this.calculateRequiredBreakMinutes(workingHours);
+    if (requiredMinutes <= 0) {
+      return { ok: true, requiredMinutes: 0, splitInvalid: false, message: null };
+    }
+    const allowed = this.getAllowedBreakSplitPatterns();
+    const ok = this.meetsBreakSplitRequirement(portionMinutes, requiredMinutes, allowed);
+    if (ok) {
+      return { ok: true, requiredMinutes, splitInvalid: false, message: null };
+    }
+    const l10n = window.ArbeitszeitCheck?.l10n || {};
+    const total = (Array.isArray(portionMinutes) ? portionMinutes : [])
+      .reduce((sum, m) => sum + Math.max(0, Math.round(Number(m) || 0)), 0);
+    const splitInvalid = allowed != null && total >= requiredMinutes;
+    const message = splitInvalid
+      ? (l10n.complianceBreakSplitInvalid
+        || 'Breaks must be one continuous block of the required length, or 2×15 minutes, or 3×10 minutes.')
+      : (l10n.complianceBreakNotMet || 'Break requirement not met');
+    return { ok: false, requiredMinutes, splitInvalid, message: String(message) };
+  },
+
   validateBreak(breakStartTime, breakEndTime, workStartDateTime, workEndDateTime, _index = 0) {
     const errors = [];
     const l10n = window.ArbeitszeitCheck?.l10n || {};

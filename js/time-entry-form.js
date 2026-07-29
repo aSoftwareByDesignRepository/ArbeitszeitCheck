@@ -88,6 +88,7 @@ class TimeEntryFormManager {
 		this.setupDateValidation();
 		this.setupFormValidation();
 		this.setupFormSubmission();
+		this.prefillDescriptionFromQuery();
 
 		// Initial summary; auto-breaks only when the user opted in (toggle on, not dismissed).
 		setTimeout(() => {
@@ -98,6 +99,30 @@ class TimeEntryFormManager {
 				this.updateTimeSummary();
 			}
 		}, 100);
+	}
+
+	/**
+	 * Soft flange from MaintenanceCheck (AC-F2): ?description=MaintenanceCheck WO …
+	 * Prefills only when the textarea is empty so edit forms stay authoritative.
+	 */
+	prefillDescriptionFromQuery() {
+		if (!this.descriptionTextarea) {
+			return;
+		}
+		if (String(this.descriptionTextarea.value || '').trim() !== '') {
+			return;
+		}
+		try {
+			const params = new URLSearchParams(window.location.search || '');
+			const raw = String(params.get('description') || '').trim();
+			if (raw === '') {
+				return;
+			}
+			this.descriptionTextarea.value = raw.slice(0, 500);
+			this.descriptionTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+		} catch (e) {
+			// Ignore malformed query strings — create form stays usable.
+		}
 	}
 
 	/**
@@ -1082,8 +1107,8 @@ class TimeEntryFormManager {
 				this.timeSummary.style.display = 'block';
 			}
 
-			// Update compliance status
-			this.updateComplianceStatus(workingDurationHours, breakDurationHours);
+			// Update compliance status (sum + AZG split patterns when configured)
+			this.updateComplianceStatus(workingDurationHours, breakDurationHours, this.collectBreakPortionMinutes(dateStr));
 
 			// Update break requirement indicator
 			this.updateBreakRequirementIndicator(workingDurationHours);
@@ -1094,12 +1119,55 @@ class TimeEntryFormManager {
 		}
 	}
 
-	updateComplianceStatus(workingHours, breakHours) {
+	/**
+	 * Whole-minute break lengths for AZG split checks (mirrors BreakSplitValidator input).
+	 * @param {string} dateStr Y-m-d
+	 * @returns {number[]}
+	 */
+	collectBreakPortionMinutes(dateStr) {
+		const portions = [];
+		if (!this.breaksContainer || !dateStr) {
+			return portions;
+		}
+		this.breaksContainer.querySelectorAll('.break-entry').forEach((breakEntry) => {
+			const breakStartInput = breakEntry.querySelector('input.break-start-time');
+			const breakEndInput = breakEntry.querySelector('input.break-end-time');
+			if (!breakStartInput || !breakEndInput || !breakStartInput.value || !breakEndInput.value) {
+				return;
+			}
+			try {
+				const breakStart = new Date(dateStr + 'T' + breakStartInput.value);
+				let breakEnd = new Date(dateStr + 'T' + breakEndInput.value);
+				if (breakEnd < breakStart) {
+					breakEnd.setDate(breakEnd.getDate() + 1);
+				}
+				const minutes = Math.round((breakEnd - breakStart) / 60000);
+				if (minutes > 0) {
+					portions.push(minutes);
+				}
+			} catch (e) {
+				// Skip incomplete/invalid rows — server still enforces on save.
+			}
+		});
+		return portions;
+	}
+
+	updateComplianceStatus(workingHours, breakHours, portionMinutes) {
 		if (!this.complianceStatus) return;
 
 		const requiredBreakMinutes = this.resolveRequiredBreakMinutes(workingHours);
 		const requiredBreakHours = requiredBreakMinutes / 60;
-		const hasRequiredBreak = breakHours >= requiredBreakHours;
+		const Validation = window.ArbeitszeitCheckValidation || window.ArbeitszeitCheck?.Validation;
+		const portions = Array.isArray(portionMinutes) ? portionMinutes : [];
+		const evalResult = Validation && typeof Validation.evaluateBreakCompliance === 'function'
+			? Validation.evaluateBreakCompliance(portions, workingHours)
+			: {
+				ok: breakHours >= requiredBreakHours,
+				requiredMinutes: requiredBreakMinutes,
+				splitInvalid: false,
+				message: null,
+			};
+		const hasRequiredBreak = evalResult.ok;
 
 		let statusClass = 'compliant';
 		let statusText = '';
@@ -1107,9 +1175,6 @@ class TimeEntryFormManager {
 		if (workingHours > this.maxWorkingHours) {
 			statusClass = 'violation';
 			statusText = t('complianceMaxHours');
-		} else if (workingHours >= 8 && workingHours <= this.maxWorkingHours) {
-			statusClass = 'warning';
-			statusText = t('complianceApproachingMax');
 		} else if (!hasRequiredBreak && requiredBreakHours > 0) {
 			const hasAutoBreak = this.breaksContainer
 				? this.breaksContainer.querySelector('.break-entry[data-auto-break]')
@@ -1118,10 +1183,16 @@ class TimeEntryFormManager {
 			if (hasAutoBreak && this.shouldRunAutoBreakCalculation()) {
 				statusClass = 'warning';
 				statusText = t('complianceRecalculatingBreak');
+			} else if (evalResult.splitInvalid) {
+				statusClass = 'warning';
+				statusText = t('complianceBreakSplitInvalid') || evalResult.message;
 			} else {
 				statusClass = 'warning';
 				statusText = t('complianceBreakNotMet');
 			}
+		} else if (workingHours >= 8 && workingHours <= this.maxWorkingHours) {
+			statusClass = 'warning';
+			statusText = t('complianceApproachingMax');
 		} else {
 			const hasAutoBreak = this.breaksContainer
 				? this.breaksContainer.querySelector('.break-entry[data-auto-break]')
@@ -1383,10 +1454,33 @@ class TimeEntryFormManager {
 				return false;
 			}
 
-			// For part-time work (under 6 hours), warn if unnecessary breaks are added
-			if (workDurationHours < 6 && totalBreakMs > 0) {
+			const netWorkingHours = Math.max(0, (workDurationMs - totalBreakMs) / (1000 * 60 * 60));
+			const Validation = window.ArbeitszeitCheckValidation || window.ArbeitszeitCheck?.Validation;
+			if (Validation && typeof Validation.evaluateBreakCompliance === 'function') {
+				const portions = this.collectBreakPortionMinutes(dateStr);
+				const evalResult = Validation.evaluateBreakCompliance(portions, netWorkingHours);
+				if (!evalResult.ok) {
+					const msg = evalResult.splitInvalid
+						? (t('complianceBreakSplitInvalid') || evalResult.message)
+						: (t('complianceBreakNotMet') || evalResult.message);
+					const firstBreakSelect = this.breaksContainer
+						? this.breaksContainer.querySelector('.break-entry select')
+						: null;
+					const target = firstBreakSelect || this.startTimeHour;
+					if (target) {
+						target.setCustomValidity(String(msg));
+						target.reportValidity();
+					}
+					return false;
+				}
+			}
+
+			// For part-time work (under first break tier), breaks are optional.
+			const firstTierHours = (Validation && typeof Validation.getBreakTiers === 'function'
+				? Validation.getBreakTiers()
+				: [{ afterHours: 6 }])[0]?.afterHours ?? 6;
+			if (netWorkingHours < firstTierHours && totalBreakMs > 0) {
 				console.info('Breaks added for short shift - this is allowed but not required');
-				// Don't fail validation, just log - breaks are optional for short shifts
 			}
 		} catch (error) {
 			console.warn('Error validating work duration:', error);

@@ -634,6 +634,10 @@ class AdminControllerTest extends TestCase
 	 */
 	public function testUpdateAdminSettingsUpdatesSettings(): void
 	{
+		$store = &$this->wireAppConfigStore([
+			'country' => 'DE',
+			'german_state' => 'NW',
+		]);
 		$this->request->method('getParams')
 			->willReturn([
 				'maxDailyHours' => 9.5,
@@ -641,61 +645,59 @@ class AdminControllerTest extends TestCase
 				'missingClockInRemindersEnabled' => false,
 			]);
 
-		$this->appConfig->expects($this->exactly(3))
-			->method('setAppValueString')
-			->withConsecutive(
-				['missing_clock_in_reminders_enabled', '0'],
-				['max_daily_hours', '9.5'],
-				['german_state', 'BY']
-			);
-
 		$response = $this->controller->updateAdminSettings();
 		$data = $response->getData();
-
-		$this->assertTrue($data['success']);
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
 		$this->assertArrayHasKey('settings', $data);
+		$this->assertSame('0', $store['missing_clock_in_reminders_enabled']);
+		$this->assertSame('9.5', $store['max_daily_hours']);
+		$this->assertSame('BY', $store['german_state']);
 	}
 
 	public function testUpdateAdminSettingsDisablesProjectCheckIntegration(): void
 	{
+		$this->wireAppConfigStore([
+			'country' => 'DE',
+			'german_state' => 'NW',
+		]);
 		$this->appManager->method('isEnabledForUser')->with('projectcheck')->willReturn(true);
 		$this->request->method('getParams')
 			->willReturn([
 				'projectCheckIntegrationEnabled' => false,
 			]);
 
-		$this->appConfig->expects($this->once())
-			->method('setAppValueString')
-			->with(Constants::CONFIG_PROJECTCHECK_INTEGRATION_ENABLED, '0');
-
 		$response = $this->controller->updateAdminSettings();
 		$data = $response->getData();
 
-		$this->assertTrue($data['success']);
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
 		$this->assertSame('0', $data['settings']['projectCheckIntegrationEnabled']);
 	}
 
 	public function testUpdateAdminSettingsEnablesProjectCheckIntegration(): void
 	{
+		$this->wireAppConfigStore([
+			'country' => 'DE',
+			'german_state' => 'NW',
+		]);
 		$this->appManager->method('isEnabledForUser')->with('projectcheck')->willReturn(true);
 		$this->request->method('getParams')
 			->willReturn([
 				'projectCheckIntegrationEnabled' => true,
 			]);
 
-		$this->appConfig->expects($this->once())
-			->method('setAppValueString')
-			->with(Constants::CONFIG_PROJECTCHECK_INTEGRATION_ENABLED, '1');
-
 		$response = $this->controller->updateAdminSettings();
 		$data = $response->getData();
 
-		$this->assertTrue($data['success']);
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
 		$this->assertSame('1', $data['settings']['projectCheckIntegrationEnabled']);
 	}
 
 	public function testUpdateAdminSettingsNormalizesAppAdminUsers(): void
 	{
+		$store = &$this->wireAppConfigStore([
+			'country' => 'DE',
+			'german_state' => 'NW',
+		]);
 		$this->request->method('getParams')
 			->willReturn([
 				'appAdminUserIds' => ['hr_admin', 'hr_admin', 'missing', 'non_admin', 'security_admin'],
@@ -712,15 +714,13 @@ class AdminControllerTest extends TestCase
 			$user->method('getUID')->willReturn($uid);
 			return $user;
 		});
-		$this->appConfig->expects($this->once())
-			->method('setAppValueString')
-			->with(Constants::CONFIG_APP_ADMIN_USER_IDS, '["hr_admin","security_admin"]');
 
 		$response = $this->controller->updateAdminSettings();
 		$data = $response->getData();
 
-		$this->assertTrue($data['success']);
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
 		$this->assertSame(['hr_admin', 'security_admin'], $data['settings']['appAdminUserIds']);
+		$this->assertSame('["hr_admin","security_admin"]', $store[Constants::CONFIG_APP_ADMIN_USER_IDS]);
 	}
 
 	/**

@@ -52,6 +52,22 @@
 
 #app-content.azc-app--admin-dashboard .admin-overtime-policy__grid dl {
 	margin: 0;
+	padding: 0;
+}
+
+/*
+ * Neutralise Nextcloud core apps.css definition-list chrome
+ * (dt { width: 130px; text-align: end } / inline-block + padding).
+ */
+#app-content.azc-app--admin-dashboard .admin-overtime-policy__grid dt,
+#app-content.azc-app--admin-dashboard .admin-overtime-policy__grid dd {
+	display: block;
+	float: none;
+	width: auto;
+	max-width: 100%;
+	padding: 0;
+	text-align: start;
+	white-space: normal;
 }
 
 #app-content.azc-app--admin-dashboard .admin-overtime-policy__grid dt {

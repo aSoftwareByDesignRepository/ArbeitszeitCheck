@@ -117,6 +117,7 @@ $azcMgrComplianceParams = [
 	'breakTiers' => $azcMgrLawProfile->breakTiersAscending(),
 	'minBreakMinutes' => $azcMgrMinBreak,
 	'maxDailyHoursDefault' => $azcMgrLawProfile->dailyMaxHoursDefault,
+	'allowedBreakSplitPatterns' => $azcMgrLawProfile->allowedBreakSplitPatterns,
 	'lawLabels' => [
 		'breaks' => $azcMgrLawProfile->lawLabel('breaks'),
 		'daily' => $azcMgrLawProfile->lawLabel('daily'),

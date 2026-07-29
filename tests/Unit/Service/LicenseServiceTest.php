@@ -84,6 +84,35 @@ class LicenseServiceTest extends TestCase
 		$this->assertNotSame('', $service->getLastApplyErrorCode());
 	}
 
+	public function testRejectDeskCheckProductMarkerEvenWithValidSignature(): void
+	{
+		$mapper = $this->createMock(LicenseStateMapper::class);
+		$mapper->expects($this->never())->method('upsert');
+		$payload = [
+			'v' => 2,
+			'customerId' => 'test',
+			'issuedAt' => '2026-01-01',
+			'validUntil' => '2027-12-31',
+			'mobileSeats' => 5,
+			'terminalDevices' => 0,
+			'product' => 'deskcheck',
+		];
+		// Signed as AZC2 wire (attacker re-labels a DKC payload) — must still fail.
+		$wire = Azc2TestSigning::signPayload($payload);
+		$service = $this->makeService($mapper);
+		$this->assertFalse($service->applyLicenseKey($wire));
+		$this->assertSame(Azc2Codec::ERROR_INVALID_PAYLOAD, $service->getLastApplyErrorCode());
+	}
+
+	public function testLegacyKeyWithoutProductStillApplies(): void
+	{
+		$mapper = $this->createMock(LicenseStateMapper::class);
+		$mapper->method('findCurrent')->willReturn(null);
+		$mapper->expects($this->once())->method('upsert')->willReturnArgument(0);
+		$service = $this->makeService($mapper);
+		$this->assertTrue($service->applyLicenseKey((string)$this->fixture['wireKey']));
+	}
+
 	public function testBuildEnvelopeFromStoredState(): void
 	{
 		$state = new LicenseState();

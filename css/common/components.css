@@ -506,17 +506,28 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 
 .form-checkbox input[type="checkbox"],
 .form-radio input[type="radio"] {
-  width: 1rem;
-  height: 1rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  /* Beat NC core `input { min-height: var(--default-clickable-area) }` */
+  min-width: 1.25rem;
+  min-height: 1.25rem;
+  max-width: 1.25rem;
+  max-height: 1.25rem;
   margin: 0;
+  padding: 0;
   cursor: pointer;
-  /* Ensure consistent, theme-aware background and border across light/dark themes */
+  /* Theme-aware fill/border across light / dark / high-contrast */
   background-color: var(--arbeitszeitcheck-color-form-background, var(--color-main-background));
   border: 1px solid var(--arbeitszeitcheck-color-form-border, var(--color-border));
   border-radius: 3px;
   box-sizing: border-box;
-  /* Use accent-color where supported so the checkmark matches the primary color */
   accent-color: var(--color-primary-element);
+  color-scheme: inherit;
+  appearance: auto;
+  -webkit-appearance: auto;
+}
+.form-radio input[type="radio"] {
+  border-radius: 50%;
 }
 
 /* Ensure checkbox/radio labels are vertically centered with the control */

@@ -328,10 +328,11 @@ class ExportController extends Controller
 	 * @param string $format Format: csv, json
 	 * @param string|null $startDate Start date (Y-m-d format)
 	 * @param string|null $endDate End date (Y-m-d format)
+	 * @return DataDownloadResponse|JSONResponse
 	 */
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function compliance(string $format = 'csv', ?string $startDate = null, ?string $endDate = null): DataDownloadResponse
+	public function compliance(string $format = 'csv', ?string $startDate = null, ?string $endDate = null): DataDownloadResponse|JSONResponse
 	{
 		try {
 			$user = $this->userSession->getUser();
@@ -392,6 +393,12 @@ class ExportController extends Controller
 			}
 
 			$filename = 'compliance-report-' . date('Y-m-d') . '.' . $format;
+
+			if ($format === 'pdf') {
+				return new JSONResponse([
+					'error' => $this->l10n->t('PDF export is not available. Please use CSV.')
+				], Http::STATUS_UNPROCESSABLE_ENTITY);
+			}
 
 			$timezone = $this->getExportTimezone();
 			return match($format) {
@@ -460,23 +467,6 @@ class ExportController extends Controller
 		}
 
 		return new DataDownloadResponse($json, $filename, 'application/json; charset=utf-8');
-	}
-
-	/**
-	 * Export data as PDF (simple text-based PDF)
-	 * Note: For production, consider using a PDF library like TCPDF or FPDF
-	 *
-	 * @param array $data Data to export
-	 * @param string $filename Filename
-	 * @param string $title Report title
-	 * @return DataDownloadResponse
-	 */
-	private function exportAsPdf(array $data, string $filename, string $title): DataDownloadResponse
-	{
-		// For now, export as CSV since PDF generation requires external libraries
-		// In production, this should use a proper PDF library
-		// This is a workaround that provides the data in a usable format
-		return $this->exportAsCsv($data, str_replace('.pdf', '.csv', $filename), $this->getExportTimezone());
 	}
 
 	/**

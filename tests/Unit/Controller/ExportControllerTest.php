@@ -383,11 +383,12 @@ class ExportControllerTest extends TestCase
 
 		$response = $this->controller->compliance('pdf', '2024-01-01', '2024-01-31');
 
-		$this->assertInstanceOf(DataDownloadResponse::class, $response);
-		// PDF export falls back to CSV, so filename should be CSV
-		$headers = method_exists($response, 'getHeaders') ? $response->getHeaders() : [];
-		$contentDisposition = $headers['Content-Disposition'] ?? $headers['content-disposition'] ?? '';
-		$this->assertStringContainsString('compliance-report-', $contentDisposition);
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$this->assertSame(\OCP\AppFramework\Http::STATUS_UNPROCESSABLE_ENTITY, $response->getStatus());
+		$data = $response->getData();
+		$this->assertIsArray($data);
+		$this->assertArrayHasKey('error', $data);
+		$this->assertStringContainsString('PDF', (string)$data['error']);
 	}
 
 	/**

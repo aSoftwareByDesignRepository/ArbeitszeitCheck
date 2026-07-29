@@ -150,4 +150,10 @@ class CapabilitiesComplianceTest extends TestCase
 
 		$this->assertSame(50.0, $caps['arbeitszeitcheck']['compliance']['weeklyAbsoluteMaxHours']);
 	}
+
+	public function testAccessibilityClaimsWcagAaNotAaa(): void
+	{
+		$caps = $this->buildCapabilities(RegionRegistry::COUNTRY_DE)->getCapabilities();
+		$this->assertSame('AA', $caps['arbeitszeitcheck']['accessibility']['wcag-level']);
+	}
 }
