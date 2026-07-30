@@ -103,6 +103,8 @@ class Capabilities implements ICapability {
 							) === '1',
 					],
 				],
+				// Companion API floor — clients fail closed to app_outdated when missing/mismatched.
+				'arbeitszeitcheck.companion.min' => 1,
 				'compliance' => [
 					// Additive DACH block (§4.2): absent 'country' means the
 					// client may assume the historical German behaviour.
