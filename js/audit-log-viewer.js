@@ -179,7 +179,7 @@
 
 	function validateFilters(filters) {
 		if (filters.userId.length > 200) {
-			return { message: alT('User filter is too long.'), focusId: 'user-filter' };
+			return { message: alT('User filter is too long.'), focusId: 'audit-user-search' };
 		}
 		if (!isValidEuropeanDate(filters.startDate) || !isValidEuropeanDate(filters.endDate)) {
 			return { message: alT('Please enter valid dates in dd.mm.yyyy format.'), focusId: 'start-date' };
@@ -334,7 +334,7 @@
 				}
 				const apiMessage = (data && (data.error || data.message)) ? String(data.error || data.message) : '';
 				if (apiMessage) {
-					const focusId = apiMessage.toLowerCase().indexOf('user') !== -1 ? 'user-filter' : 'start-date';
+					const focusId = apiMessage.toLowerCase().indexOf('user') !== -1 ? 'audit-user-search' : 'start-date';
 					setError(apiMessage, focusId);
 				}
 				state.total = 0;
@@ -380,10 +380,35 @@
 		}
 	}
 
+	let userPicker = null;
+
+	function createUserPicker() {
+		if (typeof window.ArbeitszeitCheck?.initAdminUserPicker !== 'function') {
+			return null;
+		}
+		return window.ArbeitszeitCheck.initAdminUserPicker({
+			hiddenSelector: '#user-filter',
+			searchSelector: '#audit-user-search',
+			listSelector: '#audit-user-listbox',
+			wrapSelector: '#audit-user-picker',
+			statusSelector: '#audit-user-status',
+			searchUrl: config.adminUserSearchUrl || '',
+			limit: 20,
+			minQueryLength: 2,
+			idPrefix: 'audit-user',
+			l10n: (window.ArbeitszeitCheck && window.ArbeitszeitCheck.auditLogViewerL10n) || {},
+			onChange: function (userId) {
+				const clearBtn = $('#audit-user-clear');
+				if (clearBtn) {
+					clearBtn.hidden = userId === '';
+				}
+			},
+		});
+	}
+
 	function resetFilters() {
 		const startEl = $('#start-date');
 		const endEl = $('#end-date');
-		const userEl = $('#user-filter');
 		const actionEl = $('#action-category-filter');
 		const entityEl = $('#entity-type-filter');
 		if (startEl) {
@@ -392,8 +417,23 @@
 		if (endEl) {
 			endEl.value = state.defaultEndDate;
 		}
-		if (userEl) {
-			userEl.value = '';
+		if (userPicker && typeof userPicker.clearSelection === 'function') {
+			userPicker.clearSelection();
+		} else if (userPicker && typeof userPicker.clear === 'function') {
+			userPicker.clear();
+		} else {
+			const userEl = $('#user-filter');
+			const searchEl = $('#audit-user-search');
+			if (userEl) {
+				userEl.value = '';
+			}
+			if (searchEl) {
+				searchEl.value = '';
+			}
+		}
+		const clearBtn = $('#audit-user-clear');
+		if (clearBtn) {
+			clearBtn.hidden = true;
 		}
 		if (actionEl) {
 			actionEl.value = '';
@@ -414,11 +454,25 @@
 		const userId = params.get('user_id') || params.get('userId') || '';
 		const actionCategory = params.get('action_category') || params.get('action_type') || '';
 		const entityType = params.get('entity_type') || '';
-		const userEl = $('#user-filter');
 		const actionEl = $('#action-category-filter');
 		const entityEl = $('#entity-type-filter');
-		if (userId && userEl) {
-			userEl.value = userId;
+		if (userId) {
+			if (userPicker && typeof userPicker.setSelection === 'function') {
+				userPicker.setSelection(userId, userId);
+			} else {
+				const userEl = $('#user-filter');
+				const searchEl = $('#audit-user-search');
+				if (userEl) {
+					userEl.value = userId;
+				}
+				if (searchEl) {
+					searchEl.value = userId;
+				}
+			}
+			const clearBtn = $('#audit-user-clear');
+			if (clearBtn) {
+				clearBtn.hidden = false;
+			}
 		}
 		if (actionCategory && actionEl) {
 			actionEl.value = actionCategory;
@@ -444,6 +498,24 @@
 
 		on($('#export-logs'), 'click', exportLogs);
 		on($('#reset-filters'), 'click', resetFilters);
+		on($('#audit-user-clear'), 'click', function () {
+			if (userPicker && typeof userPicker.clear === 'function') {
+				userPicker.clear();
+			} else {
+				const userEl = $('#user-filter');
+				const searchEl = $('#audit-user-search');
+				if (userEl) {
+					userEl.value = '';
+				}
+				if (searchEl) {
+					searchEl.value = '';
+				}
+			}
+			const clearBtn = $('#audit-user-clear');
+			if (clearBtn) {
+				clearBtn.hidden = true;
+			}
+		});
 		on($('#audit-log-prev'), 'click', function () {
 			state.offset = Math.max(0, state.offset - state.limit);
 			loadAuditLogs();
@@ -457,6 +529,7 @@
 	}
 
 	function init() {
+		userPicker = createUserPicker();
 		bindEvents();
 		updatePaginationUi();
 		applyUrlParams();

@@ -830,7 +830,9 @@ class AdminController extends Controller
 			'manualTimeEntriesRequireApproval' => $this->appConfig->getAppValueString(Constants::CONFIG_MANUAL_TIME_ENTRIES_REQUIRE_APPROVAL, '0') === '1',
 			'clockStampingEnabled' => $this->timeCaptureMethodService->isOrganizationClockStampingEnabled(),
 			'manualTimeEntryEnabled' => $this->timeCaptureMethodService->isOrganizationManualTimeEntryEnabled(),
+			'accessRestrictionEnabled' => $this->isAccessRestrictionEnabledFromConfig(),
 			'accessAllowedGroups' => $this->getAllowedAccessGroupsFromConfig(),
+			'accessAllowedUserIds' => $this->getConfiguredAccessAllowedUserIds(),
 			'appAdminUserIds' => $this->getConfiguredAppAdminUserIds(),
 			'projectCheckIntegrationEnabled' => $this->appManager->isEnabledForUser('projectcheck')
 				&& $this->appConfig->getAppValueString(Constants::CONFIG_PROJECTCHECK_INTEGRATION_ENABLED, Constants::CONFIG_PROJECTCHECK_INTEGRATION_DEFAULT) === '1',
@@ -848,6 +850,7 @@ class AdminController extends Controller
 				'settings' => $settings,
 				'availableGroups' => $this->getAvailableGroupsForAccessControl(),
 				'availableAppAdmins' => $this->getAvailableAppAdminsForAccessControl(),
+				'availableAccessUsers' => $this->getAvailableAccessUsersForAccessControl(),
 				'urlGenerator' => $this->urlGenerator,
 				'settingsShell' => 'app',
 				'inAppAdminSettingsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings'),
@@ -1707,7 +1710,7 @@ class AdminController extends Controller
 	#[NoCSRFRequired]
 	public function auditLog(): TemplateResponse
 	{
-		$this->registerFrontEndAssets('audit-log-viewer', 'audit-log', [], ['common/datepicker']);
+		$this->registerFrontEndAssets('audit-log-viewer', 'audit-log', [], ['common/datepicker', 'common/admin-user-picker']);
 
 		$endDate = new \DateTime();
 		$endDate->setTime(23, 59, 59);
@@ -1934,7 +1937,9 @@ class AdminController extends Controller
 				'vacationRolloverIncludeUnusedAnnual' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL, '0') === '1',
 				'clockStampingEnabled' => $this->timeCaptureMethodService->isOrganizationClockStampingEnabled(),
 				'manualTimeEntryEnabled' => $this->timeCaptureMethodService->isOrganizationManualTimeEntryEnabled(),
+				'accessRestrictionEnabled' => $this->isAccessRestrictionEnabledFromConfig(),
 				'accessAllowedGroups' => $this->getAllowedAccessGroupsFromConfig(),
+				'accessAllowedUserIds' => $this->getConfiguredAccessAllowedUserIds(),
 				'appAdminUserIds' => $this->getConfiguredAppAdminUserIds(),
 			];
 
@@ -1943,6 +1948,7 @@ class AdminController extends Controller
 				'settings' => $settings,
 				'availableGroups' => $this->getAvailableGroupsForAccessControl(),
 				'availableAppAdmins' => $this->getAvailableAppAdminsForAccessControl(),
+				'availableAccessUsers' => $this->getAvailableAccessUsersForAccessControl(),
 			]);
 		} catch (\Throwable $e) {
 			return new JSONResponse([
@@ -2171,14 +2177,44 @@ class AdminController extends Controller
 				$this->clearLaborLawProfileCache();
 			}
 
-			if (array_key_exists('accessAllowedGroups', $params)) {
-				$groupsRaw = $params['accessAllowedGroups'];
-				$groups = is_array($groupsRaw) ? $groupsRaw : (is_string($groupsRaw) ? json_decode($groupsRaw, true) : []);
-				if (!is_array($groups)) {
-					$groups = [];
+			if (array_key_exists('accessRestrictionEnabled', $params)
+				|| array_key_exists('accessAllowedGroups', $params)
+				|| array_key_exists('accessAllowedUserIds', $params)
+			) {
+				$restrictionEnabled = array_key_exists('accessRestrictionEnabled', $params)
+					? $this->toBool($params['accessRestrictionEnabled'])
+					: $this->isAccessRestrictionEnabledFromConfig();
+
+				$groups = $this->getAllowedAccessGroupsFromConfig();
+				if (array_key_exists('accessAllowedGroups', $params)) {
+					$groupsRaw = $params['accessAllowedGroups'];
+					$groupsList = is_array($groupsRaw) ? $groupsRaw : (is_string($groupsRaw) ? json_decode($groupsRaw, true) : []);
+					if (!is_array($groupsList)) {
+						$groupsList = [];
+					}
+					$groups = $this->normalizeExistingGroupIds($groupsList);
 				}
-				$this->applyAppRestrictionGroups($this->normalizeExistingGroupIds($groups));
-				$updatedSettings['accessAllowedGroups'] = $this->getAllowedAccessGroupsFromConfig();
+
+				$users = $this->getConfiguredAccessAllowedUserIds();
+				if (array_key_exists('accessAllowedUserIds', $params)) {
+					$userIdsRaw = $params['accessAllowedUserIds'];
+					$userIds = is_array($userIdsRaw) ? $userIdsRaw : (is_string($userIdsRaw) ? json_decode($userIdsRaw, true) : []);
+					if (!is_array($userIds)) {
+						$userIds = [];
+					}
+					$users = $this->normalizeAppAdminUserIds($userIds);
+				}
+
+				$this->appConfig->setAppValueString(Constants::CONFIG_ACCESS_RESTRICTION_ENABLED, $restrictionEnabled ? '1' : '0');
+				$this->appConfig->setAppValueString(Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS, json_encode($groups));
+				$this->appConfig->setAppValueString(Constants::CONFIG_ACCESS_ALLOWED_USER_IDS, json_encode($users));
+				// Open ⇒ clear NC app restriction so the menu shows for everyone.
+				// Restricted ⇒ sync group allowlist into NC restriction (users enforced in-app).
+				$this->applyAppRestrictionGroups($restrictionEnabled ? $groups : []);
+
+				$updatedSettings['accessRestrictionEnabled'] = $restrictionEnabled;
+				$updatedSettings['accessAllowedGroups'] = $groups;
+				$updatedSettings['accessAllowedUserIds'] = $users;
 			}
 
 			if (array_key_exists('appAdminUserIds', $params)) {
@@ -2433,7 +2469,43 @@ class AdminController extends Controller
 	 */
 	private function getAllowedAccessGroupsFromConfig(): array
 	{
+		$raw = trim($this->appConfig->getAppValueString(Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS, ''));
+		if ($raw !== '') {
+			$decoded = json_decode($raw, true);
+			if (is_array($decoded)) {
+				return $this->normalizeExistingGroupIds($decoded);
+			}
+		}
+
 		return $this->normalizeExistingGroupIds($this->appManager->getAppRestriction('arbeitszeitcheck'));
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function getConfiguredAccessAllowedUserIds(): array
+	{
+		$raw = $this->appConfig->getAppValueString(Constants::CONFIG_ACCESS_ALLOWED_USER_IDS, '[]');
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+
+		return $this->normalizeAppAdminUserIds($decoded);
+	}
+
+	private function isAccessRestrictionEnabledFromConfig(): bool
+	{
+		$raw = trim($this->appConfig->getAppValueString(Constants::CONFIG_ACCESS_RESTRICTION_ENABLED, ''));
+		if ($raw === '0') {
+			return false;
+		}
+		if ($raw === '1') {
+			return true;
+		}
+
+		return $this->getAllowedAccessGroupsFromConfig() !== []
+			|| $this->getConfiguredAccessAllowedUserIds() !== [];
 	}
 
 	private function toBool(mixed $value): bool
@@ -2666,13 +2738,11 @@ class AdminController extends Controller
 		$unique = [];
 		foreach ($userIds as $userId) {
 			$candidate = trim((string)$userId);
-			if ($candidate === '' || isset($unique[$candidate])) {
+			if ($candidate === '' || isset($unique[$candidate]) || strlen($candidate) > 64) {
 				continue;
 			}
-			if (!$this->groupManager->isAdmin($candidate)) {
-				continue;
-			}
-			if ($this->userManager->get($candidate) === null) {
+			$user = $this->userManager->get($candidate);
+			if ($user === null || !$user->isEnabled()) {
 				continue;
 			}
 			$unique[$candidate] = true;
@@ -2751,28 +2821,58 @@ class AdminController extends Controller
 	}
 
 	/**
+	 * Dedicated + Nextcloud admins for the App Admin picker (portfolio §2.1).
+	 *
 	 * @return list<array{id: string, displayName: string}>
 	 */
 	private function getAvailableAppAdminsForAccessControl(): array
 	{
-		$out = [];
-		$adminGroup = $this->groupManager->get('admin');
-		if ($adminGroup === null) {
-			return [];
-		}
-
-		foreach ($adminGroup->getUsers() as $adminUser) {
-			$userId = trim((string)$adminUser->getUID());
-			if ($userId === '') {
-				continue;
-			}
-			$displayName = trim((string)$adminUser->getDisplayName());
-			$out[] = [
+		$byId = [];
+		foreach ($this->getConfiguredAppAdminUserIds() as $userId) {
+			$user = $this->userManager->get($userId);
+			$displayName = $user !== null ? trim((string)$user->getDisplayName()) : '';
+			$byId[$userId] = [
 				'id' => $userId,
 				'displayName' => $displayName !== '' ? $displayName : $userId,
 			];
 		}
+		$adminGroup = $this->groupManager->get('admin');
+		if ($adminGroup !== null) {
+			foreach ($adminGroup->getUsers() as $adminUser) {
+				$userId = trim((string)$adminUser->getUID());
+				if ($userId === '' || isset($byId[$userId])) {
+					continue;
+				}
+				$displayName = trim((string)$adminUser->getDisplayName());
+				$byId[$userId] = [
+					'id' => $userId,
+					'displayName' => $displayName !== '' ? $displayName : $userId,
+				];
+			}
+		}
 
+		$out = array_values($byId);
+		usort($out, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
+		return $out;
+	}
+
+	/**
+	 * Currently allow-listed users for the access-door picker.
+	 *
+	 * @return list<array{id: string, displayName: string}>
+	 */
+	private function getAvailableAccessUsersForAccessControl(): array
+	{
+		$byId = [];
+		foreach ($this->getConfiguredAccessAllowedUserIds() as $userId) {
+			$user = $this->userManager->get($userId);
+			$displayName = $user !== null ? trim((string)$user->getDisplayName()) : '';
+			$byId[$userId] = [
+				'id' => $userId,
+				'displayName' => $displayName !== '' ? $displayName : $userId,
+			];
+		}
+		$out = array_values($byId);
 		usort($out, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
 		return $out;
 	}

@@ -220,9 +220,14 @@ echo json_encode([
 							<span class="form-required" aria-hidden="true">*</span>
 							<span class="visually-hidden">(<?php p($l->t('required')); ?>)</span>
 						</label>
-						<input type="text" id="sim-user" name="userId" class="form-input"
+						<input type="search" id="sim-user" name="userId" class="form-input"
 							placeholder="<?php p($l->t('Type to search for an employee')); ?>"
 							autocomplete="off"
+							role="combobox"
+							aria-autocomplete="list"
+							aria-controls="sim-user-suggest"
+							aria-expanded="false"
+							aria-haspopup="listbox"
 							aria-required="true"
 							aria-describedby="sim-user-help" required>
 						<p id="sim-user-help" class="form-help"><?php p($l->t('Start typing the user name or login — suggestions will appear. Use the arrow keys to navigate, Enter to select.')); ?></p>

@@ -36,10 +36,8 @@
         } else if (type === 'success') {
             liveRegion.classList.add('admin-settings-live--success');
         }
-        if (message) {
-            const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            liveRegion.scrollIntoView({ block: 'nearest', behavior: prefersReduced ? 'auto' : 'smooth' });
-        }
+        // Do not scrollIntoView: the live region can sit far from the control
+        // that just saved. Scrolling yanks the admin away mid-workflow.
     }
 
     /**
@@ -71,6 +69,8 @@
 
         initMonthReopenUserPicker();
         initAppAdminsPicker();
+        initAccessModeToggle();
+        initAccessUsersPicker();
         initAccessGroupsPicker();
         initProjectCheckAdminToggle();
         initOrganizationTimeCapture();
@@ -265,13 +265,14 @@
             return;
         }
 
-        const items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
-        const checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="appAdminUserIds[]"]'));
+        let items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
+        let checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="appAdminUserIds[]"]'));
 
         function updateCount() {
             if (!countEl) {
                 return;
             }
+            checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="appAdminUserIds[]"]'));
             const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
             if (selectedCount === 0) {
                 countEl.textContent = l10n.appAdminsAllAdmins || 'No app admins selected (all Nextcloud admins are allowed).';
@@ -284,6 +285,7 @@
         }
 
         function applyFilter() {
+            items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
             const q = String(search.value || '').trim().toLowerCase();
             let visible = 0;
             items.forEach(function(item) {
@@ -299,10 +301,204 @@
             }
         }
 
+        function ensureAdminOption(user) {
+            const id = String(user.id || user.userId || '').trim();
+            if (id === '') {
+                return;
+            }
+            const existing = list.querySelector('input[name="appAdminUserIds[]"][value="' + CSS.escape(id) + '"]');
+            if (existing) {
+                existing.checked = true;
+                updateCount();
+                applyFilter();
+                return;
+            }
+            const displayName = String(user.displayName || id);
+            const label = document.createElement('label');
+            label.className = 'access-groups-item';
+            label.setAttribute('data-app-admin-search', (displayName + ' ' + id).toLowerCase());
+            label.innerHTML = '<input type="checkbox" name="appAdminUserIds[]" value="" checked>'
+                + '<span class="access-groups-item__label"></span>'
+                + '<span class="access-groups-item__meta"></span>';
+            label.querySelector('input').value = id;
+            label.querySelector('.access-groups-item__label').textContent = displayName;
+            label.querySelector('.access-groups-item__meta').textContent = id;
+            list.appendChild(label);
+            Utils.on(label.querySelector('input'), 'change', updateCount);
+            updateCount();
+            applyFilter();
+        }
+
         Utils.on(search, 'input', applyFilter);
         checkboxes.forEach(function(box) {
             Utils.on(box, 'change', updateCount);
         });
+
+        const PickerHost = window.ArbeitszeitCheck || {};
+        const addSearch = Utils.$('#appAdminUsersAddSearch');
+        const addList = Utils.$('#appAdminUsersAddList');
+        if (typeof PickerHost.initAdminUserPicker === 'function' && addSearch && addList) {
+            // Hidden field required by the shared picker; value is only used to detect picks.
+            let hidden = Utils.$('#appAdminUsersAddHidden');
+            if (!hidden) {
+                hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.id = 'appAdminUsersAddHidden';
+                addSearch.parentNode.appendChild(hidden);
+            }
+            PickerHost.initAdminUserPicker({
+                hiddenSelector: '#appAdminUsersAddHidden',
+                searchSelector: '#appAdminUsersAddSearch',
+                listSelector: '#appAdminUsersAddList',
+                wrapSelector: '#appAdminUsersAddPicker',
+                searchUrl: PickerHost.adminUsersListUrl || '',
+                onChange: function(uid, meta) {
+                    if (!uid) {
+                        return;
+                    }
+                    ensureAdminOption({
+                        id: uid,
+                        displayName: (meta && meta.displayName) ? meta.displayName : uid,
+                    });
+                    hidden.value = '';
+                    addSearch.value = '';
+                },
+            });
+        }
+
+        updateCount();
+        applyFilter();
+    }
+
+    function initAccessModeToggle() {
+        const radios = Array.prototype.slice.call(document.querySelectorAll('input[name="accessRestrictionEnabled"]'));
+        const panels = Array.prototype.slice.call(document.querySelectorAll('[data-azc-access-allowlists]'));
+        if (radios.length === 0) {
+            return;
+        }
+
+        function sync() {
+            const restricted = radios.some(function(r) { return r.checked && String(r.value) === '1'; });
+            panels.forEach(function(panel) {
+                panel.hidden = !restricted;
+            });
+        }
+
+        radios.forEach(function(radio) {
+            Utils.on(radio, 'change', sync);
+        });
+        sync();
+    }
+
+    function initAccessUsersPicker() {
+        const search = Utils.$('#accessAllowedUsersSearch');
+        const list = Utils.$('#accessAllowedUsersList');
+        const empty = Utils.$('#accessAllowedUsersEmpty');
+        const countEl = Utils.$('#accessAllowedUsersCount');
+        const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
+        if (!search || !list) {
+            return;
+        }
+
+        let items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
+        let checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="accessAllowedUserIds[]"]'));
+
+        function updateCount() {
+            if (!countEl) {
+                return;
+            }
+            checkboxes = Array.prototype.slice.call(list.querySelectorAll('input[name="accessAllowedUserIds[]"]'));
+            const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
+            if (selectedCount === 0) {
+                countEl.textContent = l10n.accessUsersNone || 'No individual users selected.';
+                return;
+            }
+            const template = l10n.accessUsersSelected || '%s user(s) selected';
+            countEl.textContent = template.indexOf('%s') !== -1
+                ? template.replace('%s', String(selectedCount))
+                : String(selectedCount) + ' ' + template;
+        }
+
+        function applyFilter() {
+            items = Array.prototype.slice.call(list.querySelectorAll('.access-groups-item'));
+            const q = String(search.value || '').trim().toLowerCase();
+            let visible = 0;
+            items.forEach(function(item) {
+                const haystack = String(item.getAttribute('data-access-user-search') || '');
+                const show = q === '' || haystack.indexOf(q) !== -1;
+                item.hidden = !show;
+                if (show) {
+                    visible++;
+                }
+            });
+            if (empty) {
+                empty.hidden = visible !== 0;
+            }
+        }
+
+        function ensureUserOption(user) {
+            const id = String(user.id || user.userId || '').trim();
+            if (id === '') {
+                return;
+            }
+            const existing = list.querySelector('input[name="accessAllowedUserIds[]"][value="' + CSS.escape(id) + '"]');
+            if (existing) {
+                existing.checked = true;
+                updateCount();
+                applyFilter();
+                return;
+            }
+            const displayName = String(user.displayName || id);
+            const label = document.createElement('label');
+            label.className = 'access-groups-item';
+            label.setAttribute('data-access-user-search', (displayName + ' ' + id).toLowerCase());
+            label.innerHTML = '<input type="checkbox" name="accessAllowedUserIds[]" value="" checked>'
+                + '<span class="access-groups-item__label"></span>'
+                + '<span class="access-groups-item__meta"></span>';
+            label.querySelector('input').value = id;
+            label.querySelector('.access-groups-item__label').textContent = displayName;
+            label.querySelector('.access-groups-item__meta').textContent = id;
+            list.appendChild(label);
+            Utils.on(label.querySelector('input'), 'change', updateCount);
+            updateCount();
+            applyFilter();
+        }
+
+        Utils.on(search, 'input', applyFilter);
+        checkboxes.forEach(function(box) {
+            Utils.on(box, 'change', updateCount);
+        });
+
+        const PickerHost = window.ArbeitszeitCheck || {};
+        const addSearch = Utils.$('#accessAllowedUsersAddSearch');
+        const addList = Utils.$('#accessAllowedUsersAddList');
+        if (typeof PickerHost.initAdminUserPicker === 'function' && addSearch && addList) {
+            let hidden = Utils.$('#accessAllowedUsersAddHidden');
+            if (!hidden) {
+                hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.id = 'accessAllowedUsersAddHidden';
+                addSearch.parentNode.appendChild(hidden);
+            }
+            PickerHost.initAdminUserPicker({
+                hiddenSelector: '#accessAllowedUsersAddHidden',
+                searchSelector: '#accessAllowedUsersAddSearch',
+                listSelector: '#accessAllowedUsersAddList',
+                wrapSelector: '#accessAllowedUsersAddPicker',
+                searchUrl: PickerHost.adminUsersListUrl || '',
+                onChange: function(uid, meta) {
+                    if (!uid) {
+                        return;
+                    }
+                    ensureUserOption({
+                        id: uid,
+                        displayName: (meta && meta.displayName) ? meta.displayName : uid,
+                    });
+                    hidden.value = '';
+                    addSearch.value = '';
+                },
+            });
+        }
 
         updateCount();
         applyFilter();
@@ -327,7 +523,7 @@
             }
             const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
             if (selectedCount === 0) {
-                countEl.textContent = l10n.accessGroupsAllUsers || 'No groups selected (all users are allowed).';
+                countEl.textContent = l10n.accessGroupsNone || 'No groups selected.';
                 return;
             }
             const template = l10n.accessGroupsSelected || '%s group(s) selected';
@@ -391,6 +587,12 @@
             ? []
             : (Array.isArray(accessGroupsRaw) ? accessGroupsRaw : [accessGroupsRaw]);
         delete formData['accessAllowedGroups[]'];
+        const accessUsersRaw = formData['accessAllowedUserIds[]'];
+        formData.accessAllowedUserIds = accessUsersRaw === undefined
+            ? []
+            : (Array.isArray(accessUsersRaw) ? accessUsersRaw : [accessUsersRaw]);
+        delete formData['accessAllowedUserIds[]'];
+        formData.accessRestrictionEnabled = String(formData.accessRestrictionEnabled || '0') === '1';
         const appAdminRaw = formData['appAdminUserIds[]'];
         formData.appAdminUserIds = appAdminRaw === undefined
             ? []

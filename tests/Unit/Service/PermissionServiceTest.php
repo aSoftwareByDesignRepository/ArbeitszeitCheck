@@ -151,18 +151,73 @@ class PermissionServiceTest extends TestCase
 		$this->assertFalse($service->canResolveViolation('employee1', 'employee1'));
 	}
 
-	public function testIsUserAllowedByAccessGroupsDelegatesToAppManager(): void
+	public function testOpenModeAllowsAnyLoggedInUserWithoutAppManager(): void
 	{
 		$groupManager = $this->createMock(IGroupManager::class);
 		$groupManager->method('isAdmin')->willReturn(false);
 		$appManager = $this->createMock(IAppManager::class);
-		$appManager->expects($this->once())->method('isEnabledForUser')->with(Application::APP_ID, $this->anything())->willReturn(true);
-		$userManager = $this->createMock(IUserManager::class);
-		$userManager->method('get')->with('user1')->willReturn($this->createMock(\OCP\IUser::class));
+		$appManager->expects($this->never())->method('isEnabledForUser');
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(static function (string $app, string $key, string $default = '') {
+			return match ($key) {
+				Constants::CONFIG_ACCESS_RESTRICTION_ENABLED => '0',
+				Constants::CONFIG_ACCESS_ALLOWED_USER_IDS => '[]',
+				Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS => '[]',
+				Constants::CONFIG_APP_ADMIN_USER_IDS => '[]',
+				default => $default,
+			};
+		});
 		$teamResolver = $this->createMock(TeamResolverService::class);
-		$service = $this->createService($groupManager, $teamResolver, $appManager, null, $userManager);
+		$service = $this->createService($groupManager, $teamResolver, $appManager, $config);
 
 		$this->assertTrue($service->isUserAllowedByAccessGroups('user1'));
+		$this->assertFalse($service->isAccessRestrictionEnabled());
+	}
+
+	public function testRestrictedModeFailClosedAndAllowsListedUserOrGroup(): void
+	{
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('isAdmin')->willReturn(false);
+		$groupManager->method('isInGroup')->willReturnCallback(static function (string $uid, string $gid): bool {
+			return $uid === 'grouped' && $gid === 'hr';
+		});
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(static function (string $app, string $key, string $default = '') {
+			return match ($key) {
+				Constants::CONFIG_ACCESS_RESTRICTION_ENABLED => '1',
+				Constants::CONFIG_ACCESS_ALLOWED_USER_IDS => '["alice"]',
+				Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS => '["hr"]',
+				Constants::CONFIG_APP_ADMIN_USER_IDS => '[]',
+				default => $default,
+			};
+		});
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$service = $this->createService($groupManager, $teamResolver, null, $config);
+
+		$this->assertTrue($service->isAccessRestrictionEnabled());
+		$this->assertTrue($service->isUserAllowedByAccessGroups('alice'));
+		$this->assertTrue($service->isUserAllowedByAccessGroups('grouped'));
+		$this->assertFalse($service->isUserAllowedByAccessGroups('stranger'));
+	}
+
+	public function testRestrictedEmptyAllowlistsFailClosed(): void
+	{
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('isAdmin')->willReturn(false);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(static function (string $app, string $key, string $default = '') {
+			return match ($key) {
+				Constants::CONFIG_ACCESS_RESTRICTION_ENABLED => '1',
+				Constants::CONFIG_ACCESS_ALLOWED_USER_IDS => '[]',
+				Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS => '[]',
+				Constants::CONFIG_APP_ADMIN_USER_IDS => '[]',
+				default => $default,
+			};
+		});
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$service = $this->createService($groupManager, $teamResolver, null, $config);
+
+		$this->assertFalse($service->isUserAllowedByAccessGroups('nobody'));
 	}
 
 	public function testGetAllowedAccessGroupsReadsAppRestriction(): void
@@ -170,8 +225,15 @@ class PermissionServiceTest extends TestCase
 		$groupManager = $this->createMock(IGroupManager::class);
 		$appManager = $this->createMock(IAppManager::class);
 		$appManager->method('getAppRestriction')->with(Application::APP_ID)->willReturn(['group_a', 'group_a', 'group_b']);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(static function (string $app, string $key, string $default = '') {
+			return match ($key) {
+				Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS => '',
+				default => $default === '' ? '[]' : $default,
+			};
+		});
 		$teamResolver = $this->createMock(TeamResolverService::class);
-		$service = $this->createService($groupManager, $teamResolver, $appManager, null, $this->createMock(IUserManager::class));
+		$service = $this->createService($groupManager, $teamResolver, $appManager, $config, $this->createMock(IUserManager::class));
 
 		$this->assertSame(['group_a', 'group_b'], $service->getAllowedAccessGroups());
 	}
@@ -188,22 +250,25 @@ class PermissionServiceTest extends TestCase
 		$this->assertTrue($service->isUserAllowedByAccessGroups('admin1'));
 	}
 
-	public function testIsAdminRespectsConfiguredAppAdminSubset(): void
+	public function testIsAdminUsesSystemAdminOrDedicatedList(): void
 	{
 		$groupManager = $this->createMock(IGroupManager::class);
-		$groupManager->method('isAdmin')->willReturn(true);
+		$groupManager->method('isAdmin')->willReturnCallback(static function (string $uid): bool {
+			return $uid === 'nc_admin';
+		});
 		$config = $this->createMock(IConfig::class);
 		$config->method('getAppValue')
 			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
-			->willReturn('["hr_admin"]');
+			->willReturn('["colleague"]');
 		$teamResolver = $this->createMock(TeamResolverService::class);
 		$service = $this->createService($groupManager, $teamResolver, null, $config);
 
-		$this->assertTrue($service->isAdmin('hr_admin'));
-		$this->assertFalse($service->isAdmin('other_admin'));
+		$this->assertTrue($service->isAdmin('nc_admin'));
+		$this->assertTrue($service->isAdmin('colleague'));
+		$this->assertFalse($service->isAdmin('random'));
 	}
 
-	public function testCanManageEmployeeDeniesNonAllowlistedNextcloudAdmin(): void
+	public function testNonListedSystemAdminRemainsAppAdminWhenListNonEmpty(): void
 	{
 		$groupManager = $this->createMock(IGroupManager::class);
 		$groupManager->method('isAdmin')->willReturn(true);
@@ -212,43 +277,12 @@ class PermissionServiceTest extends TestCase
 			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
 			->willReturn('["hr_admin"]');
 		$teamResolver = $this->createMock(TeamResolverService::class);
-		$teamResolver->method('useAppTeams')->willReturn(false);
-		$teamResolver->expects($this->never())->method('canUserManageEmployee');
 		$service = $this->createService($groupManager, $teamResolver, null, $config);
 
-		$this->assertFalse($service->canManageEmployee('other_admin', 'employee1'));
-	}
-
-	public function testCanAccessManagerDashboardDeniesNonAllowlistedNextcloudAdmin(): void
-	{
-		$groupManager = $this->createMock(IGroupManager::class);
-		$groupManager->method('isAdmin')->willReturn(true);
-		$config = $this->createMock(IConfig::class);
-		$config->method('getAppValue')
-			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
-			->willReturn('["hr_admin"]');
-		$teamResolver = $this->createMock(TeamResolverService::class);
-		$teamResolver->method('useAppTeams')->willReturn(false);
-		$teamResolver->expects($this->never())->method('getTeamMemberIds');
-		$service = $this->createService($groupManager, $teamResolver, null, $config);
-
-		$this->assertFalse($service->canAccessManagerDashboard('other_admin'));
-	}
-
-	public function testCanResolveViolationDeniesNonAllowlistedNextcloudAdmin(): void
-	{
-		$groupManager = $this->createMock(IGroupManager::class);
-		$groupManager->method('isAdmin')->willReturn(true);
-		$config = $this->createMock(IConfig::class);
-		$config->method('getAppValue')
-			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
-			->willReturn('["hr_admin"]');
-		$teamResolver = $this->createMock(TeamResolverService::class);
-		$teamResolver->method('useAppTeams')->willReturn(false);
-		$teamResolver->expects($this->never())->method('canUserManageEmployee');
-		$service = $this->createService($groupManager, $teamResolver, null, $config);
-
-		$this->assertFalse($service->canResolveViolation('other_admin', 'employee1'));
+		$this->assertTrue($service->isAdmin('other_admin'));
+		$this->assertTrue($service->canManageEmployee('other_admin', 'employee1'));
+		$this->assertTrue($service->canAccessManagerDashboard('other_admin'));
+		$this->assertTrue($service->canResolveViolation('other_admin', 'employee1'));
 	}
 }
 

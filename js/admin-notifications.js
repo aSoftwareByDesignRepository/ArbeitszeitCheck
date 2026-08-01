@@ -67,10 +67,8 @@
 		} else if (type === 'success') {
 			liveRegion.classList.add('admin-notifications-live--success');
 		}
-		if (message) {
-			const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-			liveRegion.scrollIntoView({ block: 'nearest', behavior: prefersReduced ? 'auto' : 'smooth' });
-		}
+		// Do not scrollIntoView: announcements must not yank the viewport away
+		// from the control the admin just used.
 	}
 
 	function bindDependentBlock(toggle, blockId) {

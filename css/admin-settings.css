@@ -254,8 +254,36 @@
 
 /* Access control: searchable checkbox picker */
 #admin-settings-form #accessAllowedGroupsSearch,
+#admin-settings-form #accessAllowedUsersSearch,
 #admin-notifications-form #accessAllowedGroupsSearch{
   max-width: 100%;
+}
+
+#admin-settings-form .azc-access-mode {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+#admin-settings-form .azc-access-mode .form-label,
+#admin-settings-form .azc-access-mode legend.form-label {
+  display: block;
+  margin-bottom: var(--space-2, 0.5rem);
+}
+
+#admin-settings-form .access-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.5rem 0;
+  cursor: pointer;
+}
+
+#admin-settings-form .access-mode-option input[type="radio"] {
+  margin-top: 0.25rem;
+  min-width: 1.125rem;
+  min-height: 1.125rem;
 }
 
 #admin-settings-form .access-groups-list,

@@ -62,10 +62,6 @@
 		}
 	}
 
-	function prefersReducedMotion() {
-		return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	}
-
 	function showFeedback(message, type) {
 		if (!feedback) {
 			return;
@@ -73,12 +69,9 @@
 		feedback.hidden = false;
 		feedback.textContent = message;
 		feedback.className = 'azc-license-feedback azc-license-feedback--' + (type || 'success');
-		// The banner sits at the top of the page; make sure the admin actually
-		// sees it even when the triggering control is further down.
-		feedback.scrollIntoView({
-			block: 'nearest',
-			behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-		});
+		// Never scrollIntoView here. Seat assign/remove happens further down the
+		// page; yanking to the top banner forces the admin to scroll back after
+		// every click. Toast + aria-live already announce the outcome.
 		if (type === 'error') {
 			announce(alertRegion, message);
 			if (typeof Messaging.showError === 'function') {
@@ -490,6 +483,7 @@
 				updateSeatCounts(data.mobileSeatsUsed ?? 0, data.mobileSeatsLimit ?? 0);
 				if (userSearch) {
 					userSearch.value = '';
+					userSearch.focus();
 				}
 				showFeedback(t('seatAssigned', 'Seat assigned.'), 'success');
 			} else {

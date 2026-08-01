@@ -1714,8 +1714,7 @@
     simForm.addEventListener('submit', (ev) => {
       ev.preventDefault();
       if (simIsSubmitting) return;
-      const typedValue = simUser ? simUser.value.trim() : '';
-      const userId = simSelectedUserId || typedValue;
+      const userId = simSelectedUserId || '';
       const asOfEl = document.getElementById('sim-date');
       const asOfDate = (asOfEl && asOfEl.value) ? asOfEl.value : todayYmd();
       if (!userId) {
@@ -1731,14 +1730,6 @@
         return;
       }
       if (simUser) simUser.removeAttribute('aria-invalid');
-      // Warn (but allow) when the user typed a value but never picked one
-      // from the suggestions — preserves the existing "type a UID exactly"
-      // affordance for admins on power-tool workflows while still
-      // surfacing the risk for the common case.
-      const usedFreeText = !simSelectedUserId && typedValue !== '' && (
-        simSelectedUserDisplay === null
-        || typedValue.toLowerCase() !== String(simSelectedUserDisplay).toLowerCase()
-      );
       const hypothetical = document.getElementById('sim-hypothetical-teams');
       const hypotheticalTeamIds = hypothetical
         ? Array.from(hypothetical.selectedOptions).map((o) => parseInt(o.value, 10)).filter((n) => Number.isInteger(n) && n > 0)
@@ -1759,7 +1750,7 @@
         onSuccess: (data) => {
           simIsSubmitting = false;
           setSimSubmitBusy(false);
-          renderSimResult(data, { usedFreeText });
+          renderSimResult(data, {});
         },
         onError: (err) => {
           simIsSubmitting = false;
@@ -1914,9 +1905,6 @@
     }
     if (matchedLayer === 'legacy') {
       banners.push(`<p class="layer-sim__banner layer-sim__banner--warn" role="status">${escape(t('No layered configuration matched. The legacy 25 days/year fallback applied — consider configuring an L0 organisation default so new employees inherit a proper entitlement.', 'No layered configuration matched. The legacy 25 days/year fallback applied — consider configuring an L0 organisation default so new employees inherit a proper entitlement.'))}</p>`);
-    }
-    if (options.usedFreeText) {
-      banners.push(`<p class="layer-sim__banner layer-sim__banner--info" role="status">${escape(t('Hint: you submitted a free-text user identifier rather than picking from the suggestions. If this is not the right employee, clear the field and search again.', 'Hint: you submitted a free-text user identifier rather than picking from the suggestions. If this is not the right employee, clear the field and search again.'))}</p>`);
     }
     const summaryDays = fmtDays(data.effectiveEntitlementDays);
     const summarySentence = data.hypotheticalTeamIds && data.hypotheticalTeamIds.length > 0

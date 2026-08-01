@@ -32,7 +32,7 @@ $sharedMessageIds = [
 	'No matching employees found.',
 	'%n results',
 	'Selected: %s',
-	'Search by name or user ID…',
+	'Search by name or login…',
 	'Invalid date range. Please use valid dates in YYYY-MM-DD format.',
 	'Invalid date range. The start date must be before the end date.',
 	'Invalid date format. Please use dd.mm.yyyy (e.g., 15.01.2024).',

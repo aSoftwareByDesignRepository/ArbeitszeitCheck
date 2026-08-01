@@ -47,10 +47,9 @@
 		feedback.hidden = false;
 		feedback.textContent = message;
 		feedback.className = 'azc-kiosk-feedback azc-kiosk-feedback--' + (type || 'success');
-		feedback.scrollIntoView({
-			block: 'nearest',
-			behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-		});
+		// Never scrollIntoView here. Pairing / PIN / enrollment controls sit
+		// further down; yanking to the top banner after every action is friction.
+		// Toast + aria-live already announce the outcome.
 		if (type === 'error') {
 			announce(alertEl, message);
 			if (typeof Messaging.showError === 'function') {

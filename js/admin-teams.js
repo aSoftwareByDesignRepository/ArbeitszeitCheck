@@ -676,7 +676,7 @@
         const successKey = isMember ? 'Member added' : 'Manager added';
         const failKey = isMember ? 'Failed to add member' : 'Failed to add manager';
         const findLabel = t('Find a person', 'Find a person');
-        const findHelp = t('Start typing their name or user ID, then pick them from the list.', 'Start typing, then select from the list.');
+        const findHelp = t('Start typing their name or login, then pick them from the list.', 'Start typing, then select from the list.');
         const cancelLabel = t('Cancel', 'Cancel');
         const addLabel = t('Add', 'Add');
         const selectRequired = t('Please select a person from the search results.', 'Please select a person.');
@@ -695,7 +695,7 @@
                     + '<input type="hidden" id="' + prefix + '-user-id" name="userId" value="" required>'
                     + '<div class="user-picker user-picker--in-modal team-person-form__user-picker" id="' + prefix + '-picker">'
                     + '<input type="search" id="' + prefix + '-search" class="form-input user-picker__search" autocomplete="off" autocapitalize="none" spellcheck="false"'
-                    + ' placeholder="' + esc(t('Search by name or user ID…', 'Search by name or user ID…')) + '"'
+                    + ' placeholder="' + esc(t('Search by name or login…', 'Search by name or login…')) + '"'
                     + ' role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="' + prefix + '-listbox"'
                     + ' aria-describedby="' + prefix + '-help ' + prefix + '-status" aria-required="true">'
                     + '<div id="' + prefix + '-listbox" class="user-picker__list" role="listbox" hidden'

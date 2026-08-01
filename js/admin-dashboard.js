@@ -171,7 +171,7 @@
 		const exportUrl = buildEmployeeExportUrl(filter);
 		const exportLabel = t('Export CSV', 'Export CSV');
 		const content = [
-			'<p class="form-help">' + escapeHtml(t('drilldownHelp', 'Search by name or user ID. Export downloads the full filtered list.')) + '</p>',
+			'<p class="form-help">' + escapeHtml(t('drilldownHelp', 'Search by name or login. Export downloads the full filtered list.')) + '</p>',
 			'<div class="admin-drilldown-toolbar">',
 			'<label class="sr-only" for="' + searchId + '">' + escapeHtml(t('Search employees', 'Search employees')) + '</label>',
 			'<input type="search" id="' + searchId + '" class="form-input admin-drilldown-search" placeholder="' + escapeHtml(t('Search employees…', 'Search employees…')) + '" autocomplete="off">',

@@ -49,7 +49,7 @@ $urlGenerator = $_['urlGenerator'] ?? null;
                             autocomplete="off"
                             autocapitalize="none"
                             spellcheck="false"
-                            placeholder="<?php p($l->t('Search by name or user ID…')); ?>"
+                            placeholder="<?php p($l->t('Search by name or login…')); ?>"
                             aria-describedby="user-search-help users-pagination">
                         <p id="user-search-help" class="form-help">
                             <?php p($l->t('Type at least 2 characters to search. Leave empty to browse the list page by page.')); ?>

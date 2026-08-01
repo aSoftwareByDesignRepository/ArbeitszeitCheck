@@ -21,6 +21,7 @@ use OCP\AppFramework\Services\IAppConfig;
 use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IURLGenerator;
+use OCP\IUserManager;
 use OCP\Settings\ISettings;
 use OCP\Util;
 
@@ -31,6 +32,7 @@ class AdminSettings implements ISettings
 	private IGroupManager $groupManager;
 	private IAppManager $appManager;
 	private IURLGenerator $urlGenerator;
+	private IUserManager $userManager;
 
 	public function __construct(
 		IAppConfig $appConfig,
@@ -38,12 +40,14 @@ class AdminSettings implements ISettings
 		IGroupManager $groupManager,
 		IAppManager $appManager,
 		IURLGenerator $urlGenerator,
+		IUserManager $userManager,
 	) {
 		$this->appConfig = $appConfig;
 		$this->l10n = $l10n;
 		$this->groupManager = $groupManager;
 		$this->appManager = $appManager;
 		$this->urlGenerator = $urlGenerator;
+		$this->userManager = $userManager;
 	}
 
 	/**
@@ -107,7 +111,9 @@ class AdminSettings implements ISettings
 			'manualTimeEntriesRequireApproval' => $this->appConfig->getAppValueString(Constants::CONFIG_MANUAL_TIME_ENTRIES_REQUIRE_APPROVAL, '0') === '1',
 			'clockStampingEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_CLOCK_STAMPING_ENABLED, '1') === '1',
 			'manualTimeEntryEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MANUAL_TIME_ENTRY_ENABLED, '1') === '1',
+			'accessRestrictionEnabled' => $this->isAccessRestrictionEnabledFromSettings(),
 			'accessAllowedGroups' => $this->readAccessAllowedGroups(),
+			'accessAllowedUserIds' => $this->readConfiguredAccessAllowedUserIds(),
 			'appAdminUserIds' => $this->readConfiguredAppAdminUserIds(),
 			'projectCheckIntegrationEnabled' => $this->appManager->isEnabledForUser('projectcheck')
 				&& $this->appConfig->getAppValueString(Constants::CONFIG_PROJECTCHECK_INTEGRATION_ENABLED, Constants::CONFIG_PROJECTCHECK_INTEGRATION_DEFAULT) === '1',
@@ -119,6 +125,7 @@ class AdminSettings implements ISettings
 			'settings' => $settings,
 			'availableGroups' => $this->getAvailableGroups(),
 			'availableAppAdmins' => $this->getAvailableAppAdmins(),
+			'availableAccessUsers' => $this->getAvailableAccessUsers(),
 			'l' => $this->l10n,
 			'urlGenerator' => $this->urlGenerator,
 			'settingsShell' => 'nextcloud',
@@ -186,6 +193,25 @@ class AdminSettings implements ISettings
 	 */
 	private function readAccessAllowedGroups(): array
 	{
+		$raw = trim($this->appConfig->getAppValueString(Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS, ''));
+		if ($raw !== '') {
+			$decoded = json_decode($raw, true);
+			if (is_array($decoded)) {
+				$out = [];
+				foreach ($decoded as $groupId) {
+					$candidate = trim((string)$groupId);
+					if ($candidate === '' || isset($out[$candidate])) {
+						continue;
+					}
+					if ($this->groupManager->get($candidate) === null) {
+						continue;
+					}
+					$out[$candidate] = true;
+				}
+				return array_keys($out);
+			}
+		}
+
 		$decoded = $this->appManager->getAppRestriction('arbeitszeitcheck');
 		$out = [];
 		foreach ($decoded as $groupId) {
@@ -196,6 +222,68 @@ class AdminSettings implements ISettings
 			$out[$candidate] = true;
 		}
 		return array_keys($out);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function readConfiguredAccessAllowedUserIds(): array
+	{
+		$raw = $this->appConfig->getAppValueString(Constants::CONFIG_ACCESS_ALLOWED_USER_IDS, '[]');
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+
+		$unique = [];
+		foreach ($decoded as $candidate) {
+			$userId = trim((string)$candidate);
+			if ($userId === '' || isset($unique[$userId])) {
+				continue;
+			}
+			$user = $this->userManager->get($userId);
+			if ($user === null || !$user->isEnabled()) {
+				continue;
+			}
+			$unique[$userId] = true;
+		}
+
+		return array_keys($unique);
+	}
+
+	private function isAccessRestrictionEnabledFromSettings(): bool
+	{
+		$raw = trim($this->appConfig->getAppValueString(Constants::CONFIG_ACCESS_RESTRICTION_ENABLED, ''));
+		if ($raw === '0') {
+			return false;
+		}
+		if ($raw === '1') {
+			return true;
+		}
+
+		return $this->readAccessAllowedGroups() !== []
+			|| $this->readConfiguredAccessAllowedUserIds() !== [];
+	}
+
+	/**
+	 * Options for the allowed-users picker: currently selected allow-listed users.
+	 *
+	 * @return list<array{id: string, displayName: string}>
+	 */
+	private function getAvailableAccessUsers(): array
+	{
+		$byId = [];
+		foreach ($this->readConfiguredAccessAllowedUserIds() as $userId) {
+			$user = $this->userManager->get($userId);
+			$displayName = $user !== null ? trim((string)$user->getDisplayName()) : '';
+			$byId[$userId] = [
+				'id' => $userId,
+				'displayName' => $displayName !== '' ? $displayName : $userId,
+			];
+		}
+		$out = array_values($byId);
+		usort($out, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
+		return $out;
 	}
 
 	/**
@@ -233,7 +321,8 @@ class AdminSettings implements ISettings
 			if ($userId === '' || isset($unique[$userId])) {
 				continue;
 			}
-			if (!$this->groupManager->isAdmin($userId)) {
+			$user = $this->userManager->get($userId);
+			if ($user === null || !$user->isEnabled()) {
 				continue;
 			}
 			$unique[$userId] = true;
@@ -243,28 +332,37 @@ class AdminSettings implements ISettings
 	}
 
 	/**
+	 * Options for the App Admin picker: dedicated selected users plus Nextcloud admins.
+	 *
 	 * @return list<array{id: string, displayName: string}>
 	 */
 	private function getAvailableAppAdmins(): array
 	{
-		$out = [];
-		$adminGroup = $this->groupManager->get('admin');
-		if ($adminGroup === null) {
-			return [];
-		}
-
-		foreach ($adminGroup->getUsers() as $adminUser) {
-			$userId = trim((string)$adminUser->getUID());
-			if ($userId === '') {
-				continue;
-			}
-			$displayName = trim((string)$adminUser->getDisplayName());
-			$out[] = [
+		$byId = [];
+		foreach ($this->readConfiguredAppAdminUserIds() as $userId) {
+			$user = $this->userManager->get($userId);
+			$displayName = $user !== null ? trim((string)$user->getDisplayName()) : '';
+			$byId[$userId] = [
 				'id' => $userId,
 				'displayName' => $displayName !== '' ? $displayName : $userId,
 			];
 		}
+		$adminGroup = $this->groupManager->get('admin');
+		if ($adminGroup !== null) {
+			foreach ($adminGroup->getUsers() as $adminUser) {
+				$userId = trim((string)$adminUser->getUID());
+				if ($userId === '' || isset($byId[$userId])) {
+					continue;
+				}
+				$displayName = trim((string)$adminUser->getDisplayName());
+				$byId[$userId] = [
+					'id' => $userId,
+					'displayName' => $displayName !== '' ? $displayName : $userId,
+				];
+			}
+		}
 
+		$out = array_values($byId);
 		usort($out, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
 		return $out;
 	}

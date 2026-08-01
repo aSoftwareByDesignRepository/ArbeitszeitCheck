@@ -36,7 +36,7 @@ $clearId = $scopePickerId . '-clear';
 			spellcheck="false"
 			placeholder="<?php p($scopePickerAllowAll
 				? $l->t('All in my scope — type to search…')
-				: $l->t('Search by name or user ID…')); ?>"
+				: $l->t('Search by name or login…')); ?>"
 			role="combobox"
 			aria-autocomplete="list"
 			aria-expanded="false"

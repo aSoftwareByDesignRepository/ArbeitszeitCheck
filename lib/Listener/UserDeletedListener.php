@@ -37,6 +37,7 @@ use OCA\ArbeitszeitCheck\Db\KioskCredMapper;
 use OCA\ArbeitszeitCheck\Db\KioskSessionMapper;
 use OCA\ArbeitszeitCheck\Service\Kiosk\KioskSettingsService;
 use OCA\ArbeitszeitCheck\Service\NotificationService;
+use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\IL10N;
 use Psr\Log\LoggerInterface;
 
@@ -67,6 +68,7 @@ class UserDeletedListener implements IEventListener
 		private readonly UserVacationPolicyAssignmentMapper $userVacationPolicyAssignmentMapper,
 		private readonly EntitlementComputationSnapshotMapper $entitlementComputationSnapshotMapper,
 		private readonly NotificationService $notificationService,
+		private readonly PermissionService $permissionService,
 		private readonly IL10N $l10n,
 		private readonly LoggerInterface $logger,
 	) {
@@ -81,6 +83,7 @@ class UserDeletedListener implements IEventListener
 		$userId = $event->getUser()->getUID();
 
 		try {
+			$this->permissionService->purgeUser($userId);
 			$this->deleteTimeEntries($userId);
 			$this->deleteAbsences($userId);
 			$this->clearSubstituteFromAbsences($userId);

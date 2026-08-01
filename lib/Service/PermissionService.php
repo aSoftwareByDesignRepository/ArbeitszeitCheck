@@ -33,14 +33,31 @@ class PermissionService
 	}
 
 	/**
-	 * Returns configured allowlist group IDs.
+	 * Returns configured allowlist group IDs (portfolio door).
 	 *
-	 * Empty list means unrestricted access for backwards compatibility.
+	 * Prefers app-config {@see Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS}; falls
+	 * back to Nextcloud app restriction for installs that have not saved yet.
 	 *
 	 * @return list<string>
 	 */
 	public function getAllowedAccessGroups(): array
 	{
+		$raw = trim($this->config->getAppValue(Application::APP_ID, Constants::CONFIG_ACCESS_ALLOWED_GROUP_IDS, ''));
+		if ($raw !== '') {
+			$decoded = json_decode($raw, true);
+			if (is_array($decoded)) {
+				$groups = [];
+				foreach ($decoded as $groupId) {
+					$candidate = trim((string)$groupId);
+					if ($candidate === '' || isset($groups[$candidate])) {
+						continue;
+					}
+					$groups[$candidate] = true;
+				}
+				return array_keys($groups);
+			}
+		}
+
 		$groups = [];
 		foreach ($this->appManager->getAppRestriction(Application::APP_ID) as $groupId) {
 			$candidate = trim((string)$groupId);
@@ -54,38 +71,98 @@ class PermissionService
 	}
 
 	/**
-	 * Whether the user is allowed to use the app according to group allowlist.
+	 * @return list<string>
+	 */
+	public function getAllowedAccessUserIds(): array
+	{
+		$raw = trim($this->config->getAppValue(Application::APP_ID, Constants::CONFIG_ACCESS_ALLOWED_USER_IDS, '[]'));
+		if ($raw === '') {
+			return [];
+		}
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+		$unique = [];
+		foreach ($decoded as $candidate) {
+			$userId = trim((string)$candidate);
+			if ($userId === '' || isset($unique[$userId])) {
+				continue;
+			}
+			$unique[$userId] = true;
+		}
+		return array_keys($unique);
+	}
+
+	/**
+	 * Directory door: Open vs Restricted (portfolio ACCESS-AND-DIRECTORY-PICKERS §2).
+	 * Roles (employee / manager) are enforced separately after the door.
+	 */
+	public function isAccessRestrictionEnabled(): bool
+	{
+		$raw = trim($this->config->getAppValue(Application::APP_ID, Constants::CONFIG_ACCESS_RESTRICTION_ENABLED, ''));
+		if ($raw === '0') {
+			return false;
+		}
+		if ($raw === '1') {
+			return true;
+		}
+		// Legacy: NC / stored group allowlist non-empty ⇒ Restricted.
+		return $this->getAllowedAccessGroups() !== [] || $this->getAllowedAccessUserIds() !== [];
+	}
+
+	/**
+	 * Whether the user may open ArbeitszeitCheck (directory door only).
 	 */
 	public function isUserAllowedByAccessGroups(string $userId): bool
 	{
-		if ($this->groupManager->isAdmin($userId)) {
+		if ($userId === '') {
+			return false;
+		}
+		// System admin OR dedicated app admin always pass the door.
+		if ($this->isAdmin($userId)) {
 			return true;
 		}
-		$user = $this->userManager->get($userId);
-		return $this->appManager->isEnabledForUser(Application::APP_ID, $user);
+		if (!$this->isAccessRestrictionEnabled()) {
+			return true;
+		}
+		if (in_array($userId, $this->getAllowedAccessUserIds(), true)) {
+			return true;
+		}
+		foreach ($this->getAllowedAccessGroups() as $groupId) {
+			if ($this->groupManager->isInGroup($userId, $groupId)) {
+				return true;
+			}
+		}
+		// Restricted + empty allowlists ⇒ fail closed.
+		return false;
 	}
 
 	/**
 	 * Whether the user is a Nextcloud administrator (admin group).
 	 */
+	/**
+	 * Dedicated App Admin (portfolio ACCESS-AND-DIRECTORY-PICKERS §2.1 / BudgetCheck):
+	 * Nextcloud system admin OR listed in app_admin_user_ids.
+	 */
 	public function isAdmin(string $userId): bool
 	{
-		if (!$this->groupManager->isAdmin($userId)) {
+		if ($userId === '') {
 			return false;
 		}
 
-		$allowedAdminIds = $this->getConfiguredAppAdminUserIds();
-		if ($allowedAdminIds === []) {
+		if ($this->groupManager->isAdmin($userId)) {
 			return true;
 		}
 
-		return in_array($userId, $allowedAdminIds, true);
+		return in_array($userId, $this->getConfiguredAppAdminUserIds(), true);
 	}
 
 	/**
-	 * Returns configured app admin user IDs.
+	 * Returns configured dedicated app admin user IDs.
 	 *
-	 * Empty list means all Nextcloud admins are app-admins (backward compatibility).
+	 * Empty list means only Nextcloud admins have app-admin powers (they always pass
+	 * via {@see isAdmin}). Non-empty list adds delegated colleagues on top.
 	 *
 	 * @return list<string>
 	 */
@@ -111,6 +188,35 @@ class PermissionService
 		}
 
 		return array_keys($unique);
+	}
+
+	/**
+	 * Portfolio §2.1 / user lifecycle: strip deleted UIDs from app-admin and allow lists.
+	 */
+	public function purgeUser(string $userId): void
+	{
+		if ($userId === '') {
+			return;
+		}
+		foreach ([
+			Constants::CONFIG_APP_ADMIN_USER_IDS,
+			Constants::CONFIG_ACCESS_ALLOWED_USER_IDS,
+		] as $key) {
+			$ids = $key === Constants::CONFIG_APP_ADMIN_USER_IDS
+				? $this->getConfiguredAppAdminUserIds()
+				: $this->getAllowedAccessUserIds();
+			$filtered = array_values(array_filter(
+				$ids,
+				static fn (string $id): bool => $id !== $userId,
+			));
+			if ($filtered !== $ids) {
+				$this->config->setAppValue(
+					Application::APP_ID,
+					$key,
+					json_encode($filtered, JSON_THROW_ON_ERROR),
+				);
+			}
+		}
 	}
 
 	/**

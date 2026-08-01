@@ -103,7 +103,7 @@
 			`<div class="user-picker user-picker--in-modal" id="${prefix}-wrap">`,
 			'<div class="user-picker__control">',
 			`<input type="search" id="${prefix}-search" class="form-input user-picker__search" autocomplete="off" autocapitalize="none" spellcheck="false"`,
-			` placeholder="${t('Search by name or user ID…', 'Search by name or user ID…')}" role="combobox" aria-autocomplete="list" aria-expanded="false"`,
+			` placeholder="${t('Search by name or login…', 'Search by name or login…')}" role="combobox" aria-autocomplete="list" aria-expanded="false"`,
 			` aria-controls="${prefix}-listbox" aria-required="true">`,
 			'</div>',
 			`<div id="${prefix}-listbox" class="user-picker__list" role="listbox" hidden aria-label="${t('Matching employees', 'Matching employees')}"></div>`,

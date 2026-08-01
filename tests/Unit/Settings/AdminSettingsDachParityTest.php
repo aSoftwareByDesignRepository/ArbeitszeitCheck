@@ -53,7 +53,7 @@ class AdminSettingsDachParityTest extends TestCase
 		$urlGenerator = $this->createMock(IURLGenerator::class);
 		$urlGenerator->method('linkToRoute')->willReturn('/apps/arbeitszeitcheck/admin/settings');
 
-		return new AdminSettings($appConfig, $l10n, $groupManager, $appManager, $urlGenerator);
+		return new AdminSettings($appConfig, $l10n, $groupManager, $appManager, $urlGenerator, $this->createMock(\OCP\IUserManager::class));
 	}
 
 	public function testSwissFiftyHourCapSurvivesNcAdminSettingsPayload(): void

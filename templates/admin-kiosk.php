@@ -300,7 +300,7 @@ $meterPct = $terminalLimit > 0 ? min(100, (int)round(($terminalUsed / $terminalL
 					<span class="azc-kiosk-flow__step" aria-hidden="true">1</span>
 					<label for="azc-kiosk-user-search"><?php p($l->t('Find employee')); ?></label>
 				</p>
-				<p class="azc-kiosk-flow__hint"><?php p($l->t('Type at least 2 letters of the name or user ID, then pick the person from the list.')); ?></p>
+				<p class="azc-kiosk-flow__hint"><?php p($l->t('Type at least 2 letters of the name or login, then pick the person from the list.')); ?></p>
 				<div class="azc-kiosk-search" id="azc-kiosk-search">
 					<input type="search" id="azc-kiosk-user-search" class="azc-input azc-kiosk-search__input" autocomplete="off"
 						role="combobox"

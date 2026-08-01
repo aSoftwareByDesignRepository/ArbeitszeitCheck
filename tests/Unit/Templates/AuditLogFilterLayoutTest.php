@@ -20,6 +20,8 @@ class AuditLogFilterLayoutTest extends TestCase
 			'id="start-date"',
 			'id="end-date"',
 			'id="user-filter"',
+			'id="audit-user-search"',
+			'id="audit-user-picker"',
 			'id="action-category-filter"',
 			'id="entity-type-filter"',
 			'id="apply-filters"',
@@ -34,6 +36,9 @@ class AuditLogFilterLayoutTest extends TestCase
 		$this->assertStringContainsString('audit-log-page__filter-grid', $template);
 		$this->assertStringContainsString('audit-log-filter__field--from', $template);
 		$this->assertStringContainsString('audit-log-filter__actions', $template);
+		$this->assertStringContainsString('Never type a raw user id', $template);
+		$this->assertStringNotContainsString('Nextcloud user ID…', $template);
+		$this->assertStringNotContainsString('filter by Nextcloud user ID', $template);
 
 		/* Must not reuse global .azc-filter-field (page-patterns subgrid breaks named areas). */
 		$this->assertStringNotContainsString('azc-filter-field', $template);

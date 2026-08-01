@@ -609,7 +609,9 @@ class AdminControllerTest extends TestCase
 	{
 		$this->request->method('getParams')
 			->willReturn([
+				'accessRestrictionEnabled' => true,
 				'accessAllowedGroups' => ['group_a', 'group_a', 'missing_group', 'group_b'],
+				'accessAllowedUserIds' => [],
 			]);
 
 		$this->groupManager->method('get')->willReturnCallback(function (string $gid) {
@@ -622,11 +624,42 @@ class AdminControllerTest extends TestCase
 		});
 		$this->appManager->expects($this->once())->method('enableAppForGroups')
 			->with('arbeitszeitcheck', $this->callback(static fn (array $groups): bool => count($groups) === 2));
-		$this->appManager->method('getAppRestriction')->with('arbeitszeitcheck')->willReturn(['group_a', 'group_b']);
+		$this->appConfig->expects($this->atLeastOnce())->method('setAppValueString');
 
 		$response = $this->controller->updateAdminSettings();
 		$data = $response->getData();
 		$this->assertTrue($data['success']);
+		$this->assertTrue($data['settings']['accessRestrictionEnabled']);
+		$this->assertSame(['group_a', 'group_b'], $data['settings']['accessAllowedGroups']);
+	}
+
+	public function testUpdateAdminSettingsOpenModeClearsNcRestriction(): void
+	{
+		$this->request->method('getParams')
+			->willReturn([
+				'accessRestrictionEnabled' => false,
+				'accessAllowedGroups' => ['group_a'],
+				'accessAllowedUserIds' => ['alice'],
+			]);
+
+		$group = $this->createMock(\OCP\IGroup::class);
+		$group->method('getGID')->willReturn('group_a');
+		$this->groupManager->method('get')->willReturnCallback(static function (string $gid) use ($group) {
+			return $gid === 'group_a' ? $group : null;
+		});
+		$alice = $this->createMock(IUser::class);
+		$alice->method('isEnabled')->willReturn(true);
+		$this->userManager->method('get')->with('alice')->willReturn($alice);
+
+		$this->appManager->expects($this->once())->method('enableApp')->with('arbeitszeitcheck');
+		$this->appManager->expects($this->never())->method('enableAppForGroups');
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertFalse($data['settings']['accessRestrictionEnabled']);
+		$this->assertSame(['group_a'], $data['settings']['accessAllowedGroups']);
+		$this->assertSame(['alice'], $data['settings']['accessAllowedUserIds']);
 	}
 
 	/**
@@ -700,18 +733,19 @@ class AdminControllerTest extends TestCase
 		]);
 		$this->request->method('getParams')
 			->willReturn([
-				'appAdminUserIds' => ['hr_admin', 'hr_admin', 'missing', 'non_admin', 'security_admin'],
+				'appAdminUserIds' => ['hr_admin', 'hr_admin', 'missing', 'colleague', 'security_admin'],
 			]);
 
 		$this->groupManager->method('isAdmin')->willReturnCallback(static function (string $uid): bool {
 			return in_array($uid, ['hr_admin', 'security_admin'], true);
 		});
 		$this->userManager->method('get')->willReturnCallback(function (string $uid) {
-			if (!in_array($uid, ['hr_admin', 'security_admin'], true)) {
+			if (!in_array($uid, ['hr_admin', 'security_admin', 'colleague'], true)) {
 				return null;
 			}
 			$user = $this->createMock(IUser::class);
 			$user->method('getUID')->willReturn($uid);
+			$user->method('isEnabled')->willReturn(true);
 			return $user;
 		});
 
@@ -719,8 +753,8 @@ class AdminControllerTest extends TestCase
 		$data = $response->getData();
 
 		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
-		$this->assertSame(['hr_admin', 'security_admin'], $data['settings']['appAdminUserIds']);
-		$this->assertSame('["hr_admin","security_admin"]', $store[Constants::CONFIG_APP_ADMIN_USER_IDS]);
+		$this->assertSame(['hr_admin', 'colleague', 'security_admin'], $data['settings']['appAdminUserIds']);
+		$this->assertSame('["hr_admin","colleague","security_admin"]', $store[Constants::CONFIG_APP_ADMIN_USER_IDS]);
 	}
 
 	/**

@@ -111,21 +111,40 @@ $rangeEnd = min($total, $offset + $shownCount);
 							</div>
 
 							<div class="audit-log-filter__field audit-log-filter__field--user">
-								<label for="user-filter" class="audit-log-filter__label"><?php p($l->t('User account')); ?></label>
+								<label for="audit-user-search" class="audit-log-filter__label"><?php p($l->t('User account')); ?></label>
 								<div class="audit-log-filter__control">
-									<input
-										type="search"
-										id="user-filter"
-										name="user_id"
-										class="form-input"
-										placeholder="<?php p($l->t('Nextcloud user ID…')); ?>"
-										autocomplete="off"
-										autocapitalize="none"
-										spellcheck="false"
-										inputmode="text"
-										maxlength="200"
-										aria-describedby="audit-log-filter-footnote"
-									/>
+									<input type="hidden" id="user-filter" name="user_id" value="">
+									<div class="user-picker audit-log-filter__picker" id="audit-user-picker">
+										<div class="user-picker__control">
+											<input
+												type="search"
+												id="audit-user-search"
+												class="form-input user-picker__search"
+												placeholder="<?php p($l->t('Search by name or login…')); ?>"
+												autocomplete="off"
+												autocapitalize="none"
+												spellcheck="false"
+												role="combobox"
+												aria-autocomplete="list"
+												aria-expanded="false"
+												aria-controls="audit-user-listbox"
+												aria-describedby="audit-log-filter-footnote audit-user-status"
+											/>
+											<button type="button"
+												class="user-picker__clear"
+												id="audit-user-clear"
+												hidden
+												aria-label="<?php p($l->t('Clear user filter')); ?>">
+												<span aria-hidden="true">&times;</span>
+											</button>
+										</div>
+										<div id="audit-user-listbox"
+											class="user-picker__list"
+											role="listbox"
+											hidden
+											aria-label="<?php p($l->t('Matching accounts')); ?>"></div>
+										<p id="audit-user-status" class="azc-sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+									</div>
 								</div>
 							</div>
 
@@ -157,7 +176,7 @@ $rangeEnd = min($total, $offset + $shownCount);
 						</div>
 					</form>
 					<p id="audit-log-filter-footnote" class="audit-log-page__toolbar-footnote" role="note">
-						<?php p($l->t('Optional: filter by Nextcloud user ID. Maximum date range: %d days. Times use your personal timezone.', [$maxDateRangeDays])); ?>
+						<?php p($l->t('Optional: search and pick a user account. Never type a raw user id. Maximum date range: %d days. Times use your personal timezone.', [$maxDateRangeDays])); ?>
 					</p>
 				</div>
 			</div>
@@ -268,6 +287,7 @@ window.ArbeitszeitCheck.auditLogViewerConfig = <?php echo json_encode([
 	'defaultStartDate' => $startDate,
 	'defaultEndDate' => $endDate,
 	'exportUrl' => \OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.exportAuditLogs'),
+	'adminUserSearchUrl' => \OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.getUsers'),
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
 </script>
 

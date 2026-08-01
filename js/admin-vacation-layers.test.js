@@ -338,6 +338,67 @@ describe('simulator combobox keyboard interactions', () => {
     expect(suggest.querySelector('.form-suggest__empty')).not.toBeNull();
     vi.useRealTimers();
   });
+
+  it('rejects typed free-text UIDs and only posts a picked suggestion', async () => {
+    const simulateCalls = [];
+    window.ArbeitszeitCheckUtils.ajax = vi.fn((url, opts) => {
+      const u = String(url);
+      if (u.startsWith('/overview')) {
+        Promise.resolve().then(() => opts.onSuccess && opts.onSuccess({
+          success: true,
+          org: { active: null, history: [] },
+          model: { defaults: [], availableModels: [] },
+          team: { policies: [], availableTeams: [] },
+          ruleSets: [],
+        }));
+        return Promise.resolve(null);
+      }
+      if (u.startsWith('/users')) {
+        Promise.resolve().then(() => opts.onSuccess && opts.onSuccess({
+          success: true,
+          users: [
+            { userId: 'alice', displayName: 'Alice Anderson' },
+            { userId: 'bob', displayName: 'Bob Builder' },
+          ],
+        }));
+        return Promise.resolve(null);
+      }
+      if (u.includes('simulate') || (opts && opts.method === 'POST')) {
+        simulateCalls.push({ url: u, data: opts && opts.data });
+        Promise.resolve().then(() => opts.onSuccess && opts.onSuccess({ success: true, layers: [] }));
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(null);
+    });
+
+    const form = document.getElementById('sim-form');
+    const input = document.getElementById('sim-user');
+    const result = document.getElementById('sim-result');
+
+    // Typing a UID without picking must not POST.
+    input.value = 'alice';
+    input.dispatchEvent(new Event('input'));
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    expect(simulateCalls.length).toBe(0);
+    expect(result.textContent).toMatch(/pick an employee/i);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+
+    // Pick from suggestions, then submit must POST that uid only.
+    vi.useFakeTimers();
+    input.value = 'al';
+    input.dispatchEvent(new Event('input'));
+    await vi.advanceTimersByTimeAsync(220);
+    await Promise.resolve();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    vi.useRealTimers();
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(simulateCalls.length).toBe(1);
+    expect(simulateCalls[0].data.userId).toBe('alice');
+  });
 });
 
 describe('Layer dialog lifecycle', () => {

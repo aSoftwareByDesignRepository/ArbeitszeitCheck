@@ -172,6 +172,21 @@ final class Constants
 	public const CONFIG_APP_ADMIN_USER_IDS = 'app_admin_user_ids';
 
 	/**
+	 * Portfolio access door (ACCESS-AND-DIRECTORY-PICKERS): '0' = Open, '1' = Restricted.
+	 * Empty / unset ⇒ derive from whether group allowlists are non-empty (legacy).
+	 */
+	public const CONFIG_ACCESS_RESTRICTION_ENABLED = 'access_restriction_enabled';
+
+	/** JSON array of UIDs allow-listed when Restricted is on. */
+	public const CONFIG_ACCESS_ALLOWED_USER_IDS = 'access_allowed_user_ids';
+
+	/**
+	 * JSON array of GIDs allow-listed when Restricted is on.
+	 * Synced to Nextcloud app restriction when Restricted; cleared from NC when Open.
+	 */
+	public const CONFIG_ACCESS_ALLOWED_GROUP_IDS = 'access_allowed_group_ids';
+
+	/**
 	 * Days after the last day of a calendar month until automatic finalization runs (daily job).
 	 * "0" = no automatic finalization (employees must finalize manually, or admin reopens).
 	 */

@@ -17,6 +17,7 @@ $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 $settings = $_['settings'] ?? [];
 $availableGroups = is_array($_['availableGroups'] ?? null) ? $_['availableGroups'] : [];
 $availableAppAdmins = is_array($_['availableAppAdmins'] ?? null) ? $_['availableAppAdmins'] : [];
+$availableAccessUsers = is_array($_['availableAccessUsers'] ?? null) ? $_['availableAccessUsers'] : [];
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $apiSettingsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.updateAdminSettings');
 $monthClosureReopenUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.month_closure.reopen');
@@ -96,7 +97,7 @@ $cancelUrl = $isNcAdminShell
                     <header class="azc-card__header">
                         <div class="azc-card__header-text">
                             <h2 id="section-access-heading" class="azc-card__title"><?php p($l->t('Access control')); ?></h2>
-                            <p class="azc-card__lead"><?php p($l->t('Choose who may administer ArbeitszeitCheck and which Nextcloud groups may use the app.')); ?></p>
+			<p class="azc-card__lead"><?php p($l->t('Choose who may administer ArbeitszeitCheck and who may open the app (Open or Restricted).')); ?></p>
                         </div>
                     </header>
                     <div class="azc-card__body">
@@ -142,13 +143,103 @@ $cancelUrl = $isNcAdminShell
                             <?php p($l->t('No matching administrators found for your search.')); ?>
                         </p>
                         <p id="appAdminUsers-help" class="form-help">
-                            <?php p($l->t('Select who can administer ArbeitszeitCheck. If empty, every Nextcloud admin can administer the app (backward compatible default).')); ?>
+                            <?php p($l->t('Nextcloud admins always keep ArbeitszeitCheck admin powers. Add any colleague below to delegate app administration without making them a Nextcloud admin. Search and pick — never type a raw user id.')); ?>
                         </p>
                         <p id="appAdminUsers-note" class="form-help form-help--note">
-                            <?php p($l->t('Only users in the Nextcloud admin group are listed. Changes take effect immediately after saving.')); ?>
+                            <?php p($l->t('Dedicated app administrators appear in the list together with Nextcloud admins. Use search to find colleagues, then tick them. Changes take effect immediately after saving.')); ?>
                         </p>
+                        <div class="user-picker" id="appAdminUsersAddPicker" data-azc-app-admin-add>
+                            <div class="user-picker__control">
+                                <input type="search" id="appAdminUsersAddSearch" class="form-input user-picker__search"
+                                    role="combobox" aria-autocomplete="list" aria-expanded="false"
+                                    aria-controls="appAdminUsersAddList"
+                                    placeholder="<?php p($l->t('Search colleagues to add as app admins…')); ?>"
+                                    autocomplete="off" spellcheck="false">
+                            </div>
+                            <ul id="appAdminUsersAddList" class="user-picker__list" role="listbox" hidden></ul>
+                        </div>
                     </div>
                     <div class="form-group">
+                        <?php
+                        $accessRestrictionEnabled = !empty($settings['accessRestrictionEnabled']);
+                        $selectedAccessUsers = is_array($settings['accessAllowedUserIds'] ?? null) ? $settings['accessAllowedUserIds'] : [];
+                        ?>
+                        <fieldset class="azc-access-mode" aria-describedby="accessMode-help">
+                            <legend class="form-label"><?php p($l->t('Access mode')); ?></legend>
+                            <label class="access-mode-option">
+                                <input type="radio"
+                                       name="accessRestrictionEnabled"
+                                       value="0"
+                                       <?php echo !$accessRestrictionEnabled ? 'checked' : ''; ?>>
+                                <span><?php p($l->t('Open — every logged-in Nextcloud user can open ArbeitszeitCheck')); ?></span>
+                            </label>
+                            <label class="access-mode-option">
+                                <input type="radio"
+                                       name="accessRestrictionEnabled"
+                                       value="1"
+                                       <?php echo $accessRestrictionEnabled ? 'checked' : ''; ?>>
+                                <span><?php p($l->t('Restricted — only allow-listed users and groups can open the app')); ?></span>
+                            </label>
+                        </fieldset>
+                        <p id="accessMode-help" class="form-help">
+                            <?php p($l->t('Open shows ArbeitszeitCheck in the menu for everyone. Restricted hides it unless the person is allow-listed. System and delegated app administrators always pass the door. Employee and manager roles still apply after the door.')); ?>
+                        </p>
+                    </div>
+                    <div class="form-group" data-azc-access-allowlists <?php echo $accessRestrictionEnabled ? '' : 'hidden'; ?>>
+                        <label for="accessAllowedUsersSearch" class="form-label"><?php p($l->t('Allowed users')); ?></label>
+                        <input type="text"
+                               id="accessAllowedUsersSearch"
+                               class="form-input"
+                               autocomplete="off"
+                               spellcheck="false"
+                               placeholder="<?php p($l->t('Search people...')); ?>"
+                               aria-describedby="accessAllowedUsers-help accessAllowedUsersCount">
+                        <p id="accessAllowedUsersCount" class="form-help form-help--note" aria-live="polite">
+                            <?php
+                            $selectedUserCount = count($selectedAccessUsers);
+                            p($selectedUserCount > 0
+                                ? $l->t('%d user(s) selected', [$selectedUserCount])
+                                : $l->t('No individual users selected.'));
+                            ?>
+                        </p>
+                        <div id="accessAllowedUsersList" class="access-groups-list" role="group" aria-label="<?php p($l->t('Allowed user selection')); ?>">
+                            <?php foreach ($availableAccessUsers as $userOption): ?>
+                                <?php
+                                $uid = (string)($userOption['id'] ?? '');
+                                if ($uid === '') {
+                                    continue;
+                                }
+                                $userDisplayName = (string)($userOption['displayName'] ?? $uid);
+                                $isSelectedUser = in_array($uid, $selectedAccessUsers, true);
+                                ?>
+                                <label class="access-groups-item" data-access-user-search="<?php p(strtolower($userDisplayName . ' ' . $uid)); ?>">
+                                    <input type="checkbox"
+                                           name="accessAllowedUserIds[]"
+                                           value="<?php p($uid); ?>"
+                                           <?php echo $isSelectedUser ? 'checked' : ''; ?>>
+                                    <span class="access-groups-item__label"><?php p($userDisplayName); ?></span>
+                                    <span class="access-groups-item__meta"><?php p($uid); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <p id="accessAllowedUsersEmpty" class="form-help form-help--note" hidden>
+                            <?php p($l->t('No matching people found for your search.')); ?>
+                        </p>
+                        <p id="accessAllowedUsers-help" class="form-help">
+                            <?php p($l->t('Search and pick people. Never type a raw user id. Used together with Allowed groups when Restricted is on. Empty user and group lists fail closed.')); ?>
+                        </p>
+                        <div class="user-picker" id="accessAllowedUsersAddPicker" data-azc-access-user-add>
+                            <div class="user-picker__control">
+                                <input type="search" id="accessAllowedUsersAddSearch" class="form-input user-picker__search"
+                                    role="combobox" aria-autocomplete="list" aria-expanded="false"
+                                    aria-controls="accessAllowedUsersAddList"
+                                    placeholder="<?php p($l->t('Search colleagues to allow…')); ?>"
+                                    autocomplete="off" spellcheck="false">
+                            </div>
+                            <ul id="accessAllowedUsersAddList" class="user-picker__list" role="listbox" hidden></ul>
+                        </div>
+                    </div>
+                    <div class="form-group" data-azc-access-allowlists <?php echo $accessRestrictionEnabled ? '' : 'hidden'; ?>>
                         <?php $selectedAccessGroups = is_array($settings['accessAllowedGroups'] ?? null) ? $settings['accessAllowedGroups'] : []; ?>
                         <label for="accessAllowedGroupsSearch" class="form-label"><?php p($l->t('Allowed Nextcloud groups')); ?></label>
                         <input type="text"
@@ -163,7 +254,7 @@ $cancelUrl = $isNcAdminShell
                             $selectedCount = count($selectedAccessGroups);
                             p($selectedCount > 0
                                 ? $l->t('%d group(s) selected', [$selectedCount])
-                                : $l->t('No groups selected (all users are allowed).'));
+                                : $l->t('No groups selected.'));
                             ?>
                         </p>
                         <div id="accessAllowedGroupsList" class="access-groups-list" role="group" aria-label="<?php p($l->t('Group selection')); ?>">
@@ -190,7 +281,7 @@ $cancelUrl = $isNcAdminShell
                             <?php p($l->t('No matching groups found for your search.')); ?>
                         </p>
                         <p id="accessAllowedGroups-help" class="form-help">
-                            <?php p($l->t('Leave empty to allow all users (default behavior). If one or more groups are selected, only members of these groups can use this app. Administrators are always allowed.')); ?>
+                            <?php p($l->t('Search and pick groups. When Restricted is on, only members of these groups or allow-listed users can open the app. Administrators always pass.')); ?>
                         </p>
                         <p id="accessAllowedGroups-note" class="form-help form-help--note">
                             <?php p($l->t('Select one or more groups. The rule applies immediately after saving settings.')); ?>
@@ -578,7 +669,7 @@ $cancelUrl = $isNcAdminShell
                                     autocomplete="off"
                                     autocapitalize="none"
                                     spellcheck="false"
-                                    placeholder="<?php p($l->t('Search by name or user ID…')); ?>"
+                                    placeholder="<?php p($l->t('Search by name or login…')); ?>"
                                     role="combobox"
                                     aria-autocomplete="list"
                                     aria-expanded="false"
@@ -940,7 +1031,9 @@ window.ArbeitszeitCheck.l10n.resultsCount = <?php echo json_encode($l->t('%n res
 window.ArbeitszeitCheck.l10n.monthReopenConfirm = <?php echo json_encode($l->t('Reopen this finalized month? The employee will be able to edit times again until the month is finalized once more.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.monthReopenSuccess = <?php echo json_encode($l->t('Month reopened.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.accessGroupsSelected = <?php echo json_encode($l->t('%s group(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-window.ArbeitszeitCheck.l10n.accessGroupsAllUsers = <?php echo json_encode($l->t('No groups selected (all users are allowed).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.accessGroupsNone = <?php echo json_encode($l->t('No groups selected.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.accessUsersSelected = <?php echo json_encode($l->t('%s user(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.accessUsersNone = <?php echo json_encode($l->t('No individual users selected.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.appAdminsSelected = <?php echo json_encode($l->t('%s app admin(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.appAdminsAllAdmins = <?php echo json_encode($l->t('No app admins selected (all Nextcloud admins are allowed).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.timeCaptureAtLeastOneOrg = <?php echo json_encode($l->t('Enable clock in/out or manual time entries — at least one method is required for the organisation.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
