@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.4 - 2026-08-02
+
+### Added
+
+- **Portfolio access door:** Administration can switch between Open (everyone with app access) and Restricted mode with explicit user and group allowlists; deleted users are removed from the allowlist automatically.
+
+### Changed
+
+- **l10n:** Expanded EN/DE catalogs (DACH holiday regions, clearer admin and report copy) and refreshed secondary locales.
+
 ## 1.6.3 - 2026-07-31
 
 ### Added
