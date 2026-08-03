@@ -1,126 +1,113 @@
-## ArbeitszeitCheck (TimeGuard) – DACH- & DSGVO-konforme Zeiterfassung für Nextcloud
+# ArbeitszeitCheck (TimeGuard)
 
-**ArbeitszeitCheck** ist eine Zeiterfassungs‑App für Nextcloud für **Deutschland, Österreich und die Schweiz (DACH)** — mit Länderprofilen für **ArbZG**, **AZG/ARG** und **ArG** sowie **DSGVO/GDPR**.  
-Die App läuft vollständig innerhalb Ihrer selbst gehosteten Nextcloud‑Instanz – keine externen Cloud‑Dienste, keine Telemetrie.
+[![Nextcloud](https://img.shields.io/badge/Nextcloud-32–34-0082c9?logo=nextcloud&logoColor=white)](https://nextcloud.com/)
+[![PHP](https://img.shields.io/badge/PHP-8.1–8.5-777BB4?logo=php&logoColor=white)](https://www.php.net/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 
-### Kernfunktionen
+**[English](#english)** · **[Deutsch](#deutsch)**
 
-- **Rechtskonforme Zeiterfassung**: Kommen/Gehen, Pausen, manuelle Einträge mit Begründung
-  - Robuster Paused-Entry-Flow: pausierte Tages-Einträge werden bei erneutem Clock-In fortgesetzt (kein Duplikat), sind im Edit-Fenster wieder zugreifbar und werden bei Korrektur mit Endzeit sauber finalisiert
-- **Arbeitsrechts-Compliance (DACH)**:
-  - Länderprofil wählbar: Deutschland (ArbZG), Österreich (AZG/ARG) oder Schweiz (ArG)
-  - Feiertagsregionen: deutsche Bundesländer, österreichische Bundesländer, Schweizer Kantone
-  - Max. tägliche Arbeitszeit und Ruhezeiten laut Profil (Admin-Grenzwerte überschreiben Defaults)
-  - Pausenstufen und – wo vorgesehen – Wochen-/Durchschnittsprüfungen je Land (z. B. ArbZG 30/45 Min., AZG, ArG 15/30/60)
-  - Erkennung von Nacht‑, Sonn‑ und Feiertagsarbeit inkl. Dokumentation
-- **Abwesenheitsmanagement**: Urlaub, Krankheit, Sonderurlaub, unbezahlter Urlaub mit Genehmigungsworkflow; **Resturlaub / Vorjahres‑Tage** mit konfigurierbarem Ablaufdatum (z. B. 31.03.), FIFO‑Verbrauch, Admin‑Pflege und optional CSV‑Import (`occ arbeitszeitcheck:import-vacation-balance`)
-- **Urlaubsanspruch-Engine (neu erweitert)**: Pro Mitarbeitenden konfigurierbarer Modus (manuell, modellbasiert oder tarif-/regelbasiert), zeitlich gültige Policy-Zuordnungen (L3), optional **geschichtete Defaults** für Organisation (L0), Arbeitszeitmodell (L1) und Team (L2) mit deterministischer Reihenfolge und Prüf-Trace; aktive Regelwerk-Versionierung; Snapshot-Ablage für Auswertungen. **Rückwärtskompatibel:** ohne Konfiguration der neuen Layer oder bei App-Config `layered_entitlements_enabled = 0` gilt das bisherige L3- plus Legacy-Fallback-Verhalten (siehe `docs/Developer-Documentation.en.md`).
-- **Team‑ und Manager‑Ansicht**: Genehmigungen, Team‑Übersichten, Compliance‑Status
-- **Berichte & Exporte**: Tages/Wochen/Monats‑Reports, Overtime‑Reports, Absenzberichte, DATEV‑Export
-- **Audit‑Logs**: Lückenlose Nachvollziehbarkeit von Änderungen an Zeiten, Abwesenheiten und Einstellungen
-- **Revisionssichere Monatsfinalisierung** (optional, Admin‑Schalter): Kalendermonat mit Snapshot, Hash und PDF‑Nachweis abschließen; finalisierte Monate bleiben gesperrt, bis eine Administratorin/ein Administrator mit Begründung wieder öffnet
-- **Admin-Benachrichtigungen (neu erweitert)**: Eigene Admin-Seite für HR-E-Mail-Matrix (pro Abwesenheitstyp und Ereignis), Empfänger-Validierung/Deduplizierung sowie zentrale Steuerung von Carryover-/Rollover- und Substitutions-Mail-Einstellungen
-- **DSGVO‑Support**: Exporte, Löschkonzepte (unter Beachtung der gesetzlichen Aufbewahrung), DPIA‑/Verarbeitungsverzeichnis‑Vorlagen
+Clock in. Stay within the rules you set — on your Nextcloud. Search tip: **TimeGuard**.
 
-> **Rechtlicher Hinweis (DE):**  
-> ArbeitszeitCheck unterstützt Arbeitgeber und Administratoren bei der technisch sauberen Umsetzung der jeweils geltenden DACH-Arbeitszeitvorgaben (ArbZG, AZG/ARG, ArG) und der DSGVO (z. B. Höchstarbeitszeit, Pausen, Ruhezeiten, Aufzeichnungspflichten).  
-> Die App ersetzt **keine** individuelle Rechtsberatung. Arbeitgeber bleiben rechtlich dafür verantwortlich,
-> - wie Arbeitszeitmodelle, Betriebsvereinbarungen und Tarifverträge gestaltet sind,  
-> - wie Konfigurationen (Grenzwerte, Ausnahmen, Aufbewahrungsfristen) gewählt werden und  
-> - wie die erfassten Daten ausgewertet und für arbeitsrechtliche Entscheidungen verwendet werden.  
-> Prüfen Sie Konfiguration, Prozesse und Texte bei Bedarf mit Ihrer Rechtsabteilung oder einem Fachanwalt für Arbeitsrecht.
+---
 
-> **Legal notice (EN):**  
-> ArbeitszeitCheck helps organizations implement technical controls for applicable DACH working-time rules (ArbZG, AZG/ARG, ArG) and GDPR (e.g. maximum working hours, breaks, rest periods, record‑keeping).  
-> The app is **not** a substitute for legal advice. Employers remain legally responsible for:
-> - the design of working time models, collective agreements and internal policies,  
-> - the chosen configuration (limits, exceptions, retention periods), and  
-> - how recorded data is interpreted and used for HR / legal decisions.  
-> Always review your setup with your legal counsel if in doubt.
+## English
 
-### Installation
+**Clock in. Stay within the rules you set.**
 
-**Aus dem Nextcloud App Store (empfohlen)**
+ArbeitszeitCheck records clock-in, clock-out and breaks on the Nextcloud you already host. Pick Germany (ArbZG), Austria (AZG/ARG) or Switzerland (ArG), match holiday regions, approve absences, run reports (including DATEV) and keep an audit log.
 
-1. Als Nextcloud‑Administrator anmelden  
-2. **„Apps“ → „Organisation“ / „Produktivität“** öffnen  
-3. Nach **„ArbeitszeitCheck“** oder **„TimeGuard“** suchen  
-4. App **herunterladen und aktivieren**  
+**Free web app** (AGPL-3.0-or-later). Companion apps: https://nextcloud.software-by-design.de/
 
-**Manuelle Installation aus Git**
+### Why teams install it
+
+- Clock-in / out, pauses, resume, manual entries with a reason
+- DE / AT / CH profiles with matching holiday regions
+- Technical break and rest checks against your configured profile
+- Absences with approval; entitlement modes; CSV import via `occ`
+- Dashboards and reports (incl. DATEV); audit log; optional month finalization
+- Optional allow-lists (Nextcloud admins keep access)
+
+### Clear limits
+
+This app is **not legal advice**. You stay responsible for working-time models, collective agreements, configuration and how recorded data is used. Technical violation reports are not a third-party certification.
+
+**Calendar note:** ArbeitszeitCheck does **not** sync with the Nextcloud Calendar app (CalDAV). The in-app month view is separate; optional e-mails may attach `.ics` for manual import.
+
+### Requirements
+
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL/MariaDB or PostgreSQL
+
+### Install
+
+**App Store (recommended):** Apps → search **ArbeitszeitCheck** or **TimeGuard** → download and enable.
+
+**From Git:**
 
 ```bash
 git clone https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck.git /path/to/nextcloud/apps/arbeitszeitcheck
 cd /path/to/nextcloud
-# Optional: PHP‑/JS‑Abhängigkeiten (falls nicht über Release‑Tarball installiert)
-# cd apps/arbeitszeitcheck && composer install && npm install
 php occ app:enable arbeitszeitcheck
 ```
 
-Unterstützte Umgebungen:
+### Documentation
 
-- **Nextcloud** 32, 33, 34, 35, 36  
-- **PHP** 8.1–8.4  
-- Datenbanken: MySQL/MariaDB, PostgreSQL, SQLite (für kleinere Installationen)  
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md) / [`CHANGELOG.de.md`](CHANGELOG.de.md)
+- Docs index: [`docs/README.md`](docs/README.md) — user manuals, DACH rule notes, GDPR guide, developer overview
+
+### Security & support
+
+Report security issues privately to the maintainer (`appinfo/info.xml`).  
+**Software by Design GbR** · [nextcloud.software-by-design.de](https://nextcloud.software-by-design.de/) · [info@software-by-design.de](mailto:info@software-by-design.de) · [Support packages](https://nextcloud.software-by-design.de/en/support.html#packages)
+
+### License
+
+[AGPL-3.0-or-later](LICENSE).
+
+---
+
+## Deutsch
+
+**Einstempeln. Innerhalb der Regeln bleiben, die Sie setzen.**
+
+ArbeitszeitCheck erfasst Kommen, Gehen und Pausen in der Nextcloud, die Sie schon betreiben. Länderprofil für Deutschland (ArbZG), Österreich (AZG/ARG) oder die Schweiz (ArG), Feiertagsregionen, Abwesenheiten mit Freigabe, Berichte (inkl. DATEV) und Audit-Log.
+
+**Kostenlose Web-App** (AGPL-3.0-or-later). Companion-Apps: https://nextcloud.software-by-design.de/
+
+### Warum Teams es einsetzen
+
+- Kommen/Gehen, Pausen, Fortsetzen, manuelle Einträge mit Begründung
+- Profile DE / AT / CH mit Feiertagsregionen
+- Technische Pausen- und Ruheprüfungen am konfigurierten Profil
+- Abwesenheiten mit Freigabe; Anspruch-Modi; CSV-Import per `occ`
+- Dashboards und Berichte (inkl. DATEV); Audit-Log; optionale Monatsfinalisierung
+- Optionale Freigabelisten (Nextcloud-Administratoren behalten den Zugriff)
+
+### Klare Grenzen
+
+Diese App ist **keine Rechtsberatung**. Sie bleiben verantwortlich für Arbeitszeitmodelle, Tarif- und Betriebsregeln, Konfiguration und die Auswertung erfasster Daten. Technische Verstoßmeldungen sind keine Fremdzertifizierung.
+
+**Kalender:** Keine Synchronisation mit der Nextcloud-Kalender-App (CalDAV). Die Monatsansicht gehört zur App; optional können E-Mails mit `.ics` zum manuellen Import versendet werden.
+
+### Voraussetzungen
+
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL/MariaDB oder PostgreSQL
+
+### Installation
+
+**App Store (empfohlen):** Apps → **ArbeitszeitCheck** oder **TimeGuard** suchen → herunterladen und aktivieren.
+
+**Aus Git:** siehe englischen Abschnitt.
 
 ### Dokumentation
 
-- **Versionshistorie**: `CHANGELOG.md` (EN) / `CHANGELOG.de.md` (DE) — Release- und Änderungsübersicht (Keep a Changelog).
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md) / [`CHANGELOG.de.md`](CHANGELOG.de.md)
+- Docs: [`docs/README.md`](docs/README.md)
 
-Index und Kurzbeschreibungen: **`docs/README.md`**. Mitgelieferte Dokumente im Ordner `docs/`:
+### Sicherheit & Support
 
-- **Nutzer**
-  - `User-Manual.de.md` / `User-Manual.en.md` — Kurzanleitung (u. a. Kalenderansicht in der App vs. Nextcloud-Kalender-App; keine CalDAV-Synchronisation)
-- **Compliance**
-  - `Compliance-Implementation.de.md` / `Compliance-Implementation.en.md` — technische Umsetzung der DACH-Arbeitszeitregeln (ArbZG / AZG / ArG)
-  - `GDPR-Compliance-Guide.en.md` — Betrieb der App im Einklang mit DSGVO/GDPR
-- **Entwicklung**
-  - `Developer-Documentation.en.md` — Architekturüberblick und Hinweise für Beitragende
+Sicherheitsmeldungen privat an den Maintainer (`appinfo/info.xml`).  
+**Software by Design GbR** · [Website](https://nextcloud.software-by-design.de/) · [info@software-by-design.de](mailto:info@software-by-design.de) · [Support-Pakete](https://nextcloud.software-by-design.de/de/support.html#packages)
 
-Weitere interne Arbeits‑ und Compliance‑Dokumente (z. B. erweiterte Rollenmatrix, Store‑Publishing‑How‑to) können in einem separaten Repository gepflegt werden.
+### Lizenz
 
-**Hinweis Kalender:** ArbeitszeitCheck **synchronisiert nicht** mit der Nextcloud-**Kalender**-App (CalDAV). Die integrierte Monatsansicht gehört zur App; optional können E-Mails mit `.ics`-Anhang zum manuellen Import versendet werden.
-
-### Projekt & Support
-
-ArbeitszeitCheck wird von **Software by Design** entwickelt und gepflegt.  
-Weitere Informationen zu Projekten, Leistungen und Kontaktmöglichkeiten finden Sie auf der Website: http://nextcloud.software-by-design.de/  
-Für Anfragen per E-Mail erreichen Sie uns unter: info@software-by-design.de
-
-> **Maintainer & Support (EN):**  
-> ArbeitszeitCheck is developed and maintained by **Software by Design**.  
-> For more information about projects, services and how to get in touch, visit: http://nextcloud.software-by-design.de/  
-> You can also contact us via e-mail: info@software-by-design.de
-
-### Nextcloud App Store Assets
-
-- **App‑Metadaten**: `appinfo/info.xml` (Name, Beschreibung, Version, Abhängigkeiten)  
-- **Lizenz**: `LICENSE` (AGPL‑3.0 oder kompatibel, siehe Datei)  
-- **Icon**: `app.svg` bzw. `img/app.svg`  
-- **Screenshots**: im Verzeichnis `screenshots/`  
-  - Beschreibung und erwartete Dateien in `screenshots/README.md`  
-
-Diese Dateien werden vom Nextcloud App Store für Listung, Detailseite und Review verwendet.
-
-### Entwicklung & Tests
-
-**Voraussetzungen:** Node.js **20 oder 22** und npm **10+** (siehe `package.json` → `engines`), Composer, PHPUnit über `composer.json`.
-
-- **PHP:** `composer test` (alle Suites), `composer test:unit`, `composer test:integration` (Integration unter `tests/Integration/`), optional `composer test:coverage`
-- **PHP im Docker‑Stack dieses Monorepos:** vom Nextcloud‑Server‑Root `./docker/run-app-phpunit.sh arbeitszeitcheck` oder in der App `composer test:docker` bzw. `npm run test:php:docker`
-- **JavaScript (Vitest):** `npm test`, bei Bedarf `npm run test:watch`
-- **Lint:** `npm run lint`, `npm run stylelint` (sowie `composer lint` für PHP‑Syntaxcheck unter `lib/`)
-- **E2E (Playwright):** `npm run e2e` — erfordert laufende Nextcloud‑Instanz und Umgebungsvariablen (`NC_BASE_URL`, Testnutzer); siehe `docs/Developer-Documentation.en.md`
-- **Alle Tests im Container (Hilfsskript):** `scripts/run-tests-docker.sh` vom App‑ bzw. Repo‑Kontext
-
-Hinweis: `npm run build` ist ein Platzhalter (**kein** Bundler‑Build; Frontend ist Vanilla‑JS mit PHP‑Templates).
-
-### Frontend Runtime & UX Guardrails
-
-- **One URL resolution path:** Frontend requests should use `ArbeitszeitCheckUtils.ajax(...)` (or `ArbeitszeitCheckUtils.resolveUrl(...)` when using `fetch` explicitly) to normalize app URLs reliably on both pretty-URL and `/index.php` installations.
-- **Strict external-call policy:** `ArbeitszeitCheckUtils.ajax(...)` blocks cross-origin URLs by default. External calls require explicit opt-in via `allowExternal: true`.
-- **Lint enforcement:** ESLint rejects raw `/apps/arbeitszeitcheck/...` paths outside approved URL helpers (`buildAppUrl`, `resolveUrl`, `Utils.ajax`, `OC.generateUrl`, `triggerDownload`, …), raw `fetch('/apps/arbeitszeitcheck/...')`, and implicit external `fetch(...)` patterns.
-- **Mobile/iPhone consistency:** Shared layout styles in `css/common/` include safe-area-aware spacing and touch-target improvements (WCAG 2.1 AA focus) for user and manager pages.
-
-Weitere Details zur Architektur und zu Beitrag‑Richtlinien finden sich in `docs/Developer-Documentation.en.md`.
-
+[AGPL-3.0-or-later](LICENSE).

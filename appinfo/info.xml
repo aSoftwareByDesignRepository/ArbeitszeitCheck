@@ -8,8 +8,8 @@
 	<id>arbeitszeitcheck</id>
 	<name>ArbeitszeitCheck</name>
 	<name lang="de">ArbeitszeitCheck</name>
-	<summary>Time tracking with DACH labour-law compliance (ArbZG / AZG / ArG) and GDPR checks in Nextcloud</summary>
-	<summary lang="de">Zeiterfassung mit DACH-Arbeitsrechts-Compliance (ArbZG / AZG / ArG) und DSGVO-Prüfungen in Nextcloud</summary>
+	<summary>Track working time with DACH profiles — ArbZG / AZG / ArG on your Nextcloud</summary>
+	<summary lang="de">Arbeitszeit erfassen mit DACH-Profilen — ArbZG / AZG / ArG in Ihrer Nextcloud</summary>
 	<summary lang="fr">Suivi du temps avec conformité DACH (ArbZG / AZG / ArG) et contrôles RGPD dans Nextcloud</summary>
 	<summary lang="da">Tidsregistrering med DACH-arbejdslovsoverholdelse (ArbZG / AZG / ArG) og GDPR-kontrol i Nextcloud</summary>
 	<summary lang="es">Registro de tiempo con cumplimiento laboral DACH (ArbZG / AZG / ArG) y comprobaciones RGPD en Nextcloud</summary>
@@ -19,47 +19,62 @@
 	<summary lang="sv">Tidsregistrering med DACH-arbetslagstiftning (ArbZG / AZG / ArG) och GDPR-kontroller i Nextcloud</summary>
 	<summary lang="nb">Tidsregistrering med DACH-arbeidsrett (ArbZG / AZG / ArG) og GDPR-kontroller i Nextcloud</summary>
 	<description><![CDATA[
-# ArbeitszeitCheck
+# Clock in. Stay within the rules you set.
 
-Time tracking for Germany, Austria and Switzerland (DACH). Record work times, enforce
-breaks and rest periods under ArbZG, AZG/ARG or ArG, and monitor compliance –
-fully self‑hosted in your Nextcloud instance.
+ArbeitszeitCheck records clock-in, clock-out and breaks on the Nextcloud you already host. Pick a country profile for Germany (ArbZG), Austria (AZG/ARG) or Switzerland (ArG), match holiday regions, approve absences, run reports (including DATEV) and keep an audit log.
 
-## Features
+Also listed as **TimeGuard** in some App Store searches.
 
-- **Country profiles** – Germany (ArbZG), Austria (AZG/ARG) or Switzerland (ArG) with matching holiday regions
-- **Compliance monitoring** – automatic violation detection and reports
-- **Self‑service dashboards** – employee, team and manager views
-- **Absences & leave** – approval workflows and reporting
-- **Exports & audit log** – e.g. for DATEV and internal audits
-- 100% self‑hosted – no data leaves your server
+**Free web app** (AGPL-3.0-or-later). Companion apps: https://nextcloud.software-by-design.de/
+
+## Why teams install it
+
+- **Start and stop work cleanly** — pauses, resume, manual entries with a reason
+- **Match your country** — DE / AT / CH profiles with Länder, Bundesländer or cantons
+- **See break and rest issues early** — technical checks against the profile you configured
+- **Run absences properly** — vacation, illness, special and unpaid leave with approval; entitlement modes and CSV import via `occ`
+- **Report what happened** — employee, team and manager views; overtime and absence reports; DATEV export
+- **Lock a month when you need to** — optional finalization with snapshot, hash and PDF; admin reopen with a reason
+- **Control access** — open to all users or allow-lists; Nextcloud admins keep access
+
+## Clear limits
+
+- This app is **not legal advice**. You stay responsible for working-time models, collective agreements, configuration and how recorded data is used. Ask counsel when needed.
+- Technical violation reports against your profile are not a third-party certification.
+- Declared databases: MySQL and PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
 
 ## Requirements
 
-- Nextcloud 32–33
-- PHP 8.1–8.4
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL or PostgreSQL
 	]]></description>
 	<description lang="de"><![CDATA[
-# ArbeitszeitCheck
+# Einstempeln. Innerhalb der Regeln bleiben, die Sie setzen.
 
-Zeiterfassung für Deutschland, Österreich und die Schweiz (DACH). Erfassen Sie
-Arbeitszeiten, setzen Sie Pausen- und Ruhezeiten nach ArbZG, AZG/ARG oder ArG
-technisch durch und überwachen Sie Verstöße – vollständig in Ihrer selbst
-gehosteten Nextcloud.
+ArbeitszeitCheck erfasst Kommen, Gehen und Pausen in der Nextcloud, die Sie schon betreiben. Länderprofil für Deutschland (ArbZG), Österreich (AZG/ARG) oder die Schweiz (ArG), passende Feiertagsregionen, Abwesenheiten mit Freigabe, Berichte (inkl. DATEV) und ein Audit-Log.
 
-## Funktionen
+In manchen App-Store-Suchen auch als **TimeGuard**.
 
-- **Länderprofile** – Deutschland (ArbZG), Österreich (AZG/ARG) oder Schweiz (ArG) mit passenden Feiertagsregionen
-- **Compliance-Monitoring** – automatische Verstoßmeldungen und Berichte
-- **Self-Service-Dashboards** – für Mitarbeitende, Teams und Führungskräfte
-- **Urlaub & Abwesenheiten** – Genehmigungs-Workflows und Auswertungen
-- **Exporte & Audit-Log** – z. B. für DATEV und interne Prüfungen
-- Vollständig selbst gehostet – **keine Daten verlassen Ihren Server**
+**Kostenlose Web-App** (AGPL-3.0-or-later). Companion-Apps: https://nextcloud.software-by-design.de/
+
+## Warum Teams es einsetzen
+
+- **Sauber starten und stoppen** — Pausen, Fortsetzen, manuelle Einträge mit Begründung
+- **Zum Land passen** — Profile DE / AT / CH mit Bundesländern bzw. Kantonen
+- **Pausen- und Ruhefragen früh sehen** — technische Prüfungen am konfigurierten Profil
+- **Abwesenheiten ordentlich führen** — Urlaub, Krankheit, Sonder- und unbezahlter Urlaub mit Freigabe; Anspruch-Modi und CSV-Import per `occ`
+- **Auswerten** — Dashboards für Mitarbeitende, Teams und Führung; Überstunden- und Abwesenheitsberichte; DATEV-Export
+- **Monat bei Bedarf schließen** — optionale Finalisierung mit Snapshot, Hash und PDF; Wiederöffnen nur mit Begründung
+- **Zugriff steuern** — offen für alle oder Freigabelisten; Nextcloud-Administratoren behalten den Zugriff
+
+## Klare Grenzen
+
+- Diese App ist **keine Rechtsberatung**. Sie bleiben verantwortlich für Arbeitszeitmodelle, Tarif- und Betriebsregeln, Konfiguration und die Auswertung erfasster Daten. Bei Bedarf Fachberatung hinzuziehen.
+- Technische Verstoßmeldungen am Profil sind keine Fremdzertifizierung.
+- Deklarierte Datenbanken: MySQL und PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
 
 ## Voraussetzungen
 
-- Nextcloud 32–33
-- PHP 8.1–8.4
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL oder PostgreSQL
 	]]></description>
 	<description lang="fr"><![CDATA[
 # ArbeitszeitCheck
@@ -77,8 +92,8 @@ Suivi du temps pour l'Allemagne, l'Autriche et la Suisse (DACH). Enregistrez les
 
 ## Prérequis
 
-- Nextcloud 32–33
-- PHP 8.1–8.4
+- Nextcloud 32–34
+- PHP 8.1–8.5
 	]]></description>
 	<description lang="da"><![CDATA[
 # ArbeitszeitCheck
@@ -96,8 +111,8 @@ Tidsregistrering for Tyskland, Østrig og Schweiz (DACH). Registrer arbejdstid, 
 
 ## Krav
 
-- Nextcloud 32–33
-- PHP 8.1–8.4
+- Nextcloud 32–34
+- PHP 8.1–8.5
 	]]></description>
 	<description lang="es"><![CDATA[
 # ArbeitszeitCheck
@@ -115,8 +130,8 @@ Registro de tiempo para Alemania, Austria y Suiza (DACH). Registra horas de trab
 
 ## Requisitos
 
-- Nextcloud 32–33
-- PHP 8.1–8.4
+- Nextcloud 32–34
+- PHP 8.1–8.5
 	]]></description>
 
 	<version>1.6.4</version>
