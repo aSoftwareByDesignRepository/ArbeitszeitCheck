@@ -207,6 +207,19 @@ class HolidayService
 		return $this->isHolidayForState($this->resolveStateForUser($userId), $date);
 	}
 
+	/**
+	 * Holiday weight for Sollzeit: 0.0 none, 0.5 half-day, 1.0 full day.
+	 */
+	public function getHolidayWeightForUser(string $userId, \DateTime $date): float
+	{
+		$state = $this->resolveStateForUser($userId);
+		$day = (clone $date)->setTime(0, 0, 0);
+		$weights = $this->buildHolidayWeightMapForState($state, $day, $day);
+		$key = $day->format('Y-m-d');
+
+		return (float)($weights[$key] ?? 0.0);
+	}
+
 	public function isHolidayForState(string $state, \DateTime $date): bool
 	{
 		$state = $this->normalizeState($state);

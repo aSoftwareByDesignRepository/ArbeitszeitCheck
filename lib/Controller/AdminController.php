@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Support\WeekdaySchedule;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Db\ComplianceViolationMapper;
@@ -366,6 +367,49 @@ class AdminController extends Controller
 			return $default;
 		}
 		return (float)$normalized;
+	}
+
+	/**
+	 * Apply break_rules; validate weekday_schedule and sync weekly/daily hours when present.
+	 *
+	 * @param array<string, mixed> $breakRules
+	 * @return JSONResponse|null error response
+	 */
+	private function applyBreakRulesToWorkingTimeModel(
+		\OCA\ArbeitszeitCheck\Db\WorkingTimeModel $model,
+		array $breakRules,
+	): ?JSONResponse {
+		$scheduleRaw = $breakRules[WeekdaySchedule::KEY] ?? null;
+		if ($scheduleRaw !== null) {
+			if (!is_array($scheduleRaw)) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Validation failed'),
+					'errors' => ['breakRules' => 'SCHEDULE_INVALID'],
+					'code' => 'SCHEDULE_INVALID',
+				], Http::STATUS_BAD_REQUEST);
+			}
+			$errors = WeekdaySchedule::validate($scheduleRaw);
+			if ($errors !== []) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Validation failed'),
+					'errors' => ['breakRules' => $errors[0]],
+					'codes' => $errors,
+					'code' => $errors[0],
+				], Http::STATUS_BAD_REQUEST);
+			}
+			$schedule = WeekdaySchedule::fromValidated($scheduleRaw);
+			$breakRules[WeekdaySchedule::KEY] = $schedule->toArray();
+			$model->setBreakRulesArray($breakRules);
+			$model->setWeeklyHours($schedule->weeklyNetHours());
+			$model->setDailyHours($schedule->averageDailyNetHours());
+			$model->setWorkDaysPerWeek($schedule->workDaysPerWeek());
+			return null;
+		}
+
+		$model->setBreakRulesArray($breakRules);
+		return null;
 	}
 
 	/**
@@ -1641,7 +1685,7 @@ class AdminController extends Controller
 	#[NoCSRFRequired]
 	public function workingTimeModels(): TemplateResponse
 	{
-		$this->registerFrontEndAssets('working-time-models');
+		$this->registerFrontEndAssets('working-time-models', 'working-time-models');
 
 
 
@@ -3684,7 +3728,10 @@ class AdminController extends Controller
 
 			// Handle break rules and overtime rules if provided
 			if (isset($params['breakRules']) && is_array($params['breakRules'])) {
-				$model->setBreakRulesArray($params['breakRules']);
+				$scheduleError = $this->applyBreakRulesToWorkingTimeModel($model, $params['breakRules']);
+				if ($scheduleError !== null) {
+					return $scheduleError;
+				}
 			}
 			if (isset($params['overtimeRules']) && is_array($params['overtimeRules'])) {
 				$model->setOvertimeRulesArray($params['overtimeRules']);
@@ -3793,7 +3840,10 @@ class AdminController extends Controller
 				$model->setIsDefault($newDefaultValue);
 			}
 			if (isset($params['breakRules']) && is_array($params['breakRules'])) {
-				$model->setBreakRulesArray($params['breakRules']);
+				$scheduleError = $this->applyBreakRulesToWorkingTimeModel($model, $params['breakRules']);
+				if ($scheduleError !== null) {
+					return $scheduleError;
+				}
 			}
 			if (isset($params['overtimeRules']) && is_array($params['overtimeRules'])) {
 				$model->setOvertimeRulesArray($params['overtimeRules']);

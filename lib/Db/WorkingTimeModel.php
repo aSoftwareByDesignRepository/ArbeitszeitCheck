@@ -125,6 +125,14 @@ class WorkingTimeModel extends Entity
     }
 
     /**
+     * Optional weekday schedule stored under break_rules.weekday_schedule.
+     */
+    public function getWeekdaySchedule(): ?\OCA\ArbeitszeitCheck\Support\WeekdaySchedule
+    {
+        return \OCA\ArbeitszeitCheck\Support\WeekdaySchedule::tryFromBreakRules($this->getBreakRulesArray());
+    }
+
+    /**
      * Get overtime rules as array
      *
      * @return array|null

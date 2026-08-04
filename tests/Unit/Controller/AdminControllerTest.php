@@ -590,6 +590,7 @@ class AdminControllerTest extends TestCase
 		$adminUser = $this->createMock(IUser::class);
 		$adminUser->method('getUID')->willReturn('hr_admin');
 		$adminUser->method('getDisplayName')->willReturn('HR Admin');
+		$adminUser->method('isEnabled')->willReturn(true);
 		$adminGroup->method('getUsers')->willReturn([$adminUser]);
 		$this->groupManager->method('get')->with('admin')->willReturn($adminGroup);
 		$this->groupManager->method('isAdmin')->willReturnCallback(static fn (string $uid): bool => $uid === 'hr_admin');
@@ -1461,6 +1462,87 @@ class AdminControllerTest extends TestCase
 
 		$this->assertTrue($data['success']);
 		$this->assertArrayHasKey('model', $data);
+	}
+
+	public function testCreateWorkingTimeModelSyncsHoursFromWeekdaySchedule(): void
+	{
+		$preset = \OCA\ArbeitszeitCheck\Support\WeekdaySchedule::banssPreset();
+		$this->request->method('getParams')
+			->willReturn([
+				'name' => 'BANSS matrix',
+				'type' => 'full_time',
+				'weeklyHours' => 40.0,
+				'dailyHours' => 8.0,
+				'workDaysPerWeek' => 5.0,
+				'isDefault' => false,
+				'breakRules' => [
+					'break_policy' => 'flex',
+					'weekday_schedule' => $preset,
+				],
+			]);
+
+		$this->workingTimeModelMapper->method('findDefault')->willReturn(null);
+		$this->workingTimeModelMapper->expects($this->once())
+			->method('insert')
+			->with($this->callback(function (WorkingTimeModel $model): bool {
+				$rules = $model->getBreakRulesArray();
+				$schedule = $model->getWeekdaySchedule();
+				return $schedule !== null
+					&& abs($model->getWeeklyHours() - 38.5) < 0.0001
+					&& abs($model->getDailyHours() - 7.7) < 0.0001
+					&& abs($model->getWorkDaysPerWeek() - 5.0) < 0.0001
+					&& ($rules['break_policy'] ?? null) === 'flex'
+					&& isset($rules['weekday_schedule']['days']['mon']);
+			}))
+			->willReturnCallback(function (WorkingTimeModel $model) {
+				$model->setId(42);
+				return $model;
+			});
+
+		$response = $this->controller->createWorkingTimeModel();
+		$this->assertSame(Http::STATUS_CREATED, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertEqualsWithDelta(38.5, $data['model']['weeklyHours'], 0.01);
+	}
+
+	public function testCreateWorkingTimeModelRejectsInvalidWeekdaySchedule(): void
+	{
+		$this->request->method('getParams')
+			->willReturn([
+				'name' => 'Broken matrix',
+				'type' => 'full_time',
+				'weeklyHours' => 40.0,
+				'dailyHours' => 8.0,
+				'breakRules' => [
+					'weekday_schedule' => [
+						'days' => [
+							'mon' => [
+								'work' => true,
+								'start' => '09:00',
+								'end' => '17:00',
+								'breaks' => [
+									['start' => '08:00', 'end' => '08:30', 'paid' => false],
+								],
+							],
+							'tue' => ['work' => false],
+							'wed' => ['work' => false],
+							'thu' => ['work' => false],
+							'fri' => ['work' => false],
+							'sat' => ['work' => false],
+							'sun' => ['work' => false],
+						],
+					],
+				],
+			]);
+
+		$this->workingTimeModelMapper->expects($this->never())->method('insert');
+
+		$response = $this->controller->createWorkingTimeModel();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('SCHEDULE_INVALID_BREAK', $data['code']);
 	}
 
 	/**

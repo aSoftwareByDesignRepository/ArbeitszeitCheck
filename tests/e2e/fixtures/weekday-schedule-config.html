@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Weekday schedule fixture</title>
+	<style>
+		:root {
+			--azc-border: #c4c4c4;
+			--azc-surface: #fff;
+			--azc-surface-muted: #f4f4f4;
+			--azc-text: #222;
+			--azc-space-2: 0.5rem;
+			--azc-space-3: 0.75rem;
+			--azc-space-4: 1rem;
+			--azc-radius-sm: 0.375rem;
+		}
+		body {
+			margin: 0;
+			font-family: "Segoe UI", system-ui, sans-serif;
+			color: var(--azc-text);
+			background: #eaeaea;
+		}
+		.azc-app--admin-working-time-models {
+			max-width: 56rem;
+			margin: 1.5rem auto;
+			padding: 1rem;
+			background: var(--azc-surface);
+		}
+		.wtm-weekday-schedule {
+			display: flex;
+			flex-direction: column;
+			gap: var(--azc-space-3);
+			padding: var(--azc-space-4);
+			border: 1px solid var(--azc-border);
+			border-radius: var(--azc-radius-sm);
+			background: var(--azc-surface-muted);
+		}
+		.table-container { overflow-x: auto; }
+		.wtm-weekday-table { width: 100%; border-collapse: collapse; background: var(--azc-surface); }
+		.wtm-weekday-table th, .wtm-weekday-table td {
+			padding: var(--azc-space-2) var(--azc-space-3);
+			border-bottom: 1px solid var(--azc-border);
+			text-align: left;
+			white-space: nowrap;
+		}
+		.wtm-week-total { font-weight: 600; margin: 0; }
+		.form-help { margin: 0; line-height: 1.45; }
+		.actions { display: flex; flex-wrap: wrap; gap: var(--azc-space-2); }
+		button { min-height: 2.5rem; padding: 0.4rem 0.85rem; }
+		input[type="time"] { min-height: 2.25rem; }
+		.sr-only {
+			position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+			overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+		}
+	</style>
+</head>
+<body>
+<div id="app-content" class="azc-app azc-app--admin-working-time-models">
+	<main id="azc-main-content">
+		<form id="fixture-form">
+			<label for="weeklyHours">Weekly hours</label>
+			<input id="weeklyHours" name="weeklyHours" type="text" value="40">
+			<label for="dailyHours">Daily hours</label>
+			<input id="dailyHours" name="dailyHours" type="text" value="8">
+			<label for="workDaysPerWeek">Work days/week</label>
+			<input id="workDaysPerWeek" name="workDaysPerWeek" type="text" value="5">
+
+			<fieldset class="wtm-weekday-schedule" data-schedule-prefix="fx" id="weekday-schedule-panel">
+				<legend>Weekday times (optional)</legend>
+				<p class="form-help" id="fx-schedule-help">
+					Set different hours per weekday and fixed unpaid breaks. Weekly and daily hours update automatically.
+				</p>
+				<p class="actions">
+					<button type="button" data-action="apply-weekday-preset" aria-describedby="fx-schedule-help">
+						Mo–Thu long / Fri short
+					</button>
+					<button type="button" data-action="clear-weekday-schedule">Clear weekday times</button>
+				</p>
+				<div class="table-container" role="region" aria-label="Weekday times (optional)">
+					<table class="wtm-weekday-table">
+						<thead>
+							<tr>
+								<th scope="col">Day</th>
+								<th scope="col">Work</th>
+								<th scope="col">Start</th>
+								<th scope="col">End</th>
+								<th scope="col">Break start</th>
+								<th scope="col">Break end</th>
+								<th scope="col">Net</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr data-day="mon">
+								<th scope="row">Monday</th>
+								<td><input type="checkbox" class="wtm-day-work" id="fx-mon-work" aria-label="Monday Work"></td>
+								<td><input type="time" class="wtm-day-start" id="fx-mon-start" disabled aria-label="Monday Start"></td>
+								<td><input type="time" class="wtm-day-end" id="fx-mon-end" disabled aria-label="Monday End"></td>
+								<td><input type="time" class="wtm-day-break-start" id="fx-mon-bstart" disabled aria-label="Monday Break Start"></td>
+								<td><input type="time" class="wtm-day-break-end" id="fx-mon-bend" disabled aria-label="Monday Break End"></td>
+								<td class="wtm-day-net" id="fx-mon-net" aria-live="polite">—</td>
+							</tr>
+							<tr data-day="tue">
+								<th scope="row">Tuesday</th>
+								<td><input type="checkbox" class="wtm-day-work" id="fx-tue-work" aria-label="Tuesday Work"></td>
+								<td><input type="time" class="wtm-day-start" id="fx-tue-start" disabled aria-label="Tuesday Start"></td>
+								<td><input type="time" class="wtm-day-end" id="fx-tue-end" disabled aria-label="Tuesday End"></td>
+								<td><input type="time" class="wtm-day-break-start" id="fx-tue-bstart" disabled aria-label="Tuesday Break Start"></td>
+								<td><input type="time" class="wtm-day-break-end" id="fx-tue-bend" disabled aria-label="Tuesday Break End"></td>
+								<td class="wtm-day-net" id="fx-tue-net" aria-live="polite">—</td>
+							</tr>
+							<tr data-day="wed">
+								<th scope="row">Wednesday</th>
+								<td><input type="checkbox" class="wtm-day-work" id="fx-wed-work" aria-label="Wednesday Work"></td>
+								<td><input type="time" class="wtm-day-start" id="fx-wed-start" disabled aria-label="Wednesday Start"></td>
+								<td><input type="time" class="wtm-day-end" id="fx-wed-end" disabled aria-label="Wednesday End"></td>
+								<td><input type="time" class="wtm-day-break-start" id="fx-wed-bstart" disabled aria-label="Wednesday Break Start"></td>
+								<td><input type="time" class="wtm-day-break-end" id="fx-wed-bend" disabled aria-label="Wednesday Break End"></td>
+								<td class="wtm-day-net" id="fx-wed-net" aria-live="polite">—</td>
+							</tr>
+							<tr data-day="thu">
+								<th scope="row">Thursday</th>
+								<td><input type="checkbox" class="wtm-day-work" id="fx-thu-work" aria-label="Thursday Work"></td>
+								<td><input type="time" class="wtm-day-start" id="fx-thu-start" disabled aria-label="Thursday Start"></td>
+								<td><input type="time" class="wtm-day-end" id="fx-thu-end" disabled aria-label="Thursday End"></td>
+								<td><input type="time" class="wtm-day-break-start" id="fx-thu-bstart" disabled aria-label="Thursday Break Start"></td>
+								<td><input type="time" class="wtm-day-break-end" id="fx-thu-bend" disabled aria-label="Thursday Break End"></td>
+								<td class="wtm-day-net" id="fx-thu-net" aria-live="polite">—</td>
+							</tr>
+							<tr data-day="fri">
+								<th scope="row">Friday</th>
+								<td><input type="checkbox" class="wtm-day-work" id="fx-fri-work" aria-label="Friday Work"></td>
+								<td><input type="time" class="wtm-day-start" id="fx-fri-start" disabled aria-label="Friday Start"></td>
+								<td><input type="time" class="wtm-day-end" id="fx-fri-end" disabled aria-label="Friday End"></td>
+								<td><input type="time" class="wtm-day-break-start" id="fx-fri-bstart" disabled aria-label="Friday Break Start"></td>
+								<td><input type="time" class="wtm-day-break-end" id="fx-fri-bend" disabled aria-label="Friday Break End"></td>
+								<td class="wtm-day-net" id="fx-fri-net" aria-live="polite">—</td>
+							</tr>
+							<tr data-day="sat">
+								<th scope="row">Saturday</th>
+								<td><input type="checkbox" class="wtm-day-work" id="fx-sat-work" aria-label="Saturday Work"></td>
+								<td><input type="time" class="wtm-day-start" id="fx-sat-start" disabled aria-label="Saturday Start"></td>
+								<td><input type="time" class="wtm-day-end" id="fx-sat-end" disabled aria-label="Saturday End"></td>
+								<td><input type="time" class="wtm-day-break-start" id="fx-sat-bstart" disabled aria-label="Saturday Break Start"></td>
+								<td><input type="time" class="wtm-day-break-end" id="fx-sat-bend" disabled aria-label="Saturday Break End"></td>
+								<td class="wtm-day-net" id="fx-sat-net" aria-live="polite">—</td>
+							</tr>
+							<tr data-day="sun">
+								<th scope="row">Sunday</th>
+								<td><input type="checkbox" class="wtm-day-work" id="fx-sun-work" aria-label="Sunday Work"></td>
+								<td><input type="time" class="wtm-day-start" id="fx-sun-start" disabled aria-label="Sunday Start"></td>
+								<td><input type="time" class="wtm-day-end" id="fx-sun-end" disabled aria-label="Sunday End"></td>
+								<td><input type="time" class="wtm-day-break-start" id="fx-sun-bstart" disabled aria-label="Sunday Break Start"></td>
+								<td><input type="time" class="wtm-day-break-end" id="fx-sun-bend" disabled aria-label="Sunday Break End"></td>
+								<td class="wtm-day-net" id="fx-sun-net" aria-live="polite">—</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p class="wtm-week-total" id="fx-week-total" aria-live="polite"></p>
+			</fieldset>
+			<button type="submit">Save model</button>
+			<p id="save-status" class="sr-only" role="status" aria-live="polite"></p>
+		</form>
+	</main>
+</div>
+<script>
+(function () {
+	const long = { work: true, start: '07:00', end: '16:15', breaks: [{ start: '12:15', end: '13:00' }] };
+	const fri = { work: true, start: '07:00', end: '11:45', breaks: [{ start: '09:00', end: '09:15' }] };
+	const off = { work: false };
+	const preset = { mon: long, tue: long, wed: long, thu: long, fri: fri, sat: off, sun: off };
+
+	function parseHm(hm) {
+		if (!hm || !/^\d{1,2}:\d{2}$/.test(hm)) return null;
+		const [h, m] = hm.split(':').map(Number);
+		if (!Number.isFinite(h) || !Number.isFinite(m) || h > 23 || m > 59) return null;
+		return h * 60 + m;
+	}
+	function netHours(start, end, bStart, bEnd) {
+		const s = parseHm(start);
+		const e = parseHm(end);
+		if (s === null || e === null || e <= s) return null;
+		let unpaid = 0;
+		const bs = parseHm(bStart);
+		const be = parseHm(bEnd);
+		if (bs !== null && be !== null && be > bs) unpaid = be - bs;
+		return Math.max(0, (e - s - unpaid) / 60);
+	}
+	function refresh(fieldset) {
+		let week = 0;
+		let any = false;
+		fieldset.querySelectorAll('tr[data-day]').forEach((tr) => {
+			const day = tr.getAttribute('data-day');
+			const work = tr.querySelector('.wtm-day-work').checked;
+			const start = tr.querySelector('.wtm-day-start');
+			const end = tr.querySelector('.wtm-day-end');
+			const bStart = tr.querySelector('.wtm-day-break-start');
+			const bEnd = tr.querySelector('.wtm-day-break-end');
+			[start, end, bStart, bEnd].forEach((el) => { el.disabled = !work; });
+			const netEl = document.getElementById('fx-' + day + '-net');
+			if (!work) {
+				netEl.textContent = '—';
+				return;
+			}
+			any = true;
+			const net = netHours(start.value, end.value, bStart.value, bEnd.value);
+			netEl.textContent = net === null ? '—' : net.toFixed(2) + ' h';
+			if (net !== null) week += net;
+		});
+		document.getElementById('fx-week-total').textContent = any
+			? ('Week total (net): ' + week.toFixed(2) + ' h')
+			: '';
+		const weekly = document.getElementById('weeklyHours');
+		const daily = document.getElementById('dailyHours');
+		const workDays = document.getElementById('workDaysPerWeek');
+		const workCount = fieldset.querySelectorAll('.wtm-day-work:checked').length;
+		if (any) {
+			weekly.value = week.toFixed(2);
+			daily.value = (week / workCount).toFixed(2);
+			workDays.value = String(workCount);
+		}
+		[weekly, daily, workDays].forEach((el) => {
+			el.readOnly = any;
+			if (any) el.setAttribute('aria-readonly', 'true');
+			else el.removeAttribute('aria-readonly');
+		});
+	}
+	function applyPreset(fieldset) {
+		Object.keys(preset).forEach((day) => {
+			const row = preset[day];
+			document.getElementById('fx-' + day + '-work').checked = !!row.work;
+			document.getElementById('fx-' + day + '-start').value = row.start || '';
+			document.getElementById('fx-' + day + '-end').value = row.end || '';
+			const br = (row.breaks && row.breaks[0]) || {};
+			document.getElementById('fx-' + day + '-bstart').value = br.start || '';
+			document.getElementById('fx-' + day + '-bend').value = br.end || '';
+		});
+		refresh(fieldset);
+	}
+	const fieldset = document.getElementById('weekday-schedule-panel');
+	fieldset.addEventListener('change', () => refresh(fieldset));
+	fieldset.addEventListener('input', () => refresh(fieldset));
+	fieldset.querySelector('[data-action="apply-weekday-preset"]').addEventListener('click', () => applyPreset(fieldset));
+	fieldset.querySelector('[data-action="clear-weekday-schedule"]').addEventListener('click', () => {
+		fieldset.querySelectorAll('.wtm-day-work').forEach((cb) => { cb.checked = false; });
+		fieldset.querySelectorAll('input[type="time"]').forEach((el) => { el.value = ''; });
+		refresh(fieldset);
+	});
+	document.getElementById('fixture-form').addEventListener('submit', (e) => {
+		e.preventDefault();
+		document.getElementById('save-status').textContent = 'Saved';
+	});
+	refresh(fieldset);
+})();
+</script>
+</body>
+</html>

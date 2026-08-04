@@ -588,4 +588,86 @@ class OvertimeServiceTest extends TestCase
 		$this->assertSame(0.0, $result['overtime_hours']);
 		$this->assertSame(0.0, $result['total_hours_worked']);
 	}
+
+	/**
+	 * BANSS weekday matrix drives required hours (Mon–Fri week without holidays).
+	 */
+	public function testWeekdayScheduleRequiredHoursForBanssWeek(): void
+	{
+		$userId = 'banssuser';
+		$startDate = new \DateTime('2026-08-03'); // Monday
+		$endDate = new \DateTime('2026-08-07'); // Friday
+
+		$userModel = new UserWorkingTimeModel();
+		$userModel->setId(1);
+		$userModel->setUserId($userId);
+		$userModel->setWorkingTimeModelId(9);
+
+		$model = new WorkingTimeModel();
+		$model->setId(9);
+		$model->setName('BANSS');
+		$model->setType(WorkingTimeModel::TYPE_FULL_TIME);
+		$model->setWeeklyHours(40.0);
+		$model->setDailyHours(8.0);
+		$model->setWorkDaysPerWeek(5.0);
+		$model->setBreakRulesArray([
+			'weekday_schedule' => \OCA\ArbeitszeitCheck\Support\WeekdaySchedule::banssPreset(),
+		]);
+
+		$this->userWorkingTimeModelMapper->expects($this->atLeastOnce())
+			->method('findCurrentByUser')
+			->with($userId)
+			->willReturn($userModel);
+		$this->workingTimeModelMapper->expects($this->atLeastOnce())
+			->method('find')
+			->with(9)
+			->willReturn($model);
+
+		$this->holidayCalendarService->method('getHolidayWeightForUser')->willReturn(0.0);
+		$this->holidayCalendarService->method('computeWorkingDaysForUser')->willReturn(5.0);
+		$this->timeEntryMapper->method('findByUserAndDateRange')->willReturn([]);
+
+		$result = $this->service->calculateOvertime($userId, $startDate, $endDate, false);
+
+		$this->assertSame('weekday_schedule', $result['required_hours_basis']);
+		$this->assertEqualsWithDelta(38.5, $result['required_hours'], 0.01);
+		$this->assertEqualsWithDelta(38.5, $result['weekly_hours'], 0.01);
+		$this->assertEqualsWithDelta(-38.5, $result['overtime_hours'], 0.01);
+	}
+
+	/**
+	 * Corrupt weekday_schedule must not change legacy required-hours math.
+	 */
+	public function testCorruptWeekdayScheduleFallsBackToLegacyWeeklyContract(): void
+	{
+		$userId = 'legacyuser';
+		$startDate = new \DateTime('2026-08-03');
+		$endDate = new \DateTime('2026-08-07');
+
+		$userModel = new UserWorkingTimeModel();
+		$userModel->setId(1);
+		$userModel->setUserId($userId);
+		$userModel->setWorkingTimeModelId(3);
+
+		$model = new WorkingTimeModel();
+		$model->setId(3);
+		$model->setName('Legacy');
+		$model->setType(WorkingTimeModel::TYPE_FULL_TIME);
+		$model->setWeeklyHours(40.0);
+		$model->setDailyHours(8.0);
+		$model->setWorkDaysPerWeek(5.0);
+		$model->setBreakRulesArray([
+			'weekday_schedule' => ['days' => ['mon' => ['work' => true]]],
+		]);
+
+		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn($userModel);
+		$this->workingTimeModelMapper->method('find')->with(3)->willReturn($model);
+		$this->holidayCalendarService->method('computeWorkingDaysForUser')->willReturn(5.0);
+		$this->timeEntryMapper->method('findByUserAndDateRange')->willReturn([]);
+
+		$result = $this->service->calculateOvertime($userId, $startDate, $endDate, false);
+
+		$this->assertSame('weekly_contract', $result['required_hours_basis']);
+		$this->assertEqualsWithDelta(40.0, $result['required_hours'], 0.01);
+	}
 }

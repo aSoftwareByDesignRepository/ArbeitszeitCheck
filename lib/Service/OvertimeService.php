@@ -67,7 +67,8 @@ class OvertimeService
 		$opening = $this->overtimeSettingsService->getOpeningBalanceHours($userId, $yearOfStart);
 		$trackingFrom = $this->overtimeSettingsService->getTrackingFrom($userId);
 
-		[$dailyHours, $weeklyHours] = $this->resolveContractHours($userId);
+		[$dailyHours, $weeklyHours, $schedule] = $this->resolveContractHours($userId);
+		$requiredHoursBasis = $schedule !== null ? 'weekday_schedule' : 'weekly_contract';
 
 		$periodStart = clone $startDate;
 		if ($periodStart < $effectiveYTDStart) {
@@ -90,7 +91,9 @@ class OvertimeService
 				}
 			}
 			$balanceBefore = $opening + $carryInDelta;
-			$impliedDailyHours = $weeklyHours > 0 ? round($weeklyHours / 5, 2) : 0.0;
+			$impliedDailyHours = $schedule !== null
+				? $schedule->averageDailyNetHours()
+				: ($weeklyHours > 0 ? round($weeklyHours / 5, 2) : 0.0);
 
 			return [
 				'period_start' => $periodStart->format('Y-m-d'),
@@ -104,7 +107,7 @@ class OvertimeService
 				'daily_hours' => $dailyHours,
 				'weekly_hours' => $weeklyHours,
 				'implied_daily_hours' => $impliedDailyHours,
-				'required_hours_basis' => 'weekly_contract',
+				'required_hours_basis' => $requiredHoursBasis,
 				'working_days' => 0.0,
 				'effective_tracking_from' => $trackingFrom !== null ? $trackingFrom->format('Y-m-d') : null,
 				'opening_balance_hours' => round($opening, 2),
@@ -121,7 +124,7 @@ class OvertimeService
 			}
 		}
 
-		$requiredHours = $this->calculateRequiredHours($userId, $periodStart, $endDate, $dailyHours, $weeklyHours);
+		$requiredHours = $this->calculateRequiredHours($userId, $periodStart, $endDate, $dailyHours, $weeklyHours, $schedule);
 		// Overtime tracking "Stichtag": do not apply the full daily/weekly target to the
 		// anchor calendar day itself. Otherwise a new employee sees a full day of
 		// undertime at login before any work is recorded (confusing UX). From the next
@@ -136,7 +139,7 @@ class OvertimeService
 			if ($anchor >= $periodStartDay && $anchor <= $periodEndDay) {
 				$anchorEnd = clone $anchor;
 				$anchorEnd->setTime(23, 59, 59);
-				$requiredHours -= $this->calculateRequiredHours($userId, $anchor, $anchorEnd, $dailyHours, $weeklyHours);
+				$requiredHours -= $this->calculateRequiredHours($userId, $anchor, $anchorEnd, $dailyHours, $weeklyHours, $schedule);
 				if ($requiredHours < 0) {
 					$requiredHours = 0.0;
 				}
@@ -156,7 +159,9 @@ class OvertimeService
 		$balanceBefore = $opening + $carryInDelta;
 		$balanceAfter = $balanceBefore + $overtimeHours;
 
-		$impliedDailyHours = $weeklyHours > 0 ? round($weeklyHours / 5, 2) : 0.0;
+		$impliedDailyHours = $schedule !== null
+			? round($schedule->averageDailyNetHours(), 2)
+			: ($weeklyHours > 0 ? round($weeklyHours / 5, 2) : 0.0);
 
 		return [
 			'period_start' => $startDate->format('Y-m-d'),
@@ -170,7 +175,7 @@ class OvertimeService
 			'daily_hours' => $dailyHours,
 			'weekly_hours' => $weeklyHours,
 			'implied_daily_hours' => $impliedDailyHours,
-			'required_hours_basis' => 'weekly_contract',
+			'required_hours_basis' => $requiredHoursBasis,
 			'working_days' => $this->countWorkingDays($userId, $periodStart, $endDate),
 			'effective_tracking_from' => $trackingFrom !== null ? $trackingFrom->format('Y-m-d') : null,
 			'opening_balance_hours' => round($opening, 2),
@@ -236,8 +241,22 @@ class OvertimeService
 		return $this->getCumulativeWorkDelta($userId, $effectiveStart, $beforeDate);
 	}
 
-	private function calculateRequiredHours(string $userId, \DateTime $startDate, \DateTime $endDate, float $dailyHours, float $weeklyHours): float
-	{
+	private function calculateRequiredHours(
+		string $userId,
+		\DateTime $startDate,
+		\DateTime $endDate,
+		float $dailyHours,
+		float $weeklyHours,
+		?\OCA\ArbeitszeitCheck\Support\WeekdaySchedule $schedule = null,
+	): float {
+		if ($schedule !== null) {
+			return $schedule->requiredHoursForDateRange(
+				$startDate,
+				$endDate,
+				fn (\DateTime $day): float => $this->holidayCalendarService->getHolidayWeightForUser($userId, $day),
+			);
+		}
+
 		$workingDays = $this->countWorkingDays($userId, $startDate, $endDate);
 		$weeks = $workingDays / 5.0;
 
@@ -250,25 +269,32 @@ class OvertimeService
 	}
 
 	/**
-	 * @return array{0: float, 1: float} [dailyHours, weeklyHours]
+	 * @return array{0: float, 1: float, 2: ?\OCA\ArbeitszeitCheck\Support\WeekdaySchedule} [dailyHours, weeklyHours, schedule]
 	 */
 	private function resolveContractHours(string $userId): array
 	{
 		$dailyHours = 8.0;
 		$weeklyHours = 40.0;
+		$schedule = null;
 
 		$userModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
 		if ($userModel) {
 			try {
 				$model = $this->workingTimeModelMapper->find($userModel->getWorkingTimeModelId());
-				$dailyHours = $model->getDailyHours();
-				$weeklyHours = $model->getWeeklyHours();
+				$schedule = $model->getWeekdaySchedule();
+				if ($schedule !== null) {
+					$dailyHours = $schedule->averageDailyNetHours();
+					$weeklyHours = $schedule->weeklyNetHours();
+				} else {
+					$dailyHours = $model->getDailyHours();
+					$weeklyHours = $model->getWeeklyHours();
+				}
 			} catch (\Throwable $e) {
 				// Model not found, use defaults
 			}
 		}
 
-		return [$dailyHours, $weeklyHours];
+		return [$dailyHours, $weeklyHours, $schedule];
 	}
 
 	public function getOvertimeBalance(string $userId): float
