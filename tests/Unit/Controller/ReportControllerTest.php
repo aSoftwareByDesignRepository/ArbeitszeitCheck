@@ -76,6 +76,9 @@ class ReportControllerTest extends TestCase
 	/** @var MonthClosureService|\PHPUnit\Framework\MockObject\MockObject */
 	private $monthClosureService;
 
+	/** @var \OCA\ArbeitszeitCheck\Service\PremiumSurchargeService|\PHPUnit\Framework\MockObject\MockObject */
+	private $premiumSurchargeService;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -108,6 +111,7 @@ class ReportControllerTest extends TestCase
 		});
 		$this->userManager = $this->createMock(IUserManager::class);
 		$this->monthClosureService = $this->createMock(MonthClosureService::class);
+		$this->premiumSurchargeService = $this->createMock(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class);
 
 		$this->controller = new ReportController(
 			'arbeitszeitcheck',
@@ -123,7 +127,8 @@ class ReportControllerTest extends TestCase
 			$this->userManager,
 			$this->userSession,
 			$this->l10n,
-			$this->monthClosureService
+			$this->monthClosureService,
+			$this->premiumSurchargeService
 		);
 	}
 
@@ -801,7 +806,8 @@ class ReportControllerTest extends TestCase
 			$this->userManager,
 			$this->userSession,
 			$this->l10n,
-			$this->monthClosureService
+			$this->monthClosureService,
+			$this->premiumSurchargeService
 		);
 
 		$reportData = [
@@ -865,7 +871,8 @@ class ReportControllerTest extends TestCase
 			$this->userManager,
 			$this->userSession,
 			$this->l10n,
-			$this->monthClosureService
+			$this->monthClosureService,
+			$this->premiumSurchargeService
 		);
 
 		$userId = 'manager1';
@@ -1018,5 +1025,109 @@ class ReportControllerTest extends TestCase
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 		$this->assertStringContainsString('not authenticated', $data['error']);
+	}
+
+	public function testPremiumReportRejectsWhenDisabled(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->premiumSurchargeService->method('isEnabled')->willReturn(false);
+
+		$response = $this->controller->premium('2026-08-01', '2026-08-31');
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('PREMIUM_DISABLED', $data['code']);
+	}
+
+	public function testPremiumReportReturnsBucketsForSelf(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$user->method('getDisplayName')->willReturn('Ada');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->userManager->method('get')->with('u1')->willReturn($user);
+		$this->premiumSurchargeService->method('isEnabled')->willReturn(true);
+		$this->premiumSurchargeService->expects($this->once())
+			->method('buildPeriodReport')
+			->willReturn([
+				'type' => 'premium',
+				'enabled' => true,
+				'users' => [['user_id' => 'u1', 'buckets' => [['id' => 'sunday', 'hours' => 2.0]]]],
+				'orthogonal_to_saldo' => true,
+			]);
+
+		$response = $this->controller->premium('2026-08-01', '2026-08-31');
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertSame('premium', $data['report']['type']);
+		$this->assertTrue($data['report']['orthogonal_to_saldo']);
+	}
+
+	public function testPremiumCsvDownloadSanitisesFormulaInjection(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$user->method('getDisplayName')->willReturn('Ada');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->userManager->method('get')->with('u1')->willReturn($user);
+		$this->premiumSurchargeService->method('isEnabled')->willReturn(true);
+		$this->premiumSurchargeService->method('buildPeriodReport')->willReturn([
+			'type' => 'premium',
+			'enabled' => true,
+			'period' => ['start' => '2026-08-01', 'end' => '2026-08-31'],
+			'users' => [],
+		]);
+		$this->premiumSurchargeService->method('flattenReportToCsvRows')->willReturn([
+			[
+				'user_id' => 'u1',
+				'display_name' => '=CMD|"/c calc"',
+				'period_start' => '2026-08-01',
+				'period_end' => '2026-08-31',
+				'bucket_id' => 'sunday',
+				'bucket_label' => 'Sunday',
+				'hours' => 2.0,
+				'rate' => 1.0,
+				'valued_hours' => 2.0,
+				'stacking' => 'max_single_rate',
+				'policy_version' => 1,
+			],
+		]);
+
+		$this->request = $this->createMock(IRequest::class);
+		$this->request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			if ($name === 'download') {
+				return '1';
+			}
+			if ($name === 'format') {
+				return 'csv';
+			}
+			return $default ?? '';
+		});
+		$this->controller = new ReportController(
+			'arbeitszeitcheck',
+			$this->request,
+			$this->reportingService,
+			$this->permissionService,
+			$this->teamResolver,
+			$this->teamMemberMapper,
+			$this->teamManagerMapper,
+			$this->timeEntryMapper,
+			new TimeEntryExportTransformer($this->appConfig),
+			$this->appConfig,
+			$this->userManager,
+			$this->userSession,
+			$this->l10n,
+			$this->monthClosureService,
+			$this->premiumSurchargeService
+		);
+
+		$response = $this->controller->premium('2026-08-01', '2026-08-31');
+		$this->assertInstanceOf(DataDownloadResponse::class, $response);
+		$body = (string)$response->render();
+		$this->assertStringContainsString("'=CMD", $body);
+		$this->assertDoesNotMatchRegularExpression('/(^|[\n;])=CMD/', $body);
 	}
 }

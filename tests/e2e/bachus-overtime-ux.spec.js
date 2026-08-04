@@ -103,3 +103,18 @@ test.describe('Bachus: dashboard Saldo + Zuschläge fixture', () => {
 		expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 	});
 });
+
+test.describe('Bachus: premium report preview fixture', () => {
+	test('J-P3: report table is axe-clean and states orthogonal to Saldo', async ({ page }) => {
+		const reportUrl = 'file://' + path.resolve(__dirname, 'fixtures/premium-report-preview.html');
+		await page.goto(reportUrl);
+		await expect(page.locator('#premium-report-title')).toBeVisible();
+		await expect(page.locator('#premium-report-help')).toContainText(/not Saldo|not pay/i);
+
+		const results = await new AxeBuilder({ page })
+			.include('#premium-report-fixture')
+			.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+			.analyze();
+		expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+	});
+});

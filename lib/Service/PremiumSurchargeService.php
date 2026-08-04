@@ -147,6 +147,157 @@ class PremiumSurchargeService
 	}
 
 	/**
+	 * Frozen premium block for month-closure canonical payload (NN-06).
+	 *
+	 * @return array<string, mixed>|null null when premiums disabled at seal time
+	 */
+	public function buildClosureAuditBlock(string $userId, int $year, int $month): ?array
+	{
+		if (!$this->isEnabled()) {
+			return null;
+		}
+		if ($month < 1 || $month > 12) {
+			throw new \InvalidArgumentException('Month must be between 1 and 12.');
+		}
+		$start = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
+		$end = (clone $start)->modify('last day of this month');
+		$summary = $this->summariseForUser($userId, $start, $end);
+		$policy = $this->getPolicy();
+		$version = (int)$this->config->getAppValue(
+			'arbeitszeitcheck',
+			Constants::CONFIG_PREMIUM_POLICY_VERSION,
+			'0'
+		);
+
+		return [
+			'enabled' => true,
+			'policy_version' => $version,
+			'policy' => $policy !== null ? $policy->toArray() : $this->getPolicyArrayOrDefault(),
+			'summary' => $summary,
+			'orthogonal_to_saldo' => true,
+			'currency_mode' => 'hours_only',
+		];
+	}
+
+	/**
+	 * Multi-user period report for managers/admins (live classification).
+	 *
+	 * @param list<string> $userIds
+	 * @return array<string, mixed>
+	 */
+	public function buildPeriodReport(array $userIds, \DateTimeInterface $start, \DateTimeInterface $end, callable $displayNameForUser): array
+	{
+		$periodStart = \DateTimeImmutable::createFromInterface($start)->format('Y-m-d');
+		$periodEnd = \DateTimeImmutable::createFromInterface($end)->format('Y-m-d');
+		$enabled = $this->isEnabled();
+		$policy = $this->getPolicy();
+		$version = (int)$this->config->getAppValue(
+			'arbeitszeitcheck',
+			Constants::CONFIG_PREMIUM_POLICY_VERSION,
+			'0'
+		);
+		$users = [];
+		$totalValued = 0.0;
+		$totalClassified = 0.0;
+		if ($enabled) {
+			foreach ($userIds as $uid) {
+				$uid = trim((string)$uid);
+				if ($uid === '') {
+					continue;
+				}
+				$summary = $this->summariseForUser($uid, $start, $end);
+				$totalValued += (float)($summary['total_valued_hours'] ?? 0);
+				$totalClassified += (float)($summary['total_classified_hours'] ?? 0);
+				$users[] = [
+					'user_id' => $uid,
+					'display_name' => (string)$displayNameForUser($uid),
+					'buckets' => $summary['buckets'] ?? [],
+					'total_classified_hours' => (float)($summary['total_classified_hours'] ?? 0),
+					'total_valued_hours' => (float)($summary['total_valued_hours'] ?? 0),
+					'stacking' => $summary['stacking'] ?? null,
+				];
+			}
+		}
+
+		return [
+			'type' => 'premium',
+			'enabled' => $enabled,
+			'period' => [
+				'start' => $periodStart,
+				'end' => $periodEnd,
+			],
+			'policy_version' => $version,
+			'stacking' => $policy?->getStacking(),
+			'currency_mode' => 'hours_only',
+			'orthogonal_to_saldo' => true,
+			'total_users' => count($users),
+			'total_classified_hours' => round($totalClassified, 4),
+			'total_valued_hours' => round($totalValued, 4),
+			'users' => $users,
+			'note' => $enabled ? null : 'premium_disabled',
+		];
+	}
+
+	/**
+	 * Flat CSV rows (one row per user × bucket). Empty buckets still emit a zero row when enabled.
+	 *
+	 * @param array<string, mixed> $report from buildPeriodReport
+	 * @return list<array<string, string|float|int>>
+	 */
+	public function flattenReportToCsvRows(array $report): array
+	{
+		$rows = [];
+		$periodStart = (string)(($report['period']['start'] ?? ''));
+		$periodEnd = (string)(($report['period']['end'] ?? ''));
+		$policyVersion = (int)($report['policy_version'] ?? 0);
+		$stacking = (string)($report['stacking'] ?? '');
+		foreach ((array)($report['users'] ?? []) as $user) {
+			if (!is_array($user)) {
+				continue;
+			}
+			$uid = (string)($user['user_id'] ?? '');
+			$name = (string)($user['display_name'] ?? $uid);
+			$buckets = (array)($user['buckets'] ?? []);
+			if ($buckets === []) {
+				$rows[] = [
+					'user_id' => $uid,
+					'display_name' => $name,
+					'period_start' => $periodStart,
+					'period_end' => $periodEnd,
+					'bucket_id' => '',
+					'bucket_label' => '',
+					'hours' => 0.0,
+					'rate' => 0.0,
+					'valued_hours' => 0.0,
+					'stacking' => $stacking,
+					'policy_version' => $policyVersion,
+				];
+				continue;
+			}
+			foreach ($buckets as $bucket) {
+				if (!is_array($bucket)) {
+					continue;
+				}
+				$rows[] = [
+					'user_id' => $uid,
+					'display_name' => $name,
+					'period_start' => $periodStart,
+					'period_end' => $periodEnd,
+					'bucket_id' => (string)($bucket['id'] ?? ''),
+					'bucket_label' => (string)($bucket['label'] ?? ''),
+					'hours' => (float)($bucket['hours'] ?? 0),
+					'rate' => (float)($bucket['rate'] ?? 0),
+					'valued_hours' => (float)($bucket['valued_hours'] ?? 0),
+					'stacking' => $stacking,
+					'policy_version' => $policyVersion,
+				];
+			}
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * @return list<array{0: \DateTimeImmutable, 1: \DateTimeImmutable}>
 	 */
 	public function workIntervalsFromEntry(TimeEntry $entry): array

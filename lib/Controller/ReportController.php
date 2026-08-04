@@ -18,6 +18,7 @@ use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCA\ArbeitszeitCheck\Service\MonthClosureService;
+use OCA\ArbeitszeitCheck\Service\PremiumSurchargeService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryExportTransformer;
 use OCP\AppFramework\Controller;
@@ -49,6 +50,7 @@ class ReportController extends Controller
 	private IUserSession $userSession;
 	private IL10N $l10n;
 	private MonthClosureService $monthClosureService;
+	private PremiumSurchargeService $premiumSurchargeService;
 
 	public function __construct(
 		string $appName,
@@ -64,7 +66,8 @@ class ReportController extends Controller
 		IUserManager $userManager,
 		IUserSession $userSession,
 		IL10N $l10n,
-		MonthClosureService $monthClosureService
+		MonthClosureService $monthClosureService,
+		PremiumSurchargeService $premiumSurchargeService
 	) {
 		parent::__construct($appName, $request);
 		$this->reportingService = $reportingService;
@@ -79,6 +82,7 @@ class ReportController extends Controller
 		$this->userSession = $userSession;
 		$this->l10n = $l10n;
 		$this->monthClosureService = $monthClosureService;
+		$this->premiumSurchargeService = $premiumSurchargeService;
 	}
 
 	/**
@@ -377,6 +381,135 @@ class ReportController extends Controller
 				'error' => $mapped['error']
 			], $mapped['status']);
 		}
+	}
+
+	/**
+	 * Hour-premium (Zuschlag) period report — orthogonal to Saldo / Auszahlung.
+	 *
+	 * @return JSONResponse|DataDownloadResponse
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function premium(?string $startDate = null, ?string $endDate = null, ?string $userId = null): JSONResponse|DataDownloadResponse
+	{
+		try {
+			if (!$this->premiumSurchargeService->isEnabled()) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Hour premiums are turned off for this organisation.'),
+					'code' => 'PREMIUM_DISABLED',
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			$start = $this->parseDateYmd($startDate, 'start_date') ?? (new \DateTime())->modify('-30 days');
+			$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
+			$start->setTime(0, 0, 0);
+			$end->setTime(0, 0, 0);
+			if ($start > $end) {
+				throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+			}
+			$days = (int)$end->diff($start)->format('%a');
+			if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+				throw new \Exception($this->l10n->t('Export date range must not exceed %d days. Please narrow the range.', [Constants::MAX_EXPORT_DATE_RANGE_DAYS]));
+			}
+
+			$currentUserId = $this->getUserId();
+			$userIds = $this->resolvePremiumReportUserIds($currentUserId, $userId);
+
+			$report = $this->premiumSurchargeService->buildPeriodReport(
+				$userIds,
+				$start,
+				$end,
+				fn (string $uid): string => $this->getUserDisplayName($uid)
+			);
+
+			$download = (string)$this->request->getParam('download', '0') === '1';
+			if ($download) {
+				$format = strtolower((string)$this->request->getParam('format', 'csv'));
+				$filenameBase = 'premium-report-' . $start->format('Y-m-d') . '_' . $end->format('Y-m-d');
+				if ($format === 'json') {
+					$json = json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+					if ($json === false) {
+						throw new \Exception($this->l10n->t('Failed to encode report as JSON'));
+					}
+					return new DataDownloadResponse($json, $filenameBase . '.json', 'application/json');
+				}
+				$csv = $this->encodeTabularDataToCsv($this->premiumSurchargeService->flattenReportToCsvRows($report));
+				return new DataDownloadResponse($csv, $filenameBase . '.csv', 'text/csv');
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'report' => $report,
+			]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ReportController::premium: ' . $e->getMessage(), ['exception' => $e]);
+			$mapped = $this->buildSafeApiError($e);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $mapped['error'],
+			], $mapped['status']);
+		}
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function resolvePremiumReportUserIds(string $currentUserId, ?string $userId): array
+	{
+		$teamIdRaw = trim((string)$this->request->getParam('teamId', ''));
+		if ($teamIdRaw !== '') {
+			$tid = (int)$teamIdRaw;
+			if ($tid <= 0) {
+				throw new \Exception($this->l10n->t('Invalid team selected.'));
+			}
+			$memberIds = $this->resolveTeamMemberIdsFromTeamId($currentUserId, $tid);
+			$out = [];
+			foreach ($memberIds as $uid) {
+				$uid = (string)$uid;
+				if ($uid === '') {
+					continue;
+				}
+				if (!$this->permissionService->canViewUserReport($currentUserId, $uid)) {
+					$this->permissionService->logPermissionDenied($currentUserId, 'view_premium_report', 'report', $uid);
+					throw new \Exception($this->l10n->t('Access denied. You can only view reports for yourself or your team members.'));
+				}
+				$out[] = $uid;
+			}
+			return array_values(array_unique($out));
+		}
+
+		// Manager “everyone I manage” when no userId and can access manager dashboard
+		if ($userId === null && $this->permissionService->canAccessManagerDashboard($currentUserId)
+			&& (string)$this->request->getParam('managerScope', '') === '1') {
+			$memberIds = $this->teamResolver->getTeamMemberIds($currentUserId);
+			$out = [];
+			foreach ($memberIds as $uid) {
+				$uid = (string)$uid;
+				if ($uid === '' || !$this->permissionService->canViewUserReport($currentUserId, $uid)) {
+					continue;
+				}
+				$out[] = $uid;
+			}
+			return array_values(array_unique($out));
+		}
+
+		if ($userId === '') {
+			if (!$this->permissionService->isAdmin($currentUserId)) {
+				throw new \Exception($this->l10n->t('Access denied. You can only view reports for yourself or your team members.'));
+			}
+			$userIds = [];
+			$this->userManager->callForAllUsers(function ($user) use (&$userIds) {
+				if ($user->isEnabled() && $this->permissionService->isUserAllowedByAccessGroups($user->getUID())) {
+					$userIds[] = $user->getUID();
+				}
+			});
+			return $userIds;
+		}
+
+		$reportUserId = $userId ?? $currentUserId;
+		$this->ensureCanAccessUserReport($currentUserId, $reportUserId);
+		return [$reportUserId];
 	}
 
 	/**

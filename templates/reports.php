@@ -267,6 +267,31 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                                 <span class="report-type-card__action-label"><?php p($l->t('Select')); ?></span>
                             </span>
                         </button>
+
+                        <?php if (!empty($_['premiumSurchargesEnabled'])): ?>
+                        <button
+                            type="button"
+                            class="report-type-card btn-select-report"
+                            role="radio"
+                            aria-checked="false"
+                            data-report="premium"
+                            data-report-type="premium"
+                            data-label-select="<?php p($l->t('Select')); ?>"
+                            data-label-selected="<?php p($l->t('Selected')); ?>"
+                        >
+                            <span class="report-type-card__icon" aria-hidden="true">
+                                <?php print_unescaped(IconCatalog::render('coins', 'report-type-card__icon-svg', 2.5)); ?>
+                            </span>
+                            <span class="report-type-card__body">
+                                <span class="report-type-card__title"><?php p($l->t('Hour premiums (Zuschläge)')); ?></span>
+                                <span class="report-type-card__desc"><?php p($l->t('Hours with a percentage for payroll handoff — not Saldo and not pay.')); ?></span>
+                            </span>
+                            <span class="report-type-card__action" aria-hidden="true">
+                                <span class="report-type-card__action-mark"></span>
+                                <span class="report-type-card__action-label"><?php p($l->t('Select')); ?></span>
+                            </span>
+                        </button>
+                        <?php endif; ?>
                     </div>
                 </div>
             </section>
@@ -465,11 +490,20 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
     window.ArbeitszeitCheck.l10n.invalidReportType = <?php echo json_encode($l->t('Invalid report type.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.errorTryAgain = <?php echo json_encode($l->t('An error occurred. Please try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     
+    window.ArbeitszeitCheck.l10n.premiumsTitle = <?php echo json_encode($l->t('Hour premiums'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.premiumBucket = <?php echo json_encode($l->t('Category'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.premiumRate = <?php echo json_encode($l->t('Rate'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.premiumValued = <?php echo json_encode($l->t('Valued hours'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.premiumHint = <?php echo json_encode($l->t('Hours with a percentage for reporting — not pay, and not your overtime Saldo.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.premiumEmpty = <?php echo json_encode($l->t('No premium hours in this period.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.teamDownloadPremiumOk = <?php echo json_encode($l->t('Team download for hour premiums includes one row per person and category.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
     window.ArbeitszeitCheck.apiUrl = {
         daily: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.daily'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         weekly: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.weekly'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         monthly: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.monthly'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         overtime: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.overtime'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        premium: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.premium'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         absence: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.absence'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         compliance: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.compliance.getReport'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         team: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.team'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>

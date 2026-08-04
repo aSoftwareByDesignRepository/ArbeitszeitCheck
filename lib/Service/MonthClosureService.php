@@ -49,6 +49,7 @@ class MonthClosureService
 	private \OCA\ArbeitszeitCheck\Db\OvertimePayoutMapper $overtimePayoutMapper;
 	private TimeZoneService $timeZoneService;
 	private ILockingProvider $lockingProvider;
+	private ?PremiumSurchargeService $premiumSurchargeService;
 
 	public function __construct(
 		MonthClosureMapper $closureMapper,
@@ -66,6 +67,7 @@ class MonthClosureService
 		\OCA\ArbeitszeitCheck\Db\OvertimePayoutMapper $overtimePayoutMapper,
 		?TimeZoneService $timeZoneService = null,
 		?\OCP\Lock\ILockingProvider $lockingProvider = null,
+		?PremiumSurchargeService $premiumSurchargeService = null,
 	) {
 		$this->closureMapper = $closureMapper;
 		$this->revisionMapper = $revisionMapper;
@@ -82,6 +84,7 @@ class MonthClosureService
 		$this->overtimePayoutMapper = $overtimePayoutMapper;
 		$this->timeZoneService = $timeZoneService ?? \OCP\Server::get(TimeZoneService::class);
 		$this->lockingProvider = $lockingProvider ?? \OCP\Server::get(\OCP\Lock\ILockingProvider::class);
+		$this->premiumSurchargeService = $premiumSurchargeService;
 	}
 
 	private function todayInStorage(): \DateTimeImmutable
@@ -530,6 +533,23 @@ class MonthClosureService
 			$payload['overtime_bank'] = $bankBlock;
 		}
 
+		if ($this->premiumSurchargeService !== null) {
+			try {
+				$premiumBlock = $this->premiumSurchargeService->buildClosureAuditBlock($userId, $year, $month);
+				if ($premiumBlock !== null) {
+					$payload['premium'] = $premiumBlock;
+				}
+			} catch (\Throwable $e) {
+				$this->logger->error('Month closure premium snapshot failed: ' . $e->getMessage(), [
+					'exception' => $e,
+					'userId' => $userId,
+					'year' => $year,
+					'month' => $month,
+				]);
+				throw $e;
+			}
+		}
+
 		return $payload;
 	}
 
@@ -562,6 +582,9 @@ class MonthClosureService
 		$r['from_month_closure_snapshot'] = true;
 		$r['snapshot_hash'] = $row->getSnapshotHash();
 		$r['month_closure_version'] = $row->getVersion();
+		if (isset($data['premium']) && is_array($data['premium'])) {
+			$r['premium'] = $data['premium'];
+		}
 		return $r;
 	}
 

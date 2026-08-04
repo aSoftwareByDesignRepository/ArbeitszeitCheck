@@ -153,6 +153,7 @@ return [
 		['name' => 'report#weekly', 'url' => '/api/reports/weekly', 'verb' => 'GET'],
 		['name' => 'report#monthly', 'url' => '/api/reports/monthly', 'verb' => 'GET'],
 		['name' => 'report#overtime', 'url' => '/api/reports/overtime', 'verb' => 'GET'],
+		['name' => 'report#premium', 'url' => '/api/reports/premium', 'verb' => 'GET'],
 		['name' => 'report#absence', 'url' => '/api/reports/absence', 'verb' => 'GET'],
 		['name' => 'report#team', 'url' => '/api/reports/team', 'verb' => 'GET'],
 

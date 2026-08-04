@@ -354,6 +354,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\OvertimePayoutMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\TimeZoneService::class),
 				$c->query(\OCP\Lock\ILockingProvider::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class),
 			);
 		});
 

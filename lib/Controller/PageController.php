@@ -729,6 +729,11 @@ class PageController extends Controller
 				],
 				'isAdmin' => $isAdmin,
 				'isManager' => $isManager,
+				'premiumSurchargesEnabled' => $this->config->getAppValue(
+					'arbeitszeitcheck',
+					\OCA\ArbeitszeitCheck\Constants::CONFIG_PREMIUM_SURCHARGES_ENABLED,
+					'0'
+				) === '1',
 			];
 
 			$response = new TemplateResponse('arbeitszeitcheck', 'reports', $params);
@@ -747,6 +752,7 @@ class PageController extends Controller
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
 				'isAdmin' => false,
 				'isManager' => false,
+				'premiumSurchargesEnabled' => false,
 			]);
 			return $this->configureCSP($response);
 		}

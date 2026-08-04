@@ -46,6 +46,14 @@ class PremiumCompanionContractTest extends TestCase
 		$this->assertStringNotContainsString('premium_surcharges', $src);
 	}
 
+	public function testPremiumReportRouteIsRegistered(): void
+	{
+		$routes = file_get_contents(dirname(__DIR__, 3) . '/appinfo/routes.php');
+		$this->assertNotFalse($routes);
+		$this->assertStringContainsString("report#premium", $routes);
+		$this->assertStringContainsString('/api/reports/premium', $routes);
+	}
+
 	public function testDeNightWindowDiffersFromAtStarter(): void
 	{
 		$at = PremiumPolicy::atStarterPreset();

@@ -146,4 +146,57 @@ class PremiumSurchargeServiceTest extends TestCase
 		// 9h clocked − 45 min break = 8.25 h
 		$this->assertSame(8 * 3600 + 15 * 60, $total);
 	}
+
+	public function testFlattenReportToCsvRowsEmitsOneRowPerBucket(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('0');
+		$svc = $this->service($config);
+		$rows = $svc->flattenReportToCsvRows([
+			'period' => ['start' => '2026-08-01', 'end' => '2026-08-31'],
+			'policy_version' => 3,
+			'stacking' => 'max_single_rate',
+			'users' => [
+				[
+					'user_id' => 'u1',
+					'display_name' => 'Ada',
+					'buckets' => [
+						['id' => 'sunday', 'label' => 'Sunday', 'hours' => 2.0, 'rate' => 1.0, 'valued_hours' => 2.0],
+						['id' => 'night', 'label' => 'Night', 'hours' => 1.0, 'rate' => 0.5, 'valued_hours' => 0.5],
+					],
+				],
+			],
+		]);
+		$this->assertCount(2, $rows);
+		$this->assertSame('sunday', $rows[0]['bucket_id']);
+		$this->assertSame(3, $rows[0]['policy_version']);
+		$this->assertSame('night', $rows[1]['bucket_id']);
+	}
+
+	public function testBuildClosureAuditBlockNullWhenDisabled(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, $default = '') {
+				if ($key === Constants::CONFIG_PREMIUM_SURCHARGES_ENABLED) {
+					return '0';
+				}
+				return $default;
+			}
+		);
+		$svc = $this->service($config);
+		$this->assertNull($svc->buildClosureAuditBlock('u1', 2026, 8));
+	}
+
+	public function testBuildPeriodReportDisabledShape(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('0');
+		$svc = $this->service($config);
+		$report = $svc->buildPeriodReport(['u1'], new \DateTime('2026-08-01'), new \DateTime('2026-08-31'), static fn () => 'Ada');
+		$this->assertFalse($report['enabled']);
+		$this->assertSame([], $report['users']);
+		$this->assertTrue($report['orthogonal_to_saldo']);
+		$this->assertSame('premium_disabled', $report['note']);
+	}
 }

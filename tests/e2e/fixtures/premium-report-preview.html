@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Hour premiums report chooser</title>
+	<style>
+		body { font-family: "Source Sans 3", "Segoe UI", sans-serif; margin: 0; background: linear-gradient(160deg,#f6f4ef,#e8efe8); color: #1a1a1a; }
+		main { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+		.card { background: #fffdf8; border: 1px solid #c8c2b6; padding: 1.25rem; }
+		h1 { font-size: 1.35rem; margin: 0 0 0.5rem; }
+		p { color: #4a4a4a; }
+		table { width: 100%; border-collapse: collapse; }
+		th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #c8c2b6; min-height: 2.25rem; }
+		:focus-visible { outline: 3px solid #005fcc; outline-offset: 2px; }
+	</style>
+</head>
+<body>
+<main id="premium-report-fixture">
+	<article class="card" aria-labelledby="premium-report-title">
+		<h1 id="premium-report-title">Hour premiums (Zuschläge)</h1>
+		<p id="premium-report-help">Hours with a percentage for payroll handoff — not Saldo and not pay.</p>
+		<table aria-describedby="premium-report-help">
+			<thead>
+				<tr>
+					<th scope="col">Name</th>
+					<th scope="col">Category</th>
+					<th scope="col">Hours</th>
+					<th scope="col">Rate</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td>Ada</td>
+					<td>Sunday</td>
+					<td>2.00</td>
+					<td>100%</td>
+				</tr>
+			</tbody>
+		</table>
+	</article>
+</main>
+</body>
+</html>

@@ -587,6 +587,48 @@
 					});
 					html += '</tbody></table></div>';
 				}
+			} else if (report.type === 'premium') {
+				html += `<p class="report-meta form-help">${esc(L.premiumHint || 'Hours with a percentage for reporting — not pay, and not your overtime Saldo.')}</p>`;
+				if (report.policy_version != null) {
+					html += `<p class="report-meta"><strong>${esc(L.policyVersion || 'Policy version')}:</strong> ${esc(report.policy_version)}</p>`;
+				}
+				const users = Array.isArray(report.users) ? report.users : [];
+				if (!users.length) {
+					html += `<p class="report-meta" role="status">${esc(L.premiumEmpty || 'No premium hours in this period.')}</p>`;
+				} else {
+					html += `<h4 class="report-subhead">${esc(L.premiumsTitle || 'Hour premiums')}</h4>`;
+					html += `<div class="table-container" role="region"><table class="table table--hover azc-table--responsive report-table"><thead><tr>`
+						+ `<th>${esc(L.name || 'Name')}</th>`
+						+ `<th>${esc(L.premiumBucket || 'Category')}</th>`
+						+ `<th>${esc(L.hours || 'Hours')}</th>`
+						+ `<th>${esc(L.premiumRate || 'Rate')}</th>`
+						+ `<th>${esc(L.premiumValued || 'Valued hours')}</th>`
+						+ `</tr></thead><tbody>`;
+					users.forEach((u) => {
+						const buckets = Array.isArray(u.buckets) ? u.buckets : [];
+						if (!buckets.length) {
+							html += `<tr>`
+								+ reportTd(L.name || 'Name', esc(u.display_name || u.user_id || '-'))
+								+ reportTd(L.premiumBucket || 'Category', '—')
+								+ reportTd(L.hours || 'Hours', '0')
+								+ reportTd(L.premiumRate || 'Rate', '—')
+								+ reportTd(L.premiumValued || 'Valued hours', '0')
+								+ `</tr>`;
+							return;
+						}
+						buckets.forEach((b) => {
+							const pct = b.rate != null ? Math.round(Number(b.rate) * 100) + '%' : '—';
+							html += `<tr>`
+								+ reportTd(L.name || 'Name', esc(u.display_name || u.user_id || '-'))
+								+ reportTd(L.premiumBucket || 'Category', esc(b.label || b.id || '-'))
+								+ reportTd(L.hours || 'Hours', esc(b.hours != null ? b.hours : '0'))
+								+ reportTd(L.premiumRate || 'Rate', esc(pct))
+								+ reportTd(L.premiumValued || 'Valued hours', esc(b.valued_hours != null ? b.valued_hours : '0'))
+								+ `</tr>`;
+						});
+					});
+					html += '</tbody></table></div>';
+				}
 			} else if (report.type === 'overtime' && report.users && report.users.length) {
 				const bankOn = report.bank_enabled === true;
 				html += `<h4 class="report-subhead">${esc(L.users || 'Users')}</h4>`;
@@ -652,6 +694,45 @@
 			const scope = reportScopeInput ? reportScopeInput.value : '';
 			const adminTeamSelect = document.getElementById('admin-team-select');
 			const managerTeamSelect = document.getElementById('manager-team-select');
+
+			// Hour premiums: always use dedicated premium endpoint (supports teamId / org).
+			if (reportType === 'premium') {
+				if (A.isAdmin && scope === 'organization') {
+					return {
+						apiUrl: apiMap.premium || null,
+						isTeam: false,
+						queryParams: { userId: '' },
+					};
+				}
+				if (A.isAdmin && scope === 'admin_team') {
+					const teamId = adminTeamSelect && adminTeamSelect.value ? adminTeamSelect.value.trim() : '';
+					return {
+						apiUrl: apiMap.premium || null,
+						isTeam: true,
+						queryParams: { teamId, startDate, endDate },
+					};
+				}
+				if (A.isManager && scope === 'manager_team') {
+					return {
+						apiUrl: apiMap.premium || null,
+						isTeam: true,
+						queryParams: { managerScope: '1', startDate, endDate },
+					};
+				}
+				if (A.isManager && scope === 'manager_single_team') {
+					const teamId = managerTeamSelect && managerTeamSelect.value ? managerTeamSelect.value.trim() : '';
+					return {
+						apiUrl: apiMap.premium || null,
+						isTeam: true,
+						queryParams: { teamId, startDate, endDate },
+					};
+				}
+				return {
+					apiUrl: apiMap.premium || null,
+					isTeam: false,
+					queryParams: {},
+				};
+			}
 
 			// Default: per-user reports (viewer or target user)
 			if (!scope || scope === '') {
@@ -910,6 +991,11 @@
 										: (A.l10n && A.l10n.exportScopeNotice) ||
 											'The download will contain one row per team member matching this preview.';
 								html += `<p class="report-info" role="status">${esc(scopeNotice)}</p>`;
+							} else if (reportType === 'premium') {
+								html += `<p class="report-info" role="status">${esc(
+									(A.l10n && A.l10n.teamDownloadPremiumOk) ||
+									'Team download for hour premiums includes one row per person and category.',
+								)}</p>`;
 							} else {
 								html += `<p class="report-info" role="status">${esc(
 									(A.l10n && A.l10n.teamDownloadOnlyWorkingTimeExport) ||
@@ -1043,6 +1129,55 @@
 			const format = formatSelect ? formatSelect.value : 'csv';
 			const scope = reportScopeInput ? reportScopeInput.value : '';
 			const teamScopes = ['admin_team', 'manager_team', 'manager_single_team'];
+
+			// Hour premiums: server CSV/JSON via dedicated endpoint (personal, org, team).
+			if (reportType === 'premium') {
+				const apiMap = A.apiUrl || {};
+				const premiumApi = apiMap.premium;
+				if (!premiumApi) {
+					return;
+				}
+				try {
+					const urlObj = new URL(toDownloadHref(premiumApi));
+					urlObj.searchParams.set('startDate', startIso);
+					urlObj.searchParams.set('endDate', endIso);
+					urlObj.searchParams.set('download', '1');
+					if (format) {
+						urlObj.searchParams.set('format', format);
+					}
+					if (scope === 'organization') {
+						urlObj.searchParams.set('userId', '');
+					} else if (scope === 'admin_team') {
+						const adminTeamSelect = document.getElementById('admin-team-select');
+						const teamId = adminTeamSelect && adminTeamSelect.value ? adminTeamSelect.value.trim() : '';
+						if (!teamId) {
+							showDownloadError((A.l10n && A.l10n.teamRequired) || 'Please select a team.');
+							return;
+						}
+						urlObj.searchParams.set('teamId', teamId);
+					} else if (scope === 'manager_team') {
+						urlObj.searchParams.set('managerScope', '1');
+					} else if (scope === 'manager_single_team') {
+						const managerTeamSelect = document.getElementById('manager-team-select');
+						const teamId = managerTeamSelect && managerTeamSelect.value ? managerTeamSelect.value.trim() : '';
+						if (!teamId) {
+							showDownloadError((A.l10n && A.l10n.teamRequired) || 'Please select a team.');
+							return;
+						}
+						urlObj.searchParams.set('teamId', teamId);
+					}
+					const a = document.createElement('a');
+					a.href = urlObj.toString();
+					a.style.display = 'none';
+					a.setAttribute('download', '');
+					document.body.appendChild(a);
+					a.click();
+					document.body.removeChild(a);
+				} catch (e) {
+					// no-op
+				}
+				return;
+			}
 
 			// Organization-wide download is supported for working-time exports via team endpoint.
 			if (scope === 'organization') {

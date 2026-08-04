@@ -21,6 +21,8 @@ class ReportsExportChooserLayoutTest extends TestCase
 		$this->assertStringContainsString('data-report="monthly"', $template);
 		$this->assertStringContainsString('data-report="absence"', $template);
 		$this->assertStringContainsString('data-report="compliance"', $template);
+		$this->assertStringContainsString('premiumSurchargesEnabled', $template);
+		$this->assertStringContainsString('data-report="premium"', $template);
 		$this->assertStringContainsString('IconCatalog::render', $template);
 		$this->assertStringContainsString('azc-card__title', $template);
 
