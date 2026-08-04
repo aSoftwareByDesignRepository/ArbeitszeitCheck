@@ -4351,6 +4351,26 @@
 		"{remaining} more characters needed ({count} of {min})": "{remaining} more characters needed ({count} of {min})",
 		"Nextcloud admins always keep ArbeitszeitCheck admin powers. Add any colleague below to delegate app administration without making them a Nextcloud admin. Search and pick — never type a raw user id.": "Nextcloud admins always keep ArbeitszeitCheck admin powers. Add any colleague below to delegate app administration without making them a Nextcloud admin. Search and pick — never type a raw user id.",
 		"Dedicated app administrators appear in the list together with Nextcloud admins. Use search to find colleagues, then tick them. Changes take effect immediately after saving.": "Dedicated app administrators appear in the list together with Nextcloud admins. Use search to find colleagues, then tick them. Changes take effect immediately after saving.",
-		"Search colleagues to add as app admins…": "Search colleagues to add as app admins…"
+		"Search colleagues to add as app admins…": "Search colleagues to add as app admins…",
+		"Company status": "Company status",
+		"%1$d of %2$d working": "%1$d of %2$d working",
+		"%1$s · %2$s h": "%1$s · %2$s h",
+		"%1$d on break": "%1$d on break",
+		"%1$d paused": "%1$d paused",
+		"%1$d out": "%1$d out",
+		"%1$d away": "%1$d away",
+		"%1$d away (%2$s)": "%1$d away (%2$s)",
+		"%1$d vacation": "%1$d vacation",
+		"%1$d sick": "%1$d sick",
+		"%1$d other": "%1$d other",
+		"Nobody clocked in yet": "Nobody clocked in yet",
+		"Showing counts for the first %1$d of %2$d people.": "Showing counts for the first %1$d of %2$d people.",
+		"Open dashboard": "Open dashboard",
+		"Open employees": "Open employees",
+		"No people found.": "No people found.",
+		"Your overtime balance": "Your overtime balance",
+		"Worked hours minus your contract target (this year). This is an hour balance — not pay.": "Worked hours minus your contract target (this year). This is an hour balance — not pay.",
+		"Payouts are not the overtime balance": "Payouts are not the overtime balance",
+		"Payouts only record hours above the overtime bank cap. Each employee’s running hour balance (worked minus contract target) is on their dashboard.": "Payouts only record hours above the overtime bank cap. Each employee’s running hour balance (worked minus contract target) is on their dashboard."
 	}
 }

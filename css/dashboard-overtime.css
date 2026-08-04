@@ -35,13 +35,53 @@
 	color: var(--color-text-maxcontrast);
 }
 
+.dashboard-overtime-card__formula {
+	margin: 0.35rem 0 0;
+	max-width: 40rem;
+	font-size: 0.95rem;
+	line-height: 1.4;
+	color: var(--color-text-maxcontrast);
+}
+
 .dashboard-overtime-card__balance-value {
-	font-size: 1.75rem;
+	font-size: clamp(1.75rem, 4vw, 2.5rem);
 	font-weight: 700;
 	line-height: 1.2;
 	font-variant-numeric: tabular-nums;
 	/* Main text for contrast in all NC themes; sign + tint carry positive/negative (WCAG 1.4.1). */
 	color: var(--azc-text, var(--color-main-text));
+}
+
+.dashboard-overtime-card__bank-details {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.dashboard-overtime-card__bank-summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 0.75rem;
+	min-height: 44px;
+	cursor: pointer;
+	font-weight: 600;
+	list-style: none;
+}
+
+.dashboard-overtime-card__bank-summary::-webkit-details-marker {
+	display: none;
+}
+
+.dashboard-overtime-card__bank-summary::before {
+	content: '▸';
+	display: inline-block;
+	margin-inline-end: 0.25rem;
+	transition: transform 0.15s ease;
+}
+
+.dashboard-overtime-card__bank-details[open] > .dashboard-overtime-card__bank-summary::before {
+	transform: rotate(90deg);
 }
 
 .dashboard-overtime-card__balance-value.positive,

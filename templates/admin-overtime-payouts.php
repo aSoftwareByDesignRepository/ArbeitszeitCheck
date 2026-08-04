@@ -43,10 +43,23 @@ for ($m = 1; $m <= 12; $m++) {
         </div>
 
         <div class="admin-ot-payouts">
+            <?php
+            $calloutVariant = 'info';
+            $calloutRole = 'status';
+            $calloutId = 'admin-ot-payout-saldo-hint';
+            $calloutTitleId = 'admin-ot-payout-saldo-hint-title';
+            $calloutTitle = $l->t('Payouts are not the overtime balance');
+            $calloutText = $l->t('Payouts only record hours above the overtime bank cap. Each employee’s running hour balance (worked minus contract target) is on their dashboard.');
+            $calloutExtraClass = 'admin-ot-payouts__saldo-hint';
+            $calloutActions = [];
+            include __DIR__ . '/common/alert-callout.php';
+            ?>
+
             <?php if (!$bankEnabled): ?>
             <?php
             $calloutVariant = 'warning';
             $calloutRole = 'alert';
+            $calloutId = 'admin-ot-payout-bank-off';
             $calloutTitleId = 'admin-ot-payout-bank-off-title';
             $calloutTitle = $l->t('Overtime bank is off');
             $calloutText = $l->t('The overtime bank is disabled. Payouts cannot be processed until you enable it.');

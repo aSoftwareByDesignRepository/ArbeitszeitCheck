@@ -4351,7 +4351,27 @@
 		"{remaining} more characters needed ({count} of {min})": "Noch {remaining} Zeichen nötig ({count} von {min})",
 		"Nextcloud admins always keep ArbeitszeitCheck admin powers. Add any colleague below to delegate app administration without making them a Nextcloud admin. Search and pick — never type a raw user id.": "Nextcloud-Admins behalten immer die ArbeitszeitCheck-Adminrechte. Fügen Sie unten beliebige Kolleginnen und Kollegen hinzu, um die App-Verwaltung zu delegieren, ohne sie zu Nextcloud-Admins zu machen. Suchen und auswählen — niemals eine Benutzer-ID eintippen.",
 		"Dedicated app administrators appear in the list together with Nextcloud admins. Use search to find colleagues, then tick them. Changes take effect immediately after saving.": "Fest zugewiesene App-Administratorinnen und -Administratoren erscheinen zusammen mit Nextcloud-Admins in der Liste. Über die Suche Kolleginnen und Kollegen finden und anhaken. Änderungen gelten sofort nach dem Speichern.",
-		"Search colleagues to add as app admins…": "Kolleginnen und Kollegen als App-Admins hinzufügen…"
+		"Search colleagues to add as app admins…": "Kolleginnen und Kollegen als App-Admins hinzufügen…",
+		"Company status": "Unternehmensstatus",
+		"%1$d of %2$d working": "%1$d von %2$d arbeitend",
+		"%1$s · %2$s h": "%1$s · %2$s h",
+		"%1$d on break": "%1$d in Pause",
+		"%1$d paused": "%1$d pausiert",
+		"%1$d out": "%1$d ausgestempelt",
+		"%1$d away": "%1$d abwesend",
+		"%1$d away (%2$s)": "%1$d abwesend (%2$s)",
+		"%1$d vacation": "%1$d Urlaub",
+		"%1$d sick": "%1$d krank",
+		"%1$d other": "%1$d sonstige",
+		"Nobody clocked in yet": "Noch niemand eingestempelt",
+		"Showing counts for the first %1$d of %2$d people.": "Zählung für die ersten %1$d von %2$d Personen.",
+		"Open dashboard": "Dashboard öffnen",
+		"Open employees": "Mitarbeitende öffnen",
+		"No people found.": "Keine Personen gefunden.",
+		"Your overtime balance": "Ihr Überstundensaldo",
+		"Worked hours minus your contract target (this year). This is an hour balance — not pay.": "Gearbeitete Stunden minus Ihr Soll (dieses Jahr). Das ist ein Stundensaldo — kein Lohn.",
+		"Payouts are not the overtime balance": "Auszahlungen sind nicht der Überstundensaldo",
+		"Payouts only record hours above the overtime bank cap. Each employee’s running hour balance (worked minus contract target) is on their dashboard.": "Auszahlungen erfassen nur Stunden oberhalb der Konten-Obergrenze. Der laufende Stundensaldo (gearbeitet minus Soll) steht auf dem Dashboard der Mitarbeitenden."
 	},
 	"pluralForm": "nplurals=2; plural=(n != 1);"
 }

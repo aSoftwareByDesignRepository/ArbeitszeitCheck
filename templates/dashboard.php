@@ -476,7 +476,9 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                     ? (float)($overtimeBank['effective_balance'] ?? 0)
                     : (float)($_['overtimeYtdBalance'] ?? $metricOvertimeBalance);
                 $trafficEnabledPreview = ($overtimeTrafficLight['enabled'] ?? false) === true;
-                $showOvertimeSection = $bankEnabled || $trafficEnabledPreview || abs($displayBalancePreview) >= 0.01;
+                // Bachus: always show the overtime card (never hide when balance ≈ 0).
+                // Keeps Saldo discoverable; metrics panel no longer duplicates the balance.
+                $showOvertimeSection = true;
                 ?>
                 <article class="azc-card azc-dashboard-metrics-panel" aria-labelledby="dashboard-metrics-heading">
                     <header class="azc-card__header">
@@ -497,12 +499,6 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                         <?php } ?>
                         <span class="azc-dashboard-metric__value" aria-labelledby="dashboard-metric-week-label<?php echo $weekPeriodLabel !== '' ? ' dashboard-metric-week-period' : ''; ?>"><?php p($arbeitszeitCheckFormatHours($metricWeekHours)); ?> <span class="azc-dashboard-metric__unit"><?php p($l->t('hours')); ?></span></span>
                     </div>
-                    <?php if (!$showOvertimeSection): ?>
-                    <div class="azc-dashboard-metric" role="listitem">
-                        <span class="azc-dashboard-metric__label"><?php p($l->t('Overtime balance')); ?></span>
-                        <span class="azc-dashboard-metric__value azc-dashboard-metric__value--<?php echo $metricOvertimeBalance >= 0 ? 'positive' : 'negative'; ?>"><?php p($arbeitszeitCheckFormatHours($metricOvertimeBalance)); ?> <span class="azc-dashboard-metric__unit"><?php p($l->t('hours')); ?></span></span>
-                    </div>
-                    <?php endif; ?>
                     <?php if ($metricDailyNorm !== null && $metricDailyNorm > 0): ?>
                     <div class="azc-dashboard-metric" role="listitem">
                         <span class="azc-dashboard-metric__label"><?php p($l->t('Daily target (contract)')); ?></span>
@@ -515,6 +511,7 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
 
                 <?php
                     $displayBalance = $displayBalancePreview;
+                    $balanceSignPrefix = $displayBalance > 0.0001 ? '+' : '';
                     $lightState = (string)($overtimeTrafficLight['state'] ?? 'green');
                     $lightBadge = 'success';
                     $lightText = $l->t('Green — balance in target range');
@@ -543,15 +540,20 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                 <article class="azc-card azc-dashboard-overtime dashboard-overtime-card" aria-labelledby="dashboard-overtime-heading">
                     <header class="azc-card__header">
                         <div class="azc-card__header-text">
-                            <h3 id="dashboard-overtime-heading" class="azc-card__title"><?php p($l->t('Your overtime')); ?></h3>
+                            <h3 id="dashboard-overtime-heading" class="azc-card__title"><?php p($l->t('Your overtime balance')); ?></h3>
+                            <p id="dashboard-overtime-formula" class="azc-card__lead dashboard-overtime-card__formula">
+                                <?php p($l->t('Worked hours minus your contract target (this year). This is an hour balance — not pay.')); ?>
+                            </p>
                         </div>
                     </header>
                     <div class="azc-card__body">
                             <div class="dashboard-overtime-card__balance" role="group" aria-label="<?php p($l->t('Year-to-date overtime balance')); ?>">
                                 <span class="dashboard-overtime-card__balance-label"><?php p($bankEnabled ? $l->t('Balance (after payouts)') : $l->t('Balance (year to date)')); ?></span>
                                 <span class="dashboard-overtime-card__balance-value <?php echo $displayBalance >= 0 ? 'positive' : 'negative'; ?>"
-                                    aria-label="<?php p($l->t('Balance: %s hours', [number_format($displayBalance, 2)])); ?>">
-                                    <?php p(number_format($displayBalance, 2)); ?> <?php p($l->t('h')); ?>
+                                    id="dashboard-overtime-balance-value"
+                                    aria-describedby="dashboard-overtime-formula"
+                                    aria-label="<?php p($l->t('Balance: %s hours', [$balanceSignPrefix . number_format($displayBalance, 2)])); ?>">
+                                    <?php p($balanceSignPrefix . number_format($displayBalance, 2)); ?> <?php p($l->t('h')); ?>
                                 </span>
                             </div>
 
@@ -603,6 +605,13 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                     $bankStatusText = $l->t('Undertime — bank not in use');
                                 }
                             ?>
+                            <details class="dashboard-overtime-card__bank-details">
+                                <summary class="dashboard-overtime-card__bank-summary">
+                                    <?php p($l->t('Overtime bank and payouts')); ?>
+                                    <?php if ($payoutEligible >= 0.01): ?>
+                                    <span class="badge badge--error"><?php p($l->t('Eligible for payout')); ?>: <?php p(number_format($payoutEligible, 2)); ?> <?php p($l->t('h')); ?></span>
+                                    <?php endif; ?>
+                                </summary>
                             <div class="dashboard-overtime-card__bank" role="region" aria-labelledby="dashboard-overtime-bank-subheading">
                                 <h4 id="dashboard-overtime-bank-subheading" class="dashboard-overtime-card__bank-title"><?php p($l->t('Overtime bank')); ?></h4>
                                 <p class="form-help"><?php p($l->t('Save up to %s hours; payroll can pay out anything above the cap at month end.', [number_format($bankMax, 0)])); ?></p>
@@ -665,6 +674,7 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                 </div>
                                 <?php endif; ?>
                             </div>
+                            </details>
                             <?php endif; ?>
                     </div>
                 </article>
