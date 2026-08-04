@@ -577,6 +577,76 @@ class AdminControllerTest extends TestCase
 		$this->assertArrayNotHasKey('invalid_type', $matrix);
 	}
 
+	public function testUpdateNotificationSettingsPersistsPremiumPolicyAndFlag(): void
+	{
+		$policy = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::atStarterPreset();
+		$this->request->method('getParams')->willReturn([
+			'enabled' => false,
+			'recipients' => [],
+			'matrix' => [],
+			'premiumSurchargesEnabled' => true,
+			'premiumPolicy' => $policy,
+		]);
+
+		$captured = [];
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$captured): bool {
+				unset($lazy, $sensitive);
+				$captured[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$captured): string {
+				$key = (string)$key;
+				return $captured[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('1', $captured[Constants::CONFIG_PREMIUM_SURCHARGES_ENABLED]);
+		$this->assertArrayHasKey(Constants::CONFIG_PREMIUM_POLICY_JSON, $captured);
+		$stored = json_decode($captured[Constants::CONFIG_PREMIUM_POLICY_JSON], true, 512, JSON_THROW_ON_ERROR);
+		$this->assertSame('max_single_rate', $stored['stacking']);
+		$this->assertSame('1', $captured[Constants::CONFIG_PREMIUM_POLICY_VERSION]);
+		$this->assertTrue($data['settings']['premiumSurchargesEnabled']);
+		$this->assertSame('hours_only', $data['settings']['premiumPolicy']['currency_mode']);
+	}
+
+	public function testUpdateNotificationSettingsRejectsInvalidPremiumRate(): void
+	{
+		$policy = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::atStarterPreset();
+		$policy['categories'][0]['rate'] = 9.5;
+		$this->request->method('getParams')->willReturn([
+			'enabled' => false,
+			'recipients' => [],
+			'matrix' => [],
+			'premiumSurchargesEnabled' => true,
+			'premiumPolicy' => $policy,
+		]);
+
+		$response = $this->controller->updateNotificationSettings();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('PREMIUM_RATE_INVALID', $data['code']);
+	}
+
+	public function testGetNotificationSettingsIncludesPremiumDefaultsWhenUnset(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(static function (string $key, string $default = '') {
+				return $default;
+			});
+
+		$response = $this->controller->getNotificationSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertFalse($data['settings']['premiumSurchargesEnabled']);
+		$this->assertSame('max_single_rate', $data['settings']['premiumPolicy']['stacking']);
+		$this->assertNotEmpty($data['settings']['premiumPolicy']['categories']);
+	}
+
 	public function testGetAdminSettingsReturnsConfiguredAppAdminsAndAvailableList(): void
 	{
 		$this->appConfig->method('getAppValueString')
