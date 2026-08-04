@@ -10,6 +10,7 @@ import { login, credsFromEnv } from './helpers/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixtureUrl = 'file://' + path.resolve(__dirname, 'fixtures/bachus-premium-config.html');
+const dashboardPremiumFixtureUrl = 'file://' + path.resolve(__dirname, 'fixtures/dashboard-premium-summary.html');
 
 test.describe('Bachus: overtime discoverability (employee)', () => {
 	test.beforeEach(async ({ page }) => {
@@ -83,5 +84,22 @@ test.describe('Bachus: simplified premium config fixture', () => {
 
 		await page.locator('#premium-save').click();
 		await expect(page.locator('#premium-status')).toContainText(/saved|gespeichert/i);
+	});
+});
+
+test.describe('Bachus: dashboard Saldo + Zuschläge fixture', () => {
+	test('J-P2: premiums section stays separate from Saldo and is axe-clean', async ({ page }) => {
+		await page.goto(dashboardPremiumFixtureUrl);
+		await expect(page.locator('#dashboard-overtime-heading')).toBeVisible();
+		await expect(page.locator('#dashboard-overtime-balance-value')).toContainText(/12\.50/);
+		await expect(page.locator('#dashboard-premium-heading')).toBeVisible();
+		await expect(page.locator('#dashboard-premium-help')).toContainText(/not pay|not your Saldo/i);
+		await expect(page.locator('.dashboard-premium-list li')).toHaveCount(2);
+
+		const results = await new AxeBuilder({ page })
+			.include('.dashboard-overtime-card')
+			.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+			.analyze();
+		expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 	});
 });

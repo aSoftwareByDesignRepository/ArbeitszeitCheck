@@ -93,6 +93,106 @@
 		sync();
 	}
 
+	function collectPremiumPolicy(form) {
+		const nightWindows = {
+			at: { start: '22:00', end: '05:00' },
+			de: { start: '23:00', end: '06:00' },
+		};
+		const presetHint = form.getAttribute('data-premium-night-preset') || 'at';
+		const night = nightWindows[presetHint] || nightWindows.at;
+		const defs = [
+			{ id: 'overtime_base', label: 'Overtime above daily target', applies_to: 'hours_above_daily_or_weekly_threshold', threshold_ref: 'model_net_daily', onSel: '#premium-cat-ot-on', rateSel: '#premium-cat-ot-rate' },
+			{ id: 'sunday', label: 'Sunday', applies_to: 'weekday', weekdays: ['sun'], onSel: '#premium-cat-sun-on', rateSel: '#premium-cat-sun-rate' },
+			{ id: 'saturday', label: 'Saturday', applies_to: 'weekday', weekdays: ['sat'], onSel: '#premium-cat-sat-on', rateSel: '#premium-cat-sat-rate' },
+			{ id: 'night', label: 'Night', applies_to: 'time_window', window_start: night.start, window_end: night.end, onSel: '#premium-cat-night-on', rateSel: '#premium-cat-night-rate' },
+		];
+		const categories = [];
+		defs.forEach((def) => {
+			const on = form.querySelector(def.onSel);
+			const rateEl = form.querySelector(def.rateSel);
+			const pct = rateEl ? Number(rateEl.value) : 0;
+			const rate = Number.isFinite(pct) ? Math.max(0, Math.min(300, pct)) / 100 : 0;
+			const row = {
+				id: def.id,
+				label: def.label,
+				rate: rate,
+				enabled: !!(on && on.checked),
+				applies_to: def.applies_to,
+			};
+			if (def.weekdays) {
+				row.weekdays = def.weekdays;
+			}
+			if (def.window_start) {
+				row.window_start = def.window_start;
+				row.window_end = def.window_end;
+			}
+			if (def.threshold_ref) {
+				row.threshold_ref = def.threshold_ref;
+			}
+			categories.push(row);
+		});
+		return {
+			version: 1,
+			currency_mode: 'hours_only',
+			stacking: 'max_single_rate',
+			holiday_policy: 'treat_as_sunday',
+			categories: categories,
+		};
+	}
+
+	function applyPremiumPreset(form, kind) {
+		const rates = {
+			at: { ot: 50, sun: 100, sat: 50, night: 50 },
+			de: { ot: 50, sun: 100, sat: 50, night: 50 },
+			blank: { ot: 0, sun: 0, sat: 0, night: 0 },
+		};
+		const r = rates[kind] || rates.at;
+		form.setAttribute('data-premium-night-preset', kind === 'de' ? 'de' : 'at');
+		const map = [
+			['#premium-cat-ot-on', '#premium-cat-ot-rate', r.ot, kind !== 'blank'],
+			['#premium-cat-sun-on', '#premium-cat-sun-rate', r.sun, kind !== 'blank'],
+			['#premium-cat-sat-on', '#premium-cat-sat-rate', r.sat, kind === 'at' || kind === 'de'],
+			['#premium-cat-night-on', '#premium-cat-night-rate', r.night, kind !== 'blank'],
+		];
+		map.forEach(([onSel, rateSel, pct, on]) => {
+			const onEl = form.querySelector(onSel);
+			const rateEl = form.querySelector(rateSel);
+			if (onEl) {
+				onEl.checked = !!on;
+			}
+			if (rateEl) {
+				rateEl.value = String(pct);
+			}
+		});
+	}
+
+	function bindPremiumUi(form, onDirty) {
+		const enabled = form.querySelector('#premiumSurchargesEnabled');
+		const panel = form.querySelector('#premium-surcharges-panel');
+		const sync = () => {
+			if (!panel) {
+				return;
+			}
+			if (enabled && enabled.checked) {
+				panel.removeAttribute('hidden');
+			} else {
+				panel.setAttribute('hidden', 'hidden');
+			}
+		};
+		if (enabled) {
+			enabled.addEventListener('change', sync);
+			sync();
+		}
+		form.querySelectorAll('[data-premium-preset]').forEach((btn) => {
+			btn.addEventListener('click', () => {
+				applyPremiumPreset(form, btn.getAttribute('data-premium-preset') || 'at');
+				if (typeof onDirty === 'function') {
+					onDirty();
+				}
+			});
+		});
+	}
+
 	function init() {
 		const form = $('#admin-notifications-form');
 		const saveButton = $('#admin-notifications-save');
@@ -123,6 +223,7 @@
 			}
 		});
 
+		bindPremiumUi(form, markDirty);
 		bindDependentBlock($('#hrNotificationsEnabled'), 'hr-notification-settings');
 		bindDependentBlock($('#overtimeTrafficLightEnabled'), 'overtime-trafficlight-settings');
 		bindDependentBlock($('#overtimeBankEnabled'), 'overtime-bank-settings');
@@ -260,6 +361,8 @@
 					vacationRolloverIncludeUnusedAnnual: isChecked(formData.get('vacationRolloverIncludeUnusedAnnual')),
 					vacationProrationMethod: String(formData.get('vacationProrationMethod') || 'twelfths'),
 					vacationYearMode: String(formData.get('vacationYearMode') || 'calendar'),
+					premiumSurchargesEnabled: isChecked(formData.get('premiumSurchargesEnabled')),
+					premiumPolicy: collectPremiumPolicy(form),
 					sendIcalApprovedAbsences: isChecked(formData.get('sendIcalApprovedAbsences')),
 					sendIcalToSubstitute: isChecked(formData.get('sendIcalToSubstitute')),
 					sendIcalToManagers: isChecked(formData.get('sendIcalToManagers')),

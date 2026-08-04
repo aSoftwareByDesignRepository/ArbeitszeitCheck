@@ -2448,7 +2448,36 @@ class AdminController extends Controller
 				'vacationRolloverIncludeUnusedAnnual' => Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL,
 				'vacationProrationMethod' => Constants::CONFIG_VACATION_PRORATION_METHOD,
 				'vacationYearMode' => Constants::CONFIG_VACATION_YEAR_MODE,
+				'premiumSurchargesEnabled' => Constants::CONFIG_PREMIUM_SURCHARGES_ENABLED,
 			];
+
+			// Premium policy JSON is validated separately (not a simple string map).
+			if (array_key_exists('premiumPolicy', $params)) {
+				$policyRaw = $params['premiumPolicy'];
+				if (!is_array($policyRaw)) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Validation failed'),
+						'code' => 'PREMIUM_POLICY_INVALID',
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$errors = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::validate($policyRaw);
+				if ($errors !== []) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Validation failed'),
+						'code' => $errors[0],
+						'codes' => $errors,
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$policy = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::fromValidated($policyRaw);
+				$this->appConfig->setAppValueString(
+					Constants::CONFIG_PREMIUM_POLICY_JSON,
+					json_encode($policy->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)
+				);
+				$ver = (int)$this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, '0');
+				$this->appConfig->setAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, (string)($ver + 1));
+			}
 
 			foreach ($allowedKeys as $paramKey => $configKey) {
 				if (!isset($params[$paramKey])) {
@@ -2466,6 +2495,7 @@ class AdminController extends Controller
 					'sendEmailSubstituteApprovedToManager',
 					'vacationRolloverEnabled',
 					'vacationRolloverIncludeUnusedAnnual',
+					'premiumSurchargesEnabled',
 				], true)) {
 					$value = ($value === true || $value === 'true' || $value === '1') ? '1' : '0';
 				} elseif ($paramKey === 'vacationProrationMethod') {
@@ -2745,7 +2775,32 @@ class AdminController extends Controller
 			'overtimePayoutNotifyInApp' => $this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_PAYOUT_NOTIFY_IN_APP, '1') === '1',
 			'overtimePayoutNotifyEmail' => $this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_PAYOUT_NOTIFY_EMAIL, '1') === '1',
 			'overtimeBlockMonthClosurePendingPayout' => $this->appConfig->getAppValueString(Constants::CONFIG_OVERTIME_BLOCK_MONTH_CLOSURE_PENDING_PAYOUT, '0') === '1',
+			'premiumSurchargesEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_SURCHARGES_ENABLED, '0') === '1',
+			'premiumPolicy' => $this->decodePremiumPolicyForAdmin(),
+			'premiumPolicyVersion' => (int)$this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, '0'),
 		];
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function decodePremiumPolicyForAdmin(): array
+	{
+		$raw = $this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_POLICY_JSON, '');
+		if ($raw === '') {
+			return \OCA\ArbeitszeitCheck\Support\PremiumPolicy::atStarterPreset();
+		}
+		try {
+			$decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+		} catch (\JsonException) {
+			return \OCA\ArbeitszeitCheck\Support\PremiumPolicy::atStarterPreset();
+		}
+		if (!is_array($decoded)) {
+			return \OCA\ArbeitszeitCheck\Support\PremiumPolicy::atStarterPreset();
+		}
+		$policy = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::tryFromArray($decoded);
+
+		return $policy !== null ? $policy->toArray() : \OCA\ArbeitszeitCheck\Support\PremiumPolicy::atStarterPreset();
 	}
 
 	/**

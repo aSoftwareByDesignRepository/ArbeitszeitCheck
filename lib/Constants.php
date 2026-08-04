@@ -345,6 +345,19 @@ final class Constants
 	/** App config: when "1", overtime bank cap and month-end payout (Auszahlung) are active. */
 	public const CONFIG_OVERTIME_BANK_ENABLED = 'overtime_bank_enabled';
 
+	/**
+	 * When "1", hour+% premium (Zuschlag) classification is enabled org-wide.
+	 * Default off — orthogonal to Saldo / Auszahlung.
+	 */
+	public const CONFIG_PREMIUM_SURCHARGES_ENABLED = 'premium_surcharges_enabled';
+
+	/** JSON PremiumPolicy document (hours_only). Empty = use AT starter when enabling. */
+	public const CONFIG_PREMIUM_POLICY_JSON = 'premium_policy_json';
+
+	/** Monotonic policy revision for audit / snapshots. */
+	public const CONFIG_PREMIUM_POLICY_VERSION = 'premium_policy_version';
+
+
 	/** App config: maximum banked overtime hours (default 100). Hours above may be paid out. */
 	public const CONFIG_OVERTIME_BANK_MAX_HOURS = 'overtime_bank_max_hours';
 

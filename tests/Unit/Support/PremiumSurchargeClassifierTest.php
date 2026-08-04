@@ -1,0 +1,174 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @copyright Copyright (c) 2026
+ * @license AGPL-3.0-or-later
+ */
+
+namespace OCA\ArbeitszeitCheck\Tests\Unit\Support;
+
+use OCA\ArbeitszeitCheck\Support\PremiumPolicy;
+use OCA\ArbeitszeitCheck\Support\PremiumSurchargeClassifier;
+use PHPUnit\Framework\TestCase;
+
+class PremiumSurchargeClassifierTest extends TestCase
+{
+	private function tz(): \DateTimeZone
+	{
+		return new \DateTimeZone('Europe/Vienna');
+	}
+
+	private function interval(string $start, string $end): array
+	{
+		$tz = $this->tz();
+		return [
+			new \DateTimeImmutable($start, $tz),
+			new \DateTimeImmutable($end, $tz),
+		];
+	}
+
+	public function testSundayTwoHoursAt100Percent(): void
+	{
+		$policy = PremiumPolicy::fromValidated(PremiumPolicy::atStarterPreset());
+		$classifier = new PremiumSurchargeClassifier();
+		// Sunday 2026-08-09 10:00–12:00
+		$result = $classifier->classify(
+			[$this->interval('2026-08-09 10:00:00', '2026-08-09 12:00:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$sunday = null;
+		foreach ($result['buckets'] as $b) {
+			if ($b['id'] === 'sunday') {
+				$sunday = $b;
+			}
+		}
+		$this->assertNotNull($sunday);
+		$this->assertEqualsWithDelta(2.0, $sunday['hours'], 0.01);
+		$this->assertEqualsWithDelta(1.0, $sunday['rate'], 0.001);
+	}
+
+	public function testSaturdayFourHours(): void
+	{
+		$policy = PremiumPolicy::fromValidated(PremiumPolicy::atStarterPreset());
+		$classifier = new PremiumSurchargeClassifier();
+		// Saturday 2026-08-08 08:00–12:00
+		$result = $classifier->classify(
+			[$this->interval('2026-08-08 08:00:00', '2026-08-08 12:00:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$sat = null;
+		foreach ($result['buckets'] as $b) {
+			if ($b['id'] === 'saturday') {
+				$sat = $b;
+			}
+		}
+		$this->assertNotNull($sat);
+		$this->assertEqualsWithDelta(4.0, $sat['hours'], 0.01);
+	}
+
+	public function testNightWindowSplitMondayEvening(): void
+	{
+		$policy = PremiumPolicy::fromValidated(PremiumPolicy::atStarterPreset());
+		$classifier = new PremiumSurchargeClassifier();
+		// Monday 2026-08-03 21:00–23:00 → 1h base (no premium), 1h night
+		$result = $classifier->classify(
+			[$this->interval('2026-08-03 21:00:00', '2026-08-03 23:00:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$night = null;
+		foreach ($result['buckets'] as $b) {
+			if ($b['id'] === 'night') {
+				$night = $b;
+			}
+		}
+		$this->assertNotNull($night);
+		$this->assertEqualsWithDelta(1.0, $night['hours'], 0.01);
+	}
+
+	public function testMaxSingleRatePrefersSundayOverNight(): void
+	{
+		$raw = PremiumPolicy::atStarterPreset();
+		$raw['stacking'] = PremiumPolicy::STACKING_MAX_SINGLE;
+		$policy = PremiumPolicy::fromValidated($raw);
+		$classifier = new PremiumSurchargeClassifier();
+		// Sunday night 2026-08-09 22:00–23:00 — sunday 100% > night 50%
+		$result = $classifier->classify(
+			[$this->interval('2026-08-09 22:00:00', '2026-08-09 23:00:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$byId = [];
+		foreach ($result['buckets'] as $b) {
+			$byId[$b['id']] = $b['hours'];
+		}
+		$this->assertEqualsWithDelta(1.0, $byId['sunday'] ?? 0.0, 0.01);
+		$this->assertArrayNotHasKey('night', $byId);
+	}
+
+	public function testOvertimeAboveDailyTarget(): void
+	{
+		$policy = PremiumPolicy::fromValidated(PremiumPolicy::atStarterPreset());
+		$classifier = new PremiumSurchargeClassifier();
+		// Monday 07:00–17:00 = 10h; daily soll 8 → 2h OT (after 15:00)
+		$result = $classifier->classify(
+			[$this->interval('2026-08-03 07:00:00', '2026-08-03 17:00:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$ot = null;
+		foreach ($result['buckets'] as $b) {
+			if ($b['id'] === 'overtime_base') {
+				$ot = $b;
+			}
+		}
+		$this->assertNotNull($ot);
+		$this->assertEqualsWithDelta(2.0, $ot['hours'], 0.01);
+	}
+
+	public function testDisabledPremiumCategoriesIgnored(): void
+	{
+		$raw = PremiumPolicy::atStarterPreset();
+		foreach ($raw['categories'] as &$cat) {
+			$cat['enabled'] = false;
+		}
+		unset($cat);
+		$policy = PremiumPolicy::fromValidated($raw);
+		$classifier = new PremiumSurchargeClassifier();
+		$result = $classifier->classify(
+			[$this->interval('2026-08-09 10:00:00', '2026-08-09 12:00:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$this->assertSame([], $result['buckets']);
+	}
+}
+
+class PremiumPolicyTest extends TestCase
+{
+	public function testAtStarterValidates(): void
+	{
+		$raw = PremiumPolicy::atStarterPreset();
+		$this->assertSame([], PremiumPolicy::validate($raw));
+		$p = PremiumPolicy::fromValidated($raw);
+		$this->assertSame(PremiumPolicy::STACKING_MAX_SINGLE, $p->getStacking());
+		$this->assertCount(4, $p->getEnabledCategories());
+	}
+
+	public function testRejectsBadRate(): void
+	{
+		$raw = PremiumPolicy::atStarterPreset();
+		$raw['categories'][0]['rate'] = 9.0;
+		$this->assertContains('PREMIUM_RATE_INVALID', PremiumPolicy::validate($raw));
+	}
+}

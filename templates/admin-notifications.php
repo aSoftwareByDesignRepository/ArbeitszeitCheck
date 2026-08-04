@@ -31,11 +31,22 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
                 ['href' => '#section-absence-workflow-heading', 'label' => $l->t('Calendar & email')],
                 ['href' => '#overtime-trafficlight-heading', 'label' => $l->t('Overtime alerts')],
                 ['href' => '#overtime-bank-heading', 'label' => $l->t('Overtime bank')],
+                ['href' => '#premium-surcharges-heading', 'label' => $l->t('Hour premiums')],
                 ['href' => '#hr-notifications-heading', 'label' => $l->t('HR notifications')],
             ];
             include __DIR__ . '/common/azc-jump-nav.php';
             ?>
-            <form id="admin-notifications-form" class="form admin-settings-form admin-notifications-form" novalidate>
+            <?php
+            $premiumNightPreset = 'at';
+            $pp = is_array($settings['premiumPolicy'] ?? null) ? $settings['premiumPolicy'] : [];
+            foreach ((array)($pp['categories'] ?? []) as $pc) {
+            	if (is_array($pc) && ($pc['id'] ?? '') === 'night' && ($pc['window_start'] ?? '') === '23:00') {
+            		$premiumNightPreset = 'de';
+            		break;
+            	}
+            }
+            ?>
+            <form id="admin-notifications-form" class="form admin-settings-form admin-notifications-form" novalidate data-premium-night-preset="<?php p($premiumNightPreset); ?>">
                 <input type="hidden" name="requesttoken" value="<?php p($_['requesttoken'] ?? ''); ?>">
 
                 <div class="azc-admin-notifications-form__sections">
@@ -456,6 +467,110 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 					</div>
 					</div>
                     </div>
+				</section>
+
+				<?php
+				$premiumEnabled = (bool)($settings['premiumSurchargesEnabled'] ?? false);
+				$premiumPolicy = is_array($settings['premiumPolicy'] ?? null) ? $settings['premiumPolicy'] : [];
+				$premiumCats = is_array($premiumPolicy['categories'] ?? null) ? $premiumPolicy['categories'] : [];
+				$catById = [];
+				foreach ($premiumCats as $c) {
+					if (is_array($c) && isset($c['id'])) {
+						$catById[(string)$c['id']] = $c;
+					}
+				}
+				$ratePct = static function (string $id) use ($catById): string {
+					$r = (float)($catById[$id]['rate'] ?? 0);
+					return (string)(int)round($r * 100);
+				};
+				$catOn = static function (string $id) use ($catById): bool {
+					if (!isset($catById[$id])) {
+						return false;
+					}
+					return !array_key_exists('enabled', $catById[$id]) || !empty($catById[$id]['enabled']);
+				};
+				?>
+				<section class="azc-card azc-admin-notifications-section admin-settings-section" aria-labelledby="premium-surcharges-heading" id="premium-surcharges-section">
+					<header class="azc-card__header">
+						<div class="azc-card__header-text">
+							<h2 id="premium-surcharges-heading" class="azc-card__title"><?php p($l->t('Hour premiums (Zuschläge)')); ?></h2>
+							<p class="azc-card__lead"><?php p($l->t('Hours plus a percentage for reports — not salary and not the overtime Saldo. Off by default.')); ?></p>
+						</div>
+					</header>
+					<div class="azc-card__body">
+						<div class="form-group">
+							<div class="form-checkbox">
+								<input type="checkbox"
+									id="premiumSurchargesEnabled"
+									name="premiumSurchargesEnabled"
+									value="1"
+									<?php echo $premiumEnabled ? 'checked' : ''; ?>
+									aria-describedby="premiumSurchargesEnabled-help"
+									aria-controls="premium-surcharges-panel">
+								<label for="premiumSurchargesEnabled" class="form-label">
+									<?php p($l->t('Turn on hour premiums')); ?>
+								</label>
+							</div>
+							<p id="premiumSurchargesEnabled-help" class="form-help">
+								<?php p($l->t('When on, completed work is classified into premium hour buckets (Sunday, night, Saturday, overtime above daily target). This does not change Saldo or Auszahlung.')); ?>
+							</p>
+						</div>
+						<div id="premium-surcharges-panel" class="admin-notifications-dependent-block" <?php echo $premiumEnabled ? '' : 'hidden'; ?>>
+							<p class="form-help form-help--block" id="premium-presets-help"><?php p($l->t('Load a starter, then edit the percentages. Rates are stored as fractions (50% = 0.50).')); ?></p>
+							<div class="premium-presets" role="group" aria-labelledby="premium-presets-help">
+								<button type="button" class="azc-btn azc-btn--secondary azc-btn--sm" data-premium-preset="at"><?php p($l->t('AT starter')); ?></button>
+								<button type="button" class="azc-btn azc-btn--secondary azc-btn--sm" data-premium-preset="de"><?php p($l->t('DE Tarif starter')); ?></button>
+								<button type="button" class="azc-btn azc-btn--tertiary azc-btn--sm" data-premium-preset="blank"><?php p($l->t('Clear categories')); ?></button>
+							</div>
+							<div class="table-container" role="region" aria-label="<?php p($l->t('Premium categories')); ?>">
+								<table class="table premium-categories-table" id="premium-categories-table">
+									<thead>
+										<tr>
+											<th scope="col"><?php p($l->t('On')); ?></th>
+											<th scope="col"><?php p($l->t('Category')); ?></th>
+											<th scope="col"><?php p($l->t('Percent')); ?></th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr data-premium-id="overtime_base">
+											<td><input type="checkbox" class="premium-cat-on" id="premium-cat-ot-on" <?php echo $catOn('overtime_base') ? 'checked' : ''; ?> aria-label="<?php p($l->t('Overtime above daily target on')); ?>"></td>
+											<td><label for="premium-cat-ot-rate"><?php p($l->t('Overtime above daily target')); ?></label></td>
+											<td>
+												<input type="number" class="form-input premium-cat-rate" id="premium-cat-ot-rate" min="0" max="300" step="1" value="<?php p($ratePct('overtime_base') !== '0' || $catOn('overtime_base') ? $ratePct('overtime_base') : '50'); ?>" aria-describedby="premium-ot-hint">
+												<span aria-hidden="true">%</span>
+											</td>
+										</tr>
+										<tr data-premium-id="sunday">
+											<td><input type="checkbox" class="premium-cat-on" id="premium-cat-sun-on" <?php echo $catOn('sunday') ? 'checked' : ''; ?> aria-label="<?php p($l->t('Sunday on')); ?>"></td>
+											<td><label for="premium-cat-sun-rate"><?php p($l->t('Sunday')); ?></label></td>
+											<td>
+												<input type="number" class="form-input premium-cat-rate" id="premium-cat-sun-rate" min="0" max="300" step="1" value="<?php p($ratePct('sunday') !== '0' || $catOn('sunday') ? $ratePct('sunday') : '100'); ?>">
+												<span aria-hidden="true">%</span>
+											</td>
+										</tr>
+										<tr data-premium-id="saturday">
+											<td><input type="checkbox" class="premium-cat-on" id="premium-cat-sat-on" <?php echo $catOn('saturday') ? 'checked' : ''; ?> aria-label="<?php p($l->t('Saturday on')); ?>"></td>
+											<td><label for="premium-cat-sat-rate"><?php p($l->t('Saturday')); ?></label></td>
+											<td>
+												<input type="number" class="form-input premium-cat-rate" id="premium-cat-sat-rate" min="0" max="300" step="1" value="<?php p($ratePct('saturday') !== '0' || $catOn('saturday') ? $ratePct('saturday') : '50'); ?>">
+												<span aria-hidden="true">%</span>
+											</td>
+										</tr>
+										<tr data-premium-id="night">
+											<td><input type="checkbox" class="premium-cat-on" id="premium-cat-night-on" <?php echo $catOn('night') ? 'checked' : ''; ?> aria-label="<?php p($l->t('Night on')); ?>"></td>
+											<td><label for="premium-cat-night-rate"><?php p($l->t('Night')); ?></label></td>
+											<td>
+												<input type="number" class="form-input premium-cat-rate" id="premium-cat-night-rate" min="0" max="300" step="1" value="<?php p($ratePct('night') !== '0' || $catOn('night') ? $ratePct('night') : '50'); ?>">
+												<span aria-hidden="true">%</span>
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+							<p id="premium-ot-hint" class="form-help"><?php p($l->t('Stacking default: highest single percentage when rules overlap. Night window follows the preset (AT 22:00–05:00, DE 23:00–06:00).')); ?></p>
+							<p class="form-help form-help--note"><?php p($l->t('Overtime premium = hours above the daily contract target for that weekday — separate from your Saldo hour balance.')); ?></p>
+						</div>
+					</div>
 				</section>
 
 				<section class="azc-card azc-admin-notifications-section admin-settings-section" aria-labelledby="hr-notifications-heading">

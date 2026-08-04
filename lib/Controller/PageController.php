@@ -326,6 +326,23 @@ class PageController extends Controller
 			$workingTimeModelMissing = $this->isWorkingTimeModelMissing($userId);
 			$projectCheckLinkingEnabled = $this->projectCheckIntegration->isLinkingEnabledForUser($userId);
 
+			$premiumSummary = [
+				'enabled' => false,
+				'buckets' => [],
+			];
+			try {
+				$premiumSvc = \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class);
+				if ($premiumSvc->isEnabled()) {
+					$premiumSummary = $premiumSvc->summariseForUser(
+						$userId,
+						new \DateTime('first day of this month'),
+						new \DateTime('today')
+					);
+				}
+			} catch (\Throwable) {
+				$premiumSummary = ['enabled' => false, 'buckets' => []];
+			}
+
 			$params = $this->buildShellParams(
 				'dashboard',
 				$this->l10n->t('Dashboard'),
@@ -339,6 +356,7 @@ class PageController extends Controller
 				'overtimeBank' => $overtimeExtras['overtimeBank'],
 				'overtimeTrafficLight' => $overtimeExtras['overtimeTrafficLight'],
 				'overtimePayoutHistory' => $overtimeExtras['overtimePayoutHistory'],
+				'premiumSummary' => $premiumSummary,
 				'error' => $overtimeExtras['error'],
 				'recentEntries' => $recentEntries,
 				'isFirstTimeUser' => $isFirstTimeUser,
@@ -388,6 +406,7 @@ class PageController extends Controller
 				'overtimeBank' => ['enabled' => false, 'bank_max_hours' => 100.0, 'banked_hours' => 0.0, 'bank_fill_percent' => 0.0, 'payout_eligible_hours' => 0.0, 'effective_balance' => 0.0, 'bank_state' => 'disabled'],
 				'overtimeTrafficLight' => ['enabled' => false, 'state' => 'green', 'direction' => null, 'level' => null, 'balance' => 0.0],
 				'overtimePayoutHistory' => ['items' => [], 'total' => 0],
+				'premiumSummary' => ['enabled' => false, 'buckets' => []],
 				'recentEntries' => [],
 				'isFirstTimeUser' => true,
 				'workingTimeModelMissing' => false,

@@ -629,6 +629,21 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Support\PremiumSurchargeClassifier::class, function () {
+			return new \OCA\ArbeitszeitCheck\Support\PremiumSurchargeClassifier();
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class, function ($c) {
+			return new \OCA\ArbeitszeitCheck\Service\PremiumSurchargeService(
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),
+				$c->query(HolidayService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Support\PremiumSurchargeClassifier::class),
+			);
+		});
+
 		$context->registerService(VacationAllocationService::class, function($c) {
 			return new VacationAllocationService(
 				$c->query(\OCP\IConfig::class),

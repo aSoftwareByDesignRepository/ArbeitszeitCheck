@@ -272,3 +272,33 @@
 		background: CanvasText;
 	}
 }
+
+/* Phase D — hour premiums (Zuschläge) on overtime card */
+.dashboard-overtime-card__premiums {
+	margin-block-start: var(--azc-space-4, 1rem);
+	padding-block-start: var(--azc-space-3, 0.75rem);
+	border-block-start: 1px solid var(--azc-border, var(--color-border));
+}
+
+.dashboard-premium-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-2, 0.5rem);
+}
+
+.dashboard-premium-list li {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: var(--azc-space-2, 0.5rem);
+	min-height: 2.25rem;
+	align-items: center;
+}
+
+.dashboard-premium-list__value {
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}

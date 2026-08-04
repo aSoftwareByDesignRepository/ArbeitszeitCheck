@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dashboard overtime + hour premiums</title>
+	<style>
+		:root {
+			--bg: #f6f4ef;
+			--ink: #1a1a1a;
+			--muted: #4a4a4a;
+			--line: #c8c2b6;
+			--surface: #fffdf8;
+			--focus: #005fcc;
+		}
+		body {
+			margin: 0;
+			font-family: "Source Sans 3", "Segoe UI", sans-serif;
+			background: linear-gradient(160deg, #f6f4ef 0%, #e8efe8 100%);
+			color: var(--ink);
+			line-height: 1.45;
+		}
+		main {
+			max-width: 40rem;
+			margin: 0 auto;
+			padding: 1.5rem 1rem 3rem;
+		}
+		.card {
+			background: var(--surface);
+			border: 1px solid var(--line);
+			padding: 1.25rem 1.25rem 1.5rem;
+		}
+		h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
+		.formula { color: var(--muted); margin: 0 0 1rem; font-size: 0.95rem; }
+		.balance {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-between;
+			gap: 0.75rem;
+			align-items: baseline;
+			margin-bottom: 1rem;
+		}
+		.balance strong { font-size: 1.75rem; font-variant-numeric: tabular-nums; }
+		.premiums {
+			border-top: 1px solid var(--line);
+			padding-top: 1rem;
+			margin-top: 0.5rem;
+		}
+		.premiums h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
+		.premiums p { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.95rem; }
+		.premium-list {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 0.5rem;
+		}
+		.premium-list li {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-between;
+			gap: 0.5rem;
+			min-height: 2.25rem;
+			align-items: center;
+		}
+		:focus-visible {
+			outline: 3px solid var(--focus);
+			outline-offset: 2px;
+		}
+		@media (max-width: 30rem) {
+			.balance strong { font-size: 1.4rem; }
+		}
+	</style>
+</head>
+<body>
+<main id="azc-main-content">
+	<article class="card dashboard-overtime-card" aria-labelledby="dashboard-overtime-heading">
+		<h1 id="dashboard-overtime-heading">Your overtime balance</h1>
+		<p id="dashboard-overtime-formula" class="formula">Worked hours minus contract hours (Saldo).</p>
+		<div class="balance" role="group" aria-label="Year-to-date overtime balance">
+			<span>Balance (year to date)</span>
+			<strong id="dashboard-overtime-balance-value">12.50 h</strong>
+		</div>
+		<section class="premiums dashboard-overtime-card__premiums" aria-labelledby="dashboard-premium-heading">
+			<h2 id="dashboard-premium-heading">Hour premiums (this month)</h2>
+			<p id="dashboard-premium-help" class="formula">Hours with a percentage for reporting — not pay, and not your Saldo above.</p>
+			<ul class="premium-list dashboard-premium-list" aria-describedby="dashboard-premium-help">
+				<li>
+					<span>Sunday</span>
+					<span>2.00 h @ 100%</span>
+				</li>
+				<li>
+					<span>Night</span>
+					<span>1.00 h @ 50%</span>
+				</li>
+			</ul>
+		</section>
+	</article>
+</main>
+</body>
+</html>

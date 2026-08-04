@@ -490,3 +490,15 @@
 	line-height: 1.4;
 	cursor: pointer;
 }
+
+#app-content.azc-app--admin-notifications .premium-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--azc-space-2, 0.5rem);
+	margin-block: 0 var(--azc-space-3, 0.75rem);
+}
+
+#app-content.azc-app--admin-notifications .premium-categories-table .form-input {
+	max-inline-size: 6rem;
+	min-height: 2.5rem;
+}

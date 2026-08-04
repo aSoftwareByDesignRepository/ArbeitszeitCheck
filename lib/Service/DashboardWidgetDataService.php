@@ -162,7 +162,27 @@ class DashboardWidgetDataService {
 					? $this->projectCheckIntegration->getAvailableProjects($userId)
 					: [],
 			],
+			// Additive Phase D — null when premiums off (old apps ignore).
+			'premiumSummary'         => $this->buildPremiumSummaryForWidget($userId),
 		];
+	}
+
+	/**
+	 * @return array<string, mixed>|null
+	 */
+	private function buildPremiumSummaryForWidget(string $userId): ?array
+	{
+		try {
+			$svc = \OCP\Server::get(PremiumSurchargeService::class);
+			if (!$svc->isEnabled()) {
+				return null;
+			}
+			$start = new \DateTime('first day of this month');
+			$end = new \DateTime('today');
+			return $svc->summariseForUser($userId, $start, $end);
+		} catch (\Throwable) {
+			return null;
+		}
 	}
 
 	public function getManagerWidgetData(string $userId, int $limit = 7): array {

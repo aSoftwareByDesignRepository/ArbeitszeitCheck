@@ -557,6 +557,33 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                 </span>
                             </div>
 
+                            <?php
+                            $premiumSummary = is_array($_['premiumSummary'] ?? null) ? $_['premiumSummary'] : [];
+                            $premiumOn = !empty($premiumSummary['enabled']);
+                            $premiumBuckets = is_array($premiumSummary['buckets'] ?? null) ? $premiumSummary['buckets'] : [];
+                            if ($premiumOn):
+                            ?>
+                            <section class="dashboard-overtime-card__premiums" aria-labelledby="dashboard-premium-heading">
+                                <h4 id="dashboard-premium-heading" class="dashboard-overtime-card__bank-title"><?php p($l->t('Hour premiums (this month)')); ?></h4>
+                                <p class="form-help" id="dashboard-premium-help"><?php p($l->t('Hours with a percentage for reporting — not pay, and not your Saldo above.')); ?></p>
+                                <?php if ($premiumBuckets === []): ?>
+                                <p class="form-help" role="status"><?php p($l->t('No premium hours in this period yet.')); ?></p>
+                                <?php else: ?>
+                                <ul class="dashboard-premium-list" aria-describedby="dashboard-premium-help">
+                                    <?php foreach ($premiumBuckets as $bucket): ?>
+                                    <li>
+                                        <span class="dashboard-premium-list__label"><?php p((string)($bucket['label'] ?? $bucket['id'] ?? '')); ?></span>
+                                        <span class="dashboard-premium-list__value">
+                                            <?php p(number_format((float)($bucket['hours'] ?? 0), 2)); ?> <?php p($l->t('h')); ?>
+                                            @ <?php p((string)(int)round(((float)($bucket['rate'] ?? 0)) * 100)); ?>%
+                                        </span>
+                                    </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                                <?php endif; ?>
+                            </section>
+                            <?php endif; ?>
+
                             <?php if ($trafficEnabled): ?>
                             <div class="dashboard-overtime-card__traffic" role="status" aria-live="polite" aria-labelledby="dashboard-ot-traffic-label">
                                 <span id="dashboard-ot-traffic-label" class="dashboard-overtime-card__traffic-label"><?php p($l->t('Balance alert')); ?></span>
