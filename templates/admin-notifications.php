@@ -122,6 +122,32 @@ $eventTypes = is_array($_['eventTypes'] ?? null) ? $_['eventTypes'] : [];
 							</p>
 						</div>
 					</div>
+					<div class="azc-settings-subsection" role="group" aria-labelledby="vacation-year-mode-heading">
+						<h3 id="vacation-year-mode-heading" class="admin-settings-subsection__title"><?php p($l->t('Vacation year')); ?></h3>
+						<p class="form-help form-help--block" id="vacation-year-mode-intro">
+							<?php p($l->t('Choose whether vacation entitlement runs on the calendar year (1 January–31 December) or on each person’s hire anniversary. Default is the calendar year — leave it there unless your company uses anniversary years.')); ?>
+						</p>
+						<?php $vacationYearMode = (string)($settings['vacationYearMode'] ?? 'calendar'); ?>
+						<fieldset class="wtm-vacation-year-mode" aria-describedby="vacation-year-mode-intro vacation-year-mode-help">
+							<legend class="form-label"><?php p($l->t('Vacation year mode')); ?></legend>
+							<div class="form-radio">
+								<input type="radio" id="vacationYearMode-calendar" name="vacationYearMode" value="calendar"
+									<?php echo $vacationYearMode === 'anniversary' ? '' : 'checked'; ?>>
+								<label for="vacationYearMode-calendar"><?php p($l->t('Calendar year (1 Jan – 31 Dec)')); ?></label>
+							</div>
+							<div class="form-radio">
+								<input type="radio" id="vacationYearMode-anniversary" name="vacationYearMode" value="anniversary"
+									<?php echo $vacationYearMode === 'anniversary' ? 'checked' : ''; ?>>
+								<label for="vacationYearMode-anniversary"><?php p($l->t('Hire anniversary (from employment start)')); ?></label>
+							</div>
+						</fieldset>
+						<p id="vacation-year-mode-help" class="form-help">
+							<?php p($l->t('Anniversary mode needs an employment start date on each employee (Employees → person). People without a start date get no vacation entitlement until it is set. Carryover expiry still uses the calendar date below until a separate anniversary carryover rule is configured.')); ?>
+						</p>
+						<p class="form-help form-help--note" id="vacation-year-mode-rollover-note">
+							<?php p($l->t('Automatic calendar-year rollover is skipped while anniversary mode is on, so balances are not copied on the wrong boundary.')); ?>
+						</p>
+					</div>
 					<div class="azc-settings-subsection" role="group" aria-labelledby="vacation-proration-heading">
 						<h3 id="vacation-proration-heading" class="admin-settings-subsection__title"><?php p($l->t('Pro-rata vacation for partial years')); ?></h3>
 						<p class="form-help form-help--block" id="vacation-proration-intro">

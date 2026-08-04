@@ -27,6 +27,7 @@ class DashboardWidgetDataService {
 		private readonly IUserManager $userManager,
 		private readonly TimeZoneService $timeZoneService,
 		private readonly TimeCaptureMethodService $timeCaptureMethodService,
+		private readonly ProjectCheckIntegrationService $projectCheckIntegration,
 	) {
 	}
 
@@ -53,6 +54,7 @@ class DashboardWidgetDataService {
 			'userId'                 => $userId,
 			'status'                 => (string)($status['status'] ?? 'clocked_out'),
 			'workingTodayHours'      => (float)($status['working_today_hours'] ?? 0.0),
+			'atDailyMaximum'         => (bool)($status['at_daily_maximum'] ?? false),
 			'currentSessionDuration' => (int)($status['current_session_duration'] ?? 0),
 			// Drift-safe timer anchor (same fields as GET /api/clock/status).
 			'serverNow'              => (string)($status['server_now'] ?? ''),
@@ -106,11 +108,15 @@ class DashboardWidgetDataService {
 			}
 		}
 
+		$linkingEnabled = $this->projectCheckIntegration->isLinkingEnabledForUser($userId);
+		$projectCheckAvailable = $this->projectCheckIntegration->isProjectCheckAvailable();
+
 		return [
 			'userId'                 => $userId,
 			'status'                 => (string)($status['status'] ?? 'clocked_out'),
 			'currentEntryId'         => $currentEntryId,
 			'workingTodayHours'      => (float)($status['working_today_hours'] ?? 0.0),
+			'atDailyMaximum'         => (bool)($status['at_daily_maximum'] ?? false),
 			'currentSessionDuration' => (int)($status['current_session_duration'] ?? 0),
 			// Drift-safe timer anchor (same fields as GET /api/clock/status).
 			'serverNow'              => (string)($status['server_now'] ?? ''),
@@ -141,7 +147,21 @@ class DashboardWidgetDataService {
 			'vacationUsed'           => (float)($vacationStats['used'] ?? 0.0),
 			'vacationCarryover'      => (float)($vacationStats['carryover_days'] ?? 0.0),
 			'vacationCarryoverUsable'=> (float)($vacationStats['carryover_usable'] ?? 0.0),
+			// Additive Phase B fields — old companions ignore safely (§16).
+			'vacationYearMode'       => (string)($vacationStats['vacation_year_mode'] ?? 'calendar'),
+			'vacationYearLabel'      => (string)($vacationStats['vacation_year_label'] ?? (string)($vacationStats['year'] ?? $vacationYear)),
+			'vacationYearStart'      => $vacationStats['vacation_year_start'] ?? null,
+			'vacationYearEnd'        => $vacationStats['vacation_year_end_inclusive'] ?? null,
+			'vacationYearError'      => $vacationStats['vacation_year_error'] ?? null,
 			'timeCapture'            => $this->timeCaptureMethodService->getSettings($userId),
+			// ProjectCheck linking for mobile/web companions (optional; empty when off).
+			'projectCheck'           => [
+				'available' => $projectCheckAvailable,
+				'linkingEnabled' => $linkingEnabled,
+				'projects' => $linkingEnabled
+					? $this->projectCheckIntegration->getAvailableProjects($userId)
+					: [],
+			],
 		];
 	}
 

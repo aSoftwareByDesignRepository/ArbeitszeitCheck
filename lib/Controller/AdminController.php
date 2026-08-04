@@ -47,6 +47,7 @@ use OCA\ArbeitszeitCheck\Service\LayeredVacationValidationException;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
 use OCA\ArbeitszeitCheck\Service\VacationEntitlementEngine;
 use OCA\ArbeitszeitCheck\Service\VacationProrationService;
+use OCA\ArbeitszeitCheck\Service\VacationYearWindowResolver;
 use OCA\ArbeitszeitCheck\Service\UserOvertimeSettingsService;
 use OCA\ArbeitszeitCheck\Service\UserEmploymentSettingsService;
 use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
@@ -2446,6 +2447,7 @@ class AdminController extends Controller
 				'vacationRolloverEnabled' => Constants::CONFIG_VACATION_ROLLOVER_ENABLED,
 				'vacationRolloverIncludeUnusedAnnual' => Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL,
 				'vacationProrationMethod' => Constants::CONFIG_VACATION_PRORATION_METHOD,
+				'vacationYearMode' => Constants::CONFIG_VACATION_YEAR_MODE,
 			];
 
 			foreach ($allowedKeys as $paramKey => $configKey) {
@@ -2470,6 +2472,23 @@ class AdminController extends Controller
 					// Whitelist to the two known methods; anything else falls
 					// back to the safe default (full-month Zwölftelung).
 					$value = VacationProrationService::normalizeMethod((string)$value);
+				} elseif ($paramKey === 'vacationYearMode') {
+					$previous = VacationYearWindowResolver::normalizeMode(
+						$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_YEAR_MODE, Constants::DEFAULT_VACATION_YEAR_MODE)
+					);
+					$value = VacationYearWindowResolver::normalizeMode((string)$value);
+					if ($value !== $previous) {
+						$performedBy = $this->getPerformedBy();
+						$this->auditLogMapper->logAction(
+							$performedBy,
+							'vacation_year_mode_changed',
+							'app_config',
+							0,
+							['vacation_year_mode' => $previous],
+							['vacation_year_mode' => $value],
+							$performedBy
+						);
+					}
 				} elseif ($paramKey === 'vacationCarryoverExpiryMonth') {
 					$value = (string)max(1, min(12, (int)$value));
 				} elseif ($paramKey === 'vacationCarryoverExpiryDay') {
@@ -2701,6 +2720,9 @@ class AdminController extends Controller
 			'vacationRolloverIncludeUnusedAnnual' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_ROLLOVER_INCLUDE_UNUSED_ANNUAL, '0') === '1',
 			'vacationProrationMethod' => VacationProrationService::normalizeMethod(
 				$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_PRORATION_METHOD, Constants::DEFAULT_VACATION_PRORATION_METHOD)
+			),
+			'vacationYearMode' => VacationYearWindowResolver::normalizeMode(
+				$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_YEAR_MODE, Constants::DEFAULT_VACATION_YEAR_MODE)
 			),
 			'requireSubstituteTypes' => $requireSubstituteTypes,
 			'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',

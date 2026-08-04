@@ -105,13 +105,11 @@ $absenceFormEndDisplay = ($mode === 'create')
             $filterStatus = $_['filterStatus'] ?? '';
             ?>
             <section id="filter-section" class="azc-card azc-filter-panel absences-page__filter" style="display: none;" aria-labelledby="absences-filter-title">
-                <header class="azc-card__header">
-                    <div class="azc-card__header-text">
-                        <h2 id="absences-filter-title" class="azc-card__title"><?php p($l->t('Filter')); ?></h2>
-                        <p class="azc-card__lead"><?php p($l->t('Narrow the list by date range or status, then click Apply.')); ?></p>
-                    </div>
+                <header class="azc-filter-panel__head">
+                    <h2 id="absences-filter-title"><?php p($l->t('Filter')); ?></h2>
+                    <p class="azc-filter-panel__intro"><?php p($l->t('Narrow the list by date range or status, then click Apply.')); ?></p>
                 </header>
-                <div class="azc-card__body">
+                <div class="azc-filter-panel__body">
                     <form class="azc-filter-panel__form" novalidate>
                         <div class="azc-filter-grid absences-page__filter-grid" role="group" aria-label="<?php p($l->t('Filter options')); ?>">
                             <div class="azc-filter-field">
@@ -559,8 +557,16 @@ $absenceFormEndDisplay = ($mode === 'create')
             <!-- Stats Cards: Vacation only (sick leave etc. excluded) -->
             <section class="section section--stats vacation-stats" aria-labelledby="stats-title">
                 <h2 id="stats-title" class="section__title stats-section-title">
-                    <?php p($l->t('Vacation balance') . ' ' . (string)($stats['vacation_year'] ?? date('Y'))); ?>
+                    <?php
+                    $vyLabel = (string)($stats['vacation_year_label'] ?? ($stats['vacation_year'] ?? date('Y')));
+                    p($l->t('Vacation balance') . ' ' . $vyLabel);
+                    ?>
                 </h2>
+                <?php if (!empty($stats['vacation_year_error'])) { ?>
+                <p class="azc-callout azc-callout--warning" role="status" id="absences-vacation-year-error">
+                    <?php p($l->t('Your vacation year uses hire anniversary, but no employment start date is set. Ask your admin to set it under Employees.')); ?>
+                </p>
+                <?php } ?>
                 <p id="stats-desc" class="stats-section-desc visually-hidden">
                     <?php p($l->t('Remaining vacation days for this year (annual entitlement plus carryover minus approved vacation). Sick leave and other absences are not deducted.')); ?>
                 </p>

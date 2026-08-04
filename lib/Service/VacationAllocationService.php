@@ -18,6 +18,7 @@ use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\UserSettingsMapper;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
+use OCA\ArbeitszeitCheck\Support\VacationYearWindow;
 use OCP\IConfig;
 
 class VacationAllocationService
@@ -37,6 +38,7 @@ class VacationAllocationService
 		private VacationEntitlementEngine $vacationEntitlementEngine,
 		private EntitlementSnapshotService $entitlementSnapshotService,
 		private VacationProrationService $vacationProrationService,
+		private VacationYearWindowResolver $yearWindowResolver,
 	) {
 	}
 
@@ -158,6 +160,16 @@ class VacationAllocationService
 				$days = 0.0;
 			}
 			$days = round(max(0.0, min(366.0, $days)), 2, PHP_ROUND_HALF_UP);
+
+			if ($this->yearWindowResolver->isAnniversaryMode()) {
+				$window = $this->yearWindowResolver->resolveForUser($userId, $asOf);
+				if ($window->missingEmploymentStart) {
+					return 0.0;
+				}
+				// Anniversary window already represents one full entitlement year — no calendar Zwölftelung.
+				return $days;
+			}
+
 			// Reduce to the part of the year actually covered by employment
 			// (Zwölftelung / daily) when an employment period is configured.
 			$proration = $this->vacationProrationService->prorateForYear($userId, (int)$asOf->format('Y'), $days);
@@ -198,15 +210,39 @@ class VacationAllocationService
 	): array {
 		$yStart = new \DateTime("$year-01-01");
 		$yEnd = new \DateTime("$year-12-31");
-		$segStart = clone $absStart;
-		$segStart->setTime(0, 0, 0);
-		$segEnd = clone $absEnd;
-		$segEnd->setTime(0, 0, 0);
-		if ($segStart < $yStart) {
-			$segStart = clone $yStart;
+		return $this->splitWorkingDaysForRangeSegment($userId, $absStart, $absEnd, $yStart, $yEnd, $expiryDate);
+	}
+
+	/**
+	 * Clip absence to [rangeStart, rangeEnd] inclusive, then split by carryover expiry.
+	 *
+	 * @return array{before: float, after: float}
+	 */
+	public function splitWorkingDaysForRangeSegment(
+		string $userId,
+		\DateTimeInterface $absStart,
+		\DateTimeInterface $absEnd,
+		\DateTimeInterface $rangeStart,
+		\DateTimeInterface $rangeEndInclusive,
+		\DateTimeImmutable $expiryDate,
+	): array {
+		$rStart = \DateTime::createFromInterface(
+			\DateTimeImmutable::createFromInterface($rangeStart)->setTime(0, 0, 0)
+		);
+		$rEnd = \DateTime::createFromInterface(
+			\DateTimeImmutable::createFromInterface($rangeEndInclusive)->setTime(0, 0, 0)
+		);
+		$segStart = \DateTime::createFromInterface(
+			\DateTimeImmutable::createFromInterface($absStart)->setTime(0, 0, 0)
+		);
+		$segEnd = \DateTime::createFromInterface(
+			\DateTimeImmutable::createFromInterface($absEnd)->setTime(0, 0, 0)
+		);
+		if ($segStart < $rStart) {
+			$segStart = clone $rStart;
 		}
-		if ($segEnd > $yEnd) {
-			$segEnd = clone $yEnd;
+		if ($segEnd > $rEnd) {
+			$segEnd = clone $rEnd;
 		}
 		if ($segStart > $segEnd) {
 			return ['before' => 0.0, 'after' => 0.0];
@@ -233,24 +269,12 @@ class VacationAllocationService
 		return ['before' => $before, 'after' => $after];
 	}
 
+
 	/**
-	 * FIFO allocation for calendar year. Optionally exclude an absence (edit) and/or inject a prospective absence (create/validate).
+	 * FIFO allocation for a vacation year window. Optionally exclude an absence (edit)
+	 * and/or inject a prospective absence (create/validate).
 	 *
-	 * @return array{
-	 *   year: int,
-	 *   entitlement: float,
-	 *   entitlement_full_year: float,
-	 *   proration: array<string, mixed>,
-	 *   carryover_opening: float,
-	 *   carryover_remaining_after_approved: float,
-	 *   annual_remaining_after_approved: float,
-	 *   total_remaining_for_new_requests: float,
-	 *   carryover_expires_on: string|null,
-	 *   carryover_usable_for_new_requests: float,
-	 *   used_total_working_days: float,
-	 *   allocation_valid: bool,
-	 *   shortfall: float
-	 * }
+	 * @return array<string, mixed>
 	 *
 	 * @param bool $persistEntitlementSnapshot When true, store/revise the entitlement snapshot row (audit).
 	 *        Set false for read-only display paths (e.g. dashboard stats, widgets) to avoid write amplification,
@@ -267,20 +291,78 @@ class VacationAllocationService
 		bool $persistEntitlementSnapshot = true,
 	): array {
 		$asOf = $asOf ?? new \DateTime('today');
+		$window = $this->resolveWindowForAllocation($userId, $year, $asOf);
+		return $this->computeAllocationForWindow(
+			$userId,
+			$window,
+			$excludeAbsenceId,
+			$prospectiveStart,
+			$prospectiveEnd,
+			$asOf,
+			$prospectiveRequestCreatedAt,
+			$persistEntitlementSnapshot,
+		);
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	public function computeAllocationForWindow(
+		string $userId,
+		VacationYearWindow $window,
+		?int $excludeAbsenceId = null,
+		?\DateTime $prospectiveStart = null,
+		?\DateTime $prospectiveEnd = null,
+		?\DateTimeInterface $asOf = null,
+		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
+		bool $persistEntitlementSnapshot = true,
+	): array {
+		$asOf = $asOf ?? new \DateTime('today');
+		$year = $window->balanceYearKey;
+		$rangeStart = $window->startInclusive;
+		$rangeEndInclusive = $window->lastInclusiveDay();
+
 		$entitlementResolved = $this->vacationEntitlementEngine->computeForDate($userId, $asOf);
 		$fullYearEntitlement = (float)$entitlementResolved['days'];
-		// Pro-rata reduction for partial employment years (mid-year join/leave).
-		// Driven solely by the per-user employment start/end dates; a no-op
-		// (returns the full entitlement) when none are set.
-		$proration = $this->vacationProrationService->prorateForYear($userId, $year, $fullYearEntitlement);
-		$annualEntitlement = (float)$proration['days'];
+
+		if ($window->missingEmploymentStart) {
+			$proration = [
+				'days' => 0.0,
+				'prorated' => false,
+				'employed_in_year' => false,
+				'method' => 'anniversary',
+				'error' => Constants::VAC_YEAR_MISSING_START,
+			];
+			$annualEntitlement = 0.0;
+			$fullYearEntitlement = 0.0;
+		} elseif ($window->mode === VacationYearWindow::MODE_ANNIVERSARY) {
+			$proration = [
+				'days' => round($fullYearEntitlement, 2),
+				'prorated' => false,
+				'employed_in_year' => true,
+				'method' => 'anniversary_full',
+				'window_start' => $rangeStart->format('Y-m-d'),
+				'window_end_inclusive' => $rangeEndInclusive->format('Y-m-d'),
+			];
+			$annualEntitlement = round($fullYearEntitlement, 2);
+		} else {
+			$proration = $this->vacationProrationService->prorateForYear($userId, $year, $fullYearEntitlement);
+			$annualEntitlement = (float)$proration['days'];
+		}
+
 		$carryoverOpening = $this->vacationYearBalanceMapper->getCarryoverDays($userId, $year);
 		$carryoverOpening = $this->applyCapToOpeningBalance($carryoverOpening);
 
 		$expiry = $this->getCarryoverExpiryDateForYear($year);
 		$carryoverExpiresOn = $carryoverOpening > 0.0001 ? $expiry->format('Y-m-d') : null;
 
-		$list = $this->absenceMapper->findVacationApprovedOverlappingYear($userId, $year);
+		$list = $window->mode === VacationYearWindow::MODE_CALENDAR
+			? $this->absenceMapper->findVacationApprovedOverlappingYear($userId, $year)
+			: $this->absenceMapper->findVacationApprovedOverlappingRange(
+				$userId,
+				$rangeStart,
+				$rangeEndInclusive
+			);
 		$merged = [];
 		foreach ($list as $a) {
 			if ($excludeAbsenceId !== null && $a->getId() === $excludeAbsenceId) {
@@ -316,7 +398,14 @@ class VacationAllocationService
 			if (!$start || !$end) {
 				continue;
 			}
-			$split = $this->splitWorkingDaysForYearSegment($userId, $start, $end, $year, $expiry);
+			$split = $this->splitWorkingDaysForRangeSegment(
+				$userId,
+				$start,
+				$end,
+				$rangeStart,
+				$rangeEndInclusive,
+				$expiry
+			);
 			$wdBefore = $split['before'];
 			$wdAfter = $split['after'];
 			$chunk = $wdBefore + $wdAfter;
@@ -324,7 +413,6 @@ class VacationAllocationService
 
 			$isProspective = ($absence->getId() === self::PROSPECTIVE_ABSENCE_PLACEHOLDER_ID);
 			if ($isProspective && !$this->canProspectiveUseCarryoverPool($year, $prospectiveRequestCreatedAt, $asOf)) {
-				// Deadline passed for new carryover use: annual entitlement only (matches carryover_usable display).
 				$need = $chunk;
 				$fromA = min($annualPool, $need);
 				$annualPool -= $fromA;
@@ -368,13 +456,12 @@ class VacationAllocationService
 
 		$totalForNew = $annualRem + $carryoverUsable;
 
-		// Surface proration in the entitlement trace so the persisted snapshot
-		// (and every audit replay) records exactly how a partial-year number
-		// was derived. Only attach when proration actually applied to keep
-		// full-year traces byte-identical to the legacy shape.
 		$entitlementTrace = (array)$entitlementResolved['trace'];
-		if (!empty($proration['prorated']) || !($proration['employed_in_year'] ?? true)) {
+		if (!empty($proration['prorated']) || !($proration['employed_in_year'] ?? true) || isset($proration['error'])) {
 			$entitlementTrace['proration'] = $proration;
+		}
+		if ($window->mode === VacationYearWindow::MODE_ANNIVERSARY) {
+			$entitlementTrace['vacation_year_window'] = $window->toArray();
 		}
 
 		$result = [
@@ -389,11 +476,16 @@ class VacationAllocationService
 			'carryover_expires_on' => $carryoverExpiresOn,
 			'carryover_usable_for_new_requests' => round($carryoverUsable, 4),
 			'used_total_working_days' => round($usedTotal, 4),
-			'allocation_valid' => $valid,
+			'allocation_valid' => $valid && !$window->missingEmploymentStart,
 			'shortfall' => round($shortfall, 4),
 			'entitlement_source' => $entitlementResolved['source'],
 			'entitlement_rule_set_id' => $entitlementResolved['ruleSetId'],
 			'entitlement_trace' => $entitlementTrace,
+			'vacation_year_mode' => $window->mode,
+			'vacation_year_label' => $window->label,
+			'vacation_year_start' => $rangeStart->format('Y-m-d'),
+			'vacation_year_end_inclusive' => $rangeEndInclusive->format('Y-m-d'),
+			'vacation_year_error' => $window->missingEmploymentStart ? Constants::VAC_YEAR_MISSING_START : null,
 		];
 
 		if ($persistEntitlementSnapshot) {
@@ -405,11 +497,8 @@ class VacationAllocationService
 				);
 				$fingerprint = hash('sha256', $enc);
 			} catch (\JsonException) {
-				// Extremely unlikely: non-encodable trace. Still persist numeric entitlement with stable placeholder hash.
 				$fingerprint = hash('sha256', (string)$annualEntitlement . '|' . (string)$entitlementResolved['source']);
 			}
-			// Persist the *effective* (prorated) entitlement so the snapshot is
-			// the legally meaningful figure actually granted for the year.
 			$this->entitlementSnapshotService->store(
 				$userId,
 				$year,
@@ -424,5 +513,25 @@ class VacationAllocationService
 		}
 
 		return $result;
+	}
+
+	private function resolveWindowForAllocation(
+		string $userId,
+		int $year,
+		\DateTimeInterface $asOf,
+	): VacationYearWindow {
+		if (!$this->yearWindowResolver->isAnniversaryMode()) {
+			return $this->yearWindowResolver->resolveCalendarYear($year);
+		}
+
+		$asOfWindow = $this->yearWindowResolver->resolveForUser($userId, $asOf);
+		if ($asOfWindow->missingEmploymentStart) {
+			return $asOfWindow;
+		}
+		if ($asOfWindow->balanceYearKey === $year) {
+			return $asOfWindow;
+		}
+
+		return $this->yearWindowResolver->resolveAnniversaryForUserBalanceYear($userId, $year);
 	}
 }

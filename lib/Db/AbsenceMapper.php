@@ -444,14 +444,30 @@ class AbsenceMapper extends QBMapper
 		$yearStart = new \DateTime("$year-01-01");
 		$yearEnd = new \DateTime("$year-12-31");
 
+		return $this->findVacationApprovedOverlappingRange($userId, $yearStart, $yearEnd);
+	}
+
+	/**
+	 * Approved vacation absences overlapping an inclusive date range.
+	 *
+	 * @return Absence[]
+	 */
+	public function findVacationApprovedOverlappingRange(
+		string $userId,
+		\DateTimeInterface $rangeStart,
+		\DateTimeInterface $rangeEnd,
+	): array {
+		$from = \DateTimeImmutable::createFromInterface($rangeStart)->setTime(0, 0, 0);
+		$to = \DateTimeImmutable::createFromInterface($rangeEnd)->setTime(0, 0, 0);
+
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
 			->andWhere($qb->expr()->eq('type', $qb->createNamedParameter(Absence::TYPE_VACATION)))
 			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_APPROVED)))
-			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($yearEnd->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
-			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($yearStart->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($to->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($from->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->orderBy('start_date', 'ASC')
 			->addOrderBy('id', 'ASC');
 

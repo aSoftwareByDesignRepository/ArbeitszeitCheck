@@ -558,6 +558,7 @@ class Application extends App implements IBootstrap {
 				$c->query(AbsenceNotificationMailService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\TimeZoneService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationYearWindowResolver::class),
 			);
 		});
 
@@ -621,6 +622,13 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\VacationYearWindowResolver::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Service\VacationYearWindowResolver(
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\UserEmploymentSettingsService::class),
+			);
+		});
+
 		$context->registerService(VacationAllocationService::class, function($c) {
 			return new VacationAllocationService(
 				$c->query(\OCP\IConfig::class),
@@ -631,7 +639,8 @@ class Application extends App implements IBootstrap {
 				$c->query(HolidayService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\VacationEntitlementEngine::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\EntitlementSnapshotService::class),
-				$c->query(\OCA\ArbeitszeitCheck\Service\VacationProrationService::class)
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationProrationService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationYearWindowResolver::class),
 			);
 		});
 

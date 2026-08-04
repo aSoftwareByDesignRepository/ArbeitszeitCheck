@@ -360,7 +360,10 @@ class PageController extends Controller
 					'vacation_carryover_remaining' => (float)($vacationStats['carryover_remaining_after_approved'] ?? 0),
 					'vacation_carryover_max_cap' => $vacationStats['carryover_max_cap'] ?? null,
 					'vacation_annual_entitlement' => (float)($vacationStats['entitlement'] ?? 0),
-					'vacation_year' => $currentYear,
+					'vacation_year' => (int)($vacationStats['year'] ?? $currentYear),
+					'vacation_year_mode' => (string)($vacationStats['vacation_year_mode'] ?? 'calendar'),
+					'vacation_year_label' => (string)($vacationStats['vacation_year_label'] ?? (string)$currentYear),
+					'vacation_year_error' => $vacationStats['vacation_year_error'] ?? null,
 				],
 			];
 
@@ -625,7 +628,10 @@ class PageController extends Controller
 				'vacation_carryover_remaining' => $vacationCarryoverRemaining,
 				'vacation_carryover_max_cap' => $vacationCarryoverMaxCap,
 				'vacation_annual_entitlement' => $vacationAnnualEntitlement,
-				'vacation_year' => $currentYear,
+				'vacation_year' => (int)($vacationStats['year'] ?? $currentYear),
+				'vacation_year_mode' => (string)($vacationStats['vacation_year_mode'] ?? 'calendar'),
+				'vacation_year_label' => (string)($vacationStats['vacation_year_label'] ?? (string)$currentYear),
+				'vacation_year_error' => $vacationStats['vacation_year_error'] ?? null,
 				'pending_requests' => $pendingCount,
 			],
 			'employeeHasAssignableManager' => $employeeHasAssignableManager,

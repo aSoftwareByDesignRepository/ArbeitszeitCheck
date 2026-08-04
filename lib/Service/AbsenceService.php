@@ -50,6 +50,7 @@ class AbsenceService
 	private VacationAllocationService $vacationAllocationService;
 	private ?MonthClosureService $monthClosureService;
 	private TimeZoneService $timeZoneService;
+	private VacationYearWindowResolver $vacationYearWindowResolver;
 
 	public function __construct(
 		AbsenceMapper $absenceMapper,
@@ -70,6 +71,7 @@ class AbsenceService
 		?AbsenceNotificationMailService $absenceNotificationMailService = null,
 		?MonthClosureService $monthClosureService = null,
 		?TimeZoneService $timeZoneService = null,
+		?VacationYearWindowResolver $vacationYearWindowResolver = null,
 	) {
 		$this->absenceMapper = $absenceMapper;
 		$this->auditLogMapper = $auditLogMapper;
@@ -90,6 +92,8 @@ class AbsenceService
 		$this->monthClosureService = $monthClosureService;
 		// Optional for BC with older unit-test constructors; production always injects via Application.php.
 		$this->timeZoneService = $timeZoneService ?? \OCP\Server::get(TimeZoneService::class);
+		$this->vacationYearWindowResolver = $vacationYearWindowResolver
+			?? new VacationYearWindowResolver($config, new UserEmploymentSettingsService($userSettingsMapper, $auditLogMapper));
 	}
 
 	/** Calendar "today" at 00:00 in organisation storage TZ. */
@@ -1193,8 +1197,15 @@ class AbsenceService
 
 		try {
 			$today = \DateTime::createFromImmutable($this->todayDateInStorage());
+			// Anniversary mode: always resolve the window containing "today" so a calendar
+			// year argument from the UI cannot pick the wrong balance year (AC-101 / §9.4).
+			$allocYear = $year;
+			if ($this->vacationYearWindowResolver->isAnniversaryMode()) {
+				$window = $this->vacationYearWindowResolver->resolveForUser($userId, $today);
+				$allocYear = $window->balanceYearKey;
+			}
 			// Read-only: do not persist entitlement snapshots (avoids DB writes/locks on every dashboard/widget poll).
-			$alloc = $this->vacationAllocationService->computeYearAllocation($userId, $year, null, null, null, $today, null, false);
+			$alloc = $this->vacationAllocationService->computeYearAllocation($userId, $allocYear, null, null, null, $today, null, false);
 			$totalEntitlement = (float)$alloc['entitlement'];
 			$carryoverOpening = (float)$alloc['carryover_opening'];
 			$totalAvailable = $totalEntitlement + $carryoverOpening;
@@ -1203,17 +1214,11 @@ class AbsenceService
 			$carryoverRem = (float)($alloc['carryover_remaining_after_approved'] ?? 0);
 			$annualRem = (float)($alloc['annual_remaining_after_approved'] ?? 0);
 			$carryoverBlocked = $carryoverRem > 0.0001
-				&& !$this->vacationAllocationService->isCarryoverUsableForNewRequests($year, $today);
+				&& !$this->vacationAllocationService->isCarryoverUsableForNewRequests($allocYear, $today);
 			$cap = $this->vacationAllocationService->getMaxCarryoverOpeningCap();
 
 			return [
-				'year' => $year,
-				// Float, 2dp. Previously cast to int — silently dropped half-days
-				// from tariff-driven entitlement and disagreed with the rest of
-				// the alloc block. Unified per GAP-01 / REQ-ENT-12. Frontends
-				// render this via toLocaleString-on-Number, so a float with
-				// trailing zero (e.g. 27.5) renders correctly without code
-				// changes.
+				'year' => (int)($alloc['year'] ?? $allocYear),
 				'entitlement' => round($totalEntitlement, 2),
 				'entitlement_source' => (string)($alloc['entitlement_source'] ?? 'manual'),
 				'entitlement_rule_set_id' => $alloc['entitlement_rule_set_id'] ?? null,
@@ -1229,9 +1234,13 @@ class AbsenceService
 				'used' => round($usedDays, 2),
 				'remaining' => round($remaining, 2),
 				'sick_days' => $sickDays,
+				'vacation_year_mode' => (string)($alloc['vacation_year_mode'] ?? Constants::VACATION_YEAR_MODE_CALENDAR),
+				'vacation_year_label' => (string)($alloc['vacation_year_label'] ?? (string)$allocYear),
+				'vacation_year_start' => $alloc['vacation_year_start'] ?? null,
+				'vacation_year_end_inclusive' => $alloc['vacation_year_end_inclusive'] ?? null,
+				'vacation_year_error' => $alloc['vacation_year_error'] ?? null,
 			];
 		} catch (\Throwable $e) {
-			// Warning: stats fall back to defaults; snapshot persist is already skipped for this path.
 			\OCP\Log\logger('arbeitszeitcheck')->warning('Error getting vacation stats (using fallback): ' . $e->getMessage(), ['exception' => $e]);
 			return [
 				'year' => $year,
@@ -1250,6 +1259,11 @@ class AbsenceService
 				'used' => 0.0,
 				'remaining' => (float)Constants::DEFAULT_VACATION_DAYS_PER_YEAR,
 				'sick_days' => $sickDays,
+				'vacation_year_mode' => Constants::VACATION_YEAR_MODE_CALENDAR,
+				'vacation_year_label' => (string)$year,
+				'vacation_year_start' => null,
+				'vacation_year_end_inclusive' => null,
+				'vacation_year_error' => null,
 			];
 		}
 	}
@@ -1261,6 +1275,46 @@ class AbsenceService
 	 */
 	private function assertVacationAllocationForRequest(string $userId, \DateTime $startDate, \DateTime $endDate, ?int $excludeAbsenceId = null, ?\DateTimeInterface $prospectiveRequestCreatedAt = null): void
 	{
+		$today = \DateTime::createFromImmutable($this->todayDateInStorage());
+
+		if ($this->vacationYearWindowResolver->isAnniversaryMode()) {
+			$windows = $this->vacationYearWindowResolver->windowsOverlappingRange($userId, $startDate, $endDate);
+			foreach ($windows as $window) {
+				if ($window->missingEmploymentStart) {
+					throw new \Exception($this->l10n->t('Vacation year is set to hire anniversary, but this account has no employment start date. Ask your admin to set it under Employees.'));
+				}
+				$alloc = $this->vacationAllocationService->computeAllocationForWindow(
+					$userId,
+					$window,
+					$excludeAbsenceId,
+					$startDate,
+					$endDate,
+					$today,
+					$prospectiveRequestCreatedAt,
+					false
+				);
+				if ($alloc['allocation_valid']) {
+					continue;
+				}
+				$before = $this->vacationAllocationService->computeAllocationForWindow(
+					$userId,
+					$window,
+					$excludeAbsenceId,
+					null,
+					null,
+					$today,
+					null,
+					false
+				);
+				$remaining = (float)$before['total_remaining_for_new_requests'];
+				throw new \Exception($this->l10n->t(
+					'Not enough vacation days left for %1$s (remaining: %2$s).',
+					[$window->label, (string)round($remaining, 1)]
+				));
+			}
+			return;
+		}
+
 		$requestedWorkingDaysPerYear = $this->computeWorkingDaysPerYear($startDate, $endDate, $userId);
 		if ($requestedWorkingDaysPerYear === []) {
 			$requestedWorkingDaysPerYear = $this->holidayCalendarService->computeWorkingDaysPerYearForUser(
@@ -1269,7 +1323,6 @@ class AbsenceService
 				clone $endDate
 			);
 		}
-		$today = \DateTime::createFromImmutable($this->todayDateInStorage());
 		foreach ($requestedWorkingDaysPerYear as $y => $requestedDays) {
 			if ($requestedDays <= 0) {
 				continue;

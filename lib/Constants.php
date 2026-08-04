@@ -271,6 +271,21 @@ final class Constants
 	public const CONFIG_VACATION_PRORATION_METHOD = 'vacation_proration_method';
 
 	/**
+	 * Vacation year window mode (BANSS Phase B). Default calendar keeps legacy
+	 * Jan–Dec entitlement years. Anniversary uses employment_start ± N years.
+	 */
+	public const CONFIG_VACATION_YEAR_MODE = 'vacation_year_mode';
+
+	public const VACATION_YEAR_MODE_CALENDAR = 'calendar';
+
+	public const VACATION_YEAR_MODE_ANNIVERSARY = 'anniversary';
+
+	public const DEFAULT_VACATION_YEAR_MODE = self::VACATION_YEAR_MODE_CALENDAR;
+
+	/** Error / audit code when anniversary mode lacks employment_start. */
+	public const VAC_YEAR_MISSING_START = 'VAC_YEAR_MISSING_START';
+
+	/**
 	 * Full-month proration (Zwölftelung) per German BUrlG §5: each calendar
 	 * month touched by the employment relationship contributes 1/12 of the
 	 * annual entitlement; the prorated result is rounded up to a full day when

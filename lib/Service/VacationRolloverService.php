@@ -34,6 +34,14 @@ class VacationRolloverService
 
 	public function isAutomaticRolloverEnabled(): bool
 	{
+		if ($this->config->getAppValue(
+			'arbeitszeitcheck',
+			Constants::CONFIG_VACATION_YEAR_MODE,
+			Constants::DEFAULT_VACATION_YEAR_MODE
+		) === Constants::VACATION_YEAR_MODE_ANNIVERSARY) {
+			// Q2: anniversary-relative rollover not defined yet — fail closed.
+			return false;
+		}
 		return $this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_ROLLOVER_ENABLED, '1') === '1';
 	}
 

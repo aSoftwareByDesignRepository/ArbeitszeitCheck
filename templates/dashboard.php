@@ -684,10 +684,18 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                 <article class="azc-card azc-dashboard-vacation dashboard-vacation-card" aria-labelledby="dashboard-vacation-heading">
                     <header class="azc-card__header">
                         <div class="azc-card__header-text">
-                            <h3 id="dashboard-vacation-heading" class="azc-card__title"><?php p($l->t('Vacation')); ?> <?php p((string)($dashStats['vacation_year'] ?? date('Y'))); ?></h3>
+                            <h3 id="dashboard-vacation-heading" class="azc-card__title"><?php p($l->t('Vacation')); ?> <?php
+                                $vyLabel = (string)($dashStats['vacation_year_label'] ?? ($dashStats['vacation_year'] ?? date('Y')));
+                                p($vyLabel);
+                            ?></h3>
                         </div>
                     </header>
                     <div class="azc-card__body">
+                        <?php if (!empty($dashStats['vacation_year_error'])) { ?>
+                        <p class="azc-callout azc-callout--warning" role="status" id="dashboard-vacation-year-error">
+                            <?php p($l->t('Your vacation year uses hire anniversary, but no employment start date is set. Ask your admin to set it under Employees.')); ?>
+                        </p>
+                        <?php } ?>
                         <div class="dashboard-vacation-card__row">
                             <span class="dashboard-vacation-card__label"><?php p($l->t('Remaining vacation days')); ?></span>
                             <span class="dashboard-vacation-card__value" aria-describedby="dashboard-vacation-heading"><?php p((string)round((float)($dashStats['vacation_days_remaining'] ?? 0), 1)); ?></span>
