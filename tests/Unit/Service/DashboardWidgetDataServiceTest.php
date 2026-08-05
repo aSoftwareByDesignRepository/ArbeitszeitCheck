@@ -13,10 +13,12 @@ use OCA\ArbeitszeitCheck\Service\OvertimeBankService;
 use OCA\ArbeitszeitCheck\Service\OvertimeDisplayService;
 use OCA\ArbeitszeitCheck\Service\OvertimeService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
+use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
 use OCA\ArbeitszeitCheck\Service\TimeZoneService;
+use OCA\ArbeitszeitCheck\Service\VacationHoursDebitService;
 use OCP\IConfig;
 use OCP\IDateTimeZone;
 use OCP\IUser;
@@ -50,6 +52,25 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		return new TimeZoneService($config, $dateTimeZone, $userSession, new NullLogger());
 	}
 
+	private function createVacationHoursDebitService(): VacationHoursDebitService {
+		$svc = $this->createMock(VacationHoursDebitService::class);
+		$svc->method('snapshotForUser')->willReturn([
+			'basis' => 'org_hours_per_day',
+			'average_daily' => 8.0,
+			'weekday_nets' => null,
+			'one_day_hours' => 8.0,
+		]);
+		$svc->method('estimateForUserRange')->willReturn([
+			'hours' => 8.0,
+			'basis' => 'org_hours_per_day',
+			'average_daily' => 8.0,
+			'weekday_nets' => null,
+			'one_day_hours' => 8.0,
+		]);
+
+		return $svc;
+	}
+
 	private function createService(
 		TimeTrackingService $timeTrackingService,
 		PermissionService $permissionService,
@@ -75,6 +96,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$userManager,
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
+			$this->createMock(ProjectCheckIntegrationService::class),
+			$this->createVacationHoursDebitService(),
 		);
 	}
 
@@ -118,11 +141,88 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createMock(IUserManager::class),
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
+			$this->createMock(ProjectCheckIntegrationService::class),
+			$this->createVacationHoursDebitService()
 		);
 
-		$data = $service->getEmployeeWidgetData('u1');
+		$data = $service->getEmployeeWidgetData('u1', true);
 		$this->assertSame('08:30', $data['sessionStartFormatted']);
 		$this->assertTrue($data['autoBreakCalculation']);
+		$this->assertFalse($data['atDailyMaximum']);
+		$this->assertIsArray($data['projectCheck']);
+		$this->assertFalse($data['projectCheck']['available']);
+		$this->assertFalse($data['projectCheck']['linkingEnabled']);
+		$this->assertSame([], $data['projectCheck']['projects']);
+		// T-MOB-01 / schedule debit snapshot — always present for companion booking.
+		$this->assertArrayHasKey('vacationDebitBasis', $data);
+		$this->assertArrayHasKey('vacationWeekdayNets', $data);
+		$this->assertArrayHasKey('vacationOneDayHours', $data);
+		$this->assertArrayHasKey('vacationAverageDailyHours', $data);
+		$this->assertSame('org_hours_per_day', $data['vacationDebitBasis']);
+		$this->assertSame(8.0, $data['vacationOneDayHours']);
+		$this->assertSame(8.0, $data['vacationAverageDailyHours']);
+	}
+
+	public function testEmployeeWidgetDataIncludesAssignableProjectCheckProjects(): void {
+		$timeTrackingService = $this->createMock(TimeTrackingService::class);
+		$timeTrackingService->method('lawProfile')->willReturn(
+			\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::profileForCountry('DE')
+		);
+		$timeTrackingService->method('getStatus')->with('u1')->willReturn([
+			'status' => 'clocked_out',
+			'working_today_hours' => 8.1,
+			'at_daily_maximum' => false,
+			'current_session_duration' => 0,
+		]);
+		$timeTrackingService->method('getBreakStatus')->willReturn([]);
+		$timeTrackingService->method('isAutoBreakCalculationEnabled')->willReturn(true);
+
+		$overtime = $this->createMock(OvertimeService::class);
+		$overtime->method('getWeeklyOvertime')->willReturn([]);
+		$absence = $this->createMock(AbsenceService::class);
+		$absence->method('getVacationStats')->willReturn(['year' => 2026]);
+		$display = $this->createMock(OvertimeDisplayService::class);
+		$display->method('getYearToDateBalanceForTrafficLight')->willReturn(0.0);
+		$display->method('buildTrafficLightViewModel')->willReturn(['state' => 'green']);
+		$bank = $this->createMock(OvertimeBankService::class);
+		$bank->method('isEnabled')->willReturn(false);
+
+		$projectCheck = $this->createMock(ProjectCheckIntegrationService::class);
+		$projectCheck->method('isProjectCheckAvailable')->willReturn(true);
+		$projectCheck->method('isLinkingEnabledForUser')->with('u1')->willReturn(true);
+		$projectCheck->method('getAvailableProjects')->with('u1')->willReturn([
+			[
+				'id' => '42',
+				'name' => 'Acme',
+				'customerId' => 7,
+				'customerName' => 'Acme GmbH',
+				'displayName' => 'Acme (Acme GmbH)',
+				'costRateMode' => 'project',
+			],
+		]);
+
+		$service = new DashboardWidgetDataService(
+			$timeTrackingService,
+			$overtime,
+			$display,
+			$bank,
+			$absence,
+			$this->createMock(AbsenceMapper::class),
+			$this->createMock(TeamResolverService::class),
+			$this->createMock(PermissionService::class),
+			$this->createMock(IUserManager::class),
+			$this->createTimeZoneService(),
+			$this->createTimeCaptureMethodService(),
+			$projectCheck,
+			$this->createVacationHoursDebitService(),
+		);
+
+		$data = $service->getEmployeeWidgetData('u1', true);
+		$this->assertTrue($data['projectCheck']['available']);
+		$this->assertTrue($data['projectCheck']['linkingEnabled']);
+		$this->assertCount(1, $data['projectCheck']['projects']);
+		$this->assertSame('42', $data['projectCheck']['projects'][0]['id']);
+		$this->assertFalse($data['atDailyMaximum']);
 	}
 
 	public function testEmployeeStatusSummaryReturnsLeanPayloadWithoutHeavyQueries(): void {
@@ -161,6 +261,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createMock(IUserManager::class),
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
+			$this->createMock(ProjectCheckIntegrationService::class),
+			$this->createVacationHoursDebitService()
 		);
 
 		$data = $service->getEmployeeStatusSummary('u1');
@@ -214,9 +316,11 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createMock(IUserManager::class),
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
+			$this->createMock(ProjectCheckIntegrationService::class),
+			$this->createVacationHoursDebitService()
 		);
 
-		$data = $service->getEmployeeWidgetData('u1');
+		$data = $service->getEmployeeWidgetData('u1', true);
 		$this->assertSame('2026-01-15T12:00:00+01:00', $data['breakStartTime']);
 	}
 
@@ -255,9 +359,11 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createMock(IUserManager::class),
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
+			$this->createMock(ProjectCheckIntegrationService::class),
+			$this->createVacationHoursDebitService()
 		);
 
-		$data = $service->getEmployeeWidgetData('u1');
+		$data = $service->getEmployeeWidgetData('u1', true);
 		$this->assertSame('2026-01-15T10:00:00+01:00', $data['serverNow']);
 		$this->assertSame('Europe/Berlin', $data['serverTimezone']);
 		$this->assertFalse($data['autoBreakCalculation']);
@@ -282,7 +388,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createMock(IUserManager::class)
 		);
 
-		$data = $service->getEmployeeWidgetData('u1');
+		$data = $service->getEmployeeWidgetData('u1', true);
 		$this->assertSame('active', $data['status']);
 		$this->assertSame(4.5, $data['workingTodayHours']);
 		$this->assertTrue($data['autoBreakCalculation']);
@@ -415,6 +521,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$userManager,
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
+			$this->createMock(ProjectCheckIntegrationService::class),
+			$this->createVacationHoursDebitService()
 		);
 		$service->getManagerWidgetData('mgr1');
 	}

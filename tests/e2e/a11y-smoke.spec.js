@@ -5,8 +5,16 @@ import { login, credsFromEnv } from './helpers/auth.js';
 
 const a11yRoutes = [
 	'/apps/arbeitszeitcheck/dashboard',
-	'/apps/arbeitszeitcheck/settings',
-	'/apps/arbeitszeitcheck/admin/settings',
+	'/apps/arbeitszeitcheck/settings/breaks',
+	'/apps/arbeitszeitcheck/settings/notifications',
+	'/apps/arbeitszeitcheck/admin/settings/access',
+	'/apps/arbeitszeitcheck/admin/settings/regional',
+	'/apps/arbeitszeitcheck/admin/notifications',
+	'/apps/arbeitszeitcheck/admin/overtime-settings',
+	'/apps/arbeitszeitcheck/admin/vacation-rules',
+	'/apps/arbeitszeitcheck/admin/vacation-layers',
+	'/apps/arbeitszeitcheck/admin/overtime-payouts',
+	'/apps/arbeitszeitcheck/admin/overtime-payout-audit',
 ];
 
 for (const path of a11yRoutes) {

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Vacation hours booking</title>
+	<style>
+		body { font-family: "Segoe UI", sans-serif; margin: 0; background: #f4f6f4; color: #1a1a1a; }
+		main { max-width: 32rem; margin: 1.5rem auto; padding: 1.25rem; background: #fff; border: 1px solid #c8c8c8; border-radius: 8px; }
+		h1 { font-size: 1.35rem; margin: 0 0 0.75rem; }
+		.stat-hero { font-size: 2.5rem; font-weight: 700; min-height: 2.75rem; color: #0b6e4f; }
+		.form-label { display: block; font-weight: 600; margin: 1rem 0 0.35rem; }
+		.form-input { min-height: 2.75rem; font-size: 1.125rem; width: 100%; max-width: 12rem; padding: 0.5rem; }
+		.presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 1rem; }
+		.presets button { min-height: 2.75rem; min-width: 5.5rem; font-size: 1rem; padding: 0.4rem 0.75rem; }
+		.preview { margin: 0.5rem 0 0; padding: 0.65rem 0.75rem; background: #eef6f2; border-radius: 6px; min-height: 2.5rem; }
+		:focus-visible { outline: 3px solid #005fcc; outline-offset: 2px; }
+		[hidden] { display: none !important; }
+	</style>
+</head>
+<body>
+<main id="vacation-hours-booking" aria-labelledby="booking-title">
+	<h1 id="booking-title">Request vacation</h1>
+	<p id="stat-remaining-label">Remaining</p>
+	<p id="stat-remaining" class="stat-hero" aria-labelledby="stat-remaining-label">196.0</p>
+	<p id="stat-remaining-unit">vacation hours</p>
+
+	<label class="form-label" for="absence-type">Type</label>
+	<select id="absence-type" name="type" aria-required="true">
+		<option value="vacation" selected>Vacation</option>
+		<option value="sick_leave">Sick Leave</option>
+	</select>
+
+	<label class="form-label" for="absence-start-date">Start</label>
+	<input type="text" id="absence-start-date" class="form-input" value="03.08.2026" inputmode="numeric">
+	<label class="form-label" for="absence-end-date">End</label>
+	<input type="text" id="absence-end-date" class="form-input" value="07.08.2026" inputmode="numeric">
+
+	<div id="absence-duration-hours-group" data-hours-mode="1" data-hours-per-day="8">
+		<label class="form-label" for="absence-duration-hours">Hours <span aria-hidden="true">*</span></label>
+		<input type="number" id="absence-duration-hours" class="form-input" min="0.25" max="744" step="0.25" required aria-required="true" aria-describedby="hours-help absence-duration-hours-preview">
+		<div class="presets" role="group" aria-label="Quick hours">
+			<button type="button" class="absence-hours-preset" data-hours="4">4 hours</button>
+			<button type="button" class="absence-hours-preset" data-hours-half="1">Half day</button>
+			<button type="button" class="absence-hours-preset" data-hours-full="1">1 full day</button>
+			<button type="button" class="absence-hours-preset" data-hours-range="1">Full range</button>
+		</div>
+		<p id="hours-help">Total vacation hours for the whole request (not per day).</p>
+		<p id="absence-duration-hours-preview" class="preview" role="status" aria-live="polite"></p>
+	</div>
+</main>
+<script>
+(function () {
+	var group = document.getElementById('absence-duration-hours-group');
+	var input = document.getElementById('absence-duration-hours');
+	var typeSelect = document.getElementById('absence-type');
+	var startInput = document.getElementById('absence-start-date');
+	var endInput = document.getElementById('absence-end-date');
+	var preview = document.getElementById('absence-duration-hours-preview');
+	var hoursPerDay = 8;
+
+	function parseDDMMYYYY(s) {
+		if (!s || !/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return null;
+		var p = s.split('.');
+		return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+	}
+	function countWeekdays(start, end) {
+		if (!start || !end || end < start) return 0;
+		var n = 0;
+		var cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+		var last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+		while (cur <= last) {
+			var dow = cur.getDay();
+			if (dow !== 0 && dow !== 6) n += 1;
+			cur.setDate(cur.getDate() + 1);
+		}
+		return n;
+	}
+	function rangeHours() {
+		var days = countWeekdays(parseDDMMYYYY(startInput.value), parseDDMMYYYY(endInput.value));
+		return Math.round((days < 1 ? 1 : days) * hoursPerDay * 100) / 100;
+	}
+	function updatePreview() {
+		var raw = parseFloat(String(input.value || '').replace(',', '.'));
+		if (!isFinite(raw) || raw <= 0) {
+			preview.textContent = '';
+			return;
+		}
+		var weekdays = countWeekdays(parseDDMMYYYY(startInput.value), parseDDMMYYYY(endInput.value)) || 1;
+		preview.textContent = 'This request: ' + raw + ' hours (about ' + weekdays + ' weekdays × ' + hoursPerDay + ' h/day).';
+	}
+	function sync() {
+		var isVacation = typeSelect.value === 'vacation';
+		group.hidden = !isVacation;
+		input.disabled = !isVacation;
+		input.required = isVacation;
+		if (isVacation) {
+			input.value = String(rangeHours());
+			updatePreview();
+		} else {
+			input.value = '';
+			preview.textContent = '';
+		}
+	}
+	group.querySelectorAll('.absence-hours-preset').forEach(function (btn) {
+		btn.addEventListener('click', function () {
+			var h = parseFloat(btn.getAttribute('data-hours') || '');
+			if (btn.hasAttribute('data-hours-half')) h = hoursPerDay / 2;
+			if (btn.hasAttribute('data-hours-full')) h = hoursPerDay;
+			if (btn.hasAttribute('data-hours-range')) h = rangeHours();
+			input.value = String(h);
+			updatePreview();
+			input.focus();
+		});
+	});
+	input.addEventListener('input', updatePreview);
+	startInput.addEventListener('change', sync);
+	endInput.addEventListener('change', sync);
+	typeSelect.addEventListener('change', sync);
+	sync();
+})();
+</script>
+</body>
+</html>

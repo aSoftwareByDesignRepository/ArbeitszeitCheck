@@ -68,6 +68,7 @@ class LayeredVacationDefaultsService
 		private readonly ILockingProvider $lockingProvider,
 		private readonly ?TeamMemberMapper $teamMemberMapper = null,
 		private readonly ?UserWorkingTimeModelMapper $userWorkingTimeModelMapper = null,
+		private readonly ?VacationUnitService $vacationUnitService = null,
 	) {
 	}
 
@@ -308,6 +309,19 @@ class LayeredVacationDefaultsService
 		} finally {
 			$this->lockingProvider->releaseLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
 		}
+	}
+
+	/**
+	 * Purge all L1 model vacation defaults for a working-time model that is
+	 * about to be deleted. Caller must own the surrounding DB transaction.
+	 * Does not acquire its own lock (nested with WTM delete atomic unit).
+	 */
+	public function deleteDefaultsForWorkingTimeModel(int $workingTimeModelId): int
+	{
+		if ($workingTimeModelId <= 0) {
+			return 0;
+		}
+		return $this->modelMapper->deleteByModelId($workingTimeModelId);
 	}
 
 	/* ============================================================ *
@@ -648,6 +662,9 @@ class LayeredVacationDefaultsService
 	 * HTTP clients cannot persist contradictory state (defence in depth next
 	 * to {@see OrgVacationDefault::validate()} and siblings).
 	 *
+	 * Bachus: admins always submit calendar days in `manualDays`; when the
+	 * organisation unit is hours we convert to stored hours here.
+	 *
 	 * @param array<string, mixed> $payload
 	 * @return array<string, mixed>
 	 */
@@ -662,7 +679,65 @@ class LayeredVacationDefaultsService
 		} elseif ($mode === Constants::VACATION_MODE_TARIFF_RULE_BASED) {
 			$payload['manualDays'] = null;
 		}
+		if (array_key_exists('manualDays', $payload) && $payload['manualDays'] !== null && $payload['manualDays'] !== '') {
+			$days = $this->parseDecimal($payload['manualDays']);
+			if ($days !== null && $this->vacationUnitService !== null) {
+				$payload['manualDays'] = $this->vacationUnitService->adminDaysToStoredAmount($days);
+			}
+		}
 		return $payload;
+	}
+
+	/**
+	 * Present stored manual amount as HR-friendly days (+ hours when in hours mode).
+	 *
+	 * @return array{manualDays: ?float, manualHours: ?float, hoursPerDay: ?float}
+	 */
+	public function presentManualAmount(?float $stored): array
+	{
+		if ($stored === null) {
+			return ['manualDays' => null, 'manualHours' => null, 'hoursPerDay' => null];
+		}
+		$unit = $this->vacationUnitService;
+		if ($unit === null) {
+			return ['manualDays' => $stored, 'manualHours' => null, 'hoursPerDay' => null];
+		}
+		$days = $unit->storedAmountToAdminDays($stored);
+		if ($unit->isHoursMode()) {
+			return [
+				'manualDays' => $days,
+				'manualHours' => $unit->roundAmount($stored),
+				'hoursPerDay' => $unit->getHoursPerDay(),
+			];
+		}
+
+		return ['manualDays' => $days, 'manualHours' => null, 'hoursPerDay' => null];
+	}
+
+	/**
+	 * Enrich a layer summary so the admin UI always edits/shows days.
+	 *
+	 * @param array<string, mixed> $summary
+	 * @return array<string, mixed>
+	 */
+	public function presentLayerSummary(array $summary): array
+	{
+		// Prefer explicit stored amount so a second present() cannot treat
+		// already-converted admin days as hours (25 → 25/8 = 3.125).
+		if (array_key_exists('manualAmountStored', $summary) && $summary['manualAmountStored'] !== null) {
+			$stored = (float)$summary['manualAmountStored'];
+		} else {
+			$stored = array_key_exists('manualDays', $summary) && $summary['manualDays'] !== null
+				? (float)$summary['manualDays']
+				: null;
+		}
+		$presented = $this->presentManualAmount($stored);
+		$summary['manualDays'] = $presented['manualDays'];
+		$summary['manualHours'] = $presented['manualHours'];
+		$summary['hoursPerDay'] = $presented['hoursPerDay'];
+		$summary['manualAmountStored'] = $stored;
+
+		return $summary;
 	}
 
 	private function assertTariffRuleSetUsable(?int $ruleSetId, ?\DateTime $effectiveFrom): void

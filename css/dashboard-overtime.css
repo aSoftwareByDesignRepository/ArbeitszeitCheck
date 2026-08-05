@@ -94,13 +94,13 @@
 }
 
 .dashboard-overtime-card__balance-value.positive {
-	background: var(--azc-tint-success, color-mix(in srgb, var(--color-success, #46ba61) 18%, transparent));
-	border-color: color-mix(in srgb, var(--color-success, #46ba61) 45%, var(--color-border, #e1e1e1));
+	background: var(--azc-tint-success, color-mix(in srgb, var(--color-success) 18%, transparent));
+	border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
 }
 
 .dashboard-overtime-card__balance-value.negative {
-	background: var(--azc-tint-danger, color-mix(in srgb, var(--color-error, #cc4646) 22%, transparent));
-	border-color: color-mix(in srgb, var(--color-error, #cc4646) 50%, var(--color-border, #e1e1e1));
+	background: var(--azc-tint-danger, color-mix(in srgb, var(--color-error) 22%, transparent));
+	border-color: color-mix(in srgb, var(--color-error) 50%, var(--color-border));
 }
 
 .dashboard-overtime-card__traffic {
@@ -139,7 +139,7 @@
 	opacity: 0.35;
 	background: color-mix(
 		in srgb,
-		var(--color-text-maxcontrast, #6b6b6b) 50%,
+		var(--color-text-maxcontrast) 50%,
 		var(--color-background-dark, transparent)
 	);
 	border: 1px solid transparent;

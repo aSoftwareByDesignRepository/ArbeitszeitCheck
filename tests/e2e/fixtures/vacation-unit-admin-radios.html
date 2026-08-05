@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Vacation unit admin radios</title>
+	<style>
+		body { font-family: "Segoe UI", sans-serif; margin: 0; background: #f4f6f4; color: #1a1a1a; }
+		main { max-width: 36rem; margin: 1.5rem auto; padding: 1.25rem; background: #fff; border: 1px solid #c8c8c8; border-radius: 8px; }
+		h1 { font-size: 1.25rem; margin: 0 0 0.75rem; }
+		.radios { display: flex; gap: 1rem; margin: 0.75rem 0; }
+		label { min-height: 2.75rem; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 1.05rem; }
+		button { min-height: 2.75rem; font-size: 1rem; padding: 0.5rem 1rem; }
+		:focus-visible { outline: 3px solid #005fcc; outline-offset: 2px; }
+		[hidden] { display: none !important; }
+	</style>
+</head>
+<body>
+<main id="vacation-unit-admin" aria-labelledby="vacation-unit-heading">
+	<h1 id="vacation-unit-heading">Vacation unit (days or hours)</h1>
+	<p id="vacation-unit-status" role="status" data-current-unit="days">Current unit: days (default).</p>
+	<fieldset class="radios" aria-labelledby="vacation-unit-heading">
+		<legend class="sr-only">Organisation unit</legend>
+		<label for="vacation-unit-days">
+			<input type="radio" id="vacation-unit-days" name="vacationUnitChoice" value="days" checked>
+			<span>Days</span>
+		</label>
+		<label for="vacation-unit-hours">
+			<input type="radio" id="vacation-unit-hours" name="vacationUnitChoice" value="hours">
+			<span>Hours</span>
+		</label>
+	</fieldset>
+	<label for="vacationUnitClientConfirmed">
+		<input type="checkbox" id="vacationUnitClientConfirmed" aria-describedby="vacation-unit-client-help">
+		I confirm all Employee apps are updated
+	</label>
+	<p id="vacation-unit-client-help">Required before enabling hours.</p>
+	<p style="margin-top: 1rem;">
+		<button type="button" id="btn-vacation-unit-apply" aria-describedby="vacation-unit-apply-help">Apply unit change</button>
+	</p>
+	<p id="vacation-unit-apply-help">Apply stays clickable. If confirmation is missing, the alert explains why.</p>
+	<p id="vacation-unit-migrate-status" role="status" aria-live="polite"></p>
+	<p id="vacation-unit-migrate-error" role="alert" hidden></p>
+</main>
+<script>
+(function () {
+	var status = document.getElementById('vacation-unit-status');
+	var err = document.getElementById('vacation-unit-migrate-error');
+	var statusLive = document.getElementById('vacation-unit-migrate-status');
+	var btn = document.getElementById('btn-vacation-unit-apply');
+	var confirmInput = document.getElementById('vacationUnitClientConfirmed');
+	var current = status.getAttribute('data-current-unit') || 'days';
+
+	function selectedUnit() {
+		var checked = document.querySelector('input[name="vacationUnitChoice"]:checked');
+		return checked ? checked.value : current;
+	}
+
+	function syncApplyGate() {
+		var target = selectedUnit();
+		var needConfirm = target === 'hours' && current !== 'hours';
+		var blocked = needConfirm && !confirmInput.checked;
+		// Keep Apply enabled (WCAG) — announce reason via status/alert instead of disabled.
+		btn.disabled = false;
+		btn.removeAttribute('aria-disabled');
+		confirmInput.setAttribute('aria-invalid', blocked ? 'true' : 'false');
+		if (blocked) {
+			statusLive.textContent = 'Tick the Employee app confirmation checkbox before converting to hours.';
+		} else {
+			statusLive.textContent = '';
+		}
+	}
+
+	document.querySelectorAll('input[name="vacationUnitChoice"]').forEach(function (r) {
+		r.addEventListener('change', syncApplyGate);
+	});
+	confirmInput.addEventListener('change', syncApplyGate);
+	syncApplyGate();
+
+	btn.addEventListener('click', function () {
+		var target = selectedUnit();
+		err.hidden = true;
+		err.textContent = '';
+		if (target === current) {
+			statusLive.textContent = 'Same unit selected. Factor-only update ready.';
+			return;
+		}
+		if (target === 'hours' && !confirmInput.checked) {
+			err.hidden = false;
+			err.textContent = 'Tick the Employee app confirmation checkbox before converting to hours.';
+			statusLive.textContent = '';
+			confirmInput.focus();
+			return;
+		}
+		statusLive.textContent = 'Ready to convert to ' + target;
+	});
+})();
+</script>
+</body>
+</html>

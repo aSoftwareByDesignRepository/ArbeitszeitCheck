@@ -46,6 +46,14 @@
     bootstrap = {};
   }
   const URLS = bootstrap.urls || {};
+  const VACATION_UNIT = bootstrap.vacationUnit === 'hours' ? 'hours' : 'days';
+  const HOURS_MODE = VACATION_UNIT === 'hours';
+  // Bachus: admins always type calendar days (0–366). Hours are derived.
+  const MANUAL_AMOUNT_MAX = 366;
+  const HOURS_PER_DAY = Math.max(0.25, Number(bootstrap.vacationHoursPerDay) || 8);
+  const PER_YEAR_LABEL = (bootstrap.amountPerYearLabel && String(bootstrap.amountPerYearLabel))
+    || 'days per year';
+  const HOURS_MODE_HINT = (bootstrap.hoursModeHint && String(bootstrap.hoursModeHint)) || '';
 
   // -----------------------------------------------------------------------
   // i18n helper — falls back to the provided English string when the
@@ -56,6 +64,27 @@
       return window.t('arbeitszeitcheck', key);
     }
     return fallback || key;
+  }
+
+  const AMOUNT_COL_LABEL = t('Days', 'Days');
+
+  function fmtHoursFromDays(days) {
+    const n = Number(days);
+    if (!Number.isFinite(n)) {
+      return '—';
+    }
+    return (Math.round(n * HOURS_PER_DAY * 100) / 100).toFixed(2);
+  }
+
+  function fmtAmountCell(row) {
+    const days = row && row.manualDays != null ? fmtDays(row.manualDays) : '—';
+    if (!HOURS_MODE || row == null || row.manualDays == null) {
+      return days;
+    }
+    const hours = row.manualHours != null
+      ? fmtDays(row.manualHours)
+      : fmtHoursFromDays(row.manualDays);
+    return days + ' d · ' + hours + ' h';
   }
 
   function announce(msg) {
@@ -379,7 +408,7 @@
           : '';
         setHtml(activeEl, collisionBanner + renderActiveRow(active, [
           { label: t('Mode', 'Mode'), value: fmtMode(active.vacationMode) },
-          { label: t('Days', 'Days'), value: active.manualDays != null ? fmtDays(active.manualDays) : '—' },
+          { label: AMOUNT_COL_LABEL, value: active.manualDays != null ? fmtAmountCell(active) : '—' },
           { label: t('Tariff rule set', 'Tariff rule set'), value: fmtRuleSet(active.tariffRuleSetId) },
           { label: t('Effective', 'Effective'), value: fmtEffective(active.effectiveFrom, active.effectiveTo) },
         ]));
@@ -397,7 +426,7 @@
       <tr>
         <td data-label="${escape(t('Effective', 'Effective'))}">${escape(fmtEffective(row.effectiveFrom, row.effectiveTo))}</td>
         <td data-label="${escape(t('Mode', 'Mode'))}">${escape(fmtMode(row.vacationMode))}</td>
-        <td data-label="${escape(t('Days', 'Days'))}">${escape(fmtDays(row.manualDays))}</td>
+        <td data-label="${escape(AMOUNT_COL_LABEL)}">${escape(fmtAmountCell(row))}</td>
         <td data-label="${escape(t('Tariff rule set', 'Tariff rule set'))}">${escape(fmtRuleSet(row.tariffRuleSetId))}</td>
         <td data-label="${escape(t('Description', 'Description'))}">${escape(row.description || '')}</td>
         <td data-label="${escape(t('Actions', 'Actions'))}" class="actions-cell layer-card__history-actions">
@@ -423,7 +452,7 @@
         <td data-label="${escape(t('Model', 'Model'))}">${escape(getModelLabel(row.workingTimeModelId))}</td>
         <td data-label="${escape(t('Effective', 'Effective'))}">${escape(fmtEffective(row.effectiveFrom, row.effectiveTo))}</td>
         <td data-label="${escape(t('Mode', 'Mode'))}">${escape(fmtMode(row.vacationMode))}</td>
-        <td data-label="${escape(t('Days', 'Days'))}">${escape(fmtDays(row.manualDays))}</td>
+        <td data-label="${escape(AMOUNT_COL_LABEL)}">${escape(fmtAmountCell(row))}</td>
         <td data-label="${escape(t('Tariff rule set', 'Tariff rule set'))}">${escape(fmtRuleSet(row.tariffRuleSetId))}</td>
         <td data-label="${escape(t('Description', 'Description'))}">${escape(row.description || '')}</td>
         <td data-label="${escape(t('Actions', 'Actions'))}" class="actions-cell layer-card__history-actions">
@@ -449,7 +478,7 @@
         <td data-label="${escape(t('Team', 'Team'))}">${escape(getTeamLabel(row.teamId))}</td>
         <td data-label="${escape(t('Effective', 'Effective'))}">${escape(fmtEffective(row.effectiveFrom, row.effectiveTo))}</td>
         <td data-label="${escape(t('Mode', 'Mode'))}">${escape(fmtMode(row.vacationMode))}</td>
-        <td data-label="${escape(t('Days', 'Days'))}">${escape(fmtDays(row.manualDays))}</td>
+        <td data-label="${escape(AMOUNT_COL_LABEL)}">${escape(fmtAmountCell(row))}</td>
         <td data-label="${escape(t('Priority', 'Priority'))}">${escape(String(row.priority ?? 0))}</td>
         <td data-label="${escape(t('Description', 'Description'))}">${escape(row.description || '')}</td>
         <td data-label="${escape(t('Actions', 'Actions'))}" class="actions-cell layer-card__history-actions">
@@ -701,6 +730,7 @@
     if (!(target instanceof HTMLElement)) return;
     if (target.id === 'dlg-days') {
       clearManualDaysFieldError();
+      updateDaysHoursPreview();
     }
     if (target.id === 'dlg-from' || target.id === 'dlg-to') {
       clearDateRangeFieldError();
@@ -756,6 +786,7 @@
         clearTariffRuleSetFieldError();
       }
     }
+    updateDaysHoursPreview();
   }
 
   function modeFieldHtml(allowInherit, tariffAvailable) {
@@ -775,29 +806,21 @@
   }
 
   function daysFieldHtml() {
-    // Numeric invariant per spec: 0 ≤ days ≤ 366, rounded to two decimal
-    // places (REQ-ENT-07). We deliberately use `type="text"` + `pattern`
-    // instead of `type="number" step="0.5"` so:
-    //  1. Part-time / tariff prorations such as 31.2 days are not rejected
-    //     by the browser's numeric stepper (the previous step="0.5" UI
-    //     blocked legitimate values).
-    //  2. German-locale users can type a decimal comma (`31,2`) natively
-    //     — the same pattern is used by the L3 manual-days editor in
-    //     `admin-users.js`, so all four layers (L0/L1/L2/L3) accept the
-    //     identical input shape.
-    //  3. The DB column `manual_days FLOAT(6, 2)` and engine
-    //     `roundDays()` (half-up, 2 dp) already constrain precision on
-    //     the write path; the UI now matches that contract exactly.
+    // Bachus: always calendar days (0–366), even when the org books vacation in hours.
+    // The server converts days → stored hours using the org hours-per-day factor.
     return `
       <div class="layer-form__row layer-form__row--mode-conditional" id="dlg-row-manual" hidden>
-        <label for="dlg-days" class="form-label">${escape(t('Manual days (per year)', 'Manual days (per year)'))} <span class="form-required" aria-label="${escape(t('required', 'required'))}">*</span></label>
+        <label for="dlg-days" class="form-label">${escape(t('Annual vacation days', 'Annual vacation days'))} <span class="form-required" aria-label="${escape(t('required', 'required'))}">*</span></label>
         <input type="text" id="dlg-days" name="manualDays" class="form-input"
                inputmode="decimal"
                pattern="^[0-9]+([\\.,][0-9]{1,2})?$"
                autocomplete="off"
                aria-required="true"
-               aria-describedby="dlg-days-help dlg-days-error">
-        <p id="dlg-days-help" class="form-help">${escape(t('Annual vacation days (0–366). Up to two decimal places are allowed, e.g. 25, 25.5, 27.75, or 31.2 — comma or dot both work.', 'Annual vacation days (0–366). Up to two decimal places are allowed, e.g. 25, 25.5, 27.75, or 31.2 — comma or dot both work.'))}</p>
+               aria-describedby="dlg-days-help dlg-days-preview dlg-days-error">
+        <p id="dlg-days-help" class="form-help">${escape(HOURS_MODE
+          ? t('Enter days as usual (e.g. 25). We convert to hours automatically — no calculator needed.', 'Enter days as usual (e.g. 25). We convert to hours automatically — no calculator needed.')
+          : t('Annual vacation days (0–366). Up to two decimal places are allowed, e.g. 25, 25.5, 27.75, or 31.2 — comma or dot both work.', 'Annual vacation days (0–366). Up to two decimal places are allowed, e.g. 25, 25.5, 27.75, or 31.2 — comma or dot both work.'))}</p>
+        <p id="dlg-days-preview" class="azc-callout azc-callout--info" role="status" aria-live="polite" hidden></p>
         <p id="dlg-days-error" class="form-error form-error--inline" role="alert" aria-live="polite" hidden></p>
       </div>
     `;
@@ -944,8 +967,37 @@
   //  - We must still defer the *authoritative* validation to the engine
   //    so this is defence-in-depth, not a replacement.
   // -----------------------------------------------------------------------
-  const MANUAL_DAYS_MAX = 366; // mirror engine `roundDays` clamp
+  const MANUAL_DAYS_MAX = MANUAL_AMOUNT_MAX; // always 366 calendar days (Bachus)
   const MANUAL_DAYS_MIN = 0;
+
+  function updateDaysHoursPreview() {
+    const preview = document.getElementById('dlg-days-preview');
+    const input = document.getElementById('dlg-days');
+    if (!preview || !input) {
+      return;
+    }
+    if (!HOURS_MODE || input.disabled || input.value.trim() === '') {
+      preview.hidden = true;
+      preview.textContent = '';
+      return;
+    }
+    const parsed = parseManualDaysInput(input.value);
+    if (!parsed.ok) {
+      preview.hidden = true;
+      preview.textContent = '';
+      return;
+    }
+    const hours = fmtHoursFromDays(parsed.value);
+    const tpl = t(
+      'Stored as %s hours (%s days × %s h/day). Employees book and see remaining vacation in hours.',
+      'Stored as %s hours (%s days × %s h/day). Employees book and see remaining vacation in hours.'
+    );
+    preview.textContent = tpl
+      .replace('%s', hours)
+      .replace('%s', String(parsed.value))
+      .replace('%s', String(HOURS_PER_DAY));
+    preview.hidden = false;
+  }
 
   function parseManualDaysInput(raw) {
     if (raw === null || raw === undefined) {
@@ -1851,7 +1903,7 @@
     const chips = [];
     if (inner.clamped) {
       const raw = inner.raw_manual_days != null ? inner.raw_manual_days : inner.raw_computed_days;
-      const detail = raw != null ? ` (${fmtDays(raw)} → ${t('clamped to 0–366', 'clamped to 0–366')})` : '';
+      const detail = raw != null ? ` (${fmtDays(raw)} → ${HOURS_MODE ? t('clamped to 0–4000', 'clamped to 0–4000') : t('clamped to 0–366', 'clamped to 0–366')})` : '';
       chips.push(`<span class="trace-flag trace-flag--warn">${escape(t('Clamped', 'Clamped'))}${escape(detail)}</span>`);
     }
     if (inner.degraded === 'model_lookup_failed') {
@@ -1890,7 +1942,7 @@
           <td data-label="${escape(t('Layer', 'Layer'))}"><strong>${escape(layer.layer || '')}</strong><br><span class="form-help">${escape(humanLayerLabel(layer.layer))}</span></td>
           <td data-label="${escape(t('Outcome', 'Outcome'))}">${matched ? escape(t('Match', 'Match')) : escape(t('Skipped', 'Skipped'))}</td>
           <td data-label="${escape(t('Reason / Mode', 'Reason / Mode'))}">${escape(fmtMode(layer.mode || layer.reason || ''))}${flagsHtml ? '<br>' + flagsHtml : ''}${teamLabel}${modelLabel}${candidatesHtml}</td>
-          <td data-label="${escape(t('Days', 'Days'))}">${escape(layer.days != null ? fmtDays(layer.days) : '—')}</td>
+          <td data-label="${escape(AMOUNT_COL_LABEL)}">${escape(layer.days != null ? fmtDays(layer.days) : '—')}</td>
         </tr>
       `;
     }).join('');
@@ -1908,8 +1960,12 @@
     }
     const summaryDays = fmtDays(data.effectiveEntitlementDays);
     const summarySentence = data.hypotheticalTeamIds && data.hypotheticalTeamIds.length > 0
-      ? t('In this what-if scenario, the employee would receive {days} vacation days per year, determined by the {layer}.', 'In this what-if scenario, the employee would receive {days} vacation days per year, determined by the {layer}.')
-      : t('On {date}, the employee receives {days} vacation days per year, determined by the {layer}.', 'On {date}, the employee receives {days} vacation days per year, determined by the {layer}.');
+      ? HOURS_MODE
+        ? t('In this what-if scenario, the employee would receive {days} vacation hours per year, determined by the {layer}.', 'In this what-if scenario, the employee would receive {days} vacation hours per year, determined by the {layer}.')
+        : t('In this what-if scenario, the employee would receive {days} vacation days per year, determined by the {layer}.', 'In this what-if scenario, the employee would receive {days} vacation days per year, determined by the {layer}.')
+      : HOURS_MODE
+        ? t('On {date}, the employee receives {days} vacation hours per year, determined by the {layer}.', 'On {date}, the employee receives {days} vacation hours per year, determined by the {layer}.')
+        : t('On {date}, the employee receives {days} vacation days per year, determined by the {layer}.', 'On {date}, the employee receives {days} vacation days per year, determined by the {layer}.');
     const summaryText = summarySentence
       .replace('{date}', fmtDate(data.asOfDate))
       .replace('{days}', summaryDays)
@@ -1919,7 +1975,7 @@
         ${banners.join('')}
         <h3 class="layer-sim__headline">${escape(t('Result', 'Result'))}</h3>
         <p class="layer-sim__summary"><span class="layer-sim__days" aria-hidden="true">${escape(summaryDays)}</span>
-          <span class="visually-hidden">${escape(summaryDays)} ${escape(t('days per year', 'days per year'))}</span>
+          <span class="visually-hidden">${escape(summaryDays)} ${escape(PER_YEAR_LABEL)}</span>
           <span class="layer-sim__summary-text">${escape(summaryText)}</span></p>
         ${innerFlags ? `<p class="layer-sim__flags">${innerFlags}</p>` : ''}
         <details class="layer-sim__trace-details">

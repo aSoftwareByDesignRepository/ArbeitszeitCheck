@@ -366,7 +366,7 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                         </p>
                         <?php if ($isAdmin): ?>
                         <p id="format-help-datev" class="form-help">
-                            <?php p($l->t('For payroll (DATEV) files, open Administration → Global settings and use the «Exports and reporting» section with your date range. This page offers CSV and JSON only.')); ?>
+                            <?php p($l->t('CSV and JSON downloads use the buttons below. For payroll DATEV files, use the DATEV section under this form — configure Beraternummer and Mandantennummer in Administration → Global settings first.')); ?>
                         </p>
                         <?php endif; ?>
                     </div>
@@ -425,6 +425,47 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                         </a>
                     </div>
                 </form>
+
+                <?php if ($isAdmin): ?>
+                <aside id="datev-export-panel"
+                       class="datev-export-panel"
+                       aria-labelledby="datev-export-heading"
+                       data-datev-panel="1">
+                    <h3 id="datev-export-heading" class="datev-export-panel__title">
+                        <?php print_unescaped(IconCatalog::render('download', 'datev-export-panel__icon', 1.25)); ?>
+                        <?php p($l->t('DATEV payroll download')); ?>
+                    </h3>
+                    <p id="datev-export-lead" class="datev-export-panel__lead">
+                        <?php p($l->t('Download a DATEV text file for the same start and end dates as above. Hour premiums appear as extra Lohnart lines only when mapped in Global settings.')); ?>
+                    </p>
+                    <p id="datev-export-status"
+                       class="datev-export-panel__status"
+                       role="status"
+                       aria-live="polite">
+                        <?php p($l->t('Checking DATEV setup…')); ?>
+                    </p>
+                    <p id="datev-export-error" class="datev-export-panel__error" role="alert" hidden></p>
+                    <div class="datev-export-panel__actions">
+                        <button type="button"
+                                id="btn-datev-self"
+                                class="azc-btn azc-btn--primary"
+                                disabled
+                                aria-describedby="datev-export-lead datev-export-status">
+                            <?php p($l->t('Download my DATEV file')); ?>
+                        </button>
+                        <button type="button"
+                                id="btn-datev-org"
+                                class="azc-btn azc-btn--secondary"
+                                disabled
+                                aria-describedby="datev-export-lead datev-export-status">
+                            <?php p($l->t('Download organisation DATEV file')); ?>
+                        </button>
+                    </div>
+                    <p class="datev-export-panel__help form-help">
+                        <?php p($l->t('Organisation download includes every enabled user who has a DATEV Personalnummer. Set Personalnummer on each employee profile.')); ?>
+                    </p>
+                </aside>
+                <?php endif; ?>
             </section>
 
             <!-- Step 4: preview (shown after preview or generate) -->
@@ -497,6 +538,17 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
     window.ArbeitszeitCheck.l10n.premiumHint = <?php echo json_encode($l->t('Hours with a percentage for reporting — not pay, and not your overtime Saldo.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.premiumEmpty = <?php echo json_encode($l->t('No premium hours in this period.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.teamDownloadPremiumOk = <?php echo json_encode($l->t('Team download for hour premiums includes one row per person and category.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.monthClosureSealed = <?php echo json_encode($l->t('This month is sealed. Figures below match the closed-month snapshot (including frozen hour premiums).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.frozenPremiumsTitle = <?php echo json_encode($l->t('Frozen hour premiums'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.policyVersion = <?php echo json_encode($l->t('Policy version'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.datevChecking = <?php echo json_encode($l->t('Checking DATEV setup…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.datevReadySelf = <?php echo json_encode($l->t('DATEV organisation numbers are set. You can download your own file if your Personalnummer is set.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.datevReadyOrg = <?php echo json_encode($l->t('DATEV organisation numbers are set. Organisation download skips people without a Personalnummer.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.datevNeedConfig = <?php echo json_encode($l->t('Set Beraternummer and Mandantennummer in Administration → Global settings before downloading DATEV files.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.datevNeedPersonal = <?php echo json_encode($l->t('Organisation numbers are set, but your DATEV Personalnummer is missing. Add it on your employee profile to download your own file.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.datevNeedDates = <?php echo json_encode($l->t('Choose a start and end date above before downloading DATEV.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.datevDownloadStarted = <?php echo json_encode($l->t('DATEV download started.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.datevLoadFailed = <?php echo json_encode($l->t('Could not load DATEV status. Refresh the page or check your permissions.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
     window.ArbeitszeitCheck.apiUrl = {
         daily: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.report.daily'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
@@ -512,7 +564,9 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
     window.ArbeitszeitCheck.exportUrl = {
         timeEntries: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.timeEntries'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         absences: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.absences'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
-        compliance: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.compliance'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+        compliance: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.compliance'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        datev: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.datev'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+        datevConfig: <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.export.datevConfig'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
     };
 </script>
 </div><!-- /.azc-page-stack -->

@@ -89,7 +89,7 @@
   gap: var(--space-2, 0.5rem);
   min-height: 2.75rem;
   padding: var(--space-2, 0.5rem) 0;
-  color: var(--color-primary-element, #0082c9);
+  color: var(--color-primary-element);
   font-weight: 600;
   text-decoration: none;
   border-radius: var(--border-radius, 4px);
@@ -100,7 +100,7 @@
 }
 
 .admin-user-detail__back-link:focus-visible {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: 2px;
 }
 
@@ -182,7 +182,7 @@
 }
 
 .admin-user-detail__howto-summary:focus-visible {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: 2px;
   border-radius: var(--border-radius, 4px);
 }
@@ -229,12 +229,12 @@
 }
 
 .admin-user-detail__toc-link:hover {
-  border-color: var(--color-primary-element, #0082c9);
-  color: var(--color-primary-element, #0082c9);
+  border-color: var(--color-primary-element);
+  color: var(--color-primary-element);
 }
 
 .admin-user-detail__toc-link:focus-visible {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: 2px;
 }
 
@@ -246,8 +246,8 @@
 }
 
 .admin-user-detail__status--error {
-  border-color: var(--color-error, #e9322d);
-  background: color-mix(in srgb, var(--color-error, #e9322d) 8%, var(--color-main-background));
+  border-color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 8%, var(--color-main-background));
 }
 
 .admin-user-detail__status-text {
@@ -314,7 +314,7 @@
   padding: 0;
   border: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
   border-radius: var(--border-radius-large, 10px);
-  background: var(--color-main-background, #fff);
+  background: var(--color-main-background);
   overflow: clip;
 }
 
@@ -332,7 +332,7 @@
 }
 
 .admin-user-detail .user-edit-section__summary:focus-visible {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: -2px;
 }
 
@@ -382,8 +382,8 @@
   margin: var(--space-2, 0.5rem) 0 0;
   padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
   border-radius: var(--border-radius, 6px);
-  border-left: 3px solid var(--color-primary-element, #0082c9);
-  background: color-mix(in srgb, var(--color-primary-element, #0082c9) 8%, var(--color-main-background));
+  border-left: 3px solid var(--color-primary-element);
+  background: color-mix(in srgb, var(--color-primary-element) 8%, var(--color-main-background));
   color: var(--color-main-text);
   font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
   line-height: 1.5;
@@ -417,7 +417,7 @@
 }
 
 .admin-user-detail .entitlement-preview__details > summary:focus-visible {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: 2px;
   border-radius: var(--border-radius, 4px);
 }
@@ -493,12 +493,12 @@
 }
 
 .admin-user-detail .user-edit-capture__card:has(.user-edit-capture__checkbox:checked) {
-  border-color: var(--color-primary-element, #0082c9);
+  border-color: var(--color-primary-element);
   background: color-mix(in srgb, var(--color-main-background) 90%, var(--color-primary-element) 10%);
 }
 
 .admin-user-detail .user-edit-capture__card:has(.user-edit-capture__checkbox:focus-visible) {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: 2px;
 }
 
@@ -507,7 +507,7 @@
   height: 1.25rem;
   margin-top: 0.15rem;
   flex-shrink: 0;
-  accent-color: var(--color-primary-element, #0082c9);
+  accent-color: var(--color-primary-element);
 }
 
 .admin-user-detail .user-edit-capture__card-body {
@@ -578,8 +578,8 @@ body[data-theme-dark-highcontrast] .admin-user-detail .form-select option {
   position: sticky;
   bottom: 0.5rem;
   z-index: 2;
-  background: var(--color-main-background, #fff);
-  box-shadow: 0 -4px 12px color-mix(in srgb, var(--color-box-shadow, #000) 8%, transparent);
+  background: var(--color-main-background);
+  box-shadow: 0 -4px 12px color-mix(in srgb, var(--color-box-shadow) 8%, transparent);
 }
 
 .admin-user-detail .form-actions .btn--primary {
@@ -597,7 +597,7 @@ body[data-theme-dark-highcontrast] .admin-user-detail .form-select option {
 
 .admin-user-detail .form-actions .btn--primary:focus-visible,
 .admin-user-detail .form-actions .btn--secondary:focus-visible {
-  outline: 2px solid var(--color-primary-element, #0082c9);
+  outline: 2px solid var(--color-primary-element);
   outline-offset: 2px;
 }
 

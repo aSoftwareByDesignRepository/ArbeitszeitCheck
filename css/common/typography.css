@@ -53,8 +53,8 @@
   --arbeitszeitcheck-text-color-tertiary: var(--arbeitszeitcheck-color-text-tertiary);
   --arbeitszeitcheck-text-color-muted: var(--arbeitszeitcheck-color-text-muted);
   --arbeitszeitcheck-text-color-inverse: var(--arbeitszeitcheck-color-text-inverse);
-  --arbeitszeitcheck-text-color-link: var(--arbeitszeitcheck-color-primary);
-  --arbeitszeitcheck-text-color-link-hover: var(--arbeitszeitcheck-color-primary-hover);
+  --arbeitszeitcheck-text-color-link: var(--azc-text, var(--color-main-text));
+  --arbeitszeitcheck-text-color-link-hover: var(--azc-text, var(--color-main-text));
 
   /* Heading Styles */
   --arbeitszeitcheck-heading-font-weight: var(--arbeitszeitcheck-font-weight-semibold);
@@ -150,19 +150,19 @@
 }
 
 /* Link Styles - Scoped to app content only to avoid affecting Nextcloud navigation.
- * Exclude button-styled anchors (.btn / .azc-btn) so CTAs keep solid fills. */
-#app-content-wrapper a:not(.btn):not(.azc-btn) {
+ * Exclude button-styled anchors, badge chips, and settings chip-bar links so semantic ink wins. */
+#app-content-wrapper a:not(.btn):not(.azc-btn):not(.azc-badge):not(.azc-scope-strip__chip):not(.azc-settings-nav__link) {
   color: var(--arbeitszeitcheck-link-color);
   text-decoration: var(--arbeitszeitcheck-link-decoration);
   transition: var(--arbeitszeitcheck-link-transition);
 }
 
-#app-content-wrapper a:not(.btn):not(.azc-btn):hover {
+#app-content-wrapper a:not(.btn):not(.azc-btn):not(.azc-badge):not(.azc-scope-strip__chip):not(.azc-settings-nav__link):hover {
   color: var(--arbeitszeitcheck-link-color-hover);
   text-decoration: var(--arbeitszeitcheck-link-decoration-hover);
 }
 
-#app-content-wrapper a:not(.btn):not(.azc-btn):focus {
+#app-content-wrapper a:not(.btn):not(.azc-btn):not(.azc-badge):not(.azc-scope-strip__chip):not(.azc-settings-nav__link):focus {
   outline: 2px solid var(--arbeitszeitcheck-color-border-focus);
   outline-offset: 2px;
 }

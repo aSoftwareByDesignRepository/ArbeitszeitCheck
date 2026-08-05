@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Service;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\Absence;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
@@ -110,7 +111,21 @@ class AbsenceServiceTest extends TestCase
 			return $this->hasAssignableManagerForTests;
 		});
 		$this->config = $this->createMock(IConfig::class);
-		$this->config->method('getAppValue')->with('arbeitszeitcheck', 'require_substitute_types', '[]')->willReturn('[]');
+		$this->config->method('getAppValue')->willReturnCallback(static function (string $app, string $key, $default = '') {
+			if ($app !== 'arbeitszeitcheck') {
+				return $default;
+			}
+			if ($key === 'require_substitute_types') {
+				return '[]';
+			}
+			if ($key === Constants::CONFIG_VACATION_YEAR_MODE) {
+				return Constants::VACATION_YEAR_MODE_CALENDAR;
+			}
+			if ($key === Constants::CONFIG_VACATION_UNIT) {
+				return Constants::VACATION_UNIT_DAYS;
+			}
+			return $default;
+		});
 		$this->db = $this->createMock(IDBConnection::class);
 		$this->lockingProvider = $this->createMock(ILockingProvider::class);
 		$this->lockingProvider->method('acquireLock');
@@ -159,6 +174,8 @@ class AbsenceServiceTest extends TestCase
 		$this->vacationAllocationStub = null;
 		$this->vacationAllocationFailProspective = false;
 		$this->vacationAllocationService = $this->createMock(VacationAllocationService::class);
+		$this->vacationAllocationService->method('isCarryoverUsableForNewRequests')->willReturn(true);
+		$this->vacationAllocationService->method('getMaxCarryoverOpeningCap')->willReturn(null);
 		$this->vacationAllocationService->method('computeYearAllocation')->willReturnCallback(function ($userId, $year, $exclude, $pStart, $pEnd, $asOf, $createdAt = null, $persistSnapshot = true) {
 			unset($userId, $year, $exclude, $asOf, $createdAt, $persistSnapshot);
 			if ($this->vacationAllocationStub !== null) {
@@ -386,6 +403,65 @@ class AbsenceServiceTest extends TestCase
 		$year = (int)$futureSat->format('Y');
 		$this->holidayCalendarService->method('computeWorkingDaysPerYearForUser')
 			->willReturn([$year => 0.0]);
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('Vacation must include at least one working day');
+
+		$this->service->createAbsence($data, $userId);
+	}
+
+	/**
+	 * Hours mode + weekend + posted duration_hours must still be rejected (no invented debit).
+	 */
+	public function testCreateAbsenceVacationHoursWeekendWithDurationRejected(): void
+	{
+		$userId = 'testuser';
+		$futureSat = (new \DateTime())->modify('next Saturday');
+		$futureSun = (clone $futureSat)->modify('+1 day');
+		$data = [
+			'type' => Absence::TYPE_VACATION,
+			'start_date' => $futureSat->format('Y-m-d'),
+			'end_date' => $futureSun->format('Y-m-d'),
+			'reason' => 'Weekend hours attempt',
+			'duration_hours' => '8',
+			'require_duration_hours' => true,
+		];
+
+		$this->absenceMapper->method('findOverlapping')->willReturn([]);
+		$year = (int)$futureSat->format('Y');
+		$this->holidayCalendarService->method('computeWorkingDaysPerYearForUser')
+			->willReturn([$year => 0.0]);
+		$this->holidayCalendarService->method('computeWorkingDaysForUser')->willReturn(0.0);
+
+		$unitConfig = $this->createMock(IConfig::class);
+		$unitConfig->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, string $default = ''): string {
+				if ($key === Constants::CONFIG_VACATION_UNIT) {
+					return Constants::VACATION_UNIT_HOURS;
+				}
+				if ($key === Constants::CONFIG_VACATION_HOURS_PER_DAY) {
+					return '8';
+				}
+				return $default;
+			}
+		);
+		$unit = new \OCA\ArbeitszeitCheck\Service\VacationUnitService($unitConfig);
+		$debit = $this->createMock(\OCA\ArbeitszeitCheck\Service\VacationHoursDebitService::class);
+		$debit->method('estimateForUserRange')->willReturn([
+			'hours' => 0.0,
+			'basis' => 'org_hours_per_day',
+			'average_daily' => 8.0,
+			'one_day_hours' => 8.0,
+			'weekday_nets' => null,
+		]);
+
+		$ref = new \ReflectionClass($this->service);
+		$unitProp = $ref->getProperty('vacationUnitService');
+		$unitProp->setAccessible(true);
+		$unitProp->setValue($this->service, $unit);
+		$debitProp = $ref->getProperty('vacationHoursDebitService');
+		$debitProp->setAccessible(true);
+		$debitProp->setValue($this->service, $debit);
 
 		$this->expectException(\Exception::class);
 		$this->expectExceptionMessage('Vacation must include at least one working day');
@@ -644,7 +720,7 @@ class AbsenceServiceTest extends TestCase
 		$this->vacationAllocationFailProspective = true;
 
 		$this->expectException(\Exception::class);
-		$this->expectExceptionMessage('Not enough vacation days remaining');
+		$this->expectExceptionMessage('Not enough vacation remaining');
 
 		$this->service->createAbsence($data, $userId);
 	}

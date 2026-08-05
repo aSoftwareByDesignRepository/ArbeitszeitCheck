@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Premium DATEV details fixture</title>
+	<style>
+		body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: #ececec; color: #222; }
+		.wrap { max-width: 40rem; margin: 1.5rem auto; padding: 1rem; background: #fff; }
+		table { width: 100%; border-collapse: collapse; }
+		th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+		input { min-height: 2.75rem; font-size: 1rem; }
+		summary { min-height: 2.75rem; cursor: pointer; font-size: 1.05rem; }
+		.form-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem; }
+	</style>
+</head>
+<body>
+<div class="wrap" id="premium-datev-fixture">
+	<h1>Hour premiums</h1>
+	<table id="premium-categories-table">
+		<thead>
+			<tr><th>On</th><th>Category</th><th>Percent</th></tr>
+		</thead>
+		<tbody>
+			<tr><td><input type="checkbox" checked aria-label="Overtime on"></td><td>Overtime</td><td><input type="number" value="50" aria-label="Overtime percent"> %</td></tr>
+		</tbody>
+	</table>
+	<details class="premium-datev-details" id="premium-datev-details">
+		<summary>More options: DATEV Lohnart codes</summary>
+		<p id="premium-datev-hint">DATEV Lohnart is optional.</p>
+		<div class="form-row">
+			<label>Overtime <input type="text" id="premium-cat-ot-datev" value="2001"></label>
+		</div>
+	</details>
+</div>
+</body>
+</html>

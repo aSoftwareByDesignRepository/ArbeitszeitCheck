@@ -39,11 +39,54 @@ class VacationAllocationService
 		private EntitlementSnapshotService $entitlementSnapshotService,
 		private VacationProrationService $vacationProrationService,
 		private VacationYearWindowResolver $yearWindowResolver,
+		private ?VacationUnitService $vacationUnitService = null,
+		private ?VacationHoursDebitService $vacationHoursDebitService = null,
 	) {
 	}
 
 	/**
-	 * Resolved expiry calendar date for year Y (last day on which carryover can be used for that year's balance).
+	 * Refresh entitlement snapshots / open-period allocation for users after
+	 * vacation-year mode flips (AC-101.4). Uses the current mode from IConfig.
+	 *
+	 * @param list<string> $userIds
+	 * @return array{refreshed: int, failed: list<string>}
+	 */
+	public function refreshOpenAllocationsForUsers(array $userIds, ?\DateTimeInterface $asOf = null): array
+	{
+		$asOf = $asOf ?? new \DateTimeImmutable('today');
+		$refreshed = 0;
+		$failed = [];
+		foreach ($userIds as $userId) {
+			$uid = trim((string)$userId);
+			if ($uid === '') {
+				continue;
+			}
+			try {
+				$window = $this->yearWindowResolver->resolveForUser($uid, $asOf);
+				$this->computeAllocationForWindow(
+					$uid,
+					$window,
+					null,
+					null,
+					null,
+					$asOf,
+					null,
+					true,
+					null
+				);
+				$refreshed++;
+			} catch (\Throwable) {
+				// Per-user failures must not abort the org-wide mode switch.
+				$failed[] = $uid;
+			}
+		}
+
+		return ['refreshed' => $refreshed, 'failed' => $failed];
+	}
+
+	/**
+	 * Resolved expiry calendar date for calendar year Y (last day on which carryover can be used).
+	 * Anniversary mode must use {@see getCarryoverExpiryDateForWindow()} (Q2).
 	 */
 	public function getCarryoverExpiryDateForYear(int $year): \DateTimeImmutable
 	{
@@ -59,6 +102,33 @@ class VacationAllocationService
 		return $d->setTime(0, 0, 0);
 	}
 
+	/**
+	 * Carryover expiry for a resolved vacation year window (Q2 lock).
+	 *
+	 * Calendar: fixed month/day in the balance calendar year (legacy).
+	 * Anniversary: N months after the window start (N = expiry month setting, default 3),
+	 * so hire 1 Jul → Resturlaub usable until 30 Sep when N=3. Day setting is unused.
+	 */
+	public function getCarryoverExpiryDateForWindow(VacationYearWindow $window): \DateTimeImmutable
+	{
+		if ($window->mode !== VacationYearWindow::MODE_ANNIVERSARY || $window->missingEmploymentStart) {
+			return $this->getCarryoverExpiryDateForYear($window->balanceYearKey);
+		}
+
+		$months = $this->getExpiryMonth();
+		$start = $window->startInclusive->setTime(0, 0, 0);
+		$expiry = $start->modify('+' . $months . ' months')->modify('-1 day');
+		$last = $window->lastInclusiveDay()->setTime(0, 0, 0);
+		if ($expiry > $last) {
+			$expiry = $last;
+		}
+		if ($expiry < $start) {
+			$expiry = $start;
+		}
+
+		return $expiry->setTime(0, 0, 0);
+	}
+
 	public function getExpiryMonth(): int
 	{
 		$v = (int)$this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_CARRYOVER_EXPIRY_MONTH, '3');
@@ -72,7 +142,8 @@ class VacationAllocationService
 	}
 
 	/**
-	 * Optional global cap on opening carryover days (null = unlimited).
+	 * Optional global cap on opening carryover (null = unlimited).
+	 * Unit-aware: days mode ≤ 366, hours mode ≤ 4000 (matches clampCarryover).
 	 */
 	public function getMaxCarryoverOpeningCap(): ?float
 	{
@@ -84,7 +155,10 @@ class VacationAllocationService
 		if (!is_finite($v)) {
 			return null;
 		}
-		return max(0.0, min(366.0, $v));
+		$capMax = $this->vacationUnitService !== null
+			? $this->vacationUnitService->storedAmountCeiling()
+			: 366.0;
+		return max(0.0, min($capMax, $v));
 	}
 
 	/**
@@ -92,6 +166,9 @@ class VacationAllocationService
 	 */
 	public function applyCapToOpeningBalance(float $carryoverDays): float
 	{
+		if ($this->vacationUnitService !== null) {
+			return $this->vacationUnitService->clampCarryover($carryoverDays);
+		}
 		$v = max(0.0, min(366.0, $carryoverDays));
 		$cap = $this->getMaxCarryoverOpeningCap();
 		if ($cap !== null) {
@@ -102,14 +179,28 @@ class VacationAllocationService
 
 	/**
 	 * Whether carryover from year Y's opening balance can still be used for new requests (date-only, server "today").
+	 * Pass $userId in anniversary mode so expiry follows that person's window (Q2).
 	 */
-	public function isCarryoverUsableForNewRequests(int $year, ?\DateTimeInterface $asOf = null): bool
+	public function isCarryoverUsableForNewRequests(int $year, ?\DateTimeInterface $asOf = null, ?string $userId = null): bool
 	{
 		$asOf = $asOf ?? new \DateTime('today');
-		$expiry = $this->getCarryoverExpiryDateForYear($year);
-		$asDate = $asOf instanceof \DateTimeInterface
-			? (new \DateTime($asOf->format('Y-m-d')))->setTime(0, 0, 0)
-			: (clone $asOf)->setTime(0, 0, 0);
+		$expiry = $this->resolveExpiryForYear($year, $asOf, $userId);
+		$asDate = new \DateTime($asOf->format('Y-m-d'));
+		$asDate->setTime(0, 0, 0);
+		$exp = new \DateTime($expiry->format('Y-m-d'));
+		$exp->setTime(0, 0, 0);
+		return $asDate <= $exp;
+	}
+
+	/**
+	 * Whether carryover for this window is still usable for new requests.
+	 */
+	public function isCarryoverUsableForWindow(VacationYearWindow $window, ?\DateTimeInterface $asOf = null): bool
+	{
+		$asOf = $asOf ?? new \DateTime('today');
+		$expiry = $this->getCarryoverExpiryDateForWindow($window);
+		$asDate = new \DateTime($asOf->format('Y-m-d'));
+		$asDate->setTime(0, 0, 0);
 		$exp = new \DateTime($expiry->format('Y-m-d'));
 		$exp->setTime(0, 0, 0);
 		return $asDate <= $exp;
@@ -123,20 +214,21 @@ class VacationAllocationService
 	 * the deadline may still do so when approved later (grandfathering). Purely prospective rows with no
 	 * creation date (stats-only) use the deadline only.
 	 */
-	public function canProspectiveUseCarryoverPool(int $year, ?\DateTimeInterface $requestCreatedAt, \DateTimeInterface $validationDate): bool
-	{
-		if ($this->isCarryoverUsableForNewRequests($year, $validationDate)) {
+	public function canProspectiveUseCarryoverPool(
+		int $year,
+		?\DateTimeInterface $requestCreatedAt,
+		\DateTimeInterface $validationDate,
+		?string $userId = null,
+		?\DateTimeImmutable $expiryOverride = null,
+	): bool {
+		$expiry = $expiryOverride ?? $this->resolveExpiryForYear($year, $validationDate, $userId);
+		if ($this->isDateOnOrBeforeExpiry($validationDate, $expiry)) {
 			return true;
 		}
 		if ($requestCreatedAt === null) {
 			return false;
 		}
-		$expiry = $this->getCarryoverExpiryDateForYear($year);
-		$created = new \DateTime($requestCreatedAt->format('Y-m-d'));
-		$created->setTime(0, 0, 0);
-		$exp = new \DateTime($expiry->format('Y-m-d'));
-		$exp->setTime(0, 0, 0);
-		return $created <= $exp;
+		return $this->isDateOnOrBeforeExpiry($requestCreatedAt, $expiry);
 	}
 
 	/**
@@ -289,6 +381,7 @@ class VacationAllocationService
 		?\DateTimeInterface $asOf = null,
 		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
 		bool $persistEntitlementSnapshot = true,
+		?float $prospectiveDurationHours = null,
 	): array {
 		$asOf = $asOf ?? new \DateTime('today');
 		$window = $this->resolveWindowForAllocation($userId, $year, $asOf);
@@ -301,6 +394,7 @@ class VacationAllocationService
 			$asOf,
 			$prospectiveRequestCreatedAt,
 			$persistEntitlementSnapshot,
+			$prospectiveDurationHours,
 		);
 	}
 
@@ -316,14 +410,21 @@ class VacationAllocationService
 		?\DateTimeInterface $asOf = null,
 		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
 		bool $persistEntitlementSnapshot = true,
+		?float $prospectiveDurationHours = null,
 	): array {
 		$asOf = $asOf ?? new \DateTime('today');
 		$year = $window->balanceYearKey;
 		$rangeStart = $window->startInclusive;
 		$rangeEndInclusive = $window->lastInclusiveDay();
+		$hoursMode = $this->vacationUnitService?->isHoursMode() === true;
 
 		$entitlementResolved = $this->vacationEntitlementEngine->computeForDate($userId, $asOf);
 		$fullYearEntitlement = (float)$entitlementResolved['days'];
+		if ($this->vacationUnitService !== null) {
+			$fullYearEntitlement = $this->vacationUnitService->clampEntitlement($fullYearEntitlement);
+		} else {
+			$fullYearEntitlement = round(max(0.0, min(366.0, $fullYearEntitlement)), 2, PHP_ROUND_HALF_UP);
+		}
 
 		if ($window->missingEmploymentStart) {
 			$proration = [
@@ -348,12 +449,17 @@ class VacationAllocationService
 		} else {
 			$proration = $this->vacationProrationService->prorateForYear($userId, $year, $fullYearEntitlement);
 			$annualEntitlement = (float)$proration['days'];
+			if ($this->vacationUnitService !== null) {
+				$annualEntitlement = $this->vacationUnitService->clampEntitlement($annualEntitlement);
+			}
 		}
 
-		$carryoverOpening = $this->vacationYearBalanceMapper->getCarryoverDays($userId, $year);
+		$carryoverOpening = $hoursMode
+			? $this->vacationYearBalanceMapper->getCarryoverAmount($userId, $year, true)
+			: $this->vacationYearBalanceMapper->getCarryoverDays($userId, $year);
 		$carryoverOpening = $this->applyCapToOpeningBalance($carryoverOpening);
 
-		$expiry = $this->getCarryoverExpiryDateForYear($year);
+		$expiry = $this->getCarryoverExpiryDateForWindow($window);
 		$carryoverExpiresOn = $carryoverOpening > 0.0001 ? $expiry->format('Y-m-d') : null;
 
 		$list = $window->mode === VacationYearWindow::MODE_CALENDAR
@@ -375,6 +481,9 @@ class VacationAllocationService
 			$p->setId(self::PROSPECTIVE_ABSENCE_PLACEHOLDER_ID);
 			$p->setStartDate(clone $prospectiveStart);
 			$p->setEndDate(clone $prospectiveEnd);
+			if ($prospectiveDurationHours !== null) {
+				$p->setDurationHours($prospectiveDurationHours);
+			}
 			$merged[] = $p;
 		}
 		usort($merged, function (Absence $a, Absence $b) {
@@ -398,13 +507,15 @@ class VacationAllocationService
 			if (!$start || !$end) {
 				continue;
 			}
-			$split = $this->splitWorkingDaysForRangeSegment(
+			$split = $this->splitConsumptionForRangeSegment(
 				$userId,
+				$absence,
 				$start,
 				$end,
 				$rangeStart,
 				$rangeEndInclusive,
-				$expiry
+				$expiry,
+				$hoursMode
 			);
 			$wdBefore = $split['before'];
 			$wdAfter = $split['after'];
@@ -412,7 +523,7 @@ class VacationAllocationService
 			$usedTotal += $chunk;
 
 			$isProspective = ($absence->getId() === self::PROSPECTIVE_ABSENCE_PLACEHOLDER_ID);
-			if ($isProspective && !$this->canProspectiveUseCarryoverPool($year, $prospectiveRequestCreatedAt, $asOf)) {
+			if ($isProspective && !$this->canProspectiveUseCarryoverPool($year, $prospectiveRequestCreatedAt, $asOf, $userId, $expiry)) {
 				$need = $chunk;
 				$fromA = min($annualPool, $need);
 				$annualPool -= $fromA;
@@ -450,7 +561,7 @@ class VacationAllocationService
 		$annualRem = max(0.0, $annualPool);
 
 		$carryoverUsable = $carryoverRem;
-		if (!$this->isCarryoverUsableForNewRequests($year, $asOf)) {
+		if (!$this->isCarryoverUsableForWindow($window, $asOf)) {
 			$carryoverUsable = 0.0;
 		}
 
@@ -476,6 +587,8 @@ class VacationAllocationService
 			'carryover_expires_on' => $carryoverExpiresOn,
 			'carryover_usable_for_new_requests' => round($carryoverUsable, 4),
 			'used_total_working_days' => round($usedTotal, 4),
+			'used_total' => round($usedTotal, 4),
+			'vacation_unit' => $hoursMode ? Constants::VACATION_UNIT_HOURS : Constants::VACATION_UNIT_DAYS,
 			'allocation_valid' => $valid && !$window->missingEmploymentStart,
 			'shortfall' => round($shortfall, 4),
 			'entitlement_source' => $entitlementResolved['source'],
@@ -492,7 +605,7 @@ class VacationAllocationService
 			$fingerprint = 'invalid';
 			try {
 				$enc = json_encode(
-					[$entitlementResolved['source'], $entitlementResolved['ruleSetId'], $entitlementTrace, $annualEntitlement],
+					[$entitlementResolved['source'], $entitlementResolved['ruleSetId'], $entitlementTrace, $annualEntitlement, $hoursMode ? 'h' : 'd'],
 					JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
 				);
 				$fingerprint = hash('sha256', $enc);
@@ -515,6 +628,144 @@ class VacationAllocationService
 		return $result;
 	}
 
+	/**
+	 * Split absence consumption into before/after carryover expiry amounts
+	 * (days or hours depending on org unit).
+	 *
+	 * @return array{before: float, after: float}
+	 */
+	private function splitConsumptionForRangeSegment(
+		string $userId,
+		Absence $absence,
+		\DateTimeInterface $absStart,
+		\DateTimeInterface $absEnd,
+		\DateTimeInterface $rangeStart,
+		\DateTimeInterface $rangeEndInclusive,
+		\DateTimeImmutable $expiryDate,
+		bool $hoursMode,
+	): array {
+		$daySplit = $this->splitWorkingDaysForRangeSegment(
+			$userId,
+			$absStart,
+			$absEnd,
+			$rangeStart,
+			$rangeEndInclusive,
+			$expiryDate
+		);
+		if (!$hoursMode || $this->vacationUnitService === null) {
+			return $daySplit;
+		}
+
+		$dayTotal = $daySplit['before'] + $daySplit['after'];
+		$rawHours = $absence->getDurationHours();
+		if ($rawHours !== null && is_finite((float)$rawHours) && (float)$rawHours > 0) {
+			$hours = (float)$rawHours;
+			if ($dayTotal < 0.0001) {
+				// No working days in the clipped segment — do not invent a full debit on "before".
+				return ['before' => 0.0, 'after' => 0.0];
+			}
+			$weightBefore = $daySplit['before'];
+			$weightAfter = $daySplit['after'];
+			if ($this->vacationHoursDebitService !== null) {
+				$hourWeights = $this->scheduleHourWeightsForRangeSegment(
+					$userId,
+					$absStart,
+					$absEnd,
+					$rangeStart,
+					$rangeEndInclusive,
+					$expiryDate
+				);
+				$wTotal = $hourWeights['before'] + $hourWeights['after'];
+				if ($wTotal > 0.0001) {
+					$weightBefore = $hourWeights['before'];
+					$weightAfter = $hourWeights['after'];
+				}
+			}
+			$wTotal = $weightBefore + $weightAfter;
+			if ($wTotal < 0.0001) {
+				return ['before' => 0.0, 'after' => 0.0];
+			}
+			$ratioBefore = $weightBefore / $wTotal;
+			return [
+				'before' => round($hours * $ratioBefore, 2, PHP_ROUND_HALF_UP),
+				'after' => round($hours * (1.0 - $ratioBefore), 2, PHP_ROUND_HALF_UP),
+			];
+		}
+
+		// No duration_hours: convert day weights via org hours_per_day (full-day ranges).
+		return [
+			'before' => $this->vacationUnitService->daysToHours($daySplit['before']),
+			'after' => $this->vacationUnitService->daysToHours($daySplit['after']),
+		];
+	}
+
+	/**
+	 * Schedule-/holiday-aware hour weights for carryover before/after split (BANSS nets).
+	 *
+	 * @return array{before: float, after: float}
+	 */
+	private function scheduleHourWeightsForRangeSegment(
+		string $userId,
+		\DateTimeInterface $absStart,
+		\DateTimeInterface $absEnd,
+		\DateTimeInterface $rangeStart,
+		\DateTimeInterface $rangeEndInclusive,
+		\DateTimeImmutable $expiryDate,
+	): array {
+		if ($this->vacationHoursDebitService === null) {
+			return ['before' => 0.0, 'after' => 0.0];
+		}
+		$rStart = \DateTimeImmutable::createFromInterface($rangeStart)->setTime(0, 0, 0);
+		$rEnd = \DateTimeImmutable::createFromInterface($rangeEndInclusive)->setTime(0, 0, 0);
+		$segStart = \DateTimeImmutable::createFromInterface($absStart)->setTime(0, 0, 0);
+		$segEnd = \DateTimeImmutable::createFromInterface($absEnd)->setTime(0, 0, 0);
+		if ($segStart < $rStart) {
+			$segStart = $rStart;
+		}
+		if ($segEnd > $rEnd) {
+			$segEnd = $rEnd;
+		}
+		if ($segStart > $segEnd) {
+			return ['before' => 0.0, 'after' => 0.0];
+		}
+
+		$expiry = $expiryDate->setTime(0, 0, 0);
+		$before = 0.0;
+		$beforeEnd = $segEnd <= $expiry ? $segEnd : $expiry;
+		if ($segStart <= $beforeEnd) {
+			$est = $this->vacationHoursDebitService->estimateForUserRange($userId, $segStart, $beforeEnd);
+			$before = (float)$est['hours'];
+		}
+
+		$after = 0.0;
+		$afterStart = $expiry->modify('+1 day');
+		if ($segStart > $afterStart) {
+			$afterStart = $segStart;
+		}
+		if ($afterStart <= $segEnd) {
+			$est = $this->vacationHoursDebitService->estimateForUserRange($userId, $afterStart, $segEnd);
+			$after = (float)$est['hours'];
+		}
+
+		return ['before' => $before, 'after' => $after];
+	}
+
+	/**
+	 * Public for rollover / stats — same resolution as allocation.
+	 */
+	public function resolveWindowForUserYear(
+		string $userId,
+		int $year,
+		?\DateTimeInterface $asOf = null,
+	): VacationYearWindow {
+		return $this->resolveWindowForAllocation($userId, $year, $asOf ?? new \DateTime('today'));
+	}
+
+	public function isAnniversaryMode(): bool
+	{
+		return $this->yearWindowResolver->isAnniversaryMode();
+	}
+
 	private function resolveWindowForAllocation(
 		string $userId,
 		int $year,
@@ -533,5 +784,26 @@ class VacationAllocationService
 		}
 
 		return $this->yearWindowResolver->resolveAnniversaryForUserBalanceYear($userId, $year);
+	}
+
+	private function resolveExpiryForYear(
+		int $year,
+		\DateTimeInterface $asOf,
+		?string $userId,
+	): \DateTimeImmutable {
+		if ($userId !== null && $this->yearWindowResolver->isAnniversaryMode()) {
+			$window = $this->resolveWindowForAllocation($userId, $year, $asOf);
+			return $this->getCarryoverExpiryDateForWindow($window);
+		}
+		return $this->getCarryoverExpiryDateForYear($year);
+	}
+
+	private function isDateOnOrBeforeExpiry(\DateTimeInterface $date, \DateTimeImmutable $expiry): bool
+	{
+		$d = new \DateTime($date->format('Y-m-d'));
+		$d->setTime(0, 0, 0);
+		$exp = new \DateTime($expiry->format('Y-m-d'));
+		$exp->setTime(0, 0, 0);
+		return $d <= $exp;
 	}
 }

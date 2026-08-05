@@ -728,10 +728,23 @@
                     <input type="text" id="user-employment-start" name="employmentStart" class="form-input datepicker-input" placeholder="${datePlaceholder}" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${employmentStartVal}" autocomplete="off" aria-describedby="user-employment-start-help">
                     <p id="user-employment-start-help" class="form-help">${Utils.escapeHtml(t('employmentStartHelp', 'First day of employment. Vacation for the year of hire is prorated from this date.'))} ${Utils.escapeHtml(t('formatDdmmyyyy', 'Format: dd.mm.yyyy'))}</p>
                 </div>
-                <div class="form-group">
+                    <div class="form-group">
                     <label for="user-employment-end" class="form-label">${Utils.escapeHtml(t('employmentEnd', 'Employment end date (Austrittsdatum)'))}</label>
                     <input type="text" id="user-employment-end" name="employmentEnd" class="form-input datepicker-input" placeholder="${datePlaceholder}" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" maxlength="10" value="${employmentEndVal}" autocomplete="off" aria-describedby="user-employment-end-help">
                     <p id="user-employment-end-help" class="form-help">${Utils.escapeHtml(t('employmentEndHelp', 'Last day of employment. Leave empty for ongoing employment. Vacation for the year of leaving is prorated up to this date.'))}</p>
+                </div>
+                    </div>
+                </details>
+                <details class="user-edit-section" id="user-edit-datev" open>
+                    <summary class="user-edit-section__summary" id="user-edit-datev-heading">
+                        <span class="user-edit-section__heading">${Utils.escapeHtml(t('datevPersonal', 'DATEV Personalnummer'))}</span>
+                    </summary>
+                    <div class="user-edit-section__body">
+                    <p id="user-edit-datev-intro" class="user-edit-section__guide form-help form-help--block">${Utils.escapeHtml(t('sectionGuideDatev', 'Payroll employee number for DATEV export. Leave empty if this person is not exported to DATEV.'))}</p>
+                <div class="form-group">
+                    <label for="user-datev-personalnummer" class="form-label">${Utils.escapeHtml(t('datevPersonalnummer', 'DATEV Personalnummer'))}</label>
+                    <input type="text" id="user-datev-personalnummer" name="datevPersonalnummer" class="form-input" inputmode="numeric" pattern="[0-9]{0,8}" maxlength="8" value="${Utils.escapeHtml(String(user.datevPersonalnummer || ''))}" autocomplete="off" aria-describedby="user-datev-personalnummer-help user-edit-datev-intro">
+                    <p id="user-datev-personalnummer-help" class="form-help">${Utils.escapeHtml(t('datevPersonalnummerHelp', 'Up to 8 digits. Required for DATEV export of this employee.'))}</p>
                 </div>
                     </div>
                 </details>
@@ -748,7 +761,7 @@
                     </div>
                 </details>
 
-                <div class="form-actions admin-user-detail__actions" role="group" aria-label="${Utils.escapeHtml(t('saveChanges', 'Save changes'))}">
+                <div class="form-actions admin-user-detail__actions" data-ime-chrome="bottom" role="group" aria-label="${Utils.escapeHtml(t('saveChanges', 'Save changes'))}">
                     <a class="btn btn--secondary" href="${Utils.escapeHtml(listUrl)}" data-action="back-to-list">${Utils.escapeHtml(t('discardAndBack', 'Back without saving'))}</a>
                     <button type="submit" class="btn btn--primary">${Utils.escapeHtml(t('saveChanges', 'Save changes'))}</button>
                 </div>
@@ -1229,6 +1242,7 @@
         openingBalanceHours: '#user-overtime-opening',
         employmentStart: '#user-employment-start',
         employmentEnd: '#user-employment-end',
+        datevPersonalnummer: '#user-datev-personalnummer',
     };
 
     /**
@@ -1520,7 +1534,11 @@
             end: employmentEndRaw ? (toISO(employmentEndRaw) || '') : ''
         };
 
-        return { workingTimeModel, vacationPolicy, timeCapture, overtime, employment };
+        const datev = {
+            personalnummer: String(form.querySelector('#user-datev-personalnummer')?.value || '').trim()
+        };
+
+        return { workingTimeModel, vacationPolicy, timeCapture, overtime, employment, datev };
     }
 
     /**

@@ -34,4 +34,21 @@ final class DbLockKeys
 	{
 		return 'azc/es/' . md5($userId . '|' . $year . '|' . $asOfYmd);
 	}
+
+	public static function vacationUnitMigration(): string
+	{
+		return 'azc/vu/migrate';
+	}
+
+	/** Exclusive lock while saving / sealing premium policy (NN-06). */
+	public static function premiumPolicy(): string
+	{
+		return 'azc/pp/policy';
+	}
+
+	/** Exclusive lock while flipping vacation year mode + refreshing open allocations (AC-101.4). */
+	public static function vacationYearMode(): string
+	{
+		return 'azc/vy/mode';
+	}
 }

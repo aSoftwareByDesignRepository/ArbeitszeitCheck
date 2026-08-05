@@ -378,6 +378,52 @@ const ArbeitszeitCheckUtils = {
   },
 
   /**
+   * Ensure mutating fetch() options never set Content-Type: application/json
+   * without a body. Proxies/WAFs often return opaque HTTP 400 for that pair
+   * (same failure class as mobile clock-in / desklet punch actions).
+   *
+   * @param {RequestInit} [init]
+   * @returns {RequestInit}
+   */
+  normalizeMutatingFetchInit(init = {}) {
+    const next = { ...init };
+    const method = String(next.method || 'GET').toUpperCase();
+    if (method === 'GET' || method === 'HEAD') {
+      return next;
+    }
+
+    const emptyBody = next.body === undefined || next.body === null || next.body === '';
+    if (!emptyBody) {
+      return next;
+    }
+
+    if (next.headers instanceof Headers) {
+      const headers = new Headers(next.headers);
+      const contentType = headers.get('Content-Type') || '';
+      if (!contentType) {
+        headers.set('Content-Type', 'application/json');
+      }
+      if (String(headers.get('Content-Type') || '').toLowerCase().includes('application/json')) {
+        next.body = JSON.stringify({});
+      }
+      next.headers = headers;
+      return next;
+    }
+
+    const headers = { ...(next.headers || {}) };
+    const contentType = headers['Content-Type'] || headers['content-type'] || '';
+    if (!contentType) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const resolvedType = headers['Content-Type'] || headers['content-type'] || '';
+    if (String(resolvedType).toLowerCase().includes('application/json')) {
+      next.body = JSON.stringify({});
+    }
+    next.headers = headers;
+    return next;
+  },
+
+  /**
    * Make AJAX request using Nextcloud's OC.generateUrl
    */
   ajax(url, options = {}) {
@@ -412,11 +458,18 @@ const ArbeitszeitCheckUtils = {
       config.signal = signal;
     }
 
-    if (data && methodUpper !== 'GET' && methodUpper !== 'HEAD') {
+    // Mutating requests must always carry a JSON body + Content-Type. Bare POSTs
+    // (Content-Type set, empty body) are rejected as opaque HTTP 400 by some
+    // reverse proxies/WAFs — the same failure class as mobile clock-in.
+    if (methodUpper !== 'GET' && methodUpper !== 'HEAD') {
       if (config.headers['Content-Type'] === 'application/json') {
-        config.body = JSON.stringify(data);
-      } else {
+        const payload = (data && typeof data === 'object') ? data : {};
+        config.body = JSON.stringify(payload);
+      } else if (data != null) {
         config.body = data;
+      } else {
+        config.headers['Content-Type'] = 'application/json';
+        config.body = JSON.stringify({});
       }
     }
 

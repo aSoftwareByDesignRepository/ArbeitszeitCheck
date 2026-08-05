@@ -211,12 +211,15 @@
 			.map((id) => el(id))
 			.filter(Boolean);
 
+		const deskletActions = window.AzcDeskletActions || null;
+
 		let lastKnown = {
 			status: 'clocked_out',
 			workingTodayHours: 0,
 			currentSessionDuration: 0,
 			clockStampingEnabled: true,
 			manualTimeEntryEnabled: true,
+			atDailyMaximum: false,
 		};
 		let mutationInFlight = false;
 		let sessionTickTimer = null;
@@ -316,6 +319,7 @@
 				sessionStartFormatted: '',
 				clockStampingEnabled: true,
 				manualTimeEntryEnabled: true,
+				atDailyMaximum: false,
 			};
 		}
 		const capture = (raw.timeCapture && typeof raw.timeCapture === 'object')
@@ -335,6 +339,7 @@
 			),
 			clockStampingEnabled: capture.clockStampingEnabled !== false,
 			manualTimeEntryEnabled: capture.manualTimeEntryEnabled !== false,
+			atDailyMaximum: Boolean(raw.atDailyMaximum ?? raw.at_daily_maximum),
 		};
 	};
 
@@ -366,12 +371,29 @@
 			}
 		};
 
+		const projectPickerEl = el('dz-project-picker');
+		const projectSelectEl = el('dz-clock-in-project');
+		const dailyMaxNoticeEl = el('dz-daily-max-notice');
+		const captureNoticeEl = el('dz-capture-notice');
+
 		const setButtonsLocked = (locked) => {
 			actionButtons.forEach((btn) => {
 				btn.disabled = locked;
 				btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
 				btn.classList.toggle('btn--loading', locked);
 			});
+			if (projectSelectEl) {
+				projectSelectEl.disabled = locked
+					|| !Boolean(
+						(deskletActions
+							? deskletActions.getEffectiveButtonStates(
+								lastKnown.status,
+								lastKnown.clockStampingEnabled !== false,
+								Boolean(lastKnown.atDailyMaximum),
+							)
+							: { 'dz-clock-in': true })['dz-clock-in'],
+					);
+			}
 		};
 
 		const stopSessionTicker = () => {
@@ -400,19 +422,22 @@
 			}, 1000);
 		};
 
-		const BUTTON_STATES = {
-			clocked_out: { 'dz-clock-in': true, 'dz-start-break': false, 'dz-end-break': false, 'dz-clock-out': false },
-			active: { 'dz-clock-in': false, 'dz-start-break': true, 'dz-end-break': false, 'dz-clock-out': true },
-			break: { 'dz-clock-in': false, 'dz-start-break': false, 'dz-end-break': true, 'dz-clock-out': true },
-			paused: { 'dz-clock-in': true, 'dz-start-break': false, 'dz-end-break': false, 'dz-clock-out': true },
-			completed: { 'dz-clock-in': true, 'dz-start-break': false, 'dz-end-break': false, 'dz-clock-out': false },
-		};
-
-		const captureNoticeEl = el('dz-capture-notice');
-
-		const getEffectiveButtonStates = (status, clockStampingEnabled) => {
-			const states = { ...(BUTTON_STATES[status] ?? BUTTON_STATES.clocked_out) };
+		const getEffectiveButtonStates = (status, clockStampingEnabled, atDailyMaximum = false) => {
+			if (deskletActions && typeof deskletActions.getEffectiveButtonStates === 'function') {
+				return deskletActions.getEffectiveButtonStates(status, clockStampingEnabled, atDailyMaximum);
+			}
+			const fallback = {
+				clocked_out: { 'dz-clock-in': true, 'dz-start-break': false, 'dz-end-break': false, 'dz-clock-out': false },
+				active: { 'dz-clock-in': false, 'dz-start-break': true, 'dz-end-break': false, 'dz-clock-out': true },
+				break: { 'dz-clock-in': false, 'dz-start-break': false, 'dz-end-break': true, 'dz-clock-out': true },
+				paused: { 'dz-clock-in': true, 'dz-start-break': false, 'dz-end-break': false, 'dz-clock-out': true },
+				completed: { 'dz-clock-in': true, 'dz-start-break': false, 'dz-end-break': false, 'dz-clock-out': false },
+			};
+			const states = { ...(fallback[status] ?? fallback.clocked_out) };
 			if (!clockStampingEnabled) {
+				states['dz-clock-in'] = false;
+			}
+			if (atDailyMaximum && (status === 'clocked_out' || status === 'paused' || status === 'completed')) {
 				states['dz-clock-in'] = false;
 			}
 			return states;
@@ -452,34 +477,77 @@
 			captureNoticeEl.setAttribute('role', 'status');
 		};
 
-		const updateButtonStates = (status, clockStampingEnabled = true) => {
+		const updateDailyMaxNotice = (data) => {
+			if (!dailyMaxNoticeEl) {
+				return;
+			}
+			const show = deskletActions && typeof deskletActions.shouldShowDailyMaxNotice === 'function'
+				? deskletActions.shouldShowDailyMaxNotice(data.status, Boolean(data.atDailyMaximum))
+				: (Boolean(data.atDailyMaximum)
+					&& (data.status === 'clocked_out' || data.status === 'paused' || data.status === 'completed'));
+			if (!show) {
+				dailyMaxNoticeEl.setAttribute('hidden', '');
+				dailyMaxNoticeEl.textContent = '';
+				return;
+			}
+			dailyMaxNoticeEl.removeAttribute('hidden');
+			dailyMaxNoticeEl.innerHTML = '';
+			const titleEl = document.createElement('p');
+			titleEl.className = 'dz-capture-notice__title';
+			titleEl.textContent = l10n.dailyMaximumTitle || 'Daily maximum reached';
+			const textEl = document.createElement('p');
+			textEl.className = 'dz-capture-notice__text';
+			textEl.textContent = l10n.dailyMaximumBody
+				|| 'You already reached today’s working-time limit. Clock-in is available again tomorrow.';
+			dailyMaxNoticeEl.appendChild(titleEl);
+			dailyMaxNoticeEl.appendChild(textEl);
+		};
+
+		const updateProjectPickerVisibility = (status, clockStampingEnabled, atDailyMaximum) => {
+			if (!projectPickerEl) {
+				return;
+			}
+			const canClockIn = deskletActions && typeof deskletActions.canShowProjectPicker === 'function'
+				? deskletActions.canShowProjectPicker(status, clockStampingEnabled, atDailyMaximum)
+				: Boolean(getEffectiveButtonStates(status, clockStampingEnabled, atDailyMaximum)['dz-clock-in']);
+			projectPickerEl.hidden = !canClockIn;
+			if (projectSelectEl) {
+				projectSelectEl.disabled = !canClockIn || mutationInFlight;
+			}
+		};
+
+		const updateButtonStates = (status, clockStampingEnabled = true, atDailyMaximum = false) => {
 			if (mutationInFlight) {
 				setButtonsLocked(true);
 				return;
 			}
-		const states = getEffectiveButtonStates(status, clockStampingEnabled);
-		// Contextual actions: only show what the user can do *right now*. Hiding the
-		// inapplicable actions (rather than showing them greyed-out) keeps the row
-		// unambiguous — there are never more than two live choices at once.
-		Object.entries(states).forEach(([id, enabled]) => {
-			const btn = el(id);
-			if (!btn) {
-				return;
-			}
-			btn.hidden = !enabled;
-			btn.disabled = !enabled;
-			btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
-			btn.classList.remove('btn--loading');
-		});
-	};
+			const states = getEffectiveButtonStates(status, clockStampingEnabled, atDailyMaximum);
+			// Contextual actions: only show what the user can do *right now*. Hiding the
+			// inapplicable actions (rather than showing them greyed-out) keeps the row
+			// unambiguous — there are never more than two live choices at once.
+			Object.entries(states).forEach(([id, enabled]) => {
+				const btn = el(id);
+				if (!btn) {
+					return;
+				}
+				btn.hidden = !enabled;
+				btn.disabled = !enabled;
+				btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+				btn.classList.remove('btn--loading');
+			});
+			updateProjectPickerVisibility(status, clockStampingEnabled, atDailyMaximum);
+		};
 
 		const renderEmployee = (rawData) => {
-			const data = normaliseStatus(rawData);
+			const data = (deskletActions && typeof deskletActions.normaliseStatus === 'function')
+				? deskletActions.normaliseStatus(rawData)
+				: normaliseStatus(rawData);
 			const {
 				status,
 				workingTodayHours,
 				currentSessionDuration,
 				clockStampingEnabled,
+				atDailyMaximum,
 			} = data;
 			lastKnown = data;
 
@@ -488,18 +556,18 @@
 				statusBadgeEl.textContent = statusLabel(status);
 			}
 
-		if (statusTextEl) {
-			// The badge already names the state, so this line carries *extra* context:
-			// when a session is running, show when it started ("Since 09:30").
-			if ((status === 'active' || status === 'break') && data.sessionStartFormatted) {
-				const template = l10n.sessionSince || 'Since %1$s';
-				statusTextEl.textContent = template.replace('%1$s', data.sessionStartFormatted);
-				statusTextEl.hidden = false;
-			} else {
-				statusTextEl.textContent = '';
-				statusTextEl.hidden = true;
+			if (statusTextEl) {
+				// The badge already names the state, so this line carries *extra* context:
+				// when a session is running, show when it started ("Since 09:30").
+				if ((status === 'active' || status === 'break') && data.sessionStartFormatted) {
+					const template = l10n.sessionSince || 'Since %1$s';
+					statusTextEl.textContent = template.replace('%1$s', data.sessionStartFormatted);
+					statusTextEl.hidden = false;
+				} else {
+					statusTextEl.textContent = '';
+					statusTextEl.hidden = true;
+				}
 			}
-		}
 
 			if (statusIconEl) {
 				statusIconEl.innerHTML = statusIcon(status);
@@ -518,8 +586,9 @@
 				statusCardEl.dataset.status = status;
 			}
 
-			updateButtonStates(status, clockStampingEnabled);
+			updateButtonStates(status, clockStampingEnabled, atDailyMaximum);
 			updateCaptureNotice(data);
+			updateDailyMaxNotice(data);
 			startSessionTicker(currentSessionDuration, status);
 		};
 
@@ -576,7 +645,7 @@
 
 		const apiClient = window.AzcApi || null;
 
-		const fetchDesklet = async (url, method = 'GET') => {
+		const fetchDesklet = async (url, method = 'GET', jsonBody = undefined) => {
 			const requestUrl = normalizeDeskletUrl(url);
 			if (!isSafeAppUrl(requestUrl)) {
 				return {
@@ -586,8 +655,17 @@
 					error: l10n.statusLoadError || l10n.networkError || 'Could not load status.',
 				};
 			}
+			const upper = String(method || 'GET').toUpperCase();
+			const isMutating = upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE';
+			const payload = isMutating
+				? ((jsonBody && typeof jsonBody === 'object') ? jsonBody : {})
+				: undefined;
 			if (apiClient && typeof apiClient.fetch === 'function') {
-				return apiClient.fetch(requestUrl, { method, silent: true });
+				// Always pass json for mutating desklet actions so AzcApi sends a body.
+				if (isMutating) {
+					return apiClient.fetch(requestUrl, { method: upper, json: payload, silent: true });
+				}
+				return apiClient.fetch(requestUrl, { method: upper, silent: true });
 			}
 			const requestToken = (() => {
 				if (window.OC?.requestToken) {
@@ -597,14 +675,24 @@
 				return meta ? meta.getAttribute('content') : '';
 			})();
 			try {
-				const response = await fetch(requestUrl, {
-					method,
-					headers: {
-						Accept: 'application/json',
-						'requesttoken': requestToken,
-					},
+				const headers = {
+					Accept: 'application/json',
+					requesttoken: requestToken,
+				};
+				const init = {
+					method: upper,
+					headers,
 					credentials: 'same-origin',
-				});
+				};
+				if (isMutating) {
+					headers['Content-Type'] = 'application/json';
+					const bodyObj = { ...(payload || {}) };
+					if (requestToken && bodyObj.requesttoken == null) {
+						bodyObj.requesttoken = requestToken;
+					}
+					init.body = JSON.stringify(bodyObj);
+				}
+				const response = await fetch(requestUrl, init);
 				let data = null;
 				const contentType = response.headers.get('content-type') || '';
 				if (contentType.includes('application/json')) {
@@ -616,6 +704,7 @@
 				}
 				if (!response.ok) {
 					const error = (data && typeof data.error === 'string' && data.error)
+						|| (data && typeof data.message === 'string' && data.message)
 						|| l10n.networkError
 						|| 'Could not load status.';
 					return { ok: false, status: response.status, data, error };
@@ -720,6 +809,14 @@
 			setLoading(false);
 		};
 
+		const restoreButtonsFromLastKnown = () => {
+			updateButtonStates(
+				lastKnown.status,
+				lastKnown.clockStampingEnabled !== false,
+				Boolean(lastKnown.atDailyMaximum),
+			);
+		};
+
 		const wireAction = (id, url) => {
 			const actionUrl = normalizeDeskletUrl(url);
 			const btn = el(id);
@@ -738,14 +835,24 @@
 				hideFeedback();
 
 				try {
-					const result = await fetchDesklet(actionUrl, 'POST');
+					const jsonBody = (id === 'dz-clock-in' && deskletActions
+						&& typeof deskletActions.buildClockInJsonBody === 'function')
+						? deskletActions.buildClockInJsonBody(projectSelectEl ? projectSelectEl.value : '')
+						: (id === 'dz-clock-in' && projectSelectEl && String(projectSelectEl.value || '').trim() !== ''
+							? { projectCheckProjectId: String(projectSelectEl.value).trim() }
+							: {});
+					const result = await fetchDesklet(actionUrl, 'POST', jsonBody);
 					const body = result.data || {};
 
 					if (!isSuccessPayload(result)) {
-						const errMsg = result.error
-							|| body.error
-							|| l10n.actionFailed
-							|| 'Action failed';
+						const errMsg = (deskletActions
+							&& typeof deskletActions.resolveActionErrorMessage === 'function')
+							? deskletActions.resolveActionErrorMessage(result, l10n)
+							: (result.error
+								|| body.error
+								|| body.message
+								|| l10n.actionFailed
+								|| 'Action failed');
 						if (result.status === 403 && body.error_code === 'clock_stamping_disabled') {
 							await loadData();
 						}
@@ -755,7 +862,7 @@
 						} else {
 							announce(errMsg);
 						}
-						updateButtonStates(lastKnown.status, lastKnown.clockStampingEnabled);
+						restoreButtonsFromLastKnown();
 						return;
 					}
 
@@ -776,10 +883,10 @@
 						|| 'Could not load status. Please check your connection.';
 					showError(errMsg);
 					announce(errMsg);
-					updateButtonStates(lastKnown.status, lastKnown.clockStampingEnabled);
+					restoreButtonsFromLastKnown();
 				} finally {
 					mutationInFlight = false;
-					updateButtonStates(lastKnown.status, lastKnown.clockStampingEnabled);
+					restoreButtonsFromLastKnown();
 				}
 			});
 		};
@@ -804,6 +911,12 @@
 			btn.disabled = true;
 			btn.setAttribute('aria-disabled', 'true');
 		});
+		if (projectPickerEl) {
+			projectPickerEl.hidden = true;
+		}
+		if (projectSelectEl) {
+			projectSelectEl.disabled = true;
+		}
 
 		loadData();
 		const refreshTimer = window.setInterval(loadData, 30000);

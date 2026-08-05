@@ -314,10 +314,16 @@ class TimeTrackingService
 			return null;
 		}
 		if (mb_strlen($projectCheckProjectId) > TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH) {
-			throw new BusinessRuleException($this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH]));
+			throw new BusinessRuleException(
+				$this->l10n->t('Project ID must not exceed %d characters', [TimeEntry::PROJECT_CHECK_PROJECT_ID_MAX_LENGTH]),
+				BusinessRuleCode::PROJECT_ID_TOO_LONG,
+			);
 		}
 		if (!$this->projectCheckService->userMayAttachProjectCheckProjectToOwnTime($userId, $projectCheckProjectId)) {
-			throw new BusinessRuleException($this->l10n->t('You cannot clock in on the selected project. If the project uses per-person rates, you must be on the project team. Otherwise ask a ProjectCheck administrator for access.'));
+			throw new BusinessRuleException(
+				$this->l10n->t('You cannot clock in on the selected project. If the project uses per-person rates, you must be on the project team. Otherwise ask a ProjectCheck administrator for access.'),
+				BusinessRuleCode::PROJECT_NOT_ALLOWED,
+			);
 		}
 		return $projectCheckProjectId;
 	}
@@ -981,8 +987,10 @@ class TimeTrackingService
 	{
 		try {
 			$now = $this->nowForAtEntries();
-			$totalHours = $this->dailyWorkingHoursCalculator->getWorkingHoursForToday($userId, $now);
-			return min($totalHours, $this->getMaxDailyHours());
+			// Do not clamp to the daily maximum — callers (UI, compliance, clock-in
+			// guards) need the real calendar-day total. Clamping hid over-max hours
+			// and made error copy claim the user had worked exactly the limit.
+			return $this->dailyWorkingHoursCalculator->getWorkingHoursForToday($userId, $now);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error getting today hours for user ' . $userId . ': ' . $e->getMessage(), ["exception" => $e]);
 			return 0.0;

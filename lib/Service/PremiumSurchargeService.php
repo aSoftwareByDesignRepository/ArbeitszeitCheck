@@ -76,8 +76,12 @@ class PremiumSurchargeService
 	 *
 	 * @return array<string, mixed>
 	 */
-	public function summariseForUser(string $userId, \DateTimeInterface $start, \DateTimeInterface $end): array
-	{
+	public function summariseForUser(
+		string $userId,
+		\DateTimeInterface $start,
+		\DateTimeInterface $end,
+		?PremiumPolicy $policyOverride = null,
+	): array {
 		if (!$this->isEnabled()) {
 			return [
 				'enabled' => false,
@@ -89,7 +93,7 @@ class PremiumSurchargeService
 			];
 		}
 
-		$policy = $this->getPolicy();
+		$policy = $policyOverride ?? $this->getPolicy();
 		if ($policy === null || $policy->getEnabledCategories() === []) {
 			return [
 				'enabled' => true,
@@ -148,6 +152,8 @@ class PremiumSurchargeService
 
 	/**
 	 * Frozen premium block for month-closure canonical payload (NN-06).
+	 * Loads policy + version once under an exclusive policy lock so a concurrent
+	 * admin save cannot stamp a mismatched policy into the sealed snapshot.
 	 *
 	 * @return array<string, mixed>|null null when premiums disabled at seal time
 	 */
@@ -159,24 +165,36 @@ class PremiumSurchargeService
 		if ($month < 1 || $month > 12) {
 			throw new \InvalidArgumentException('Month must be between 1 and 12.');
 		}
-		$start = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
-		$end = (clone $start)->modify('last day of this month');
-		$summary = $this->summariseForUser($userId, $start, $end);
-		$policy = $this->getPolicy();
-		$version = (int)$this->config->getAppValue(
-			'arbeitszeitcheck',
-			Constants::CONFIG_PREMIUM_POLICY_VERSION,
-			'0'
-		);
 
-		return [
-			'enabled' => true,
-			'policy_version' => $version,
-			'policy' => $policy !== null ? $policy->toArray() : $this->getPolicyArrayOrDefault(),
-			'summary' => $summary,
-			'orthogonal_to_saldo' => true,
-			'currency_mode' => 'hours_only',
-		];
+		$locking = \OCP\Server::get(\OCP\Lock\ILockingProvider::class);
+		$lockKey = DbLockKeys::premiumPolicy();
+		$locking->acquireLock($lockKey, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE, 'Premium seal snapshot');
+		try {
+			$policy = $this->getPolicy();
+			$version = (int)$this->config->getAppValue(
+				'arbeitszeitcheck',
+				Constants::CONFIG_PREMIUM_POLICY_VERSION,
+				'0'
+			);
+			$start = new \DateTime(sprintf('%04d-%02d-01', $year, $month));
+			$end = (clone $start)->modify('last day of this month');
+			$summary = $this->summariseForUser($userId, $start, $end, $policy);
+
+			return [
+				'enabled' => true,
+				'policy_version' => $version,
+				'policy' => $policy !== null ? $policy->toArray() : $this->getPolicyArrayOrDefault(),
+				'summary' => $summary,
+				'orthogonal_to_saldo' => true,
+				'currency_mode' => 'hours_only',
+			];
+		} finally {
+			try {
+				$locking->releaseLock($lockKey, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE);
+			} catch (\Throwable) {
+				// best-effort
+			}
+		}
 	}
 
 	/**

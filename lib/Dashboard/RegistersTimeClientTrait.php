@@ -14,8 +14,13 @@ use OCA\ArbeitszeitCheck\Support\TimeClientBootstrap;
 use OCP\Util;
 
 /**
- * Dashboard widgets render outside app templates; they must register the
- * timezone client stack and desklet styles in {@see load()} themselves.
+ * Dashboard widgets render outside app templates; styles (and optional time
+ * client scripts) must be registered in {@see load()} themselves.
+ *
+ * API-only widgets should call {@see registerDeskletStylesForWidget()} only.
+ * Widgets that mount desklet JS must call {@see registerTimeClientForWidget()}
+ * which uses regular Util::addScript (never addInitScript) so l10n/*.js does
+ * not execute before window.OC on `/apps/dashboard`.
  */
 trait RegistersTimeClientTrait {
 	private function registerTimeClientForWidget(TimeClientBootstrap $timeClientBootstrap): void {

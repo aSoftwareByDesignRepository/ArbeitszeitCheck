@@ -99,8 +99,11 @@
 	padding: 0.65rem 0.95rem;
 	border-radius: var(--azc-radius-md, 12px);
 	border: 1px solid color-mix(in srgb, var(--color-main-text) 12%, transparent);
-	/* Solid light plate — logo fills are dark; must beat link resets. */
-	background-color: #ffffff !important;
+	/*
+	 * Always-light plate under dark brand artwork (logo fills stay dark).
+	 * Use named white — not theme main-background — so dark/HC themes keep contrast.
+	 */
+	background-color: color-mix(in srgb, white 96%, var(--color-primary-element) 4%) !important;
 	box-shadow: var(--azc-shadow-sm);
 	text-decoration: none !important;
 	color: inherit !important;
@@ -111,13 +114,13 @@
 }
 
 #app-content.azc-app--admin-support-us a.azc-support-us-page__brand-link {
-	background-color: #ffffff !important;
+	background-color: color-mix(in srgb, white 96%, var(--color-primary-element) 4%) !important;
 	text-decoration: none !important;
 }
 
 .azc-support-us-page__brand-link:hover {
 	border-color: color-mix(in srgb, var(--color-primary-element) 40%, transparent);
-	box-shadow: var(--azc-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.12));
+	box-shadow: var(--azc-shadow-md);
 }
 
 .azc-support-us-page__brand-link:focus-visible {
@@ -156,7 +159,8 @@
 	font-weight: 700;
 	letter-spacing: 0.04em;
 	line-height: 1.05;
-	color: #29235c;
+	/* Dark ink on the forced-light brand plate (independent of NC theme text). */
+	color: color-mix(in srgb, black 78%, var(--color-primary-element));
 	white-space: nowrap;
 }
 
@@ -167,7 +171,7 @@
 	font-style: italic;
 	letter-spacing: 0.06em;
 	line-height: 1.1;
-	color: #3c3c3b;
+	color: color-mix(in srgb, black 72%, transparent);
 	white-space: nowrap;
 }
 
@@ -241,7 +245,7 @@
 	height: 0.65rem;
 	margin-block-start: 0.4rem;
 	border-radius: 50%;
-	background: var(--color-primary-element, #0082c9);
+	background: var(--color-primary-element);
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-element) 22%, transparent);
 }
 
@@ -472,7 +476,7 @@
 .azc-support-us__option:hover,
 .azc-support-us__option:focus-within {
 	border-color: color-mix(in srgb, var(--color-primary-element) 45%, var(--azc-border, var(--color-border)));
-	box-shadow: var(--azc-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.12));
+	box-shadow: var(--azc-shadow-md);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -516,15 +520,15 @@
 /* Support Us CTAs are azc-btn anchors — reinforce solid surfaces against any
  * leftover link cascade (page-scoped safety net). */
 #app-content.azc-app--admin-support-us a.azc-support-us__cta.azc-btn--primary {
-	background-color: var(--color-primary-element, #0082c9) !important;
-	border-color: var(--color-primary-element, #0082c9) !important;
-	color: var(--color-primary-element-text, #fff) !important;
+	background-color: var(--color-primary-element) !important;
+	border-color: var(--color-primary-element) !important;
+	color: var(--color-primary-element-text) !important;
 }
 
 #app-content.azc-app--admin-support-us a.azc-support-us__cta.azc-btn--primary:hover {
 	background-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
 	border-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
-	color: var(--color-primary-element-text, #fff) !important;
+	color: var(--color-primary-element-text) !important;
 }
 
 #app-content.azc-app--admin-support-us a.azc-support-us__cta.azc-btn--secondary {

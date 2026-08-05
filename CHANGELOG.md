@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.5 - 2026-08-04
+
+### Fixed
+
+- **Admin notifications layout (HTTP 500):** unescaped `%` in premium help copy (`50% = 0.50`) crashed L10N vsprintf → guest/error shell (`body-login` + `guest.css`) centered the sidebar and checkbox labels. Literal percents use `%%`; JS placeholder strings go through `TemplateL10n`.
+- **Admin notifications interaction jump:** `initVacationUnitMigration` referenced `l10n` outside `init()` (`ReferenceError`) and soft-keyboard reveal scrolled checkboxes/radios into a visualViewport feedback loop — clicking controls no longer throws or yanks the page.
+- **Focus/select page jumps (global):** soft-keyboard helper never scrolls for selects, date/time, or desktop focus; only reveals typed fields when the keyboard has shrunk the visual viewport; jump nav stays in document flow (no sticky chrome) on all admin settings pages.
+- **Notifications page clarity:** six card-level jump pills with matching card titles (Absences & vacation, Calendar & email, Overtime alerts/bank, Hour premiums, HR office) and a one-line lead — same words in nav and headings.
+- **Premium categories table UX:** fixed column widths, left-aligned category labels, proper checkbox touch targets, and `%` beside the percent field (no more stacked/centered mess).
+- **BANSS vacation-unit migrate crash window:** pending flag + committed audit detection finishes the IConfig unit flip if the process dies after DB commit (never leaves hour magnitudes labeled as days). Heal also runs on every `getUnit()` read path (not only Apply).
+- **DATEV premiums vs closed months:** sealed months always export frozen month-closure premium buckets (NN-06), including mid-month ranges; half-open exclusive end from ExportController no longer bleeds +1 day into the next month.
+- **Anniversary mode switch:** calendar→anniversary requires explicit missing-hire acknowledgement when employment starts are missing (`VAC_YEAR_MISSING_HIRE_ACK_REQUIRED`).
+- **Vacation mutations during unit migrate:** create/update/shorten/approve/cancel vacation refuse with `VAC_UNIT_MIGRATE_IN_PROGRESS` while the migration lock or pending crash-window flag is set.
+- **Month-close premium seal:** policy load + classification share one exclusive `azc/pp/policy` lock with admin policy save so sealed snapshots cannot mix versions.
+- **BANSS migration UX:** visible 7.7 callout + “Use 7.7” control; confirm dialogs show the conversion factor.
+- **Employee app hours preview:** debit preview is hours-only (no holiday-blind weekday estimate).
+- **Anniversary approval lock:** `FOR UPDATE` scope follows hire-anniversary windows (not blind calendar Jan–Dec).
+- **Vacation year mode flip:** refreshes open allocations for access-allowed users (AC-101.4); audit records hire-ack count + refresh count.
+- **Hours-mode rollover:** `VacationRolloverService` receives `VacationUnitService` so carryover writes keep `carryover_hours` (no silent clear-to-days).
+- **Migrate-idle on balance CLI/rollover:** import + automatic rollover refuse while unit migration is in progress.
+- **Migrate-idle TOCTOU:** writers hold `LOCK_SHARED` on `azc/vu/migrate` for the whole critical section (`withIdleShared` / absence shared hold); migrate still takes exclusive.
+- **Year-mode flip race:** exclusive `azc/vy/mode` + migrate-idle shared around config write + AC-101.4 refresh; reports `allocationsFailedCount`; refuses during unit migrate.
+- **Bachus admin UX:** vacation year/unit as giant choice cards; long help + FIFO/overlap/DATEV collapsed under “More options”; short first-paint copy.
+- **Premium policy busy:** concurrent admin save returns HTTP 409 `PREMIUM_POLICY_BUSY` (injectable `ILockingProvider` for deterministic tests).
+- **Premium `tagged_multi`:** no longer sums money into `total_valued_hours`; unique wall-clock `total_classified_hours`; DST night-window coverage.
+- **Mobile clock-in (Kommen):** mutating API calls now always send a JSON body with `Content-Type: application/json`, so reverse proxies/WAFs no longer return opaque HTTP 400 without a message. Error envelopes include stable `error_code` values; mobile surfaces server messages (or localized fallbacks) instead of English “Request failed (400)”.
+- **Web / desklet clock actions:** clock-out, break start/end, daily-max enforcement, and dashboard desklet POSTs now always send a JSON body (same proxy-safe contract as mobile). Desklet and widget errors forward business-rule messages and `error_code` instead of a generic “Action failed”.
+- **Desklet project selection:** when ProjectCheck linking is enabled, the dashboard desklet shows an accessible project picker before Kommen and posts `projectCheckProjectId` with clock-in; daily-maximum callout hides clock-in until the next day. When ProjectCheck is installed but linking is off, the desklet shows a clear neutral callout (same guidance as the full dashboard / mobile home).
+- **Desklet template vars:** workspace partial reads `$_['deskletConfig']` / `$_['l']` (OCP\Template assign), so project options and JSON config actually reach the rendered HTML.
+- **Utils.ajax empty POST:** bare mutating calls via `ArbeitszeitCheckUtils.ajax` now send `JSON.stringify({})` with `Content-Type: application/json` (no Content-Type-without-body).
+- **Admin kiosk/license/tariff/holidays DELETE/POST:** shared `normalizeMutatingFetchInit` forces a JSON body whenever Content-Type claims JSON (or when the body is missing on mutating verbs), closing the same proxy-400 class on revoke/clear-license/holiday-delete paths.
+- **Mobile project selection:** home dashboard and manual time-entry expose ProjectCheck assignable projects when admin linking is enabled; accessible project picker before Kommen/Weiterarbeiten and on create-entry.
+- **Today’s hours:** `getTodayHours()` no longer clamps to the daily maximum, so UI and error copy report real worked hours.
+- **Lock conflicts:** HTTP 423 responses include `error_code=locked` and a duplicated `message` field for clients.
+
+### Added
+
+- Companion contract coverage: T-MOB-02 additive-key assertions; Kiosk 1.0.6 version alignment (Employee 1.0.4 unit-aware remains publish-ready off-host).
+- Mobile home payload fields `atDailyMaximum` and `projectCheck` for companion clients; callouts when daily max is reached or ProjectCheck linking is installed but disabled.
+- Dashboard widget `clockIn` accepts optional `projectCheckProjectId`.
+- Desklet config exposes `projectCheck` projects and l10n for the project picker / daily-maximum notice.
+
 ## 1.6.4 - 2026-08-02
 
 ### Added

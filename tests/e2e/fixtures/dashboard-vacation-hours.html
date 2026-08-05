@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dashboard vacation hours</title>
+	<style>
+		body { font-family: "Segoe UI", sans-serif; margin: 0; background: #f4f6f4; color: #1a1a1a; }
+		main { max-width: 28rem; margin: 1.5rem auto; padding: 1.25rem; background: #fff; border: 1px solid #c8c8c8; border-radius: 8px; }
+		.label { font-size: 1rem; margin: 0 0 0.25rem; }
+		.value { font-size: 2.5rem; font-weight: 700; min-height: 2.75rem; color: #0b6e4f; margin: 0; }
+		.unit { font-size: 1rem; font-weight: 600; margin: 0.25rem 0 0; }
+		.breakdown { margin: 1rem 0 0; padding: 0; }
+		.breakdown div { display: flex; justify-content: space-between; gap: 1rem; margin: 0.35rem 0; }
+		.breakdown dt { margin: 0; font-weight: 500; }
+		.breakdown dd { margin: 0; font-variant-numeric: tabular-nums; }
+		:focus-visible { outline: 3px solid #005fcc; outline-offset: 2px; }
+	</style>
+</head>
+<body>
+<main id="dashboard-vacation-hours" aria-labelledby="dash-vac-heading" data-vacation-unit="hours">
+	<h1 id="dash-vac-heading">Vacation 2026</h1>
+	<p id="dashboard-vacation-remaining-label" class="label">Remaining vacation hours</p>
+	<p id="dashboard-vacation-remaining-value" class="value" aria-labelledby="dashboard-vacation-remaining-label">196.0</p>
+	<p class="unit">hours</p>
+	<dl class="breakdown dashboard-vacation-card__breakdown" aria-label="Vacation breakdown">
+		<div>
+			<dt>Annual leave left (bookable)</dt>
+			<dd id="dash-annual-remaining">160.0 hours</dd>
+		</div>
+		<div>
+			<dt>Carryover pool left</dt>
+			<dd id="dash-carryover-remaining">36.0 hours</dd>
+		</div>
+	</dl>
+</main>
+</body>
+</html>

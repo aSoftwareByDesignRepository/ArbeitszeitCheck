@@ -61,6 +61,9 @@ final class PremiumSurchargeClassifier
 		});
 
 		$dayProgress = [];
+		// Wall-clock minutes that matched ≥1 category (never double-count overlaps).
+		$uniqueClassifiedSeconds = 0;
+		$stacking = $policy->getStacking();
 		foreach ($sorted as [$start, $end]) {
 			$t = $start->getTimestamp();
 			$endTs = $end->getTimestamp();
@@ -89,7 +92,8 @@ final class PremiumSurchargeClassifier
 					continue;
 				}
 
-				$stacking = $policy->getStacking();
+				$uniqueClassifiedSeconds += 60;
+
 				if ($stacking === PremiumPolicy::STACKING_MAX_SINGLE) {
 					$best = null;
 					$bestRate = -1.0;
@@ -104,7 +108,8 @@ final class PremiumSurchargeClassifier
 						$bucketSeconds[(string)$best['id']] += 60;
 					}
 				} else {
-					// tagged_multi and additive_rates: attribute minutes to every match.
+					// additive_rates + tagged_multi: attribute the minute to every match.
+					// Valued totals differ below (additive sums rates; tagged does not).
 					foreach ($matches as $cat) {
 						$bucketSeconds[(string)$cat['id']] += 60;
 					}
@@ -113,7 +118,6 @@ final class PremiumSurchargeClassifier
 		}
 
 		$buckets = [];
-		$totalClassified = 0.0;
 		$totalValued = 0.0;
 		foreach ($bucketSeconds as $id => $seconds) {
 			if ($seconds <= 0) {
@@ -127,18 +131,22 @@ final class PremiumSurchargeClassifier
 				'label' => (string)$meta[$id]['label'],
 				'hours' => $hours,
 				'rate' => $rate,
+				// Per-bucket valued_hours always shown; stacked money total below.
 				'valued_hours' => $valued,
 			];
-			$totalClassified += $hours;
-			$totalValued += $valued;
+			if ($stacking === PremiumPolicy::STACKING_ADDITIVE
+				|| $stacking === PremiumPolicy::STACKING_MAX_SINGLE) {
+				$totalValued += $valued;
+			}
+			// tagged_multi: report tags without summing money (NN / §9.3).
 		}
 
 		usort($buckets, static fn (array $a, array $b): int => strcmp($a['id'], $b['id']));
 
 		return [
-			'stacking' => $policy->getStacking(),
+			'stacking' => $stacking,
 			'buckets' => $buckets,
-			'total_classified_hours' => round($totalClassified, 4),
+			'total_classified_hours' => round($uniqueClassifiedSeconds / 3600.0, 4),
 			'total_valued_hours' => round($totalValued, 4),
 		];
 	}

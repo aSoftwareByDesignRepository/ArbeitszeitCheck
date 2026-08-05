@@ -248,7 +248,7 @@ class LayeredVacationEntitlementEngineTest extends TestCase
 	public function testLegacyFallbackEmittedWhenNothingConfigured(): void
 	{
 		[$engine, $mocks] = $this->makeEngine();
-		$mocks['userSettings']->method('getIntegerSetting')->willReturn(25);
+		$mocks['userSettings']->method('getFloatSetting')->willReturn(25.0);
 		$result = $engine->computeForDate('u1', new \DateTimeImmutable('2026-06-01'));
 		$this->assertSame(25.0, $result['days']);
 		$this->assertSame('legacy', $result['matchedLayer']);
@@ -267,7 +267,7 @@ class LayeredVacationEntitlementEngineTest extends TestCase
 			});
 		[$engine, $mocks] = $this->makeEngine(['config' => $config]);
 		$mocks['org']->expects($this->never())->method('findActiveByDate');
-		$mocks['userSettings']->method('getIntegerSetting')->willReturn(25);
+		$mocks['userSettings']->method('getFloatSetting')->willReturn(25.0);
 		$result = $engine->computeForDate('u1', new \DateTimeImmutable('2026-06-01'));
 		$this->assertSame(25.0, $result['days']);
 		$this->assertSame('legacy', $result['matchedLayer']);
@@ -493,7 +493,7 @@ class LayeredVacationEntitlementEngineTest extends TestCase
 	{
 		[$engine, $mocks] = $this->makeEngine();
 		$mocks['policy']->method('findCurrentByUser')->willReturn($this->makePolicy(true));
-		$mocks['userSettings']->method('getIntegerSetting')->willReturn(20);
+		$mocks['userSettings']->method('getFloatSetting')->willReturn(20.0);
 		$result = $engine->computeForDate('u1', new \DateTimeImmutable('2026-06-01'));
 		$this->assertSame(20.0, $result['days']);
 		$this->assertSame('legacy', $result['matchedLayer']);
@@ -541,7 +541,7 @@ class LayeredVacationEntitlementEngineTest extends TestCase
 		$inherit = $this->makePolicy(true);
 		$mocks['org']->expects($this->never())->method('findActiveByDate');
 		$mocks['teamPolicy']->expects($this->never())->method('findActiveByTeamIds');
-		$mocks['userSettings']->method('getIntegerSetting')->willReturn(21);
+		$mocks['userSettings']->method('getFloatSetting')->willReturn(21.0);
 		$result = $engine->computeForPolicy('u1', $inherit, new \DateTimeImmutable('2026-06-01'));
 		$this->assertSame(21.0, $result['days']);
 		$this->assertSame('legacy', $result['matchedLayer']);
@@ -824,7 +824,7 @@ class LayeredVacationEntitlementEngineTest extends TestCase
 		// Top-level `degraded` survives redaction so the employee gets a
 		// "please contact HR" hint, but no internal reason is disclosed.
 		[$engine, $mocks] = $this->makeEngine();
-		$mocks['userSettings']->method('getIntegerSetting')->willReturn(25);
+		$mocks['userSettings']->method('getFloatSetting')->willReturn(25.0);
 		$full = $engine->computeForDate('u1', new \DateTimeImmutable('2026-06-01'))['trace'];
 		$this->assertTrue($full['degraded'] ?? false);
 

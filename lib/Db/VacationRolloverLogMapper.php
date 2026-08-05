@@ -35,7 +35,9 @@ class VacationRolloverLogMapper extends QBMapper
 		$e->setUserId($userId);
 		$e->setFromYear($fromYear);
 		$e->setToYear($toYear);
-		$e->setAmount(max(0.0, min(366.0, $amount)));
+		// Hours mode can roll > 366 (e.g. unused annual + carryover). Cap at 4000 to
+		// match VacationUnitService::clampCarryover — never truncate real hour amounts to 366.
+		$e->setAmount(max(0.0, min(4000.0, $amount)));
 		$e->setCreatedAt(new \DateTime());
 		return $this->insert($e);
 	}

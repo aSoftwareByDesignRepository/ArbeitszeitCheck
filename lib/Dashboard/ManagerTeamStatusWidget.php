@@ -6,7 +6,6 @@ namespace OCA\ArbeitszeitCheck\Dashboard;
 
 use OCA\ArbeitszeitCheck\AppInfo\Application;
 use OCA\ArbeitszeitCheck\Service\DashboardWidgetDataService;
-use OCA\ArbeitszeitCheck\Support\TimeClientBootstrap;
 use OCP\Dashboard\IAPIWidgetV2;
 use OCP\Dashboard\IButtonWidget;
 use OCP\Dashboard\IIconWidget;
@@ -17,14 +16,22 @@ use OCP\Dashboard\Model\WidgetItems;
 use OCP\IL10N;
 use OCP\IURLGenerator;
 
+/**
+ * Server-rendered team status list. CSS only in {@see load()} — no time-client
+ * JS (avoids premature l10n/*.js on the Vue home dashboard).
+ */
 class ManagerTeamStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, IReloadableWidget {
 	use RegistersTimeClientTrait;
+
+	private ?string $cachedWidgetUserId = null;
+
+	/** @var array<string, mixed>|null */
+	private ?array $cachedWidgetData = null;
 
 	public function __construct(
 		private readonly IL10N $l10n,
 		private readonly IURLGenerator $urlGenerator,
 		private readonly DashboardWidgetDataService $widgetDataService,
-		private readonly TimeClientBootstrap $timeClientBootstrap,
 		private readonly WidgetIconHelper $widgetIconHelper,
 	) {
 	}
@@ -50,59 +57,61 @@ class ManagerTeamStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidge
 	}
 
 	public function getUrl(): ?string {
-		return $this->urlGenerator->getAbsoluteURL($this->urlGenerator->linkToRoute('arbeitszeitcheck.manager.dashboard'));
+		return $this->absoluteRoute('arbeitszeitcheck.manager.dashboard');
 	}
 
 	public function load(): void {
-		$this->registerTimeClientForWidget($this->timeClientBootstrap);
 		$this->registerDeskletStylesForWidget();
 	}
 
 	public function getItemsV2(string $userId, ?string $since = null, int $limit = 7): WidgetItems {
-		$data = $this->widgetDataService->getManagerWidgetData($userId, $limit);
-		$members = $data['members'];
+		$data = $this->getManagerData($userId, $limit);
+		$copy = new WidgetStatusCopy($this->l10n);
+		$icon = $this->getIconUrl();
+		$dashboardUrl = $this->absoluteRoute('arbeitszeitcheck.manager.dashboard');
+		$summary = is_array($data['summary'] ?? null) ? $data['summary'] : [];
+		$absence = is_array($data['absenceSummary'] ?? null) ? $data['absenceSummary'] : [];
 
-		$items = [];
-		foreach ($members as $member) {
-			$items[] = new WidgetItem(
-				(string)$member['displayName'],
-				$this->l10n->t('Status: %1$s, Today: %2$s h', [
-					$this->statusLabel((string)$member['status']),
-					number_format((float)$member['workingTodayHours'], 2),
-				]),
-				$this->urlGenerator->getAbsoluteURL($this->urlGenerator->linkToRoute('arbeitszeitcheck.manager.dashboard')),
-				$this->getIconUrl(),
-				(string)$member['userId']
-			);
-		}
-
-		if ($items === []) {
+		/** @var list<array{userId?:string,displayName?:string,status?:string,workingTodayHours?:float|int}> $members */
+		$members = is_array($data['members'] ?? null) ? $data['members'] : [];
+		if ($members === []) {
 			return new WidgetItems([], $this->l10n->t('No team members found.'));
 		}
 
-		$summary = $data['summary'];
-		$absenceSummary = $data['absenceSummary'] ?? [
-			'vacation' => 0,
-			'sick' => 0,
-			'other_absent' => 0,
-			'total_absent' => 0,
+		$total = max((int)($summary['total'] ?? 0), count($members));
+		$working = (int)($summary['active'] ?? 0);
+
+		$items = [
+			new WidgetItem(
+				$copy->workingHeadline($working, $total),
+				$copy->summarySubtitle($summary, $absence),
+				$dashboardUrl,
+				$icon,
+				'summary'
+			),
 		];
+
+		$peopleSlots = max(0, $limit - 1);
+		$people = array_slice($copy->sortPeopleByStatus($members), 0, $peopleSlots);
+
+		foreach ($people as $member) {
+			$memberId = (string)($member['userId'] ?? '');
+			$items[] = new WidgetItem(
+				(string)($member['displayName'] ?? $memberId),
+				$copy->personSubtitle(
+					(string)($member['status'] ?? 'clocked_out'),
+					(float)($member['workingTodayHours'] ?? 0.0)
+				),
+				$dashboardUrl,
+				$icon,
+				$memberId !== '' ? $memberId : ('member-' . count($items))
+			);
+		}
+
 		return new WidgetItems(
 			$items,
 			$this->l10n->t('No team members found.'),
-			$this->l10n->t(
-				'Working:%1$d, Break:%2$d, Paused:%3$d, Clocked out:%4$d. Absent:%5$d (Vacation:%6$d, Sick:%7$d, Other:%8$d).',
-				[
-					(int)$summary['active'],
-					(int)$summary['break'],
-					(int)$summary['paused'],
-					(int)$summary['clocked_out'],
-					(int)$absenceSummary['total_absent'],
-					(int)$absenceSummary['vacation'],
-					(int)$absenceSummary['sick'],
-					(int)$absenceSummary['other_absent'],
-				]
-			)
+			''
 		);
 	}
 
@@ -110,8 +119,8 @@ class ManagerTeamStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidge
 		return [
 			new WidgetButton(
 				WidgetButton::TYPE_MORE,
-				$this->urlGenerator->getAbsoluteURL($this->urlGenerator->linkToRoute('arbeitszeitcheck.manager.dashboard')),
-				$this->l10n->t('Open manager dashboard')
+				$this->absoluteRoute('arbeitszeitcheck.manager.dashboard'),
+				$this->l10n->t('Open dashboard')
 			),
 		];
 	}
@@ -120,12 +129,28 @@ class ManagerTeamStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidge
 		return 45;
 	}
 
-	private function statusLabel(string $status): string {
-		return match ($status) {
-			'active' => $this->l10n->t('Working'),
-			'break' => $this->l10n->t('On Break'),
-			'paused' => $this->l10n->t('Paused'),
-			default => $this->l10n->t('Clocked Out'),
-		};
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function getManagerData(string $userId, int $limit): array {
+		$effectiveLimit = max(1, $limit);
+		if ($this->cachedWidgetUserId === $userId && is_array($this->cachedWidgetData)) {
+			return $this->cachedWidgetData;
+		}
+
+		$data = $this->widgetDataService->getManagerWidgetData($userId, $effectiveLimit);
+		$this->cachedWidgetUserId = $userId;
+		$this->cachedWidgetData = $data;
+
+		return $data;
+	}
+
+	/**
+	 * @param array<string, mixed> $params
+	 */
+	private function absoluteRoute(string $route, array $params = []): string {
+		return $this->urlGenerator->getAbsoluteURL(
+			$this->urlGenerator->linkToRoute($route, $params)
+		);
 	}
 }

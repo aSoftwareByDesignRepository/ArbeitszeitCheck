@@ -95,9 +95,13 @@
 	}
 
 	async function api(url, options) {
+		const raw = options || {};
+		const opts = (Utils.normalizeMutatingFetchInit
+			? Utils.normalizeMutatingFetchInit(raw)
+			: raw);
 		let res;
 		try {
-			res = await fetch(url, options);
+			res = await fetch(url, opts);
 		} catch {
 			const err = new Error(t(
 				'networkFailed',

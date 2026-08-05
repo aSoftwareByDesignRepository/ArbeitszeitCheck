@@ -25,6 +25,7 @@ use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
+use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\IL10N;
 use OCP\IConfig;
@@ -43,6 +44,7 @@ class ExportController extends Controller
 	private IL10N $l10n;
 	private IConfig $config;
 	private PermissionService $permissionService;
+	private ?IUserManager $userManager;
 
 	/**
 	 * Guard CSV exports against spreadsheet formula injection.
@@ -84,8 +86,16 @@ class ExportController extends Controller
 		if (strpos($raw, 'User not authenticated') !== false) {
 			return $this->l10n->t('User not authenticated');
 		}
+		if (strpos($raw, 'Access denied') !== false) {
+			return $this->l10n->t('Access denied');
+		}
+		if (strpos($raw, 'User not found') !== false) {
+			return $this->l10n->t('User not found');
+		}
 		if (strpos($raw, 'Start date must be before or equal to end date') !== false
 			|| strpos($raw, 'Export date range must not exceed') !== false
+			|| strpos($raw, 'DATEV configuration incomplete') !== false
+			|| strpos($raw, 'Personalnummer not configured') !== false
 			|| strpos($raw, 'Invalid ') === 0) {
 			return $raw;
 		}
@@ -103,7 +113,8 @@ class ExportController extends Controller
 		IUserSession $userSession,
 		IL10N $l10n,
 		IConfig $config,
-		PermissionService $permissionService
+		PermissionService $permissionService,
+		?IUserManager $userManager = null
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -115,6 +126,7 @@ class ExportController extends Controller
 		$this->l10n = $l10n;
 		$this->config = $config;
 		$this->permissionService = $permissionService;
+		$this->userManager = $userManager;
 	}
 
 	/**
@@ -216,7 +228,8 @@ class ExportController extends Controller
 			return match($format) {
 				'csv' => $this->exportAsCsv($data, $filename, $timezone),
 				'json' => $this->exportAsJson($data, $filename, $timezone),
-				'datev' => $this->exportAsDatev($userId, $start, $end),
+				// Inclusive calendar end → exclusive upper bound (same as export#datev).
+				'datev' => $this->exportAsDatev($userId, $start, $endExclusive),
 				default => $this->exportAsCsv($data, $filename, $timezone)
 			};
 		} catch (\Throwable $e) {
@@ -470,11 +483,11 @@ class ExportController extends Controller
 	}
 
 	/**
-	 * Export time entries in DATEV format
+	 * Export time entries in DATEV format for one user.
 	 *
 	 * @param string $userId User ID
-	 * @param \DateTime $startDate Start date
-	 * @param \DateTime $endDate End date
+	 * @param \DateTime $startDate Range start (inclusive)
+	 * @param \DateTime $endDate Range end (exclusive upper bound)
 	 * @return DataDownloadResponse
 	 */
 	private function exportAsDatev(string $userId, \DateTime $startDate, \DateTime $endDate): DataDownloadResponse
@@ -482,10 +495,9 @@ class ExportController extends Controller
 		try {
 			$content = $this->datevExportService->exportTimeEntries($userId, $startDate, $endDate);
 			$filename = 'datev-export-' . date('Y-m-d') . '.txt';
-			
+
 			return new DataDownloadResponse($content, $filename, 'text/plain; charset=iso-8859-1');
 		} catch (\Throwable $e) {
-			// Return error as CSV with error message
 			$errorData = [['error' => $this->safeExportErrorMessage($e)]];
 			return $this->exportAsCsv($errorData, 'datev-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
@@ -497,10 +509,13 @@ class ExportController extends Controller
 	}
 
 	/**
-	 * Export time entries in DATEV format
+	 * Export time entries in DATEV format.
 	 *
-	 * @param string|null $startDate Start date (Y-m-d format)
-	 * @param string|null $endDate End date (Y-m-d format)
+	 * Query params:
+	 * - startDate / endDate (Y-m-d), inclusive calendar days
+	 * - scope=self|organization (default self)
+	 * - userId=… (admin only) export one other employee
+	 *
 	 * @return DataDownloadResponse
 	 */
 	#[NoAdminRequired]
@@ -513,46 +528,42 @@ class ExportController extends Controller
 				throw new \Exception($this->l10n->t('User not authenticated'));
 			}
 
-			$userId = $user->getUID();
+			$actorId = $user->getUID();
+			[$start, $endExclusive] = $this->resolveInclusiveDateRange($startDate, $endDate);
 
-		// Determine date range (default to last 30 days if not specified)
-		$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
-		$end->setTime(0, 0, 0);
-		$start = $this->parseDateYmd($startDate, 'start_date') ?? clone $end;
-		if (!$startDate) {
-			$start->modify('-30 days');
-		}
-		$start->setTime(0, 0, 0);
+			$scope = strtolower(trim((string)$this->request->getParam('scope', 'self')));
+			$targetParam = trim((string)$this->request->getParam('userId', ''));
 
-		if ($start > $end) {
-			throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
-		}
+			if ($scope === 'organization' || $scope === 'org') {
+				if (!$this->permissionService->isAdmin($actorId)) {
+					$this->permissionService->logPermissionDenied($actorId, 'export_datev_org', 'datev_export');
+					throw new \Exception($this->l10n->t('Access denied'));
+				}
+				return $this->exportAsDatevOrganization($start, $endExclusive);
+			}
 
-		// Enforce max date range (midnight-to-midnight gives exact day count).
-		$diff = $end->diff($start);
-		$days = (int) $diff->format('%a');
-		if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
-			throw new \Exception($this->l10n->t(
-				'Export date range must not exceed %d days. Please narrow the range.',
-				[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
-			));
-		}
+			$exportUserId = $actorId;
+			if ($targetParam !== '' && $targetParam !== $actorId) {
+				if (!$this->permissionService->isAdmin($actorId)) {
+					$this->permissionService->logPermissionDenied($actorId, 'export_datev_user', 'datev_export', $targetParam);
+					throw new \Exception($this->l10n->t('Access denied'));
+				}
+				if ($this->userManager === null || $this->userManager->get($targetParam) === null) {
+					throw new \Exception($this->l10n->t('User not found'));
+				}
+				$exportUserId = $targetParam;
+			}
 
-		// Exclusive upper bound: start of next day (DATEV service uses strict < comparisons).
-		$endExclusive = (clone $end)->modify('+1 day');
-
-		// Use the existing DATEV export method
-		return $this->exportAsDatev($userId, $start, $endExclusive);
+			return $this->exportAsDatev($exportUserId, $start, $endExclusive);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in ExportController::datev: ' . $e->getMessage(), ["exception" => $e]);
-			// Return error as CSV with error message
 			$errorData = [['error' => $this->safeExportErrorMessage($e)]];
 			return $this->exportAsCsv($errorData, 'datev-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
 	}
 
 	/**
-	 * Get DATEV export configuration status
+	 * Get DATEV export configuration status (admin).
 	 *
 	 * @return JSONResponse
 	 */
@@ -577,6 +588,14 @@ class ExportController extends Controller
 				], Http::STATUS_FORBIDDEN);
 			}
 			$status = $this->datevExportService->getConfigurationStatus();
+			$personal = (string)$this->config->getUserValue(
+				$userId,
+				'arbeitszeitcheck',
+				Constants::USER_DATEV_PERSONALNUMMER,
+				''
+			);
+			$status['personalnummer_set_for_viewer'] = $personal !== '';
+			$status['ready_for_self_export'] = !empty($status['configured']) && $personal !== '';
 			return new JSONResponse([
 				'success' => true,
 				'config' => $status
@@ -587,5 +606,54 @@ class ExportController extends Controller
 				'error' => $this->safeExportErrorMessage($e)
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * @return array{0: \DateTime, 1: \DateTime} [rangeStart, rangeEndExclusive]
+	 */
+	private function resolveInclusiveDateRange(?string $startDate, ?string $endDate): array
+	{
+		$end = $this->parseDateYmd($endDate, 'end_date') ?? new \DateTime();
+		$end->setTime(0, 0, 0);
+		$start = $this->parseDateYmd($startDate, 'start_date') ?? clone $end;
+		if (!$startDate) {
+			$start->modify('-30 days');
+		}
+		$start->setTime(0, 0, 0);
+
+		if ($start > $end) {
+			throw new \Exception($this->l10n->t('Start date must be before or equal to end date'));
+		}
+
+		$diff = $end->diff($start);
+		$days = (int)$diff->format('%a');
+		if ($days > Constants::MAX_EXPORT_DATE_RANGE_DAYS) {
+			throw new \Exception($this->l10n->t(
+				'Export date range must not exceed %d days. Please narrow the range.',
+				[Constants::MAX_EXPORT_DATE_RANGE_DAYS]
+			));
+		}
+
+		$endExclusive = (clone $end)->modify('+1 day');
+		return [$start, $endExclusive];
+	}
+
+	private function exportAsDatevOrganization(\DateTime $start, \DateTime $endExclusive): DataDownloadResponse
+	{
+		if ($this->userManager === null) {
+			throw new \Exception($this->l10n->t('Export failed. Please try again. If the problem continues, contact your administrator.'));
+		}
+		$userIds = [];
+		foreach ($this->userManager->search('') as $u) {
+			if ($u->isEnabled()) {
+				$userIds[] = $u->getUID();
+			}
+			if (count($userIds) >= 2000) {
+				break;
+			}
+		}
+		$content = $this->datevExportService->exportMultipleUsers($userIds, $start, $endExclusive);
+		$filename = 'datev-export-org-' . date('Y-m-d') . '.txt';
+		return new DataDownloadResponse($content, $filename, 'text/plain; charset=iso-8859-1');
 	}
 }

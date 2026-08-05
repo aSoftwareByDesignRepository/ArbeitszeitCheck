@@ -17,6 +17,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setYear(int $year)
  * @method float getCarryoverDays()
  * @method void setCarryoverDays(float $carryoverDays)
+ * @method float|null getCarryoverHours()
+ * @method void setCarryoverHours(float|null $carryoverHours)
  * @method \DateTime getCreatedAt()
  * @method void setCreatedAt(\DateTime $createdAt)
  * @method \DateTime getUpdatedAt()
@@ -27,6 +29,7 @@ class VacationYearBalance extends Entity
 	protected $userId;
 	protected $year;
 	protected $carryoverDays = 0.0;
+	protected $carryoverHours = null;
 	protected $createdAt;
 	protected $updatedAt;
 
@@ -35,6 +38,7 @@ class VacationYearBalance extends Entity
 		$this->addType('userId', 'string');
 		$this->addType('year', 'integer');
 		$this->addType('carryoverDays', 'float');
+		$this->addType('carryoverHours', 'float');
 		$this->addType('createdAt', 'datetime');
 		$this->addType('updatedAt', 'datetime');
 	}

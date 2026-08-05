@@ -67,6 +67,56 @@ class TimeClientBootstrapTest extends TestCase {
 		$bootstrap->registerConfig();
 	}
 
+	public function testRegisterConfigDoesNotPushTranslationsIntoInitQueue(): void {
+		$initialState = $this->createMock(IInitialState::class);
+		$bootstrap = $this->createBootstrap($initialState);
+		$bootstrap->registerConfig();
+
+		$ref = new \ReflectionClass(\OCP\Util::class);
+		$initProp = $ref->getProperty('scriptsInit');
+		$initProp->setAccessible(true);
+		/** @var list<string> $initScripts */
+		$initScripts = $initProp->getValue();
+
+		foreach ($initScripts as $path) {
+			$this->assertStringNotContainsString(
+				'arbeitszeitcheck/l10n',
+				(string)$path,
+				'l10n/*.js must not load via scriptsInit — OC is undefined that early on /apps/dashboard'
+			);
+			$this->assertStringNotContainsString(
+				'arbeitszeitcheck/js/common/time-init',
+				(string)$path,
+				'time-init must not use addInitScript (forces premature l10n preload)'
+			);
+		}
+
+		$scriptsProp = $ref->getProperty('scripts');
+		$scriptsProp->setAccessible(true);
+		/** @var array<string, list<string>> $scripts */
+		$scripts = $scriptsProp->getValue();
+		$azc = $scripts['arbeitszeitcheck'] ?? [];
+		$this->assertContains(
+			'arbeitszeitcheck/js/common/time-init',
+			$azc,
+			'time-init must register as a normal app script after OC exists'
+		);
+	}
+
+	public function testSourceForbidsAddInitScriptCall(): void {
+		$src = (string)file_get_contents(__DIR__ . '/../../../lib/Support/TimeClientBootstrap.php');
+		// Docblocks may mention addInitScript as a warning; executable calls must not exist.
+		$this->assertStringNotContainsString(
+			'Util::addInitScript(Application::APP_ID',
+			$src
+		);
+		$this->assertDoesNotMatchRegularExpression(
+			'/^\s*Util::addInitScript\s*\(/m',
+			$src
+		);
+		$this->assertStringContainsString("Util::addScript(Application::APP_ID, 'common/time-init')", $src);
+	}
+
 	public function testStorageAndDisplayTimeZonesMatchService(): void {
 		$initialState = $this->createMock(IInitialState::class);
 		$bootstrap = $this->createBootstrap($initialState);

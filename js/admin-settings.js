@@ -560,51 +560,94 @@
     /**
      * Handle form submission
      */
+    let adminSettingsSaveInflight = false;
     async function handleFormSubmit(e) {
         e.preventDefault();
+        if (adminSettingsSaveInflight) {
+            return;
+        }
 
         const form = e.target;
         const formData = Utils.serializeForm(form);
+        const scope = String(form.getAttribute('data-settings-section') || formData.settings_section || 'all');
+        formData.settings_section = scope;
 
-        // Convert checkboxes to boolean (unchecked = not in form; checked sends "on" or value e.g. "1")
+        // Convert checkboxes to boolean only when the control exists on this page.
+        // Missing fields must not be sent as false — that would wipe sibling sections.
         function isChecked(v) { return v === 'on' || v === '1' || v === 1 || v === true; }
-        formData.autoComplianceCheck = isChecked(formData.autoComplianceCheck);
-        formData.realtimeComplianceCheck = isChecked(formData.realtimeComplianceCheck);
-        formData.complianceStrictMode = isChecked(formData.complianceStrictMode);
-        formData.enableViolationNotifications = isChecked(formData.enableViolationNotifications);
-        formData.breakAutoFallbackEnabled = isChecked(formData.breakAutoFallbackEnabled);
-        formData.exportMidnightSplitEnabled = isChecked(formData.exportMidnightSplitEnabled);
-        formData.monthClosureEnabled = isChecked(formData.monthClosureEnabled);
-        formData.statutoryAutoReseed = isChecked(formData.statutoryAutoReseed);
-        formData.timeEntryChangesRequireApproval = isChecked(formData.timeEntryChangesRequireApproval);
-        formData.manualTimeEntriesRequireApproval = isChecked(formData.manualTimeEntriesRequireApproval);
-        formData.clockStampingEnabled = isChecked(formData.clockStampingEnabled);
-        formData.manualTimeEntryEnabled = isChecked(formData.manualTimeEntryEnabled);
-        // Always send (unchecked checkboxes are omitted from FormData; server only updates keys that are present).
-        formData.projectCheckIntegrationEnabled = isChecked(formData.projectCheckIntegrationEnabled);
-        const accessGroupsRaw = formData['accessAllowedGroups[]'];
-        formData.accessAllowedGroups = accessGroupsRaw === undefined
-            ? []
-            : (Array.isArray(accessGroupsRaw) ? accessGroupsRaw : [accessGroupsRaw]);
-        delete formData['accessAllowedGroups[]'];
-        const accessUsersRaw = formData['accessAllowedUserIds[]'];
-        formData.accessAllowedUserIds = accessUsersRaw === undefined
-            ? []
-            : (Array.isArray(accessUsersRaw) ? accessUsersRaw : [accessUsersRaw]);
-        delete formData['accessAllowedUserIds[]'];
-        formData.accessRestrictionEnabled = String(formData.accessRestrictionEnabled || '0') === '1';
-        const appAdminRaw = formData['appAdminUserIds[]'];
-        formData.appAdminUserIds = appAdminRaw === undefined
-            ? []
-            : (Array.isArray(appAdminRaw) ? appAdminRaw : [appAdminRaw]);
-        delete formData['appAdminUserIds[]'];
-        const requireSubstituteRaw = formData['requireSubstituteTypes[]'];
-        formData.requireSubstituteTypes = requireSubstituteRaw === undefined
-            ? []
-            : (Array.isArray(requireSubstituteRaw) ? requireSubstituteRaw : [requireSubstituteRaw]);
-        delete formData['requireSubstituteTypes[]'];
+        function hasField(name) {
+            return !!form.querySelector('[name="' + name + '"], [name="' + name + '[]"]');
+        }
+        function setBoolIfPresent(name) {
+            if (!hasField(name)) {
+                delete formData[name];
+                return;
+            }
+            formData[name] = isChecked(formData[name]);
+        }
+        [
+            'autoComplianceCheck',
+            'realtimeComplianceCheck',
+            'complianceStrictMode',
+            'enableViolationNotifications',
+            'breakAutoFallbackEnabled',
+            'exportMidnightSplitEnabled',
+            'monthClosureEnabled',
+            'statutoryAutoReseed',
+            'timeEntryChangesRequireApproval',
+            'manualTimeEntriesRequireApproval',
+            'clockStampingEnabled',
+            'manualTimeEntryEnabled',
+            'projectCheckIntegrationEnabled',
+        ].forEach(setBoolIfPresent);
 
-        // Convert localized decimal numbers (use defaults on invalid/empty)
+        if (hasField('accessAllowedGroups[]') || hasField('accessAllowedGroups')) {
+            const accessGroupsRaw = formData['accessAllowedGroups[]'];
+            formData.accessAllowedGroups = accessGroupsRaw === undefined
+                ? []
+                : (Array.isArray(accessGroupsRaw) ? accessGroupsRaw : [accessGroupsRaw]);
+            delete formData['accessAllowedGroups[]'];
+        } else {
+            delete formData['accessAllowedGroups[]'];
+            delete formData.accessAllowedGroups;
+        }
+        if (hasField('accessAllowedUserIds[]') || hasField('accessAllowedUserIds')) {
+            const accessUsersRaw = formData['accessAllowedUserIds[]'];
+            formData.accessAllowedUserIds = accessUsersRaw === undefined
+                ? []
+                : (Array.isArray(accessUsersRaw) ? accessUsersRaw : [accessUsersRaw]);
+            delete formData['accessAllowedUserIds[]'];
+        } else {
+            delete formData['accessAllowedUserIds[]'];
+            delete formData.accessAllowedUserIds;
+        }
+        if (hasField('accessRestrictionEnabled')) {
+            formData.accessRestrictionEnabled = String(formData.accessRestrictionEnabled || '0') === '1';
+        } else {
+            delete formData.accessRestrictionEnabled;
+        }
+        if (hasField('appAdminUserIds[]') || hasField('appAdminUserIds')) {
+            const appAdminRaw = formData['appAdminUserIds[]'];
+            formData.appAdminUserIds = appAdminRaw === undefined
+                ? []
+                : (Array.isArray(appAdminRaw) ? appAdminRaw : [appAdminRaw]);
+            delete formData['appAdminUserIds[]'];
+        } else {
+            delete formData['appAdminUserIds[]'];
+            delete formData.appAdminUserIds;
+        }
+        if (hasField('requireSubstituteTypes[]') || hasField('requireSubstituteTypes')) {
+            const requireSubstituteRaw = formData['requireSubstituteTypes[]'];
+            formData.requireSubstituteTypes = requireSubstituteRaw === undefined
+                ? []
+                : (Array.isArray(requireSubstituteRaw) ? requireSubstituteRaw : [requireSubstituteRaw]);
+            delete formData['requireSubstituteTypes[]'];
+        } else {
+            delete formData['requireSubstituteTypes[]'];
+            delete formData.requireSubstituteTypes;
+        }
+
+        // Convert localized decimal numbers (use defaults on invalid/empty) — only if present.
         const parseLocalizedNumber = (v) => {
             if (v === undefined || v === null || String(v).trim() === '') {
                 return Number.NaN;
@@ -618,21 +661,53 @@
             return Number.isFinite(n) ? n : def;
         };
         const int = (v, def) => { const n = parseInt(String(v), 10); return (Number.isInteger(n) ? n : def); };
-        formData.maxDailyHours = num(formData.maxDailyHours, 10);
-        formData.minRestPeriod = num(formData.minRestPeriod, 11);
-        formData.defaultWorkingHours = num(formData.defaultWorkingHours, 8);
-        formData.breakAutoFallbackMinutes = int(formData.breakAutoFallbackMinutes, 180);
-        if (formData.breakAutoFallbackMinutes < 15) {
-            formData.breakAutoFallbackMinutes = 15;
+        if (hasField('maxDailyHours')) {
+            formData.maxDailyHours = num(formData.maxDailyHours, 10);
+        } else {
+            delete formData.maxDailyHours;
         }
-        if (formData.breakAutoFallbackMinutes > 720) {
-            formData.breakAutoFallbackMinutes = 720;
+        if (hasField('minRestPeriod')) {
+            formData.minRestPeriod = num(formData.minRestPeriod, 11);
+        } else {
+            delete formData.minRestPeriod;
         }
-        formData.breakAutoFallbackFlexWindowStart = int(formData.breakAutoFallbackFlexWindowStart, 11);
-        formData.breakAutoFallbackFlexWindowEnd = int(formData.breakAutoFallbackFlexWindowEnd, 16);
-        formData.retentionPeriod = int(formData.retentionPeriod, 2);
+        if (hasField('defaultWorkingHours')) {
+            formData.defaultWorkingHours = num(formData.defaultWorkingHours, 8);
+        } else {
+            delete formData.defaultWorkingHours;
+        }
+        if (hasField('breakAutoFallbackMinutes')) {
+            formData.breakAutoFallbackMinutes = int(formData.breakAutoFallbackMinutes, 180);
+            if (formData.breakAutoFallbackMinutes < 15) {
+                formData.breakAutoFallbackMinutes = 15;
+            }
+            if (formData.breakAutoFallbackMinutes > 720) {
+                formData.breakAutoFallbackMinutes = 720;
+            }
+        } else {
+            delete formData.breakAutoFallbackMinutes;
+        }
+        if (hasField('breakAutoFallbackFlexWindowStart')) {
+            formData.breakAutoFallbackFlexWindowStart = int(formData.breakAutoFallbackFlexWindowStart, 11);
+        } else {
+            delete formData.breakAutoFallbackFlexWindowStart;
+        }
+        if (hasField('breakAutoFallbackFlexWindowEnd')) {
+            formData.breakAutoFallbackFlexWindowEnd = int(formData.breakAutoFallbackFlexWindowEnd, 16);
+        } else {
+            delete formData.breakAutoFallbackFlexWindowEnd;
+        }
+        if (hasField('retentionPeriod')) {
+            formData.retentionPeriod = int(formData.retentionPeriod, 2);
+        } else {
+            delete formData.retentionPeriod;
+        }
         const graceInput = Utils.$('#monthClosureGraceDaysAfterEom');
-        formData.monthClosureGraceDaysAfterEom = graceInput ? int(graceInput.value, 0) : int(formData.monthClosureGraceDaysAfterEom, 0);
+        if (graceInput) {
+            formData.monthClosureGraceDaysAfterEom = int(graceInput.value, 0);
+        } else {
+            delete formData.monthClosureGraceDaysAfterEom;
+        }
         // Only submit the Swiss weekly absolute max when country is CH — a
         // disabled select is omitted from FormData; also strip stale values.
         const nextCountryForWeekly = formData.country ? String(formData.country).toUpperCase() : 'DE';
@@ -644,6 +719,9 @@
 
         const liveRegion = Utils.$('#admin-settings-live');
         const saveButton = Utils.$('#admin-settings-save');
+        if (saveButton && (saveButton.disabled || saveButton.getAttribute('aria-busy') === 'true')) {
+            return;
+        }
 
         // Validate
         if (!validateForm(formData, liveRegion)) {
@@ -670,6 +748,12 @@
                 );
                 return;
             }
+            // Lock before await so a second Enter cannot start another confirm+save.
+            adminSettingsSaveInflight = true;
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.setAttribute('aria-busy', 'true');
+            }
             const result = await Components.confirmDialog({
                 title: t('Change working time country?'),
                 message: message,
@@ -679,13 +763,19 @@
             });
             const accepted = result === true || !!(result && result.confirmed);
             if (!accepted) {
+                adminSettingsSaveInflight = false;
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    saveButton.removeAttribute('aria-busy');
+                }
                 return;
             }
-        }
-
-        if (saveButton) {
-            saveButton.disabled = true;
-            saveButton.setAttribute('aria-busy', 'true');
+        } else {
+            adminSettingsSaveInflight = true;
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.setAttribute('aria-busy', 'true');
+            }
         }
         setLiveMessage(liveRegion, '', null);
 
@@ -697,6 +787,7 @@
             method: 'POST',
             data: formData,
             onSuccess: function(data) {
+                adminSettingsSaveInflight = false;
                 if (saveButton) {
                     saveButton.disabled = false;
                     saveButton.removeAttribute('aria-busy');
@@ -715,6 +806,7 @@
                 }
             },
             onError: function(_error) {
+                adminSettingsSaveInflight = false;
                 if (saveButton) {
                     saveButton.disabled = false;
                     saveButton.removeAttribute('aria-busy');
@@ -859,59 +951,61 @@
             return false;
         };
 
-        if (data.maxDailyHours < 1 || data.maxDailyHours > 24) {
+        if (data.maxDailyHours !== undefined && (data.maxDailyHours < 1 || data.maxDailyHours > 24)) {
             return fail(
                 window.ArbeitszeitCheck?.l10n?.maxDailyHoursRange || (window.t && window.t('arbeitszeitcheck', 'Maximum daily hours must be between 1 and 24')) || 'Maximum daily hours must be between 1 and 24',
                 'maxDailyHours'
             );
         }
 
-        if (data.minRestPeriod < 1 || data.minRestPeriod > 24) {
+        if (data.minRestPeriod !== undefined && (data.minRestPeriod < 1 || data.minRestPeriod > 24)) {
             return fail(
                 window.ArbeitszeitCheck?.l10n?.minRestPeriodRange || (window.t && window.t('arbeitszeitcheck', 'Minimum rest period must be between 1 and 24 hours')) || 'Minimum rest period must be between 1 and 24 hours',
                 'minRestPeriod'
             );
         }
 
-        if (data.defaultWorkingHours < 1 || data.defaultWorkingHours > 24) {
+        if (data.defaultWorkingHours !== undefined && (data.defaultWorkingHours < 1 || data.defaultWorkingHours > 24)) {
             return fail(
                 window.ArbeitszeitCheck?.l10n?.defaultWorkingHoursRange || (window.t && window.t('arbeitszeitcheck', 'Default working hours must be between 1 and 24')) || 'Default working hours must be between 1 and 24',
                 'defaultWorkingHours'
             );
         }
 
-        if (data.retentionPeriod < 1 || data.retentionPeriod > 10) {
+        if (data.retentionPeriod !== undefined && (data.retentionPeriod < 1 || data.retentionPeriod > 10)) {
             return fail(
                 window.ArbeitszeitCheck?.l10n?.retentionPeriodRange || (window.t && window.t('arbeitszeitcheck', 'Retention period must be between 1 and 10 years')) || 'Retention period must be between 1 and 10 years',
                 'retentionPeriod'
             );
         }
 
-        if (data.vacationCarryoverExpiryMonth < 1 || data.vacationCarryoverExpiryMonth > 12) {
+        if (data.vacationCarryoverExpiryMonth !== undefined && (data.vacationCarryoverExpiryMonth < 1 || data.vacationCarryoverExpiryMonth > 12)) {
             return fail(
                 window.ArbeitszeitCheck?.l10n?.carryoverMonthRange || (window.t && window.t('arbeitszeitcheck', 'Carryover expiry month must be between 1 and 12')) || 'Carryover expiry month must be between 1 and 12',
                 'vacationCarryoverExpiryMonth'
             );
         }
-        if (data.vacationCarryoverExpiryDay < 1 || data.vacationCarryoverExpiryDay > 31) {
+        if (data.vacationCarryoverExpiryDay !== undefined && (data.vacationCarryoverExpiryDay < 1 || data.vacationCarryoverExpiryDay > 31)) {
             return fail(
                 window.ArbeitszeitCheck?.l10n?.carryoverDayRange || (window.t && window.t('arbeitszeitcheck', 'Carryover expiry day must be between 1 and 31')) || 'Carryover expiry day must be between 1 and 31',
                 'vacationCarryoverExpiryDay'
             );
         }
 
-        if (data.monthClosureGraceDaysAfterEom < 0 || data.monthClosureGraceDaysAfterEom > 90) {
+        if (data.monthClosureGraceDaysAfterEom !== undefined && (data.monthClosureGraceDaysAfterEom < 0 || data.monthClosureGraceDaysAfterEom > 90)) {
             return fail(
                 window.ArbeitszeitCheck?.l10n?.monthClosureGraceDaysRange || (window.t && window.t('arbeitszeitcheck', 'Grace days after month end must be between 0 and 90')) || 'Grace days after month end must be between 0 and 90',
                 'monthClosureGraceDaysAfterEom'
             );
         }
 
-        if (!data.clockStampingEnabled && !data.manualTimeEntryEnabled) {
-            return fail(
-                window.ArbeitszeitCheck?.l10n?.timeCaptureAtLeastOneOrg || (window.t && window.t('arbeitszeitcheck', 'Enable clock in/out or manual time entries — at least one method is required for the organisation.')) || 'Enable clock in/out or manual time entries — at least one method is required for the organisation.',
-                'clockStampingEnabled'
-            );
+        if (data.clockStampingEnabled !== undefined || data.manualTimeEntryEnabled !== undefined) {
+            if (!data.clockStampingEnabled && !data.manualTimeEntryEnabled) {
+                return fail(
+                    window.ArbeitszeitCheck?.l10n?.timeCaptureAtLeastOneOrg || (window.t && window.t('arbeitszeitcheck', 'Enable clock in/out or manual time entries — at least one method is required for the organisation.')) || 'Enable clock in/out or manual time entries — at least one method is required for the organisation.',
+                    'clockStampingEnabled'
+                );
+            }
         }
 
         const capRaw = data.vacationCarryoverMaxDays;

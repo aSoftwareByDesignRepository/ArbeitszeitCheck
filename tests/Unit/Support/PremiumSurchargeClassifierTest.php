@@ -152,6 +152,82 @@ class PremiumSurchargeClassifierTest extends TestCase
 		);
 		$this->assertSame([], $result['buckets']);
 	}
+
+	public function testAdditiveRatesSumValuedHoursForSundayNight(): void
+	{
+		$raw = PremiumPolicy::atStarterPreset();
+		$raw['stacking'] = PremiumPolicy::STACKING_ADDITIVE;
+		$policy = PremiumPolicy::fromValidated($raw);
+		$classifier = new PremiumSurchargeClassifier();
+		$result = $classifier->classify(
+			[$this->interval('2026-08-09 22:00:00', '2026-08-09 23:00:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$byId = [];
+		foreach ($result['buckets'] as $b) {
+			$byId[$b['id']] = $b;
+		}
+		$this->assertEqualsWithDelta(1.0, $byId['sunday']['hours'] ?? 0.0, 0.01);
+		$this->assertEqualsWithDelta(1.0, $byId['night']['hours'] ?? 0.0, 0.01);
+		// Unique wall clock = 1h; valued = 1.0 + 0.5
+		$this->assertEqualsWithDelta(1.0, $result['total_classified_hours'], 0.01);
+		$this->assertEqualsWithDelta(1.5, $result['total_valued_hours'], 0.01);
+	}
+
+	public function testTaggedMultiDoesNotSumMoney(): void
+	{
+		$raw = PremiumPolicy::atStarterPreset();
+		$raw['stacking'] = PremiumPolicy::STACKING_TAGGED;
+		$policy = PremiumPolicy::fromValidated($raw);
+		$classifier = new PremiumSurchargeClassifier();
+		$result = $classifier->classify(
+			[$this->interval('2026-08-09 22:00:00', '2026-08-09 23:00:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$byId = [];
+		foreach ($result['buckets'] as $b) {
+			$byId[$b['id']] = $b['hours'];
+		}
+		$this->assertEqualsWithDelta(1.0, $byId['sunday'] ?? 0.0, 0.01);
+		$this->assertEqualsWithDelta(1.0, $byId['night'] ?? 0.0, 0.01);
+		$this->assertEqualsWithDelta(1.0, $result['total_classified_hours'], 0.01);
+		$this->assertEqualsWithDelta(0.0, $result['total_valued_hours'], 0.01);
+	}
+
+	public function testDstSpringForwardEuropeViennaNightWindow(): void
+	{
+		// 2026-03-29 is Sunday (EU spring-forward). Disable weekday premiums so
+		// only the night window is classified across the missing 02:00 hour.
+		$raw = PremiumPolicy::atStarterPreset();
+		foreach ($raw['categories'] as &$cat) {
+			if (($cat['id'] ?? '') !== 'night') {
+				$cat['enabled'] = false;
+			}
+		}
+		unset($cat);
+		$policy = PremiumPolicy::fromValidated($raw);
+		$classifier = new PremiumSurchargeClassifier();
+		$result = $classifier->classify(
+			[$this->interval('2026-03-29 01:30:00', '2026-03-29 03:30:00')],
+			$policy,
+			static fn (): bool => false,
+			static fn (): float => 8.0,
+		);
+		$night = null;
+		foreach ($result['buckets'] as $b) {
+			if ($b['id'] === 'night') {
+				$night = $b;
+			}
+		}
+		$this->assertNotNull($night);
+		// Absolute timestamps: ~1h wall after DST jump still all inside night window.
+		$this->assertGreaterThan(0.9, $night['hours']);
+		$this->assertLessThan(1.2, $night['hours']);
+	}
 }
 
 class PremiumPolicyTest extends TestCase

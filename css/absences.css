@@ -322,13 +322,13 @@
 	padding: var(--space-5, 1.25rem) var(--space-6, 1.5rem);
 	border-radius: var(--radius-xl, 12px);
 	border: 1px solid var(--arbeitszeitcheck-color-border);
-	background: var(--arbeitszeitcheck-color-background-hover, rgba(0, 0, 0, 0.04));
+	background: var(--arbeitszeitcheck-color-background-hover, var(--azc-bg-soft));
 	box-shadow: var(--arbeitszeitcheck-shadow-subtle);
 	max-width: 52rem;
 }
 
 .vacation-stats__notice--deadline {
-	border-left: 4px solid var(--arbeitszeitcheck-color-warning, var(--color-warning, #b88100));
+	border-left: 4px solid var(--arbeitszeitcheck-color-warning, var(--color-warning));
 }
 
 .vacation-stats__notice-text {
@@ -462,7 +462,7 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 	margin: auto;
 	background: var(--color-main-background);
 	color: var(--color-main-text);
-	box-shadow: var(--arbeitszeitcheck-shadow-xl, 0 10px 30px rgba(0, 0, 0, 0.18));
+	box-shadow: var(--arbeitszeitcheck-shadow-xl, var(--azc-shadow-md));
 	box-sizing: border-box;
 	width: min(36rem, calc(100vw - 2rem));
 	max-width: calc(100vw - 2rem);
@@ -775,7 +775,8 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 	display: block;
 	font-size: 2.25rem;
 	font-weight: 700;
-	color: var(--arbeitszeitcheck-color-primary);
+	/* Main text — NC primary blue fails WCAG AA on dark themes (~2.9:1). */
+	color: var(--azc-text, var(--color-main-text));
 	line-height: 1.2;
 	visibility: visible;
 	opacity: 1;
@@ -808,8 +809,41 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 	box-shadow: 0 0 0 1px var(--arbeitszeitcheck-color-primary);
 }
 
+.stat-card--remaining.stat-card--hero {
+	grid-column: 1 / -1;
+	padding: var(--space-5, 1.25rem) var(--space-4, 1rem);
+	background: var(--arbeitszeitcheck-color-background-elevated);
+}
+
 .stat-card--remaining .stat-value {
-	color: var(--arbeitszeitcheck-color-primary);
+	/* Primary border/cue only; large KPI ink stays main-text for WCAG 1.4.3. */
+	color: var(--azc-text, var(--color-main-text));
+}
+
+.stat-card--remaining .stat-value--hero {
+	font-size: clamp(2rem, 5vw, 2.75rem);
+	line-height: 1.1;
+	font-weight: 700;
+	min-height: 2.75rem;
+}
+
+.absence-hours-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 0.5rem 0 0.25rem;
+}
+
+.absence-hours-presets .azc-btn {
+	min-height: 2.75rem;
+	min-width: 5.5rem;
+	font-size: 1rem;
+}
+
+.form-input--hours {
+	max-width: 12rem;
+	font-size: 1.125rem;
+	min-height: 2.75rem;
 }
 
 /* Table Styling - Ensure visibility */
@@ -868,7 +902,7 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 
 /* Subtle highlight for rows that need action (e.g. substitute declined) */
 .absences-table tbody tr[data-status="substitute_declined"] {
-	background: var(--arbeitszeitcheck-color-background-hover, rgba(0, 0, 0, 0.02));
+	background: var(--arbeitszeitcheck-color-background-hover, var(--azc-bg-soft));
 }
 
 .absences-table tbody tr[data-status="substitute_declined"]:hover {

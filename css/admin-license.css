@@ -64,7 +64,7 @@
 #app-content.azc-app .azc-license-meter__fill {
 	height: 100%;
 	border-radius: inherit;
-	background: var(--color-primary-element, #0082c9);
+	background: var(--color-primary-element);
 	transition: width 0.25s ease;
 }
 
@@ -142,7 +142,7 @@
 
 #app-content.azc-app .azc-btn--danger {
 	background: var(--color-error);
-	color: var(--color-primary-text, #fff);
+	color: var(--color-primary-text);
 	border: 2px solid var(--color-error);
 }
 
@@ -278,7 +278,7 @@
 	background: var(--color-main-background);
 	max-height: 14rem;
 	overflow-y: auto;
-	box-shadow: var(--azc-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.12));
+	box-shadow: var(--azc-shadow-md);
 }
 
 #app-content.azc-app .azc-seat-search-results li {
@@ -382,7 +382,7 @@
 .azc-license-modal-backdrop {
 	position: fixed;
 	inset: 0;
-	background: rgba(0, 0, 0, 0.45);
+	background: var(--azc-scrim, color-mix(in srgb, var(--color-main-text) 45%, transparent));
 	z-index: 9998;
 }
 
@@ -400,7 +400,7 @@
 	border: 2px solid var(--color-primary-element);
 	border-radius: var(--azc-radius-lg, 12px);
 	background: var(--color-main-background);
-	box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.2);
+	box-shadow: var(--azc-shadow-md);
 }
 
 #app-content.azc-app .azc-license-modal h3 {

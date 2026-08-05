@@ -121,4 +121,99 @@ class MonthClosurePdfDocumentBuilderTest extends TestCase
 
 		$this->assertStringContainsString('OT BANK SECTION', $pdf);
 	}
+
+	public function testPdfIncludesPremiumSectionFromFrozenSnapshot(): void
+	{
+		$l = $this->createMock(IL10N::class);
+		$l->method('getLanguageCode')->willReturn('en');
+		$l->method('t')->willReturnCallback(static function (string $text) {
+			return match ($text) {
+				'month_closure_pdf_section_premium' => 'PREMIUM SECTION',
+				'month_closure_pdf_title' => 'TITLE',
+				'month_closure_pdf_footer' => 'FOOTER',
+				'month_closure_pdf_integrity_note' => 'INTEGRITY',
+				'month_closure_pdf_col_premium_category' => 'CAT',
+				'month_closure_pdf_col_premium_hours' => 'HRS',
+				'month_closure_pdf_col_premium_rate' => 'RATE',
+				'month_closure_pdf_col_premium_valued' => 'VAL',
+				'month_closure_pdf_premium_orthogonal_note' => 'ORTHO',
+				default => 'X',
+			};
+		});
+
+		$snap = [
+			'schema' => 'arbeitszeitcheck.month_closure.v1',
+			'year' => 2026,
+			'month' => 3,
+			'period' => ['start' => '2026-03-01', 'end' => '2026-03-31'],
+			'report' => ['total_hours' => 1.0, 'violations_count' => 0],
+			'premium' => [
+				'enabled' => true,
+				'policy_version' => 7,
+				'summary' => [
+					'total_classified_hours' => 5.5,
+					'total_valued_hours' => 8.25,
+					'buckets' => [
+						[
+							'id' => 'sunday',
+							'label' => 'SundayPremium',
+							'hours' => 5.5,
+							'rate' => 1.0,
+							'valued_hours' => 5.5,
+						],
+					],
+				],
+			],
+			'time_entries' => [],
+			'absences' => [],
+		];
+		$row = new MonthClosure();
+		$row->setSnapshotHash(str_repeat('b', 64));
+		$row->setVersion(1);
+
+		$pdf = MonthClosurePdfDocumentBuilder::build($snap, $row, 'User', 'u1', $l, '');
+
+		$this->assertStringContainsString('PREMIUM SECTION', $pdf);
+		$this->assertStringContainsString('SundayPremium', $pdf);
+		$this->assertStringContainsString('ORTHO', $pdf);
+	}
+
+	public function testPdfOmitsPremiumSectionWhenDisabledInSnapshot(): void
+	{
+		$l = $this->createMock(IL10N::class);
+		$l->method('getLanguageCode')->willReturn('en');
+		$l->method('t')->willReturnCallback(static function (string $text) {
+			if ($text === 'month_closure_pdf_section_premium') {
+				return 'PREMIUM SECTION';
+			}
+			if ($text === 'month_closure_pdf_title') {
+				return 'TITLE';
+			}
+			if ($text === 'month_closure_pdf_footer') {
+				return 'FOOTER';
+			}
+			if ($text === 'month_closure_pdf_integrity_note') {
+				return 'INTEGRITY';
+			}
+
+			return 'X';
+		});
+
+		$snap = [
+			'schema' => 'arbeitszeitcheck.month_closure.v1',
+			'year' => 2026,
+			'month' => 3,
+			'period' => ['start' => '2026-03-01', 'end' => '2026-03-31'],
+			'report' => ['total_hours' => 1.0, 'violations_count' => 0],
+			'premium' => ['enabled' => false, 'summary' => ['buckets' => []]],
+			'time_entries' => [],
+			'absences' => [],
+		];
+		$row = new MonthClosure();
+		$row->setSnapshotHash(str_repeat('c', 64));
+		$row->setVersion(1);
+
+		$pdf = MonthClosurePdfDocumentBuilder::build($snap, $row, 'User', 'u1', $l, '');
+		$this->assertStringNotContainsString('PREMIUM SECTION', $pdf);
+	}
 }

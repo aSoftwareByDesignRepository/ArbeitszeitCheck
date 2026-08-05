@@ -301,7 +301,7 @@
 /* Disable legacy card lift inside dashboard (azc-card is the source of truth) */
 #app-content.azc-app--dashboard .card:not(.azc-card) {
     transform: none;
-    box-shadow: var(--azc-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+    box-shadow: var(--azc-shadow-sm);
 }
 
 #app-content.azc-app--dashboard .card:not(.azc-card):hover {
@@ -374,7 +374,7 @@
 /* Primary actions: 2px focus ring for keyboard users (WCAG 2.4.7) */
 .arbeitszeitcheck-dashboard__grid .btn:focus-visible,
 .dashboard-vacation-card__actions .btn:focus-visible {
-    outline: 2px solid var(--color-primary-element, var(--arbeitszeitcheck-color-primary, #0066cc));
+    outline: 2px solid var(--color-primary-element, var(--arbeitszeitcheck-color-primary));
     outline-offset: 2px;
 }
 
@@ -475,7 +475,7 @@
     border: 1px solid var(--azc-border, var(--color-border));
     border-radius: var(--azc-radius-md, 8px);
     background: var(--azc-bg-card, var(--color-main-background));
-    box-shadow: var(--azc-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+    box-shadow: var(--azc-shadow-sm);
     min-height: 5.5rem;
 }
 
@@ -507,14 +507,14 @@
 
 #app-content.azc-app--dashboard .azc-dashboard-metric__value--positive {
     background: var(--azc-tint-success);
-    border: 1px solid color-mix(in srgb, var(--color-success, #46ba61) 45%, var(--color-border));
+    border: 1px solid color-mix(in srgb, var(--color-success) 45%, var(--color-border));
     border-radius: var(--azc-radius-sm, 6px);
     padding: 0.1rem 0.45rem;
 }
 
 #app-content.azc-app--dashboard .azc-dashboard-metric__value--negative {
     background: var(--azc-tint-danger);
-    border: 1px solid color-mix(in srgb, var(--color-error, #cc4646) 50%, var(--color-border));
+    border: 1px solid color-mix(in srgb, var(--color-error) 50%, var(--color-border));
     border-radius: var(--azc-radius-sm, 6px);
     padding: 0.1rem 0.45rem;
 }
@@ -1090,6 +1090,27 @@
 #app-content.azc-app--dashboard .dashboard-vacation-card__value {
     font-size: clamp(1.5rem, 4vw, 2rem);
     font-variant-numeric: tabular-nums;
+}
+
+#app-content.azc-app--dashboard .dashboard-vacation-card__value--hero {
+    font-size: clamp(2rem, 5vw, 2.75rem);
+    font-weight: 700;
+    line-height: 1.1;
+    min-height: 2.75rem;
+    color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
+}
+
+#app-content.azc-app--dashboard .dashboard-vacation-card__row--hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    margin-bottom: var(--azc-space-3, 0.75rem);
+}
+
+#app-content.azc-app--dashboard .dashboard-vacation-card__unit {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--arbeitszeitcheck-color-text-secondary, var(--color-text-maxcontrast));
 }
 
 #app-content.azc-app--dashboard .dashboard-vacation-card__actions {

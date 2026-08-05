@@ -110,6 +110,7 @@ class VacationEntitlementEngine {
 		private TeamMapper $teamMapper,
 		private TeamMemberMapper $teamMemberMapper,
 		private IConfig $config,
+		private ?VacationUnitService $vacationUnitService = null,
 	) {
 	}
 
@@ -586,12 +587,13 @@ class VacationEntitlementEngine {
 
 		$workDaysPerWeek = max(1.0, min(7.0, $workDaysPerWeek));
 		$referenceWeekDays = max(1.0, min(7.0, $referenceWeekDays));
-		$baseDays = max(0.0, min(366.0, $baseDays));
+		$ceiling = $this->entitlementCeiling();
+		$baseDays = max(0.0, min($ceiling, $baseDays));
 
 		$computedRaw = $baseDays * ($workDaysPerWeek / max(1.0, $referenceWeekDays));
 		$computedRaw += $additional;
 		$computedRaw -= $deductions;
-		$computed = max(0.0, min(366.0, $computedRaw));
+		$computed = max(0.0, min($ceiling, $computedRaw));
 		$wasClamped = abs($computedRaw - $computed) > 0.0001;
 		$computed = $this->applyRounding($computed, $rounding);
 		$computed = $this->applyProRata($computed, $proRata, $asOfDate);
@@ -849,16 +851,24 @@ class VacationEntitlementEngine {
 		];
 	}
 
-	private function resolveLegacyManualEntitlement(string $userId): int {
+	private function entitlementCeiling(): float
+	{
+		return $this->vacationUnitService?->isHoursMode() === true ? 4000.0 : 366.0;
+	}
+
+	private function resolveLegacyManualEntitlement(string $userId): float {
+		$ceiling = $this->entitlementCeiling();
 		$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
 		if ($currentModel !== null && $currentModel->getVacationDaysPerYear() !== null) {
-			return max(0, min(366, (int)$currentModel->getVacationDaysPerYear()));
+			$raw = (float)$currentModel->getVacationDaysPerYear();
+			return max(0.0, min($ceiling, $raw));
 		}
-		return max(0, min(366, (int)$this->userSettingsMapper->getIntegerSetting(
+		$fromSettings = $this->userSettingsMapper->getFloatSetting(
 			$userId,
 			'vacation_days_per_year',
-			Constants::DEFAULT_VACATION_DAYS_PER_YEAR
-		)));
+			(float)Constants::DEFAULT_VACATION_DAYS_PER_YEAR
+		);
+		return max(0.0, min($ceiling, $fromSettings));
 	}
 
 	/**
@@ -1005,7 +1015,8 @@ class VacationEntitlementEngine {
 		if (!is_finite($value)) {
 			return 0.0;
 		}
-		$clamped = max(0.0, min(366.0, $value));
+		$ceiling = $this->entitlementCeiling();
+		$clamped = max(0.0, min($ceiling, $value));
 		return round($clamped, 2, PHP_ROUND_HALF_UP);
 	}
 
@@ -1014,7 +1025,7 @@ class VacationEntitlementEngine {
 	 * by trace builders to surface `clamped=true` for auditors so
 	 * misconfigured rule sets (negative manual days, accidentally adding
 	 * 200% pro-rata) are visible instead of disappearing behind the
-	 * 0..366 invariant (EC-08).
+	 * unit ceiling (EC-08).
 	 *
 	 * Tolerance picks up below the 2dp rounding noise so 25.0 vs 25.001 is
 	 * not flagged as "clamped" by accident.
@@ -1024,7 +1035,8 @@ class VacationEntitlementEngine {
 		if (!is_finite($raw)) {
 			return true;
 		}
-		if ($raw < 0.0 || $raw > 366.0) {
+		$ceiling = $this->entitlementCeiling();
+		if ($raw < 0.0 || $raw > $ceiling) {
 			return true;
 		}
 		// Below the 2dp rounding floor — not a clamp, just rounding noise.

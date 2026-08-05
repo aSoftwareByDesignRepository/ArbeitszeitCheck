@@ -11,9 +11,9 @@
 #app-content.azc-app .inline-notice--info,
 .modal-backdrop .inline-notice--info,
 .toast--info {
-	border-color: var(--color-primary-element, #00679e);
+	border-color: var(--color-primary-element);
 	border-left-width: 5px;
-	border-left-color: var(--color-primary-element, #00679e);
+	border-left-color: var(--color-primary-element);
 	background: var(--azc-tint-info);
 }
 
@@ -25,9 +25,9 @@
 .toast--warning,
 #app-content.azc-app .alert--warning,
 .modal-backdrop .alert--warning {
-	border-color: var(--color-warning-text, var(--color-warning, #a37200));
+	border-color: var(--color-warning-text, var(--color-warning));
 	border-left-width: 5px;
-	border-left-color: var(--color-warning-text, var(--color-warning, #a37200));
+	border-left-color: var(--color-warning-text, var(--color-warning));
 	background: var(--azc-tint-warning);
 }
 
@@ -37,9 +37,9 @@
 .toast--success,
 #app-content.azc-app .alert--success,
 .modal-backdrop .alert--success {
-	border-color: var(--color-success-text, var(--color-success, #2d7b46));
+	border-color: var(--color-success-text, var(--color-success));
 	border-left-width: 5px;
-	border-left-color: var(--color-success-text, var(--color-success, #2d7b46));
+	border-left-color: var(--color-success-text, var(--color-success));
 	background: var(--azc-tint-success);
 }
 
@@ -52,9 +52,9 @@
 .toast--error,
 #app-content.azc-app .alert--error,
 .modal-backdrop .alert--error {
-	border-color: var(--color-error-text, var(--color-error, #db0606));
+	border-color: var(--color-error-text, var(--color-error));
 	border-left-width: 5px;
-	border-left-color: var(--color-error-text, var(--color-error, #db0606));
+	border-left-color: var(--color-error-text, var(--color-error));
 	background: var(--azc-tint-danger);
 }
 
@@ -479,7 +479,7 @@
 .toast-close:hover,
 .toast-close:focus-visible {
 	opacity: 1;
-	outline: 2px solid var(--color-primary-element, #00679e);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 

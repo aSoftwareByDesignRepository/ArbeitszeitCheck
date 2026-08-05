@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+$azcSettingsShowCardChrome = !empty($azcSettingsShowCardChrome) || !empty($renderAll);
+
 /**
  * Admin global settings: enable/disable ProjectCheck integration for all users.
  *
@@ -17,12 +19,16 @@ $pcAvailable = !empty($projectCheckAvailable);
 $pcEnabled = !empty($settings['projectCheckIntegrationEnabled']);
 ?>
 <section class="azc-card admin-settings-section azc-projectcheck-admin-settings" aria-labelledby="section-projectcheck-heading">
-	<header class="azc-card__header">
-		<div class="azc-card__header-text">
-			<h2 id="section-projectcheck-heading" class="azc-card__title"><?php p($l->t('ProjectCheck connection')); ?></h2>
-			<p class="azc-card__lead"><?php p($l->t('Optionally let employees link working time to ProjectCheck projects.')); ?></p>
-		</div>
-	</header>
+	                    <header class="azc-card__header<?php echo empty($azcSettingsShowCardChrome) ? ' azc-card__header--page-title-only' : ''; ?>">
+                        <div class="azc-card__header-text">
+                            <?php if (!empty($azcSettingsShowCardChrome)): ?>
+                            <h2 id="section-projectcheck-heading" class="azc-card__title"><?php p($l->t('ProjectCheck connection')); ?></h2>
+                            <p class="azc-card__lead"><?php p($l->t('Optionally let employees link working time to ProjectCheck projects.')); ?></p>
+                            <?php else: ?>
+                            <h2 id="section-projectcheck-heading" class="azc-card__title visually-hidden"><?php p($l->t('ProjectCheck connection')); ?></h2>
+                            <?php endif; ?>
+                        </div>
+                    </header>
 	<div class="azc-card__body">
 	<?php if (!$pcAvailable): ?>
 		<?php
@@ -73,7 +79,7 @@ $pcEnabled = !empty($settings['projectCheckIntegrationEnabled']);
 			</div>
 
 			<p id="projectcheck-admin-integration-help" class="form-help">
-				<?php p($l->t('Saved with “Save all settings” below. Existing links on old time entries stay as they are; turning this off only stops new links and hides the project picker. Projects with per-person pricing still appear only for users on the project team.')); ?>
+				<?php p($l->t('Saved with Save on this page. Existing links on old time entries stay as they are; turning this off only stops new links and hides the project picker. Projects with per-person pricing still appear only for users on the project team.')); ?>
 			</p>
 		</div>
 	<?php endif; ?>

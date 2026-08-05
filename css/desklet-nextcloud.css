@@ -168,26 +168,32 @@
 	opacity: 0.95;
 }
 
+/*
+ * halfEmptyContentMessage sits above the list with EmptyContent chrome.
+ * Status widgets only use a short note there — hide the decorative checkmark
+ * and left-align so it reads as a caption, not a second hero.
+ */
 #app-dashboard .panel:has(a[href*="/apps/arbeitszeitcheck/"]) .empty-content.half-screen {
-	margin: 0 0 10px 0;
-	padding: 0 0 2px 0;
+	margin: 0 0 8px 0;
+	padding: 0 2px;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0;
 }
 
-#app-dashboard .panel:has(a[href*="/apps/arbeitszeitcheck/"]) .empty-content.half-screen .empty-content__icon :is(.material-design-icon, .material-design-icon__svg, svg) {
-	width: 24px !important;
-	height: 24px !important;
-	min-height: 0 !important;
-	display: block;
-	opacity: 0.6;
-	margin: 0 auto 8px;
+#app-dashboard .panel:has(a[href*="/apps/arbeitszeitcheck/"]) .empty-content.half-screen .empty-content__icon {
+	display: none !important;
 }
 
 #app-dashboard .panel:has(a[href*="/apps/arbeitszeitcheck/"]) .empty-content .empty-content__description {
-	line-height: 1.5;
-	color: var(--color-text, var(--color-main-text));
-	text-align: center;
+	line-height: 1.4;
+	color: var(--color-text-maxcontrast, var(--color-text, var(--color-main-text)));
+	text-align: left;
 	max-width: 100%;
-	padding: 0 6px;
+	padding: 0;
+	font-size: 13px;
+	margin: 0;
 }
 
 #app-dashboard .panel:has(a[href*="/apps/arbeitszeitcheck/"]) a.more {
@@ -208,7 +214,7 @@
 	font-weight: 600;
 	line-height: 1.25;
 	text-align: center;
-	color: var(--color-primary-element-text, #fff);
+	color: var(--color-primary-element-text);
 	background: var(--color-primary-element, var(--color-primary));
 	text-decoration: none;
 	isolation: isolate;
@@ -216,7 +222,7 @@
 }
 
 #app-dashboard .panel:has(a[href*="/apps/arbeitszeitcheck/"]) a.more:hover {
-	color: var(--color-primary-element-text, #fff);
+	color: var(--color-primary-element-text);
 	background: var(
 		--color-primary-element-hover,
 		var(--color-primary-element, var(--color-primary))

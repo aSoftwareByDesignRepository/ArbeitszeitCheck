@@ -42,18 +42,18 @@ body {
   /* Semantic — from Nextcloud */
   --arbeitszeitcheck-color-success: var(--color-success);
   --arbeitszeitcheck-color-success-hover: var(--color-success);
-  --arbeitszeitcheck-color-success-light: color-mix(in srgb, var(--color-success, #22c55e) 15%, transparent);
+  --arbeitszeitcheck-color-success-light: color-mix(in srgb, var(--color-success) 15%, transparent);
   --arbeitszeitcheck-color-success-dark: var(--color-success);
 
   --arbeitszeitcheck-color-warning: var(--color-warning);
   --arbeitszeitcheck-color-warning-hover: var(--color-warning);
-  --arbeitszeitcheck-color-warning-light: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent);
+  --arbeitszeitcheck-color-warning-light: color-mix(in srgb, var(--color-warning) 15%, transparent);
   --arbeitszeitcheck-color-warning-dark: var(--color-warning);
 
   --arbeitszeitcheck-color-error: var(--color-error);
   --arbeitszeitcheck-color-error-hover: var(--color-error);
-  --arbeitszeitcheck-color-error-light: color-mix(in srgb, var(--color-error, #ef4444) 15%, transparent);
-  --arbeitszeitcheck-color-error-dark: var(--color-error);
+  --arbeitszeitcheck-color-error-light: color-mix(in srgb, var(--color-error-text, var(--color-error)) 15%, var(--color-main-background));
+  --arbeitszeitcheck-color-error-dark: var(--color-element-error, var(--color-error));
 
   --arbeitszeitcheck-color-info: var(--color-primary);
   --arbeitszeitcheck-color-info-hover: var(--color-primary-hover);
@@ -162,9 +162,9 @@ body {
   --arbeitszeitcheck-color-button-secondary-hover: var(--color-background-hover);
   --arbeitszeitcheck-color-button-secondary-active: var(--color-background-hover);
   --arbeitszeitcheck-color-button-secondary-text: var(--color-main-text);
-  --arbeitszeitcheck-color-button-danger: var(--color-error);
-  --arbeitszeitcheck-color-button-danger-hover: var(--color-error);
-  --arbeitszeitcheck-color-button-danger-text: var(--color-primary-text);
+  --arbeitszeitcheck-color-button-danger: var(--azc-danger-fill, var(--color-element-error, var(--color-error)));
+  --arbeitszeitcheck-color-button-danger-hover: color-mix(in srgb, var(--azc-danger-fill, var(--color-element-error)) 85%, var(--color-main-text));
+  --arbeitszeitcheck-color-button-danger-text: var(--azc-danger-on-fill, var(--color-primary-element-text));
 
   /* Loading */
   --arbeitszeitcheck-color-loading-spinner: var(--color-primary-element);

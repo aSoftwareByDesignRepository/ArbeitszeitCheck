@@ -32,6 +32,7 @@ use OCA\ArbeitszeitCheck\Service\MonthClosureFeature;
 use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
 use OCA\ArbeitszeitCheck\Service\MonthClosureService;
 use OCA\ArbeitszeitCheck\Exception\MonthFinalizedException;
+use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Service\AppLocalNaiveDateTimeNormalizer;
 use OCA\ArbeitszeitCheck\Service\TimeZoneService;
 use OCA\ArbeitszeitCheck\Service\TimeEntryCorrectionService;
@@ -609,6 +610,7 @@ class ManagerController extends Controller
 			}
 
 			$navFlags = $this->getNavigationFlags($actorUserId);
+			$vacationUnitService = new \OCA\ArbeitszeitCheck\Service\VacationUnitService($this->config);
 			$response = new TemplateResponse('arbeitszeitcheck', 'manager-absences', array_merge(
 				$this->buildManagerShellParams(
 					'manager-absences',
@@ -619,6 +621,8 @@ class ManagerController extends Controller
 				$this->managerEmployeeListTemplateParams('absences'),
 				[
 					'monthClosureEnabled' => $this->monthClosureEnabledParam(),
+					'vacationUnit' => $vacationUnitService->getUnit(),
+					'vacationHoursPerDay' => $vacationUnitService->getHoursPerDay(),
 				]
 			));
 			return $this->configureCSP($response);
@@ -1494,6 +1498,7 @@ class ManagerController extends Controller
 					'startDate' => $absence->getStartDate()?->format('Y-m-d'),
 					'endDate' => $absence->getEndDate()?->format('Y-m-d'),
 					'days' => $absence->getDays(),
+					'durationHours' => $absence->getDurationHours(),
 					'status' => $absence->getStatus(),
 					'statusLabel' => $this->getAbsenceStatusLabel($absence->getStatus()),
 					'reason' => $absence->getReason(),
@@ -1520,6 +1525,73 @@ class ManagerController extends Controller
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error(
 				'Error in ManagerController::getEmployeeAbsences',
+				['exception' => $e]
+			);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An internal error occurred. Please contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Schedule-aware vacation hours estimate for a managed employee (full-day range).
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function estimateEmployeeVacationHours(): JSONResponse
+	{
+		try {
+			$actorUserId = $this->getUserId();
+			$accessResponse = $this->ensureManagerReadAccess($actorUserId, 'estimate_employee_vacation_hours');
+			if ($accessResponse !== null) {
+				return $accessResponse;
+			}
+
+			$targetUserId = trim((string)$this->request->getParam('userId', ''));
+			$startDate = trim((string)$this->request->getParam('startDate', ''));
+			$endDate = trim((string)$this->request->getParam('endDate', $startDate));
+			if ($targetUserId === '' || $startDate === '' || $endDate === '') {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('userId, startDate, and endDate are required.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			if (!$this->permissionService->canManageEmployee($actorUserId, $targetUserId)) {
+				$this->permissionService->logPermissionDenied($actorUserId, 'estimate_employee_vacation_hours', 'user', $targetUserId);
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Access denied. You can only record absences for employees you manage.'),
+				], Http::STATUS_FORBIDDEN);
+			}
+			if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Dates must be in YYYY-MM-DD format.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			$start = \DateTime::createFromFormat('!Y-m-d', $startDate);
+			$end = \DateTime::createFromFormat('!Y-m-d', $endDate);
+			if ($start === false || $end === false) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Dates must be in YYYY-MM-DD format.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			/** @var \OCA\ArbeitszeitCheck\Service\VacationHoursDebitService $debit */
+			$debit = \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\VacationHoursDebitService::class);
+			$est = $debit->estimateForUserRange($targetUserId, $start, $end);
+			return new JSONResponse([
+				'success' => true,
+				'hours' => $est['hours'],
+				'basis' => $est['basis'],
+				'average_daily' => $est['average_daily'],
+				'one_day_hours' => $est['one_day_hours'],
+				'weekday_nets' => $est['weekday_nets'],
+			]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in ManagerController::estimateEmployeeVacationHours',
 				['exception' => $e]
 			);
 			return new JSONResponse([
@@ -1619,18 +1691,48 @@ class ManagerController extends Controller
 				'end_date' => $endDate,
 				'reason' => $reason !== '' ? $reason : null,
 			];
+			if (array_key_exists('durationHours', $payload) || array_key_exists('duration_hours', $payload)) {
+				$dh = $payload['durationHours'] ?? $payload['duration_hours'];
+				$data['duration_hours'] = is_array($dh) ? (string)reset($dh) : (string)$dh;
+			}
+			if (!empty($payload['requireDurationHours']) || !empty($payload['require_duration_hours'])) {
+				$data['require_duration_hours'] = true;
+			}
+			if (!empty($payload['serverMayFillHours']) || !empty($payload['server_may_fill_hours'])) {
+				$data['server_may_fill_hours'] = true;
+			}
 
 			try {
 				$absence = $this->absenceService->createApprovedAbsenceForEmployeeByManager($actorUserId, $targetUserId, $data);
+			} catch (BusinessRuleException $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->info(
+					'ManagerController::createEmployeeAbsence business rule: ' . $e->getMessage(),
+					['exception' => $e]
+				);
+				$payloadOut = [
+					'success' => false,
+					'error' => $e->getMessage(),
+				];
+				$code = $e->getReasonCode();
+				if ($code !== null && $code !== '') {
+					$payloadOut['code'] = $code;
+					$payloadOut['error_code'] = $code;
+				}
+				return new JSONResponse($payloadOut, Http::STATUS_BAD_REQUEST);
 			} catch (\Exception $e) {
 				\OCP\Log\logger('arbeitszeitcheck')->info(
 					'ManagerController::createEmployeeAbsence validation or business rule: ' . $e->getMessage(),
 					['exception' => $e]
 				);
-				return new JSONResponse([
+				$payloadOut = [
 					'success' => false,
 					'error' => $e->getMessage(),
-				], Http::STATUS_BAD_REQUEST);
+				];
+				if (preg_match('/\[([A-Z0-9_]{3,64})\]\s*$/', $e->getMessage(), $m) === 1) {
+					$payloadOut['code'] = $m[1];
+					$payloadOut['error_code'] = $m[1];
+				}
+				return new JSONResponse($payloadOut, Http::STATUS_BAD_REQUEST);
 			} catch (\Throwable $e) {
 				\OCP\Log\logger('arbeitszeitcheck')->error(
 					'ManagerController::createEmployeeAbsence unexpected failure: ' . $e->getMessage(),

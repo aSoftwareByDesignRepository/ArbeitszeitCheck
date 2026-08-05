@@ -44,4 +44,14 @@ test.describe('Phase A: weekday schedule fixture', () => {
 
 		expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 	});
+
+	test('J-S4: contract — live WTM JS must not open create/edit modals', async () => {
+		const fs = await import('node:fs');
+		const pathMod = await import('node:path');
+		const jsPath = pathMod.resolve(__dirname, '../../js/working-time-models.js');
+		const js = fs.readFileSync(jsPath, 'utf8');
+		expect(js).toContain('function openEditorPanel');
+		expect(js).not.toContain('create-model-modal');
+		expect(js).not.toContain('edit-model-modal');
+	});
 });

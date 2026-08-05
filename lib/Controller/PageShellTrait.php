@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Controller;
 
 use OCA\ArbeitszeitCheck\Service\FrontEndAssetService;
+use OCA\ArbeitszeitCheck\Service\AdminPolicyPagesCatalog;
 use OCA\ArbeitszeitCheck\Service\LocaleFormatService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\IL10N;
@@ -51,6 +52,7 @@ trait PageShellTrait
 		'admin-users',
 		'admin-user-detail',
 		'admin-notifications',
+		'admin-overtime-settings',
 		'admin-license',
 		'admin-settings',
 		'admin-support-us',
@@ -58,12 +60,36 @@ trait PageShellTrait
 		'admin-overtime-payout-audit',
 		'admin-tariff-rules',
 		'admin-vacation-layers',
+		'admin-vacation-rules',
 		'admin-teams',
 		'admin-holidays',
 		'admin-audit-log',
 		'admin-working-time-models',
 		'admin-kiosk',
 	];
+
+	/**
+	 * Attach SETTINGS-PAGES-STANDARD chip bar payload for policy-cluster pages.
+	 *
+	 * @param array<string, mixed> $params
+	 * @return array<string, mixed>
+	 */
+	protected function withPolicyPagesNav(array $params, string $pageId): array
+	{
+		$catalog = new AdminPolicyPagesCatalog();
+		$section = $catalog->sectionForPageId($pageId);
+		if ($section === null) {
+			return $params;
+		}
+		$params['policyPages'] = $catalog->chipBarPayload($this->l10n, $this->urlGenerator, $section);
+		// SETTINGS-PAGES-STANDARD §7: App → Policy settings (link) → section title
+		$params['breadcrumbSection'] = '';
+		$params['breadcrumbParent'] = [
+			'label' => $this->l10n->t('Policy settings'),
+			'url' => $catalog->url($this->urlGenerator, $catalog->defaultSection()),
+		];
+		return $params;
+	}
 
 	/**
 	 * @param array<string, mixed> $navFlags
@@ -87,7 +113,7 @@ trait PageShellTrait
 			$shellWidth = 'wide';
 		}
 
-		return array_merge($navFlags, [
+		$params = array_merge($navFlags, [
 			'pageId' => $pageId,
 			'pageTitle' => $pageTitle,
 			'pageHelp' => $pageHelp,
@@ -102,6 +128,8 @@ trait PageShellTrait
 			'l' => $this->l10n,
 			'pendingCorrectionCount' => $navFlags['pendingCorrectionCount'] ?? 0,
 		]);
+
+		return $this->withPolicyPagesNav($params, $pageId);
 	}
 
 	/**
@@ -164,6 +192,7 @@ trait PageShellTrait
 			'substitutionRequests' => $g->linkToRoute('arbeitszeitcheck.substitute.index'),
 			'adminDashboard' => $g->linkToRoute('arbeitszeitcheck.admin.dashboard'),
 			'adminNotifications' => $g->linkToRoute('arbeitszeitcheck.admin.notifications'),
+			'adminOvertimeSettings' => $g->linkToRoute('arbeitszeitcheck.admin.overtimeSettings'),
 			'adminOvertimePayouts' => $g->linkToRoute('arbeitszeitcheck.overtime_payout.index'),
 			'adminOvertimePayoutAudit' => $g->linkToRoute('arbeitszeitcheck.overtime_payout.auditIndex'),
 			'adminUsers' => $g->linkToRoute('arbeitszeitcheck.admin.users'),

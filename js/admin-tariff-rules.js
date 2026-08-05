@@ -139,7 +139,10 @@
 			opts.body = JSON.stringify(opts.json);
 			delete opts.json;
 		}
-		const response = await fetch(generateUrl(url), opts);
+		const normalized = Utils.normalizeMutatingFetchInit
+			? Utils.normalizeMutatingFetchInit(opts)
+			: opts;
+		const response = await fetch(generateUrl(url), normalized);
 		let payload = null;
 		try {
 			payload = await response.json();

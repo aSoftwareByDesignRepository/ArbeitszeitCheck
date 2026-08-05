@@ -212,14 +212,26 @@
         const start = formatDateForDisplay(s.start_date || s.startDate || '');
         const end = formatDateForDisplay(s.end_date || s.endDate || '');
         const days = s.days != null ? s.days : '';
+        const durationHours = s.durationHours != null ? s.durationHours : (s.duration_hours != null ? s.duration_hours : null);
         const id = item.id;
         const displayName = escapeHtml(item.displayName || item.userId || '');
         const typeDisplay = escapeHtml(absenceTitleTypeDisplay(s, typeCode));
+        let durationMeta = '';
+        const hoursMode = ((window.ArbeitszeitCheck && window.ArbeitszeitCheck.vacationUnit) || 'days') === 'hours';
+        const hoursPerDay = Number((window.ArbeitszeitCheck && window.ArbeitszeitCheck.vacationHoursPerDay) || 8) || 8;
+        if (durationHours != null && Number(durationHours) > 0) {
+            durationMeta = ' (' + escapeHtml(String(Number(durationHours).toFixed(1))) + ' ' + t('hours', 'hours') + ')';
+        } else if (hoursMode && days !== '' && Number(days) > 0) {
+            const converted = Math.round(Number(days) * hoursPerDay * 100) / 100;
+            durationMeta = ' (' + escapeHtml(String(converted.toFixed(1))) + ' ' + t('hours', 'hours') + ')';
+        } else if (days) {
+            durationMeta = ' (' + escapeHtml(String(days)) + ' ' + t('days', 'days') + ')';
+        }
         return (
             '<div class="pending-approval-card pending-approval-card--absence" data-absence-id="' + escapeHtml(String(id)) + '" role="article">' +
             '  <div class="pending-approval-card__body">' +
             '    <p class="pending-approval-card__title"><strong>' + displayName + '</strong> – ' + typeDisplay + '</p>' +
-            '    <p class="pending-approval-card__meta">' + escapeHtml(start) + ' – ' + escapeHtml(end) + (days ? ' (' + escapeHtml(String(days)) + ' ' + t('days', 'days') + ')' : '') + '</p>' +
+            '    <p class="pending-approval-card__meta">' + escapeHtml(start) + ' – ' + escapeHtml(end) + durationMeta + '</p>' +
             '    <div class="pending-approval-card__actions">' +
             '      <button type="button" class="azc-btn azc-btn--primary btn-approve-absence" data-absence-id="' + escapeHtml(String(id)) + '" aria-label="' + t('Approve', 'Approve') + ' ' + displayName + '">' + t('Approve', 'Approve') + '</button>' +
             '      <button type="button" class="azc-btn azc-btn--secondary btn-reject-absence" data-absence-id="' + escapeHtml(String(id)) + '" aria-label="' + t('Reject', 'Reject') + ' ' + displayName + '">' + t('Reject', 'Reject') + '</button>' +

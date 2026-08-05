@@ -28,6 +28,27 @@ class VacationYearBalanceMapper extends QBMapper
 	}
 
 	/**
+	 * Opening carryover in the active unit.
+	 * Hours mode prefers carryover_hours when set; otherwise falls back to carryover_days
+	 * (post-migration both hold hour amounts in Q3=A).
+	 */
+	public function getCarryoverAmount(string $userId, int $year, bool $preferHours): float
+	{
+		try {
+			$row = $this->findByUserAndYear($userId, $year);
+			if ($preferHours) {
+				$hours = $row->getCarryoverHours();
+				if ($hours !== null && is_finite((float)$hours)) {
+					return (float)$hours;
+				}
+			}
+			return (float)$row->getCarryoverDays();
+		} catch (DoesNotExistException $e) {
+			return 0.0;
+		}
+	}
+
+	/**
 	 * @return float Carryover days or 0 if no row
 	 */
 	public function getCarryoverDays(string $userId, int $year): float
@@ -39,13 +60,31 @@ class VacationYearBalanceMapper extends QBMapper
 		}
 	}
 
-	public function upsert(string $userId, int $year, float $carryoverDays): VacationYearBalance
-	{
+	/**
+	 * @param bool $clearCarryoverHours When true, null out carryover_hours (days-mode reverse migrate).
+	 *                                  When false and $carryoverHours is null, leave hours column unchanged.
+	 */
+	public function upsert(
+		string $userId,
+		int $year,
+		float $carryoverDays,
+		?float $carryoverHours = null,
+		bool $clearCarryoverHours = false,
+	): VacationYearBalance {
 		$now = new \DateTime();
-		$normalized = max(0.0, min(366.0, $carryoverDays));
+		$normalized = max(0.0, min(4000.0, $carryoverDays));
+		$normalizedHours = $carryoverHours;
+		if ($normalizedHours !== null) {
+			$normalizedHours = max(0.0, min(4000.0, $normalizedHours));
+		}
 		try {
 			$entity = $this->findByUserAndYear($userId, $year);
 			$entity->setCarryoverDays($normalized);
+			if ($clearCarryoverHours) {
+				$entity->setCarryoverHours(null);
+			} elseif ($normalizedHours !== null) {
+				$entity->setCarryoverHours($normalizedHours);
+			}
 			$entity->setUpdatedAt($now);
 			return $this->update($entity);
 		} catch (DoesNotExistException $e) {
@@ -53,14 +92,23 @@ class VacationYearBalanceMapper extends QBMapper
 			$entity->setUserId($userId);
 			$entity->setYear($year);
 			$entity->setCarryoverDays($normalized);
+			if ($clearCarryoverHours) {
+				$entity->setCarryoverHours(null);
+			} elseif ($normalizedHours !== null) {
+				$entity->setCarryoverHours($normalizedHours);
+			}
 			$entity->setCreatedAt($now);
 			$entity->setUpdatedAt($now);
 			try {
 				return $this->insert($entity);
 			} catch (UniqueConstraintViolationException) {
-				// Concurrent writer created the row first. Re-read and update deterministically.
 				$existing = $this->findByUserAndYear($userId, $year);
 				$existing->setCarryoverDays($normalized);
+				if ($clearCarryoverHours) {
+					$existing->setCarryoverHours(null);
+				} elseif ($normalizedHours !== null) {
+					$existing->setCarryoverHours($normalizedHours);
+				}
 				$existing->setUpdatedAt($now);
 				return $this->update($existing);
 			}

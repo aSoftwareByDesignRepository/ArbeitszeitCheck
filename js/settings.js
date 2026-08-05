@@ -133,8 +133,8 @@
                 const Utils = window.ArbeitszeitCheckUtils;
                 const title = window.t ? window.t('arbeitszeitcheck', 'Delete my ArbeitszeitCheck data') : 'Delete my ArbeitszeitCheck data';
                 const message = window.t
-                    ? window.t('arbeitszeitcheck', 'This permanently removes your time entries, absences, and settings from ArbeitszeitCheck.')
-                    : 'This permanently removes your time entries, absences, and settings from ArbeitszeitCheck.';
+                    ? window.t('arbeitszeitcheck', 'This deletes eligible time entries older than the retention period and clears your personal settings. Recent entries, absences, and compliance records stay where the law requires it.')
+                    : 'This deletes eligible time entries older than the retention period and clears your personal settings. Recent entries, absences, and compliance records stay where the law requires it.';
                 const confirmResult = Utils?.confirmDestructiveAction
                     ? await Utils.confirmDestructiveAction({
                         title,
@@ -189,9 +189,12 @@
          * Save working time preferences
          */
         saveWorkingTimeSettings: function(form) {
-            const _formData = new FormData(form);
+            const autoBreak = form.querySelector('#auto-break-calculation');
+            if (!autoBreak) {
+                return;
+            }
             const data = {
-                auto_break_calculation: form.querySelector('#auto-break-calculation').checked
+                auto_break_calculation: !!autoBreak.checked
             };
 
             this.submitSettings(data, 'working-time-settings-form');
@@ -201,11 +204,16 @@
          * Save notification settings
          */
         saveNotificationSettings: function(form) {
-            const _formData = new FormData(form);
+            const notificationsEnabled = form.querySelector('#notifications-enabled');
+            const breakReminders = form.querySelector('#break-reminders');
+            const missingClockIn = form.querySelector('#missing-clock-in-reminders');
+            if (!notificationsEnabled || !breakReminders || !missingClockIn) {
+                return;
+            }
             const data = {
-                notifications_enabled: form.querySelector('#notifications-enabled').checked,
-                break_reminders_enabled: form.querySelector('#break-reminders').checked,
-                missing_clock_in_reminders_enabled: form.querySelector('#missing-clock-in-reminders').checked
+                notifications_enabled: !!notificationsEnabled.checked,
+                break_reminders_enabled: !!breakReminders.checked,
+                missing_clock_in_reminders_enabled: !!missingClockIn.checked
             };
 
             this.submitSettings(data, 'notification-settings-form');
@@ -216,10 +224,14 @@
          */
         submitSettings: function(data, formId) {
             const submitButton = document.querySelector(`#${formId} button[type="submit"]`);
+            if (submitButton && (submitButton.disabled || submitButton.getAttribute('aria-busy') === 'true')) {
+                return;
+            }
             const originalText = submitButton ? submitButton.textContent : '';
             
             if (submitButton) {
                 submitButton.disabled = true;
+                submitButton.setAttribute('aria-busy', 'true');
                 submitButton.textContent = window.ArbeitszeitCheck?.l10n?.saving || (window.t && window.t('arbeitszeitcheck', 'Saving...')) || 'Saving...';
             }
 
@@ -276,6 +288,7 @@
             .finally(() => {
                 if (submitButton) {
                     submitButton.disabled = false;
+                    submitButton.removeAttribute('aria-busy');
                     submitButton.textContent = originalText;
                 }
             });

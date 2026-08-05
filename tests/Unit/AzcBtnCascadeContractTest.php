@@ -92,6 +92,16 @@ final class AzcBtnCascadeContractTest extends TestCase {
 			'/\.dz-workspace \.azc-btn--secondary,\s*\n\.dz-workspace \.btn-secondary,\s*\n\.dz-workspace \.btn--secondary \{\s*\n\tbackground-color:[^;]*!important;/',
 			$css
 		);
+		self::assertMatchesRegularExpression(
+			'/\.dz-project-picker__select\s*\{[^}]*min-height:\s*44px/s',
+			$css,
+			'Project picker must keep WCAG-friendly 44px touch targets'
+		);
+		self::assertStringContainsString('.dz-capture-notice--warning', $css);
+		self::assertStringContainsString('.dz-capture-notice--neutral', $css);
+		self::assertStringContainsString('common/desklet-actions', (string)file_get_contents(
+			$root . '/lib/Support/DashboardWidgetAssetBootstrap.php'
+		));
 	}
 
 	public function testSmallAliasMirrorsSmSizing(): void {

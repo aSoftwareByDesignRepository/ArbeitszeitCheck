@@ -89,7 +89,7 @@
 
 #app-content.azc-app--admin-overtime-payout-audit .admin-ot-audit-filters__clear:focus-visible,
 #app-content.azc-app--admin-overtime-payout-audit .user-picker__clear:focus-visible {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -103,7 +103,7 @@
 	max-height: 14rem;
 	overflow-y: auto;
 	list-style: none;
-	background: var(--color-main-background, #fff);
+	background: var(--color-main-background);
 	border: 1px solid var(--azc-border);
 	border-radius: var(--azc-radius-sm);
 	box-shadow: var(--azc-shadow-md);
@@ -188,7 +188,7 @@
 	padding: var(--azc-space-4);
 	border-radius: var(--azc-radius-sm);
 	border: 1px solid var(--azc-border);
-	background: var(--color-main-background, #fff);
+	background: var(--color-main-background);
 }
 
 #app-content.azc-app--admin-overtime-payout-audit .admin-ot-audit-gaps__meta {

@@ -20,8 +20,10 @@ use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCA\ArbeitszeitCheck\Support\OpeningBalanceYearValidator;
 use OCA\ArbeitszeitCheck\Support\RegionRegistry;
 use OCA\ArbeitszeitCheck\Support\StrictYmdDates;
+use OCA\ArbeitszeitCheck\Support\DatevOrgCredentials;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\TTransactional;
+use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserManager;
@@ -51,7 +53,45 @@ class AdminUserProfileUpdateService
 		private readonly IL10N $l10n,
 		private readonly IDBConnection $db,
 		private readonly ?LaborLawProfileFactory $laborLawProfileFactory = null,
+		private readonly ?IConfig $config = null,
+		private readonly ?VacationUnitService $vacationUnitService = null,
+		private readonly ?VacationUnitMigrationService $vacationUnitMigrationService = null,
 	) {
+	}
+
+	private function vacationAmountCeiling(): float
+	{
+		// Bachus: admins always enter calendar days (0–366). Storage may be hours.
+		return 366.0;
+	}
+
+	private function adminDaysToStoredAmount(float $days): float
+	{
+		if ($this->vacationUnitService !== null) {
+			return $this->vacationUnitService->adminDaysToStoredAmount($days);
+		}
+		return $days;
+	}
+
+	private function storedAmountToAdminDays(float $stored): float
+	{
+		if ($this->vacationUnitService !== null) {
+			return $this->vacationUnitService->storedAmountToAdminDays($stored);
+		}
+		return $stored;
+	}
+
+	/**
+	 * @param array<string, mixed> $summary
+	 * @return array<string, mixed>
+	 */
+	private function presentUserModelSummary(array $summary): array
+	{
+		if (isset($summary['vacationDaysPerYear']) && $summary['vacationDaysPerYear'] !== null) {
+			$summary['vacationDaysPerYear'] = $this->storedAmountToAdminDays((float)$summary['vacationDaysPerYear']);
+		}
+
+		return $summary;
 	}
 
 	/**
@@ -60,7 +100,8 @@ class AdminUserProfileUpdateService
 	 *   vacationPolicy?: array<string, mixed>,
 	 *   timeCapture?: array<string, mixed>,
 	 *   overtime?: array<string, mixed>,
-	 *   employment?: array<string, mixed>
+	 *   employment?: array<string, mixed>,
+	 *   datev?: array<string, mixed>
 	 * } $payload
 	 * @return array<string, mixed>
 	 */
@@ -73,6 +114,7 @@ class AdminUserProfileUpdateService
 		$timeCapture = is_array($payload['timeCapture'] ?? null) ? $payload['timeCapture'] : [];
 		$overtime = is_array($payload['overtime'] ?? null) ? $payload['overtime'] : [];
 		$employment = is_array($payload['employment'] ?? null) ? $payload['employment'] : [];
+		$datev = is_array($payload['datev'] ?? null) ? $payload['datev'] : [];
 
 		// Pre-flight validation (read-only) before opening a transaction.
 		$this->preflightWorkingTimeModel($userId, $workingTimeModel);
@@ -80,14 +122,16 @@ class AdminUserProfileUpdateService
 		$this->preflightTimeCapture($userId, $timeCapture);
 		$this->preflightOvertime($overtime);
 		$this->preflightEmployment($userId, $employment);
+		$this->preflightDatev($datev);
 
-		return $this->atomic(function () use ($userId, $workingTimeModel, $vacationPolicy, $timeCapture, $overtime, $employment, $performedBy): array {
+		return $this->atomic(function () use ($userId, $workingTimeModel, $vacationPolicy, $timeCapture, $overtime, $employment, $datev, $performedBy): array {
 			$result = ['success' => true];
 			$result = array_merge($result, $this->applyWorkingTimeModel($userId, $workingTimeModel, $performedBy));
 			$result = array_merge($result, $this->applyVacationPolicy($userId, $vacationPolicy, $performedBy));
 			$result = array_merge($result, $this->applyTimeCaptureSettings($userId, $timeCapture, $performedBy));
 			$result = array_merge($result, $this->applyOvertimeSettings($userId, $overtime, $performedBy));
 			$result = array_merge($result, $this->applyEmploymentSettings($userId, $employment, $performedBy));
+			$result = array_merge($result, $this->applyDatevSettings($userId, $datev, $performedBy));
 
 			return $result;
 		}, $this->db);
@@ -105,7 +149,17 @@ class AdminUserProfileUpdateService
 		$workingTimeModelId = ($workingTimeModelIdRaw !== null && $workingTimeModelIdRaw !== '')
 			? (int)$workingTimeModelIdRaw
 			: null;
-		$vacationDaysPerYear = isset($params['vacationDaysPerYear']) ? (int)$params['vacationDaysPerYear'] : null;
+		$vacationDaysPerYear = null;
+		if (isset($params['vacationDaysPerYear']) && $params['vacationDaysPerYear'] !== '' && $params['vacationDaysPerYear'] !== null) {
+			$daysInput = (float)str_replace(',', '.', (string)$params['vacationDaysPerYear']);
+			if ($daysInput < 0 || $daysInput > 366) {
+				throw new AdminUserProfileUpdateException(
+					$this->l10n->t('Vacation days per year must be between 0 and 366')
+				);
+			}
+			$stored = $this->adminDaysToStoredAmount($daysInput);
+			$vacationDaysPerYear = (int)round($stored);
+		}
 		$startDate = $params['startDate'] ?? null;
 		$endDate = $params['endDate'] ?? null;
 		$germanState = isset($params['germanState']) ? (string)$params['germanState'] : null;
@@ -122,7 +176,7 @@ class AdminUserProfileUpdateService
 		if ($currentModel && $workingTimeModelId !== null && $workingTimeModelId > 0) {
 			if ($this->workingTimeModelAssignmentMatches($currentModel, $workingTimeModelId, $vacationDaysPerYear, $startDate, $endDate)) {
 				return [
-					'userWorkingTimeModel' => $currentModel->getSummary(),
+					'userWorkingTimeModel' => $this->presentUserModelSummary($currentModel->getSummary()),
 					'unchanged' => true,
 				];
 			}
@@ -238,16 +292,42 @@ class AdminUserProfileUpdateService
 			if ($carryoverYear < 2000 || $carryoverYear > 2100) {
 				throw new AdminUserProfileUpdateException($this->l10n->t('Invalid year for vacation carryover'));
 			}
-			$carryoverVal = $this->parseDecimalInput($params['vacationCarryoverDays'], 0.0);
-			if ($carryoverVal < 0 || $carryoverVal > 366) {
-				throw new AdminUserProfileUpdateException($this->l10n->t('Vacation carryover must be between 0 and 366 days'));
+			$carryoverDaysInput = $this->parseDecimalInput($params['vacationCarryoverDays'], 0.0);
+			if ($carryoverDaysInput < 0 || $carryoverDaysInput > 366.0) {
+				throw new AdminUserProfileUpdateException(
+					$this->l10n->t('Vacation carryover must be between 0 and 366 days')
+				);
 			}
-			$carryoverVal = $this->vacationAllocationService->applyCapToOpeningBalance($carryoverVal);
-			$this->vacationYearBalanceMapper->upsert($userId, $carryoverYear, $carryoverVal);
+			$writeCarryover = function () use ($userId, $carryoverYear, $carryoverDaysInput): void {
+				$carryoverVal = $this->adminDaysToStoredAmount($carryoverDaysInput);
+				$carryoverVal = $this->vacationAllocationService->applyCapToOpeningBalance($carryoverVal);
+				$hoursMode = $this->vacationUnitService?->isHoursMode() === true;
+				$this->vacationYearBalanceMapper->upsert(
+					$userId,
+					$carryoverYear,
+					$carryoverVal,
+					$hoursMode ? $carryoverVal : null,
+					!$hoursMode
+				);
+			};
+			if ($this->vacationUnitMigrationService !== null) {
+				try {
+					$this->vacationUnitMigrationService->withIdleShared($writeCarryover);
+				} catch (\RuntimeException $e) {
+					if ($e->getMessage() === Constants::VAC_UNIT_MIGRATE_IN_PROGRESS) {
+						throw new AdminUserProfileUpdateException(
+							$this->l10n->t('Vacation unit migration is in progress. Please try again in a moment.')
+						);
+					}
+					throw $e;
+				}
+			} else {
+				$writeCarryover();
+			}
 		}
 
 		return [
-			'userWorkingTimeModel' => $updated !== null ? $updated->getSummary() : null,
+			'userWorkingTimeModel' => $updated !== null ? $this->presentUserModelSummary($updated->getSummary()) : null,
 		];
 	}
 
@@ -380,6 +460,62 @@ class AdminUserProfileUpdateService
 	}
 
 	/**
+	 * Persist DATEV Personalnummer for payroll export (IConfig user value).
+	 *
+	 * @param array<string, mixed> $params
+	 * @return array<string, mixed>
+	 */
+	public function applyDatevSettings(string $userId, array $params, string $performedBy): array
+	{
+		if ($params === [] || !array_key_exists('personalnummer', $params)) {
+			return [];
+		}
+		$this->assertUserExists($userId);
+		$this->preflightDatev($params);
+		if ($this->config === null) {
+			throw new AdminUserProfileUpdateException(
+				$this->l10n->t('DATEV Personalnummer cannot be saved right now. Try again or contact support.')
+			);
+		}
+
+		$normalized = DatevOrgCredentials::normalizeDigits($params['personalnummer']);
+		$previous = (string)$this->config->getUserValue($userId, 'arbeitszeitcheck', Constants::USER_DATEV_PERSONALNUMMER, '');
+		if ($previous === $normalized) {
+			return ['datevPersonalnummer' => $normalized];
+		}
+		$this->config->setUserValue($userId, 'arbeitszeitcheck', Constants::USER_DATEV_PERSONALNUMMER, $normalized);
+		$this->auditLogMapper->logAction(
+			$userId,
+			'datev_personalnummer_changed',
+			'user_config',
+			0,
+			['datev_personalnummer_set' => $previous !== ''],
+			['datev_personalnummer_set' => $normalized !== ''],
+			$performedBy
+		);
+
+		return ['datevPersonalnummer' => $normalized];
+	}
+
+	/**
+	 * @param array<string, mixed> $params
+	 */
+	private function preflightDatev(array $params): void
+	{
+		if ($params === [] || !array_key_exists('personalnummer', $params)) {
+			return;
+		}
+		$errors = DatevOrgCredentials::validatePersonalnummer($params['personalnummer'], true);
+		if ($errors !== []) {
+			throw new AdminUserProfileUpdateException(
+				$this->l10n->t('DATEV Personalnummer must be empty or 1–8 digits.'),
+				400,
+				['datevPersonalnummer' => $this->l10n->t('DATEV Personalnummer must be empty or 1–8 digits.')]
+			);
+		}
+	}
+
+	/**
 	 * @param array<string, mixed> $params
 	 */
 	private function preflightEmployment(string $userId, array $params): void
@@ -473,9 +609,11 @@ class AdminUserProfileUpdateService
 		$this->assertUserExists($userId);
 
 		if (isset($params['vacationDaysPerYear'])) {
-			$days = (int)$params['vacationDaysPerYear'];
-			if ($days < 0 || $days > 366) {
-				throw new AdminUserProfileUpdateException($this->l10n->t('Vacation days per year must be between 0 and 366'));
+			$days = (float)str_replace(',', '.', (string)$params['vacationDaysPerYear']);
+			if ($days < 0 || $days > 366.0) {
+				throw new AdminUserProfileUpdateException(
+					$this->l10n->t('Vacation days per year must be between 0 and 366')
+				);
 			}
 		}
 
@@ -656,6 +794,14 @@ class AdminUserProfileUpdateService
 			$vacationMode = Constants::VACATION_MODE_INHERIT;
 		}
 		$manualDays = isset($params['manualDays']) ? $this->parseDecimalInput($params['manualDays'], 0.0) : null;
+		if ($manualDays !== null) {
+			if ($manualDays < 0.0 || $manualDays > 366.0) {
+				throw new AdminUserProfileUpdateException(
+					$this->l10n->t('Vacation days per year must be between 0 and 366')
+				);
+			}
+			$manualDays = $this->adminDaysToStoredAmount($manualDays);
+		}
 		$tariffRuleSetId = isset($params['tariffRuleSetId']) && $params['tariffRuleSetId'] !== null && $params['tariffRuleSetId'] !== ''
 			? (int)$params['tariffRuleSetId']
 			: null;

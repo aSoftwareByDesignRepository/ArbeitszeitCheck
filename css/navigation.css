@@ -64,6 +64,29 @@
     list-style: none;
 }
 
+/* Admin submenu topic labels (not links — WCAG: presentation only) */
+#app-navigation .nav-submenu > li.nav-submenu-group {
+    list-style: none;
+    margin: var(--azc-space-3, 0.75rem) 0 var(--azc-space-1, 0.25rem);
+    padding: 0;
+    pointer-events: none;
+}
+
+#app-navigation .nav-submenu > li.nav-submenu-group:first-child {
+    margin-top: 0.25rem;
+}
+
+#app-navigation .nav-submenu-group__title {
+    margin: 0;
+    padding: 0.35rem var(--azc-nav-child-padding-inline, 1.5rem) 0.2rem;
+    font-size: var(--azc-fs-xs, 0.75rem);
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
 /* Navigation Menu - scrollable so Manager stays reachable when Verwaltung is expanded */
 .nav-menu {
     margin: 0;

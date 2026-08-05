@@ -120,6 +120,15 @@
 		};
 	}
 
+	async function apiFetch(url, options) {
+		const opts = Utils.normalizeMutatingFetchInit
+			? Utils.normalizeMutatingFetchInit(options || {})
+			: (options || {});
+		const res = await fetch(url, opts);
+		const data = await res.json().catch(() => ({}));
+		return { res, data };
+	}
+
 	function escapeHtml(s) {
 		const d = document.createElement('div');
 		d.textContent = s;
@@ -359,12 +368,11 @@
 			const originalLabel = saveBtn.textContent;
 			saveBtn.textContent = t('saving', 'Saving…');
 			try {
-				const res = await fetch(apiLicense, {
+				const { data } = await apiFetch(apiLicense, {
 					method: 'POST',
 					headers: headers(),
 					body: JSON.stringify({ licenseKey: key }),
 				});
-				const data = await res.json();
 				if (data.ok) {
 					// Keep the button disabled: the page is about to reload and
 					// re-enabling it would open a double-submit window.
@@ -399,11 +407,10 @@
 				clearBtn.disabled = true;
 			}
 			try {
-				const res = await fetch(apiClearLicense, {
+				const { data } = await apiFetch(apiClearLicense, {
 					method: 'DELETE',
 					headers: headers(),
 				});
-				const data = await res.json();
 				if (data.ok) {
 					setFlashAndReload(t('clearSuccess', 'License removed.'));
 					return;
@@ -445,12 +452,11 @@
 			btn.disabled = true;
 			hideFeedback();
 			try {
-				const res = await fetch(apiRemoveSeat, {
+				const { data } = await apiFetch(apiRemoveSeat, {
 					method: 'POST',
 					headers: headers(),
 					body: JSON.stringify({ userId }),
 				});
-				const data = await res.json();
 				if (data.ok) {
 					renderSeatRows(data.seats);
 					updateSeatCounts(data.mobileSeatsUsed ?? 0, data.mobileSeatsLimit ?? 0);
@@ -472,12 +478,11 @@
 		closeSearchResults();
 		hideFeedback();
 		try {
-			const res = await fetch(apiSeats, {
+			const { data } = await apiFetch(apiSeats, {
 				method: 'POST',
 				headers: headers(),
 				body: JSON.stringify({ userId }),
 			});
-			const data = await res.json();
 			if (data.ok) {
 				renderSeatRows(data.seats);
 				updateSeatCounts(data.mobileSeatsUsed ?? 0, data.mobileSeatsLimit ?? 0);

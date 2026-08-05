@@ -173,7 +173,9 @@ final class WeekdaySchedule
 	}
 
 	/**
-	 * BANSS-like Mo–Thu long / Fri short preset (editable after apply).
+	 * BANSS weekday preset (Q5 LOCKED): Mo–Thu 07:00–16:15 − 45′ unpaid = **8.50 h** net;
+	 * Fri 07:00–11:45 − 15′ unpaid = **4.50 h** net; week sum **38.50 h** (not 8.25 / 37.5).
+	 * Editable after apply.
 	 *
 	 * @return array{version: int, days: array<string, mixed>}
 	 */

@@ -12,7 +12,7 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
 include __DIR__ . '/common/admin-overtime-payout-l10n.php';
 
 $bankEnabled = (bool)($_['bankEnabled'] ?? false);
-$notificationsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.notifications') . '#overtime-bank-heading';
+$notificationsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.overtimeSettings') . '#overtime-bank-heading';
 $auditUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.overtime_payout.auditIndex');
 $bankMax = (float)($_['bankMaxHours'] ?? 100);
 $defaultYear = (int)($_['defaultYear'] ?? (int)date('Y'));
@@ -36,11 +36,10 @@ for ($m = 1; $m <= 12; $m++) {
 <?php include __DIR__ . '/common/page-start.php'; ?>
 
         <div class="azc-page-stack">
-        <div class="header-actions azc-page-actions-source">
-            <a href="<?php p($auditUrl); ?>" class="azc-btn azc-btn--secondary">
-                <?php p($l->t('Payout audit')); ?>
-            </a>
-        </div>
+        <?php
+        $policyPages = is_array($_['policyPages'] ?? null) ? $_['policyPages'] : [];
+        include __DIR__ . '/common/azc-policy-pages-nav.php';
+        ?>
 
         <div class="admin-ot-payouts">
             <?php
@@ -51,7 +50,11 @@ for ($m = 1; $m <= 12; $m++) {
             $calloutTitle = $l->t('Payouts are not the overtime balance');
             $calloutText = $l->t('Payouts only record hours above the overtime bank cap. Each employee’s running hour balance (worked minus contract target) is on their dashboard.');
             $calloutExtraClass = 'admin-ot-payouts__saldo-hint';
-            $calloutActions = [];
+            $calloutActions = [[
+                'href' => $auditUrl,
+                'label' => $l->t('Open payout audit'),
+                'class' => 'azc-btn azc-btn--secondary',
+            ]];
             include __DIR__ . '/common/alert-callout.php';
             ?>
 

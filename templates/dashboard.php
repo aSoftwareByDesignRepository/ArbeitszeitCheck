@@ -708,7 +708,15 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                 <?php endif; ?>
 
                 <!-- Vacation summary -->
-                <article class="azc-card azc-dashboard-vacation dashboard-vacation-card" aria-labelledby="dashboard-vacation-heading">
+                <?php
+                $dashVacationUnit = (string)($dashStats['vacation_unit'] ?? 'days');
+                $dashIsVacationHours = $dashVacationUnit === 'hours';
+                $dashUnitWord = $dashIsVacationHours ? $l->t('hours') : $l->t('days');
+                $dashRemainingLabel = $dashIsVacationHours
+                    ? $l->t('Remaining vacation hours')
+                    : $l->t('Remaining vacation days');
+                ?>
+                <article class="azc-card azc-dashboard-vacation dashboard-vacation-card" aria-labelledby="dashboard-vacation-heading" data-vacation-unit="<?php p($dashVacationUnit); ?>">
                     <header class="azc-card__header">
                         <div class="azc-card__header-text">
                             <h3 id="dashboard-vacation-heading" class="azc-card__title"><?php p($l->t('Vacation')); ?> <?php
@@ -723,23 +731,26 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                             <?php p($l->t('Your vacation year uses hire anniversary, but no employment start date is set. Ask your admin to set it under Employees.')); ?>
                         </p>
                         <?php } ?>
-                        <div class="dashboard-vacation-card__row">
-                            <span class="dashboard-vacation-card__label"><?php p($l->t('Remaining vacation days')); ?></span>
-                            <span class="dashboard-vacation-card__value" aria-describedby="dashboard-vacation-heading"><?php p((string)round((float)($dashStats['vacation_days_remaining'] ?? 0), 1)); ?></span>
+                        <div class="dashboard-vacation-card__row dashboard-vacation-card__row--hero">
+                            <span class="dashboard-vacation-card__label" id="dashboard-vacation-remaining-label"><?php p($dashRemainingLabel); ?></span>
+                            <span class="dashboard-vacation-card__value dashboard-vacation-card__value--hero"
+                                  id="dashboard-vacation-remaining-value"
+                                  aria-labelledby="dashboard-vacation-remaining-label"><?php p((string)round((float)($dashStats['vacation_days_remaining'] ?? 0), 1)); ?></span>
+                            <span class="dashboard-vacation-card__unit"><?php p($dashUnitWord); ?></span>
                         </div>
                         <dl class="dashboard-vacation-card__breakdown" aria-label="<?php p($l->t('Vacation breakdown')); ?>">
                             <div class="dashboard-vacation-card__breakdown-row">
                                 <dt><?php p($l->t('Annual leave left (bookable)')); ?></dt>
-                                <dd><?php p((string)round((float)($dashStats['vacation_annual_remaining'] ?? 0), 1)); ?></dd>
+                                <dd><?php p((string)round((float)($dashStats['vacation_annual_remaining'] ?? 0), 1) . ' ' . $dashUnitWord); ?></dd>
                             </div>
                             <div class="dashboard-vacation-card__breakdown-row">
                                 <dt><?php p($l->t('Carryover pool left')); ?></dt>
-                                <dd><?php p((string)round((float)($dashStats['vacation_carryover_remaining'] ?? 0), 1)); ?></dd>
+                                <dd><?php p((string)round((float)($dashStats['vacation_carryover_remaining'] ?? 0), 1) . ' ' . $dashUnitWord); ?></dd>
                             </div>
                             <?php if (isset($dashStats['vacation_carryover_max_cap']) && $dashStats['vacation_carryover_max_cap'] !== null && $dashStats['vacation_carryover_max_cap'] !== '') { ?>
                             <div class="dashboard-vacation-card__breakdown-row">
                                 <dt><?php p($l->t('Max. carryover (admin cap)')); ?></dt>
-                                <dd><?php p((string)round((float)$dashStats['vacation_carryover_max_cap'], 1)); ?></dd>
+                                <dd><?php p((string)round((float)$dashStats['vacation_carryover_max_cap'], 1) . ' ' . $dashUnitWord); ?></dd>
                             </div>
                             <?php } ?>
                         </dl>
@@ -762,9 +773,11 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                             id="dashboard-vacation-carryover-hint"
                             role="status">
                             <?php if ($vcLocked) {
-                                p($l->t('Carryover deadline has passed (%1$s). New requests can no longer use last year’s remaining days. The opening balance above is your HR record; approved vacation already reduced it.', [$vcExpFmt]));
+                                echo $dashIsVacationHours
+                                    ? $l->t('Carryover deadline has passed (%1$s). New requests can no longer use last year’s remaining hours. The opening balance above is your HR record; approved vacation already reduced it.', [$vcExpFmt])
+                                    : $l->t('Carryover deadline has passed (%1$s). New requests can no longer use last year’s remaining days. The opening balance above is your HR record; approved vacation already reduced it.', [$vcExpFmt]);
                             } else {
-                                p($l->t('Carryover from last year: use by %1$s (%2$s days still usable for new requests).', [$vcExpFmt, (string)round($vcUsable, 1)]));
+                                p($l->t('Carryover from last year: use by %1$s (%2$s %3$s still usable for new requests).', [$vcExpFmt, (string)round($vcUsable, 1), $dashUnitWord]));
                             } ?>
                         </p>
                         <?php } ?>

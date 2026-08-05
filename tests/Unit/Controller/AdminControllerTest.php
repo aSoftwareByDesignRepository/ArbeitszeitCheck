@@ -204,6 +204,10 @@ class AdminControllerTest extends TestCase
 		$auditLogPresenter = new \OCA\ArbeitszeitCheck\Service\AuditLogPresenter($l10n, $dateTimeFormatter);
 
 		$db = $this->createMock(IDBConnection::class);
+		$config = $this->createMock(\OCP\IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(static function (string $app, string $key, $default = '') {
+			return $default;
+		});
 		$adminUserProfileUpdateService = new AdminUserProfileUpdateService(
 			$this->userManager,
 			$this->userWorkingTimeModelMapper,
@@ -260,6 +264,8 @@ class AdminControllerTest extends TestCase
 			$permissionService,
 			$localeFormat,
 			$db,
+			null,
+			$config,
 		);
 	}
 
@@ -384,13 +390,57 @@ class AdminControllerTest extends TestCase
 	}
 
 	/**
-	 * Test settings returns template
+	 * Test settings index redirects to default section
 	 */
-	public function testSettingsReturnsTemplate(): void
+	public function testSettingsRedirectsToDefaultSection(): void
 	{
 		$response = $this->controller->settings();
 
+		$this->assertInstanceOf(\OCP\AppFramework\Http\RedirectResponse::class, $response);
+	}
+
+	public function testSettingsSectionAccessReturnsTemplate(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(fn (string $key, string $default = '') => $default);
+		$response = $this->controller->settingsSection('access');
 		$this->assertInstanceOf(TemplateResponse::class, $response);
+	}
+
+	public function testSettingsSectionUnknownReturnsNotFound(): void
+	{
+		$response = $this->controller->settingsSection('not-a-real-section');
+		$this->assertInstanceOf(\OCP\AppFramework\Http\NotFoundResponse::class, $response);
+	}
+
+	public function testUpdateAdminSettingsRetentionScopeDoesNotWriteCompliance(): void
+	{
+		$store = [
+			'auto_compliance_check' => '1',
+			'retention_period' => '2',
+		];
+		$this->request->method('getParams')->willReturn([
+			'settings_section' => 'retention',
+			'retentionPeriod' => 5,
+			'autoComplianceCheck' => false,
+		]);
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$store): bool {
+				unset($lazy, $sensitive);
+				$store[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$store): string {
+				$key = (string)$key;
+				return $store[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('5', $store['retention_period']);
+		$this->assertSame('1', $store['auto_compliance_check']);
 	}
 
 	public function testNotificationsReturnsTemplate(): void
@@ -398,6 +448,14 @@ class AdminControllerTest extends TestCase
 		$this->appConfig->method('getAppValueString')
 			->willReturnCallback(fn (string $key, string $default = '') => $default);
 		$response = $this->controller->notifications();
+		$this->assertInstanceOf(TemplateResponse::class, $response);
+	}
+
+	public function testOvertimeSettingsReturnsTemplate(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(fn (string $key, string $default = '') => $default);
+		$response = $this->controller->overtimeSettings();
 		$this->assertInstanceOf(TemplateResponse::class, $response);
 	}
 
@@ -575,6 +633,9 @@ class AdminControllerTest extends TestCase
 		$this->assertTrue($matrix['vacation']['request_created']);
 		$this->assertTrue($matrix['vacation']['manager_approved']);
 		$this->assertArrayNotHasKey('invalid_type', $matrix);
+		// Partial HR payload must not wipe overtime bank / traffic light.
+		$this->assertArrayNotHasKey(Constants::CONFIG_OVERTIME_BANK_ENABLED, $captured);
+		$this->assertArrayNotHasKey(Constants::CONFIG_OVERTIME_TRAFFIC_LIGHT_ENABLED, $captured);
 	}
 
 	public function testUpdateNotificationSettingsPersistsPremiumPolicyAndFlag(): void
@@ -613,6 +674,61 @@ class AdminControllerTest extends TestCase
 		$this->assertSame('hours_only', $data['settings']['premiumPolicy']['currency_mode']);
 	}
 
+	public function testUpdateNotificationSettingsPersistsDatevPremiumLohnartMap(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'enabled' => false,
+			'recipients' => [],
+			'matrix' => [],
+			'datevLohnartPremiumMap' => [
+				'sunday' => '3100',
+				'night' => '',
+				'saturday' => '3200',
+			],
+		]);
+
+		$captured = [];
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$captured): bool {
+				unset($lazy, $sensitive);
+				$captured[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$captured): string {
+				$key = (string)$key;
+				return $captured[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame(
+			'{"sunday":"3100","saturday":"3200"}',
+			$captured[Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP]
+		);
+		$this->assertSame(
+			['sunday' => '3100', 'saturday' => '3200'],
+			$data['settings']['datevLohnartPremiumMap']
+		);
+	}
+
+	public function testUpdateNotificationSettingsRejectsInvalidDatevPremiumCode(): void
+	{
+		$this->request->method('getParams')->willReturn([
+			'enabled' => false,
+			'recipients' => [],
+			'matrix' => [],
+			'datevLohnartPremiumMap' => ['sunday' => '0abc'],
+		]);
+
+		$response = $this->controller->updateNotificationSettings();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('DATEV_PREMIUM_MAP_CODE', $data['code']);
+	}
+
 	public function testUpdateNotificationSettingsRejectsInvalidPremiumRate(): void
 	{
 		$policy = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::atStarterPreset();
@@ -632,6 +748,190 @@ class AdminControllerTest extends TestCase
 		$this->assertSame('PREMIUM_RATE_INVALID', $data['code']);
 	}
 
+	public function testUpdateNotificationSettingsBareEnabledAloneDoesNotWipeHr(): void
+	{
+		$captured = [];
+		$this->request->method('getParams')->willReturn([
+			'enabled' => '0',
+		]);
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$captured): bool {
+				unset($lazy, $sensitive);
+				$captured[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$captured): string {
+				$key = (string)$key;
+				return $captured[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertArrayNotHasKey(Constants::CONFIG_HR_NOTIFICATIONS_ENABLED, $captured);
+		$this->assertArrayNotHasKey(Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, $captured);
+	}
+
+	public function testUpdateNotificationSettingsBankEnableWithoutMaxPreservesMax(): void
+	{
+		$store = [
+			Constants::CONFIG_OVERTIME_BANK_MAX_HOURS => '42.5',
+			Constants::CONFIG_OVERTIME_BANK_YELLOW_PERCENT => '70',
+			Constants::CONFIG_OVERTIME_BANK_RED_PERCENT => '90',
+			Constants::CONFIG_OVERTIME_BANK_ENABLED => '0',
+		];
+		$this->request->method('getParams')->willReturn([
+			'overtimeBankEnabled' => true,
+			'policyScope' => 'overtime',
+		]);
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$store): bool {
+				unset($lazy, $sensitive);
+				$store[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$store): string {
+				$key = (string)$key;
+				return $store[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('1', $store[Constants::CONFIG_OVERTIME_BANK_ENABLED]);
+		$this->assertSame('42.5', $store[Constants::CONFIG_OVERTIME_BANK_MAX_HOURS]);
+		$this->assertSame('70', $store[Constants::CONFIG_OVERTIME_BANK_YELLOW_PERCENT]);
+		$this->assertSame('90', $store[Constants::CONFIG_OVERTIME_BANK_RED_PERCENT]);
+		$this->assertSame('Overtime settings updated successfully', $data['message']);
+	}
+
+	public function testUpdateNotificationSettingsInvalidPremiumDoesNotCommitBank(): void
+	{
+		$store = [
+			Constants::CONFIG_OVERTIME_BANK_ENABLED => '0',
+			Constants::CONFIG_OVERTIME_BANK_MAX_HOURS => '100',
+		];
+		$policy = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::atStarterPreset();
+		$policy['categories'][0]['rate'] = 9.5;
+		$this->request->method('getParams')->willReturn([
+			'overtimeBankEnabled' => true,
+			'overtimeBankMaxHours' => '55',
+			'premiumPolicy' => $policy,
+		]);
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$store): bool {
+				unset($lazy, $sensitive);
+				$store[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$store): string {
+				$key = (string)$key;
+				return $store[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertSame('0', $store[Constants::CONFIG_OVERTIME_BANK_ENABLED]);
+		$this->assertSame('100', $store[Constants::CONFIG_OVERTIME_BANK_MAX_HOURS]);
+	}
+
+	public function testUpdateNotificationSettingsInvalidTrafficDoesNotCommitHr(): void
+	{
+		$store = [
+			Constants::CONFIG_HR_NOTIFICATIONS_ENABLED => '0',
+			Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS => 'old@example.com',
+			Constants::CONFIG_OVERTIME_TRAFFIC_LIGHT_ENABLED => '0',
+		];
+		$this->request->method('getParams')->willReturn([
+			'hrNotificationsEnabled' => true,
+			'recipients' => 'new@example.com',
+			'matrix' => [],
+			'overtimeTrafficLightEnabled' => true,
+			'overtimeRecipients' => 'not-an-email',
+			'overtimeYellowOver' => '5',
+			'overtimeRedOver' => '15',
+			'overtimeYellowUnder' => '5',
+			'overtimeRedUnder' => '15',
+		]);
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$store): bool {
+				unset($lazy, $sensitive);
+				$store[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$store): string {
+				$key = (string)$key;
+				return $store[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertSame('0', $store[Constants::CONFIG_HR_NOTIFICATIONS_ENABLED]);
+		$this->assertSame('old@example.com', $store[Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS]);
+		$this->assertSame('0', $store[Constants::CONFIG_OVERTIME_TRAFFIC_LIGHT_ENABLED]);
+	}
+
+	public function testUpdateNotificationSettingsRecipientsOnlyDoesNotClearHrEnabled(): void
+	{
+		$store = [
+			Constants::CONFIG_HR_NOTIFICATIONS_ENABLED => '1',
+			Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS => 'keep@example.com',
+		];
+		$this->request->method('getParams')->willReturn([
+			'recipients' => 'updated@example.com',
+		]);
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$store): bool {
+				unset($lazy, $sensitive);
+				$store[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$store): string {
+				$key = (string)$key;
+				return $store[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('1', $store[Constants::CONFIG_HR_NOTIFICATIONS_ENABLED]);
+		$this->assertSame('updated@example.com', $store[Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS]);
+	}
+
+	public function testUpdateNotificationSettingsAcceptsHrNotificationsEnabledAlias(): void
+	{
+		$captured = [];
+		$this->request->method('getParams')->willReturn([
+			'hrNotificationsEnabled' => true,
+			'recipients' => 'hr@example.com',
+			'matrix' => [],
+			'policyScope' => 'notifications',
+		]);
+		$this->appConfig->method('setAppValueString')
+			->willReturnCallback(function ($key, $value, $lazy = false, $sensitive = false) use (&$captured): bool {
+				unset($lazy, $sensitive);
+				$captured[(string)$key] = (string)$value;
+				return true;
+			});
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(function ($key, $default = '') use (&$captured): string {
+				$key = (string)$key;
+				return $captured[$key] ?? (string)$default;
+			});
+
+		$response = $this->controller->updateNotificationSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('1', $captured[Constants::CONFIG_HR_NOTIFICATIONS_ENABLED]);
+		$this->assertSame('hr@example.com', $captured[Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS]);
+		$this->assertSame('Notification settings updated successfully', $data['message']);
+	}
+
 	public function testGetNotificationSettingsIncludesPremiumDefaultsWhenUnset(): void
 	{
 		$this->appConfig->method('getAppValueString')
@@ -645,6 +945,7 @@ class AdminControllerTest extends TestCase
 		$this->assertFalse($data['settings']['premiumSurchargesEnabled']);
 		$this->assertSame('max_single_rate', $data['settings']['premiumPolicy']['stacking']);
 		$this->assertNotEmpty($data['settings']['premiumPolicy']['categories']);
+		$this->assertSame([], $data['settings']['datevLohnartPremiumMap']);
 	}
 
 	public function testGetAdminSettingsReturnsConfiguredAppAdminsAndAvailableList(): void
@@ -756,6 +1057,46 @@ class AdminControllerTest extends TestCase
 		$this->assertSame('0', $store['missing_clock_in_reminders_enabled']);
 		$this->assertSame('9.5', $store['max_daily_hours']);
 		$this->assertSame('BY', $store['german_state']);
+	}
+
+	public function testUpdateAdminSettingsPersistsDatevOrgCredentials(): void
+	{
+		$store = &$this->wireAppConfigStore([
+			'country' => 'DE',
+			'german_state' => 'NW',
+		]);
+		$this->request->method('getParams')->willReturn([
+			'datevBeraternummer' => '1234567',
+			'datevMandantennummer' => '12345',
+			'datevLohnartNormal' => '1000',
+			'datevLohnartUeberstunden' => '2000',
+		]);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('1234567', $store[Constants::CONFIG_DATEV_BERATERNUMMER]);
+		$this->assertSame('12345', $store[Constants::CONFIG_DATEV_MANDANTENNUMMER]);
+		$this->assertSame('1000', $store[Constants::CONFIG_DATEV_LOHNART_NORMAL]);
+		$this->assertSame('1234567', $data['settings']['datevBeraternummer']);
+	}
+
+	public function testUpdateAdminSettingsRejectsPartialDatevCredentials(): void
+	{
+		$this->wireAppConfigStore([
+			'country' => 'DE',
+			'german_state' => 'NW',
+		]);
+		$this->request->method('getParams')->willReturn([
+			'datevBeraternummer' => '1234567',
+			'datevMandantennummer' => '',
+		]);
+
+		$response = $this->controller->updateAdminSettings();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('DATEV_CREDENTIALS_INCOMPLETE', $data['code']);
 	}
 
 	public function testUpdateAdminSettingsDisablesProjectCheckIntegration(): void
@@ -1487,8 +1828,7 @@ class AdminControllerTest extends TestCase
 			->willReturn($currentDefault);
 
 		$this->workingTimeModelMapper->expects($this->once())
-			->method('update')
-			->with($currentDefault);
+			->method('clearDefaults');
 
 		$this->workingTimeModelMapper->expects($this->once())
 			->method('insert')
@@ -1615,13 +1955,41 @@ class AdminControllerTest extends TestCase
 		$this->assertSame('SCHEDULE_INVALID_BREAK', $data['code']);
 	}
 
+	public function testCreateWorkingTimeModelRejectsListEncodedBreakRules(): void
+	{
+		$this->request->method('getParams')
+			->willReturn([
+				'name' => 'List break rules',
+				'type' => 'full_time',
+				'weeklyHours' => 40.0,
+				'dailyHours' => 8.0,
+				'breakRules' => ['not', 'a', 'map'],
+			]);
+
+		$this->workingTimeModelMapper->expects($this->never())->method('insert');
+
+		$response = $this->controller->createWorkingTimeModel();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('SCHEDULE_INVALID', $data['code']);
+	}
+
 	/**
 	 * Test deleteWorkingTimeModel deletes model
 	 */
 	public function testDeleteWorkingTimeModelDeletesModel(): void
 	{
 		$modelId = 1;
-		$model = $this->createMock(\OCA\ArbeitszeitCheck\Db\WorkingTimeModel::class);
+		$model = new WorkingTimeModel();
+		$model->setId($modelId);
+		$model->setName('Part-Time');
+		$model->setType(WorkingTimeModel::TYPE_PART_TIME);
+		$model->setWeeklyHours(20.0);
+		$model->setDailyHours(4.0);
+		$model->setWorkDaysPerWeek(5.0);
+		$model->setIsDefault(false);
+		$model->setUpdatedAt(new \DateTime());
 
 		$this->workingTimeModelMapper->method('find')
 			->with($modelId)
@@ -1630,6 +1998,11 @@ class AdminControllerTest extends TestCase
 		$this->userWorkingTimeModelMapper->method('findByWorkingTimeModel')
 			->with($modelId, false)
 			->willReturn([]);
+
+		$this->layeredVacationDefaultsService->expects($this->once())
+			->method('deleteDefaultsForWorkingTimeModel')
+			->with($modelId)
+			->willReturn(0);
 
 		$this->workingTimeModelMapper->expects($this->once())
 			->method('delete')
@@ -1648,7 +2021,13 @@ class AdminControllerTest extends TestCase
 	public function testDeleteWorkingTimeModelReturnsErrorWhenUsersAssigned(): void
 	{
 		$modelId = 1;
-		$model = $this->createMock(\OCA\ArbeitszeitCheck\Db\WorkingTimeModel::class);
+		$model = new WorkingTimeModel();
+		$model->setId($modelId);
+		$model->setName('Part-Time');
+		$model->setType(WorkingTimeModel::TYPE_PART_TIME);
+		$model->setWeeklyHours(20.0);
+		$model->setDailyHours(4.0);
+		$model->setIsDefault(false);
 
 		$userModel = $this->createMock(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModel::class);
 
@@ -1660,12 +2039,39 @@ class AdminControllerTest extends TestCase
 			->with($modelId, false)
 			->willReturn([$userModel]);
 
+		$this->workingTimeModelMapper->expects($this->never())->method('delete');
+
 		$response = $this->controller->deleteWorkingTimeModel($modelId);
 
 		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
+		$this->assertSame('MODEL_IN_USE', $data['code']);
 		$this->assertStringContainsString('Cannot delete working time model', $data['error']);
+	}
+
+	public function testDeleteWorkingTimeModelRefusesDefaultModel(): void
+	{
+		$modelId = 1;
+		$model = new WorkingTimeModel();
+		$model->setId($modelId);
+		$model->setName('Default');
+		$model->setType(WorkingTimeModel::TYPE_FULL_TIME);
+		$model->setWeeklyHours(40.0);
+		$model->setDailyHours(8.0);
+		$model->setIsDefault(true);
+
+		$this->workingTimeModelMapper->method('find')
+			->with($modelId)
+			->willReturn($model);
+
+		$this->workingTimeModelMapper->expects($this->never())->method('delete');
+
+		$response = $this->controller->deleteWorkingTimeModel($modelId);
+		$this->assertEquals(Http::STATUS_CONFLICT, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('DEFAULT_MODEL', $data['code']);
 	}
 
 	/**

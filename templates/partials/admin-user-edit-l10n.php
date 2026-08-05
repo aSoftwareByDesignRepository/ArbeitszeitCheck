@@ -56,7 +56,13 @@ window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.l10n.endDate = <?php echo json_encode($l->t('End Date (Optional)'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.noModel = <?php echo json_encode($l->t('No Model Assigned'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.selectWorkScheduleHelp = <?php echo json_encode($l->t('Select a work schedule to assign to this employee'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    window.ArbeitszeitCheck.l10n.vacationDaysHelp = <?php echo json_encode($l->t('Number of vacation days per year (organisation default often 20–25 days in DACH)'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.vacationDaysHelp = <?php
+		$unit = new \OCA\ArbeitszeitCheck\Service\VacationUnitService(\OCP\Server::get(\OCP\IConfig::class));
+		$help = $unit->isHoursMode()
+			? $l->t('Enter vacation days as usual (e.g. 25). We convert to hours automatically using %s hours per day — no calculator needed.', [(string)$unit->getHoursPerDay()])
+			: $l->t('Number of vacation days per year (organisation default often 20–25 days in DACH)');
+		echo json_encode($help, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+	?>;
     window.ArbeitszeitCheck.l10n.vacationCarryoverLabel = <?php echo json_encode($l->t('Vacation carryover (opening balance)'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.vacationCarryoverHelp = <?php echo json_encode($l->t('Opening balance of carryover days for the selected calendar year (Resturlaub), e.g. from HR or migration. This is not the annual vacation entitlement from the working time model. The last day carryover can be used is set globally in Admin settings.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.vacationCarryoverYearLabel = <?php echo json_encode($l->t('Year for carryover balance'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

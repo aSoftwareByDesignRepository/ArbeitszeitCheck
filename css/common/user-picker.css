@@ -48,7 +48,7 @@
 	background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background));
 	border: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
 	border-radius: var(--border-radius, 6px);
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+	box-shadow: var(--azc-shadow-md);
 }
 
 #app-content-wrapper .user-picker--in-modal .user-picker__list {

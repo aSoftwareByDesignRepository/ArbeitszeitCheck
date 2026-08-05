@@ -5,7 +5,7 @@ import { login, credsFromEnv } from './helpers/auth.js';
 const routes = [
 	{ path: '/apps/arbeitszeitcheck/dashboard', name: 'dashboard' },
 	{ path: '/apps/arbeitszeitcheck/time-entries', name: 'time-entries' },
-	{ path: '/apps/arbeitszeitcheck/settings', name: 'settings' },
+	{ path: '/apps/arbeitszeitcheck/settings/breaks', name: 'settings' },
 	{ path: '/apps/arbeitszeitcheck/compliance', name: 'compliance' },
 ];
 

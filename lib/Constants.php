@@ -286,6 +286,65 @@ final class Constants
 	public const VAC_YEAR_MISSING_START = 'VAC_YEAR_MISSING_START';
 
 	/**
+	 * Org vacation unit (BANSS Phase C / US-102). Default days = legacy behaviour.
+	 * Hours = pure-hours entitlement & consumption after migration wizard (Q3=A).
+	 */
+	public const CONFIG_VACATION_UNIT = 'vacation_unit';
+
+	public const VACATION_UNIT_DAYS = 'days';
+
+	public const VACATION_UNIT_HOURS = 'hours';
+
+	public const DEFAULT_VACATION_UNIT = self::VACATION_UNIT_DAYS;
+
+	/**
+	 * Hours-per-day factor used by the days↔hours migration wizard and as the
+	 * last-resort debit fallback when an employee has no working-time model.
+	 * Day-to-day bookings prefer weekday schedule nets / model daily hours.
+	 * BANSS-style 38.5 h weeks: admins should set 7.7 (= 38.5/5) at migration.
+	 */
+	public const CONFIG_VACATION_HOURS_PER_DAY = 'vacation_hours_per_day';
+
+	public const DEFAULT_VACATION_HOURS_PER_DAY = 8.0;
+
+	/** BANSS Appendix A average: 38.5 h / 5 workdays — recommended migration factor. */
+	public const BANSS_RECOMMENDED_VACATION_HOURS_PER_DAY = 7.7;
+
+	/**
+	 * Factor used at the last days↔hours unit flip. Reverse migration must use
+	 * this (not a later preset-only hours_per_day tweak) so Bestandskunden
+	 * amounts round-trip without silent drift.
+	 */
+	public const CONFIG_VACATION_LAST_CONVERT_FACTOR = 'vacation_last_convert_factor';
+
+	/** Admin confirmed Employee apps are unit-aware (Q8 hard-gate). */
+	public const CONFIG_VACATION_UNIT_CLIENT_CONFIRMED = 'vacation_unit_client_confirmed';
+
+	/** ISO timestamp of last successful unit migration wizard run. */
+	public const CONFIG_VACATION_UNIT_MIGRATED_AT = 'vacation_unit_migrated_at';
+
+	/**
+	 * In-flight days↔hours migration (JSON). IConfig is not in the DB
+	 * transaction — if the process dies after commit but before the unit flip,
+	 * {@see VacationUnitMigrationService::completePendingMigrationIfNeeded()}
+	 * finishes the flip from the committed audit row (never leaves hour
+	 * magnitudes labeled as days).
+	 */
+	public const CONFIG_VACATION_UNIT_MIGRATE_PENDING = 'vacation_unit_migrate_pending';
+
+	public const VAC_UNIT_MIG_REQUIRED = 'VAC_UNIT_MIG_REQUIRED';
+
+	public const VAC_UNIT_CLIENT_GATE = 'VAC_UNIT_CLIENT_GATE';
+
+	/** Concurrent vacation mutation while days↔hours migration holds the lock / pending flag. */
+	public const VAC_UNIT_MIGRATE_IN_PROGRESS = 'VAC_UNIT_MIGRATE_IN_PROGRESS';
+
+	public const ABSENCE_HOURS_CLIENT_REQUIRED = 'ABSENCE_HOURS_CLIENT_REQUIRED';
+
+	/** Calendar→anniversary while users lack employment_start without ack. */
+	public const VAC_YEAR_MISSING_HIRE_ACK_REQUIRED = 'VAC_YEAR_MISSING_HIRE_ACK_REQUIRED';
+
+	/**
 	 * Full-month proration (Zwölftelung) per German BUrlG §5: each calendar
 	 * month touched by the employment relationship contributes 1/12 of the
 	 * annual entitlement; the prorated result is rounded up to a full day when
@@ -357,6 +416,26 @@ final class Constants
 	/** Monotonic policy revision for audit / snapshots. */
 	public const CONFIG_PREMIUM_POLICY_VERSION = 'premium_policy_version';
 
+	/**
+	 * JSON map of premium category id → DATEV Lohnart code (1–4 digits).
+	 * Empty / missing ids are skipped — additive export only; never alters normal-hour lines.
+	 */
+	public const CONFIG_DATEV_LOHNART_PREMIUM_MAP = 'datev_lohnart_premium_map';
+
+	/** DATEV Beraternummer (consultant number), up to 7 digits. */
+	public const CONFIG_DATEV_BERATERNUMMER = 'datev_beraternummer';
+
+	/** DATEV Mandantennummer (client number), up to 5 digits. */
+	public const CONFIG_DATEV_MANDANTENNUMMER = 'datev_mandantennummer';
+
+	/** DATEV Lohnart for normal working hours (default 1000). */
+	public const CONFIG_DATEV_LOHNART_NORMAL = 'datev_lohnart_normal';
+
+	/** DATEV Lohnart reserved for future Saldo/Auszahlung mapping (default 2000). */
+	public const CONFIG_DATEV_LOHNART_UEBERSTUNDEN = 'datev_lohnart_ueberstunden';
+
+	/** Per-user DATEV Personalnummer (IConfig user value key). */
+	public const USER_DATEV_PERSONALNUMMER = 'datev_personalnummer';
 
 	/** App config: maximum banked overtime hours (default 100). Hours above may be paid out. */
 	public const CONFIG_OVERTIME_BANK_MAX_HOURS = 'overtime_bank_max_hours';

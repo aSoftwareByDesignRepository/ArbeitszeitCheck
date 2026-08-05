@@ -47,19 +47,19 @@
 }
 
 #app-content.azc-app .azc-stat-tile--primary {
-	border-left-color: var(--color-primary-element, #0082c9);
+	border-left-color: var(--color-primary-element);
 }
 
 #app-content.azc-app .azc-stat-tile--success {
-	border-left-color: var(--color-success-text, var(--color-success, #2d7a3e));
+	border-left-color: var(--color-success-text, var(--color-success));
 }
 
 #app-content.azc-app .azc-stat-tile--warning {
-	border-left-color: var(--color-warning-text, var(--color-warning, #a67c00));
+	border-left-color: var(--color-warning-text, var(--color-warning));
 }
 
 #app-content.azc-app .azc-stat-tile--danger {
-	border-left-color: var(--color-error-text, var(--color-error, #e9322d));
+	border-left-color: var(--color-error-text, var(--color-error));
 }
 
 #app-content.azc-app .azc-stat-tile--neutral {
@@ -117,7 +117,7 @@
 
 #app-content.azc-app button.azc-stat-tile:focus-visible,
 #app-content.azc-app a.azc-stat-tile:focus-visible {
-	outline: 3px solid color-mix(in srgb, var(--color-primary-element, #0082c9) 55%, transparent);
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 55%, transparent);
 	outline-offset: 2px;
 }
 

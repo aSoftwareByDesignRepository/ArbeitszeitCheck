@@ -118,8 +118,8 @@ class OrgVacationDefault extends Entity
 		if ($this->vacationMode === Constants::VACATION_MODE_TARIFF_RULE_BASED && $this->tariffRuleSetId === null) {
 			$errors['tariffRuleSetId'] = 'Tariff rule set is required for tariff mode';
 		}
-		if ($this->manualDays !== null && ($this->manualDays < 0.0 || $this->manualDays > 366.0)) {
-			$errors['manualDays'] = 'Manual days must be between 0 and 366';
+		if ($this->manualDays !== null && ($this->manualDays < 0.0 || $this->manualDays > 4000.0)) {
+			$errors['manualDays'] = 'Manual amount must be between 0 and 4000';
 		}
 		if ($this->effectiveFrom === null) {
 			$errors['effectiveFrom'] = 'Effective from date is required';

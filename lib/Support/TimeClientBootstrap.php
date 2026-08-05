@@ -24,9 +24,14 @@ use OCP\Util;
  * always defined before `js/common/time.js` executes.
  *
  * Configuration is emitted through Nextcloud {@see IInitialState} and applied
- * by `js/common/time-init.js` (init script). This works on full app pages,
- * widget-only dashboard loads, and any future route that skips
- * `templates/common/navigation.php`.
+ * by `js/common/time-init.js` (regular app script) and again by `time.js` as a
+ * safety net. This works on full app pages, widget-only dashboard loads, and
+ * any future route that skips `templates/common/navigation.php`.
+ *
+ * CRITICAL: never register `time-init` via {@see Util::addInitScript()}. That
+ * API auto-injects `l10n/<lang>.js` into the early init queue. On the Vue
+ * home dashboard (`/apps/dashboard`) those translation files execute before
+ * `window.OC` exists → `ReferenceError: OC is not defined` and a dead shell.
  */
 final class TimeClientBootstrap {
 	private const INITIAL_STATE_KEY = 'time';
@@ -42,7 +47,7 @@ final class TimeClientBootstrap {
 	}
 
 	/**
-	 * Register InitialState + init script (idempotent per request).
+	 * Register InitialState + time-init as a normal app script (idempotent per request).
 	 */
 	public function registerConfig(): void {
 		if (self::$configRegistered) {
@@ -65,7 +70,8 @@ final class TimeClientBootstrap {
 			'serverNow' => $this->timeZoneService->nowInStorage()->format(\DateTimeInterface::ATOM),
 		]);
 
-		Util::addInitScript(Application::APP_ID, 'common/time-init');
+		// Regular script (NOT addInitScript): translations load only after OC exists.
+		Util::addScript(Application::APP_ID, 'common/time-init');
 	}
 
 	/**

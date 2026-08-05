@@ -214,6 +214,78 @@
 	color: var(--color-text-maxcontrast);
 }
 
+.dz-capture-notice--warning {
+	border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
+	border-left-color: var(--color-warning);
+	background: color-mix(in srgb, var(--color-warning) 10%, var(--color-main-background));
+}
+
+.dz-capture-notice--neutral {
+	border-color: color-mix(in srgb, var(--color-border-maxcontrast, var(--color-border)) 70%, transparent);
+	border-left-color: var(--color-border-maxcontrast, var(--color-border));
+	background: color-mix(in srgb, var(--color-background-dark, var(--color-main-background)) 55%, var(--color-main-background));
+}
+
+.dz-capture-notice[hidden] {
+	display: none !important;
+}
+
+/* ── Optional ProjectCheck project before clock-in ───────────── */
+.dz-project-picker {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2, 0.5rem);
+	margin: 0 0 var(--space-4, 1rem);
+	padding: 0;
+}
+
+.dz-project-picker[hidden] {
+	display: none !important;
+}
+
+.dz-project-picker__label {
+	margin: 0;
+	font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+	font-weight: var(--arbeitszeitcheck-font-weight-semibold, 600);
+	color: var(--color-main-text);
+}
+
+.dz-project-picker__select {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 44px;
+	padding: 0.5rem 0.75rem;
+	border: 1px solid var(--color-border-maxcontrast, var(--color-border));
+	border-radius: var(--radius-base, 6px);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: var(--arbeitszeitcheck-font-size-md, 1rem);
+	line-height: 1.4;
+}
+
+.dz-project-picker__select:focus {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+}
+
+.dz-project-picker__select:disabled {
+	opacity: 0.65;
+	cursor: not-allowed;
+}
+
+.dz-project-picker__help {
+	margin: 0;
+	font-size: var(--arbeitszeitcheck-font-size-sm, 0.875rem);
+	line-height: 1.45;
+	color: var(--color-text-maxcontrast);
+}
+
+@media (max-width: 480px) {
+	.dz-project-picker__select {
+		font-size: 1rem; /* iOS zoom prevention */
+	}
+}
+
 /* ── Error display ────────────────────────────────────────────── */
 .dz-error-panel {
 	display: flex;
@@ -278,9 +350,9 @@
 .dz-workspace .azc-btn--primary,
 .dz-workspace .btn-primary,
 .dz-workspace .btn--primary {
-	background-color: var(--color-primary-element, #0082c9) !important;
-	border-color: var(--color-primary-element, #0082c9) !important;
-	color: var(--color-primary-element-text, #fff) !important;
+	background-color: var(--color-primary-element) !important;
+	border-color: var(--color-primary-element) !important;
+	color: var(--color-primary-element-text) !important;
 }
 
 .dz-workspace .azc-btn--primary:hover:not(:disabled),
@@ -288,7 +360,7 @@
 .dz-workspace .btn--primary:hover:not(:disabled) {
 	background-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
 	border-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
-	color: var(--color-primary-element-text, #fff) !important;
+	color: var(--color-primary-element-text) !important;
 }
 
 .dz-workspace .azc-btn--secondary,
@@ -310,17 +382,17 @@
 .dz-workspace .azc-btn--danger,
 .dz-workspace .btn-danger,
 .dz-workspace .btn--danger {
-	background-color: var(--color-error, #cc4646) !important;
-	border-color: var(--color-error, #cc4646) !important;
-	color: var(--color-primary-text, #fff) !important;
+	background-color: var(--azc-danger-fill) !important;
+	border-color: var(--azc-danger-fill) !important;
+	color: var(--azc-danger-on-fill) !important;
 }
 
 .dz-workspace .azc-btn--danger:hover:not(:disabled),
 .dz-workspace .btn-danger:hover:not(:disabled),
 .dz-workspace .btn--danger:hover:not(:disabled) {
-	background-color: var(--color-error-hover, var(--color-error)) !important;
-	border-color: var(--color-error-hover, var(--color-error)) !important;
-	color: var(--color-primary-text, #fff) !important;
+	background-color: color-mix(in srgb, var(--azc-danger-fill) 85%, var(--color-main-text)) !important;
+	border-color: color-mix(in srgb, var(--azc-danger-fill) 85%, var(--color-main-text)) !important;
+	color: var(--azc-danger-on-fill) !important;
 }
 
 .dz-button-row .azc-btn,

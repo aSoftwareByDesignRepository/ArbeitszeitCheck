@@ -30,6 +30,7 @@ final class DashboardWidgetAssetBootstrap {
 
 		Util::addScript(Application::APP_ID, 'common/catalog');
 		Util::addScript(Application::APP_ID, 'common/api');
+		Util::addScript(Application::APP_ID, 'common/desklet-actions');
 		Util::addScript(Application::APP_ID, 'dashboard-widgets');
 		Util::addStyle(Application::APP_ID, 'dashboard-widgets');
 	}

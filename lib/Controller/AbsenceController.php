@@ -21,6 +21,8 @@ use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\MonthClosureService;
 use OCA\ArbeitszeitCheck\Service\VacationEntitlementEngine;
 use OCA\ArbeitszeitCheck\Service\VacationProrationService;
+use OCA\ArbeitszeitCheck\Service\VacationUnitService;
+use OCA\ArbeitszeitCheck\Service\VacationHoursDebitService;
 use OCA\ArbeitszeitCheck\Service\LocaleFormatService;
 use OCA\ArbeitszeitCheck\Service\NavigationFlagsService;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
@@ -99,6 +101,11 @@ class AbsenceController extends Controller
 		$this->localeFormat = $localeFormat;
 		$this->navigationFlags = $navigationFlags;
 		$this->setCspService($cspService);
+	}
+
+	private function vacationUnitService(): VacationUnitService
+	{
+		return new VacationUnitService($this->config);
 	}
 
 	private function registerAbsenceFormAssets(): void
@@ -195,6 +202,32 @@ class AbsenceController extends Controller
 			$this->registerAbsenceFormAssets();
 		}
 
+		$stats = is_array($pageData['stats'] ?? null) ? $pageData['stats'] : [];
+		$unitService = $this->vacationUnitService();
+		if (!isset($stats['vacation_unit'])) {
+			$stats['vacation_unit'] = $unitService->getUnit();
+		}
+		if (!isset($stats['vacation_hours_per_day'])) {
+			$stats['vacation_hours_per_day'] = $unitService->getHoursPerDay();
+		}
+		if (!isset($stats['vacation_weekday_nets'])) {
+			try {
+				/** @var VacationHoursDebitService $debit */
+				$debit = \OCP\Server::get(VacationHoursDebitService::class);
+				$snap = $debit->snapshotForUser($userId);
+				$stats['vacation_debit_basis'] = $snap['basis'];
+				$stats['vacation_weekday_nets'] = $snap['weekday_nets'];
+				$stats['vacation_one_day_hours'] = $snap['one_day_hours'];
+				$stats['vacation_average_daily'] = $snap['average_daily'];
+			} catch (\Throwable) {
+				$stats['vacation_debit_basis'] = 'org_hours_per_day';
+				$stats['vacation_weekday_nets'] = null;
+				$stats['vacation_one_day_hours'] = $unitService->getHoursPerDay();
+				$stats['vacation_average_daily'] = $unitService->getHoursPerDay();
+			}
+		}
+		$pageData['stats'] = $stats;
+
 		return \array_merge($this->buildAbsencesShellParams($mode, $navFlags), $pageData);
 	}
 
@@ -232,21 +265,19 @@ class AbsenceController extends Controller
 	}
 
 	/**
-	 * Get a safe user-facing error message from an exception.
-	 *
-	 * Defense in depth:
-	 *  1. Only accept exceptions whose concrete class is exactly \Exception, or
-	 *     {@see BusinessRuleException} (typed business rules with a pre-translated message).
-	 *     The absence service layer primarily uses bare \Exception for localized business-rule
-	 *     errors. Subclasses such as \PDOException, \TypeError, \Doctrine\DBAL\Exception, etc.,
-	 *     are treated as technical and get a generic message.
-	 *  2. Even for plain \Exception, the message content is inspected for common leakage
-	 *     indicators (SQL state codes, namespaced class names, file system paths, stack
-	 *     trace hints). Anything matching collapses to the generic message.
-	 *
-	 * The full original exception (including class, message and trace) is logged separately
-	 * by the calling controller via OCP\Log\logger(...).
+	 * Machine-readable reason for clients (mobile fail-closed, forms).
 	 */
+	private function getErrorCode(\Throwable $e): ?string
+	{
+		if ($e instanceof BusinessRuleException) {
+			$code = $e->getReasonCode();
+			return ($code !== null && $code !== '') ? $code : null;
+		}
+		if (preg_match('/\[([A-Z0-9_]{3,64})\]\s*$/', (string)$e->getMessage(), $m) === 1) {
+			return $m[1];
+		}
+		return null;
+	}
 	private function getSafeErrorMessage(\Throwable $e): string
 	{
 		$generic = $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
@@ -255,6 +286,8 @@ class AbsenceController extends Controller
 			return $generic;
 		}
 		$msg = trim((string)$e->getMessage());
+		// Strip trailing machine codes like [ABSENCE_HOURS_CLIENT_REQUIRED] from user text.
+		$msg = trim((string)preg_replace('/\s*\[[A-Z0-9_]{3,64}\]\s*$/', '', $msg));
 		if ($msg === '' || strlen($msg) > 500) {
 			return $generic;
 		}
@@ -971,8 +1004,18 @@ class AbsenceController extends Controller
 				'start_date' => is_array($params['start_date'] ?? '') ? (string)reset($params['start_date']) : (string)($params['start_date'] ?? ''),
 				'end_date' => is_array($params['end_date'] ?? '') ? (string)reset($params['end_date']) : (string)($params['end_date'] ?? ''),
 				'reason' => is_array($params['reason'] ?? null) ? (string)reset($params['reason']) : ($params['reason'] ?? null),
-				'substitute_user_id' => is_array($params['substitute_user_id'] ?? null) ? (string)reset($params['substitute_user_id']) : ($params['substitute_user_id'] ?? null)
+				'substitute_user_id' => is_array($params['substitute_user_id'] ?? null) ? (string)reset($params['substitute_user_id']) : ($params['substitute_user_id'] ?? null),
 			];
+			if (array_key_exists('duration_hours', $params)) {
+				$dh = $params['duration_hours'];
+				$data['duration_hours'] = is_array($dh) ? (string)reset($dh) : (string)$dh;
+			}
+			if (!empty($params['require_duration_hours'])) {
+				$data['require_duration_hours'] = true;
+			}
+			if (!empty($params['server_may_fill_hours'])) {
+				$data['server_may_fill_hours'] = true;
+			}
 
 			if (empty($data['type']) || empty($data['start_date']) || empty($data['end_date'])) {
 				$msg = $this->l10n->t('Please choose a type and fill in start and end date.');
@@ -1038,10 +1081,16 @@ class AbsenceController extends Controller
 				$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.absence.create') . '?error=' . rawurlencode($msg);
 				return new RedirectResponse($url, Http::STATUS_SEE_OTHER);
 			}
-			return new JSONResponse([
+			$payload = [
 				'success' => false,
 				'error' => $msg,
-			], Http::STATUS_BAD_REQUEST);
+			];
+			$code = $this->getErrorCode($e);
+			if ($code !== null) {
+				$payload['code'] = $code;
+				$payload['error_code'] = $code;
+			}
+			return new JSONResponse($payload, Http::STATUS_BAD_REQUEST);
 		}
 	}
 
@@ -1369,6 +1418,49 @@ class AbsenceController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
+	public function estimateVacationHours(?string $start_date = null, ?string $end_date = null): JSONResponse
+	{
+		try {
+			$userId = $this->getUserId();
+			$startRaw = $start_date !== null && $start_date !== ''
+				? $start_date
+				: (string)$this->request->getParam('start_date', '');
+			$endRaw = $end_date !== null && $end_date !== ''
+				? $end_date
+				: (string)$this->request->getParam('end_date', '');
+			try {
+				$start = $this->parseFormDate($startRaw);
+				$end = $this->parseFormDate($endRaw !== '' ? $endRaw : $startRaw);
+			} catch (\InvalidArgumentException) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Start date and end date are required'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			/** @var VacationHoursDebitService $debit */
+			$debit = \OCP\Server::get(VacationHoursDebitService::class);
+			$est = $debit->estimateForUserRange($userId, $start, $end);
+			return new JSONResponse([
+				'success' => true,
+				'hours' => $est['hours'],
+				'basis' => $est['basis'],
+				'average_daily' => $est['average_daily'],
+				'one_day_hours' => $est['one_day_hours'],
+				'weekday_nets' => $est['weekday_nets'],
+			]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'Error in AbsenceController::estimateVacationHours: ' . $e->getMessage(),
+				['exception' => $e]
+			);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	/**
 	 * Get absence statistics endpoint
 	 *
@@ -1401,6 +1493,8 @@ class AbsenceController extends Controller
 					'annual_remaining_after_approved' => (float)($stats['annual_remaining_after_approved'] ?? 0),
 					'carryover_max_cap' => $stats['carryover_max_cap'] ?? null,
 					'remaining' => $stats['remaining'],
+					'vacation_unit' => $stats['vacation_unit'] ?? 'days',
+					'vacation_hours_per_day' => $stats['vacation_hours_per_day'] ?? null,
 				],
 				'sickLeaveStats' => [
 					'days' => $stats['sick_days']

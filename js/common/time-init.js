@@ -1,10 +1,10 @@
 /**
  * Applies timezone bootstrap from Nextcloud InitialState.
  *
- * Loaded via Util::addInitScript() by {@see TimeClientBootstrap} so
- * `window.ArbeitszeitCheck.tz` and `serverNow` exist before `common/time.js`
- * on every page — including the global dashboard (widgets) that do not
- * render `templates/common/navigation.php`.
+ * Loaded via Util::addScript() by {@see TimeClientBootstrap} (never
+ * addInitScript — that would preload l10n/*.js before window.OC on the Vue
+ * home dashboard). Ensures `window.ArbeitszeitCheck.tz` / `serverNow` exist
+ * before `common/time.js` on app pages and desklets that skip navigation.php.
  *
  * @copyright Copyright (c) 2026 Alexander Mäule <info@software-by-design.de>
  * @license AGPL-3.0-or-later

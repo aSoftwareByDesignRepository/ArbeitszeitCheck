@@ -24,6 +24,7 @@ use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\Lock\ILockingProvider;
 use OCA\ArbeitszeitCheck\Constants;
+use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Util\AbsenceNotificationPayload;
 use OCP\IUserManager;
 
@@ -51,6 +52,12 @@ class AbsenceService
 	private ?MonthClosureService $monthClosureService;
 	private TimeZoneService $timeZoneService;
 	private VacationYearWindowResolver $vacationYearWindowResolver;
+	private ?VacationUnitService $vacationUnitService;
+	private ?VacationHoursDebitService $vacationHoursDebitService;
+	/** Shared migrate-idle lock held for the duration of a vacation mutation (anti-TOCTOU). */
+	private ?string $heldVacationUnitMigrateSharedLock = null;
+	/** Shared year-mode lock — blocks exclusive mode flip mid-mutation (lock order: year → migrate). */
+	private ?string $heldVacationYearModeSharedLock = null;
 
 	public function __construct(
 		AbsenceMapper $absenceMapper,
@@ -72,6 +79,8 @@ class AbsenceService
 		?MonthClosureService $monthClosureService = null,
 		?TimeZoneService $timeZoneService = null,
 		?VacationYearWindowResolver $vacationYearWindowResolver = null,
+		?VacationUnitService $vacationUnitService = null,
+		?VacationHoursDebitService $vacationHoursDebitService = null,
 	) {
 		$this->absenceMapper = $absenceMapper;
 		$this->auditLogMapper = $auditLogMapper;
@@ -94,6 +103,8 @@ class AbsenceService
 		$this->timeZoneService = $timeZoneService ?? \OCP\Server::get(TimeZoneService::class);
 		$this->vacationYearWindowResolver = $vacationYearWindowResolver
 			?? new VacationYearWindowResolver($config, new UserEmploymentSettingsService($userSettingsMapper, $auditLogMapper));
+		$this->vacationUnitService = $vacationUnitService;
+		$this->vacationHoursDebitService = $vacationHoursDebitService;
 	}
 
 	/** Calendar "today" at 00:00 in organisation storage TZ. */
@@ -121,6 +132,9 @@ class AbsenceService
 	{
 		$lockKey = $this->acquireUserMutationLock($userId);
 		try {
+			if (($data['type'] ?? '') === Absence::TYPE_VACATION) {
+				$this->assertVacationUnitMigrationIdle();
+			}
 			$this->validateAbsenceData($data, $userId, null, null, []);
 
 			$absence = new Absence();
@@ -153,6 +167,9 @@ class AbsenceService
 			// Calculate working days (Mon–Fri minus Feiertage inkl. Firmenfeiertage)
 			$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
 			$absence->setDays($workingDays);
+			if ($data['type'] === Absence::TYPE_VACATION) {
+				$this->applyVacationDurationHours($absence, $data, $workingDays);
+			}
 
 			// All DB writes are atomic: if the audit log insertion fails, the absence
 			// insertion is rolled back and the user sees an error rather than having an
@@ -257,6 +274,9 @@ class AbsenceService
 
 		$lockKey = $this->acquireUserMutationLock($targetUserId);
 		try {
+			if (($data['type'] ?? '') === Absence::TYPE_VACATION) {
+				$this->assertVacationUnitMigrationIdle();
+			}
 			$this->validateAbsenceData($data, $targetUserId, null, null, ['skip_substitute_rules' => true]);
 
 			$absence = new Absence();
@@ -278,6 +298,9 @@ class AbsenceService
 
 			$workingDays = $this->computeWorkingDaysForUser($targetUserId, $absence->getStartDate(), $absence->getEndDate());
 			$absence->setDays($workingDays);
+			if ($absence->getType() === Absence::TYPE_VACATION) {
+				$this->applyVacationDurationHours($absence, $data, $workingDays);
+			}
 
 			$savedAbsence = null;
 			$this->db->beginTransaction();
@@ -292,7 +315,14 @@ class AbsenceService
 					$ed = $absence->getEndDate();
 					if ($sd && $ed) {
 						$this->lockVacationApprovalScope($targetUserId, $sd, $ed);
-						$this->assertVacationAllocationForRequest($targetUserId, $sd, $ed, null, $absence->getCreatedAt());
+						$this->assertVacationAllocationForRequest(
+							$targetUserId,
+							$sd,
+							$ed,
+							null,
+							$absence->getCreatedAt(),
+							$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null
+						);
 					}
 				}
 
@@ -375,6 +405,10 @@ class AbsenceService
 			if (!$absence) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
+			if ($absence->getType() === Absence::TYPE_VACATION
+				|| (($data['type'] ?? null) === Absence::TYPE_VACATION)) {
+				$this->assertVacationUnitMigrationIdle();
+			}
 		// Check if absence can be updated (pending, substitute_pending, or substitute_declined can be modified by owner)
 		if (!in_array($absence->getStatus(), [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_SUBSTITUTE_DECLINED], true)) {
 			throw new \Exception($this->l10n->t('Only pending absences can be updated'));
@@ -415,11 +449,19 @@ class AbsenceService
 		if (array_key_exists('substitute_user_id', $data)) {
 			$validateData['substitute_user_id'] = $data['substitute_user_id'];
 		}
+		if (array_key_exists('duration_hours', $data)) {
+			$validateData['duration_hours'] = $data['duration_hours'];
+		} elseif ($absence->getDurationHours() !== null) {
+			$validateData['duration_hours'] = $absence->getDurationHours();
+		}
 		$this->validateAbsenceData($validateData, $userId, $id, $absence->getCreatedAt(), []);
 
 		// Recalculate working days (Mon–Fri minus Feiertage inkl. Firmenfeiertage)
 		$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
 		$absence->setDays($workingDays);
+		if ($absence->getType() === Absence::TYPE_VACATION) {
+			$this->applyVacationDurationHours($absence, $validateData, $workingDays);
+		}
 		$absence->setUpdatedAt(new \DateTime());
 
 		// Normalize substitute workflow whenever substitute assignment changes.
@@ -567,6 +609,9 @@ class AbsenceService
 			if ($absence->getUserId() !== $userId) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
+			if ($absence->getType() === Absence::TYPE_VACATION) {
+				$this->assertVacationUnitMigrationIdle();
+			}
 			$status = $absence->getStatus();
 			if (!in_array($status, [Absence::STATUS_PENDING, Absence::STATUS_SUBSTITUTE_PENDING, Absence::STATUS_APPROVED], true)) {
 				throw new \Exception($this->l10n->t('This absence cannot be cancelled.'));
@@ -651,6 +696,9 @@ class AbsenceService
 			if ($absence->getUserId() !== $userId) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
+			if ($absence->getType() === Absence::TYPE_VACATION) {
+				$this->assertVacationUnitMigrationIdle();
+			}
 			if ($absence->getStatus() !== Absence::STATUS_APPROVED) {
 				throw new \Exception($this->l10n->t('Only approved absences can be shortened.'));
 			}
@@ -690,7 +738,20 @@ class AbsenceService
 
 			$absence->setEndDate($newEnd);
 			$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $newEnd);
+			if ($absence->getType() === Absence::TYPE_VACATION && $workingDays < 0.01) {
+				throw new \Exception($this->l10n->t(
+					'Vacation must include at least one working day. The selected period contains only weekends or public holidays.'
+				));
+			}
 			$absence->setDays($workingDays);
+			if ($absence->getType() === Absence::TYPE_VACATION && $this->vacationUnitService?->isHoursMode()) {
+				$this->recomputeVacationHoursAfterShorten(
+					$absence,
+					$originalEndDate,
+					$oldData,
+					$workingDays
+				);
+			}
 			$absence->setUpdatedAt($this->nowInStorage());
 
 			$this->db->beginTransaction();
@@ -733,6 +794,9 @@ class AbsenceService
 		$lockKey = $this->acquireUserMutationLock($lockAbsence->getUserId());
 		$updatedAbsence = null;
 		try {
+			if ($lockAbsence->getType() === Absence::TYPE_VACATION) {
+				$this->assertVacationUnitMigrationIdle();
+			}
 			$this->db->beginTransaction();
 			$absence = $this->absenceMapper->find($id);
 			if (!$absence) {
@@ -763,7 +827,14 @@ class AbsenceService
 				$sd = $absence->getStartDate();
 				$ed = $absence->getEndDate();
 				if ($sd && $ed) {
-					$this->assertVacationAllocationForRequest($absence->getUserId(), $sd, $ed, null, $absence->getCreatedAt());
+					$this->assertVacationAllocationForRequest(
+						$absence->getUserId(),
+						$sd,
+						$ed,
+						null,
+						$absence->getCreatedAt(),
+						$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null
+					);
 				}
 			}
 
@@ -820,6 +891,9 @@ class AbsenceService
 		$lockKey = $this->acquireUserMutationLock($lockAbsence->getUserId());
 		$updatedAbsence = null;
 		try {
+			if ($lockAbsence->getType() === Absence::TYPE_VACATION) {
+				$this->assertVacationUnitMigrationIdle();
+			}
 			$this->db->beginTransaction();
 			$absence = $this->absenceMapper->find($id);
 			if (!$absence) {
@@ -879,11 +953,12 @@ class AbsenceService
 	/**
 	 * Serialize vacation approval calculations for one employee by locking overlapping vacation rows.
 	 *
-	 * For MySQL/PostgreSQL/Oracle we issue a `SELECT ... FOR UPDATE` over approved+pending vacation
-	 * rows in the affected year range. This prevents concurrent manager approvals from validating
-	 * entitlement against stale snapshots and over-approving.
+	 * Scope follows vacation-year windows (calendar years or hire-anniversary windows)
+	 * that overlap the request — never blind calendar Jan–Dec when anniversary mode is on,
+	 * so two approvals in the same hire year cannot slip past non-overlapping year locks.
 	 *
-	 * SQLite does not support row-level `FOR UPDATE`; transaction semantics remain best-effort there.
+	 * For MySQL/PostgreSQL/Oracle we issue a `SELECT ... FOR UPDATE` over approved+pending vacation
+	 * rows in that scope. SQLite does not support row-level `FOR UPDATE`; transaction semantics remain best-effort there.
 	 */
 	private function lockVacationApprovalScope(string $userId, \DateTimeInterface $startDate, \DateTimeInterface $endDate): void
 	{
@@ -892,10 +967,28 @@ class AbsenceService
 			return;
 		}
 
-		$startYear = (int)$startDate->format('Y');
-		$endYear = (int)$endDate->format('Y');
-		$scopeStart = new \DateTime(sprintf('%04d-01-01', min($startYear, $endYear)));
-		$scopeEnd = new \DateTime(sprintf('%04d-12-31', max($startYear, $endYear)));
+		$windows = $this->vacationYearWindowResolver->windowsOverlappingRange($userId, $startDate, $endDate);
+		if ($windows === []) {
+			$startYear = (int)$startDate->format('Y');
+			$endYear = (int)$endDate->format('Y');
+			$scopeStart = new \DateTime(sprintf('%04d-01-01', min($startYear, $endYear)));
+			$scopeEnd = new \DateTime(sprintf('%04d-12-31', max($startYear, $endYear)));
+		} else {
+			$scopeStart = null;
+			$scopeEnd = null;
+			foreach ($windows as $window) {
+				$wStart = \DateTime::createFromImmutable($window->startInclusive);
+				$wEnd = \DateTime::createFromImmutable($window->lastInclusiveDay());
+				if ($scopeStart === null || $wStart < $scopeStart) {
+					$scopeStart = $wStart;
+				}
+				if ($scopeEnd === null || $wEnd > $scopeEnd) {
+					$scopeEnd = $wEnd;
+				}
+			}
+			/** @var \DateTime $scopeStart */
+			/** @var \DateTime $scopeEnd */
+		}
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('id')
@@ -933,6 +1026,9 @@ class AbsenceService
 			$absence = $this->absenceMapper->find($id);
 			if (!$absence) {
 				throw new \Exception($this->l10n->t('Absence not found'));
+			}
+			if ($absence->getType() === Absence::TYPE_VACATION) {
+				$this->assertVacationUnitMigrationIdle();
 			}
 		if ($absence->getStatus() !== Absence::STATUS_SUBSTITUTE_PENDING) {
 			throw new \Exception($this->l10n->t('Absence is not awaiting substitute approval'));
@@ -1048,6 +1144,9 @@ class AbsenceService
 			if (!$absence) {
 				throw new \Exception($this->l10n->t('Absence not found'));
 			}
+			if ($absence->getType() === Absence::TYPE_VACATION) {
+				$this->assertVacationUnitMigrationIdle();
+			}
 		if ($absence->getStatus() !== Absence::STATUS_SUBSTITUTE_PENDING) {
 			throw new \Exception($this->l10n->t('Absence is not awaiting substitute approval'));
 		}
@@ -1118,6 +1217,112 @@ class AbsenceService
 		return $key;
 	}
 
+	/**
+	 * Block vacation mutations while days↔hours migration holds its exclusive lock
+	 * or has a pending crash-window flag, and while vacation year mode is flipping.
+	 * Lock order (must match AdminController year flip): year shared → migrate shared.
+	 * Holds both until {@see releaseUserMutationLock()} (anti-TOCTOU).
+	 */
+	private function assertVacationUnitMigrationIdle(): void
+	{
+		$this->acquireVacationYearModeSharedLock();
+		if ($this->heldVacationUnitMigrateSharedLock !== null) {
+			return;
+		}
+		$pending = trim((string)$this->config->getAppValue(
+			'arbeitszeitcheck',
+			Constants::CONFIG_VACATION_UNIT_MIGRATE_PENDING,
+			''
+		));
+		if ($pending !== '') {
+			$this->releaseVacationYearModeSharedLock();
+			throw new BusinessRuleException(
+				$this->l10n->t('Vacation unit migration is in progress. Please try again in a moment.'),
+				Constants::VAC_UNIT_MIGRATE_IN_PROGRESS
+			);
+		}
+		$key = DbLockKeys::vacationUnitMigration();
+		try {
+			$this->lockingProvider->acquireLock($key, ILockingProvider::LOCK_SHARED, 'Vacation unit migrate idle shared');
+		} catch (\OCP\Lock\LockedException $e) {
+			$this->releaseVacationYearModeSharedLock();
+			throw new BusinessRuleException(
+				$this->l10n->t('Vacation unit migration is in progress. Please try again in a moment.'),
+				Constants::VAC_UNIT_MIGRATE_IN_PROGRESS
+			);
+		}
+		// Re-check pending after acquire (flag may flip while waiting for the lock).
+		$pendingAfter = trim((string)$this->config->getAppValue(
+			'arbeitszeitcheck',
+			Constants::CONFIG_VACATION_UNIT_MIGRATE_PENDING,
+			''
+		));
+		if ($pendingAfter !== '') {
+			try {
+				$this->lockingProvider->releaseLock($key, ILockingProvider::LOCK_SHARED);
+			} catch (\Throwable) {
+				// best-effort
+			}
+			$this->releaseVacationYearModeSharedLock();
+			throw new BusinessRuleException(
+				$this->l10n->t('Vacation unit migration is in progress. Please try again in a moment.'),
+				Constants::VAC_UNIT_MIGRATE_IN_PROGRESS
+			);
+		}
+		$this->heldVacationUnitMigrateSharedLock = $key;
+	}
+
+	private function acquireVacationYearModeSharedLock(): void
+	{
+		if ($this->heldVacationYearModeSharedLock !== null) {
+			return;
+		}
+		$key = DbLockKeys::vacationYearMode();
+		try {
+			$this->lockingProvider->acquireLock($key, ILockingProvider::LOCK_SHARED, 'Vacation year mode idle shared');
+		} catch (\OCP\Lock\LockedException $e) {
+			throw new BusinessRuleException(
+				$this->l10n->t('Vacation year mode is being updated. Please try again.'),
+				'VAC_YEAR_MODE_BUSY'
+			);
+		}
+		$this->heldVacationYearModeSharedLock = $key;
+	}
+
+	private function releaseVacationYearModeSharedLock(): void
+	{
+		$key = $this->heldVacationYearModeSharedLock;
+		if ($key === null) {
+			return;
+		}
+		$this->heldVacationYearModeSharedLock = null;
+		try {
+			$this->lockingProvider->releaseLock($key, ILockingProvider::LOCK_SHARED);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->warning(
+				'Failed to release vacation year mode shared lock: ' . $e->getMessage(),
+				['exception' => $e]
+			);
+		}
+	}
+
+	private function releaseVacationUnitMigrationSharedLock(): void
+	{
+		$key = $this->heldVacationUnitMigrateSharedLock;
+		if ($key === null) {
+			return;
+		}
+		$this->heldVacationUnitMigrateSharedLock = null;
+		try {
+			$this->lockingProvider->releaseLock($key, ILockingProvider::LOCK_SHARED);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->warning(
+				'Failed to release vacation unit migrate shared lock: ' . $e->getMessage(),
+				['exception' => $e]
+			);
+		}
+	}
+
 	private function releaseUserMutationLock(string $key): void
 	{
 		try {
@@ -1125,6 +1330,9 @@ class AbsenceService
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->warning('Failed to release absence workflow lock: ' . $e->getMessage(), ['exception' => $e]);
 		}
+		// Reverse of acquire order: migrate shared, then year shared.
+		$this->releaseVacationUnitMigrationSharedLock();
+		$this->releaseVacationYearModeSharedLock();
 	}
 
 	/**
@@ -1214,7 +1422,7 @@ class AbsenceService
 			$carryoverRem = (float)($alloc['carryover_remaining_after_approved'] ?? 0);
 			$annualRem = (float)($alloc['annual_remaining_after_approved'] ?? 0);
 			$carryoverBlocked = $carryoverRem > 0.0001
-				&& !$this->vacationAllocationService->isCarryoverUsableForNewRequests($allocYear, $today);
+				&& !$this->vacationAllocationService->isCarryoverUsableForNewRequests($allocYear, $today, $userId);
 			$cap = $this->vacationAllocationService->getMaxCarryoverOpeningCap();
 
 			return [
@@ -1234,6 +1442,8 @@ class AbsenceService
 				'used' => round($usedDays, 2),
 				'remaining' => round($remaining, 2),
 				'sick_days' => $sickDays,
+				'vacation_unit' => (string)($alloc['vacation_unit'] ?? ($this->vacationUnitService?->getUnit() ?? Constants::VACATION_UNIT_DAYS)),
+				'vacation_hours_per_day' => $this->vacationUnitService?->getHoursPerDay() ?? Constants::DEFAULT_VACATION_HOURS_PER_DAY,
 				'vacation_year_mode' => (string)($alloc['vacation_year_mode'] ?? Constants::VACATION_YEAR_MODE_CALENDAR),
 				'vacation_year_label' => (string)($alloc['vacation_year_label'] ?? (string)$allocYear),
 				'vacation_year_start' => $alloc['vacation_year_start'] ?? null,
@@ -1259,6 +1469,8 @@ class AbsenceService
 				'used' => 0.0,
 				'remaining' => (float)Constants::DEFAULT_VACATION_DAYS_PER_YEAR,
 				'sick_days' => $sickDays,
+				'vacation_unit' => $this->vacationUnitService?->getUnit() ?? Constants::VACATION_UNIT_DAYS,
+				'vacation_hours_per_day' => $this->vacationUnitService?->getHoursPerDay() ?? Constants::DEFAULT_VACATION_HOURS_PER_DAY,
 				'vacation_year_mode' => Constants::VACATION_YEAR_MODE_CALENDAR,
 				'vacation_year_label' => (string)$year,
 				'vacation_year_start' => null,
@@ -1273,9 +1485,19 @@ class AbsenceService
 	 *
 	 * @throws \Exception
 	 */
-	private function assertVacationAllocationForRequest(string $userId, \DateTime $startDate, \DateTime $endDate, ?int $excludeAbsenceId = null, ?\DateTimeInterface $prospectiveRequestCreatedAt = null): void
-	{
+	private function assertVacationAllocationForRequest(
+		string $userId,
+		\DateTime $startDate,
+		\DateTime $endDate,
+		?int $excludeAbsenceId = null,
+		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
+		?float $prospectiveDurationHours = null,
+	): void {
 		$today = \DateTime::createFromImmutable($this->todayDateInStorage());
+		$hoursMode = $this->vacationUnitService?->isHoursMode() === true;
+		$unitLabel = $hoursMode
+			? $this->l10n->t('hours')
+			: $this->l10n->t('days');
 
 		if ($this->vacationYearWindowResolver->isAnniversaryMode()) {
 			$windows = $this->vacationYearWindowResolver->windowsOverlappingRange($userId, $startDate, $endDate);
@@ -1291,7 +1513,8 @@ class AbsenceService
 					$endDate,
 					$today,
 					$prospectiveRequestCreatedAt,
-					false
+					false,
+					$prospectiveDurationHours
 				);
 				if ($alloc['allocation_valid']) {
 					continue;
@@ -1304,12 +1527,13 @@ class AbsenceService
 					null,
 					$today,
 					null,
-					false
+					false,
+					null
 				);
 				$remaining = (float)$before['total_remaining_for_new_requests'];
 				throw new \Exception($this->l10n->t(
-					'Not enough vacation days left for %1$s (remaining: %2$s).',
-					[$window->label, (string)round($remaining, 1)]
+					'Not enough vacation %1$s left for %2$s (remaining: %3$s).',
+					[$unitLabel, $window->label, (string)round($remaining, 1)]
 				));
 			}
 			return;
@@ -1324,7 +1548,7 @@ class AbsenceService
 			);
 		}
 		foreach ($requestedWorkingDaysPerYear as $y => $requestedDays) {
-			if ($requestedDays <= 0) {
+			if ($requestedDays <= 0 && !($hoursMode && $prospectiveDurationHours !== null && $prospectiveDurationHours > 0)) {
 				continue;
 			}
 			$year = (int)$y;
@@ -1336,7 +1560,8 @@ class AbsenceService
 				$endDate,
 				$today,
 				$prospectiveRequestCreatedAt,
-				false
+				false,
+				$prospectiveDurationHours
 			);
 			if ($alloc['allocation_valid']) {
 				continue;
@@ -1349,18 +1574,194 @@ class AbsenceService
 				null,
 				$today,
 				null,
-				false
+				false,
+				null
 			);
+			$requestedDisplay = $hoursMode && $prospectiveDurationHours !== null
+				? (float)$prospectiveDurationHours
+				: (float)$requestedDays;
 			$msg = $this->l10n->t(
-				'Not enough vacation days remaining. You have %1$s days left for %2$s but requested %3$s days.',
+				'Not enough vacation remaining. You have %1$s %2$s left for %3$s but requested %4$s %2$s.',
 				[
 					(string)round($before['total_remaining_for_new_requests'], 1),
+					$unitLabel,
 					(string)$year,
-					(string)round($requestedDays, 1),
+					(string)round($requestedDisplay, 1),
 				]
 			);
 			throw new \Exception($msg);
 		}
+	}
+
+	/**
+	 * After shortening an approved hours-mode vacation, re-debit from schedule Sollzeit
+	 * for the new range. Preserves partial-day ratio vs the original full-range estimate
+	 * (never blind working-day ratio — BANSS Mon–Fri 38.5 → Mon–Thu is 34.0, not 30.8).
+	 *
+	 * @param array<string, mixed> $oldData Prior absence summary (days, etc.)
+	 */
+	private function recomputeVacationHoursAfterShorten(
+		Absence $absence,
+		\DateTimeInterface $originalEndDate,
+		array $oldData,
+		float $workingDays,
+	): void {
+		if ($this->vacationUnitService === null || !$this->vacationUnitService->isHoursMode()) {
+			return;
+		}
+		$userId = (string)$absence->getUserId();
+		$oldHoursStored = $absence->getDurationHours();
+		$oldDays = (float)($oldData['days'] ?? 0);
+		$startForDebit = $absence->getStartDate();
+		$newEnd = $absence->getEndDate();
+		if ($startForDebit === null || $newEnd === null) {
+			throw new \Exception($this->l10n->t('Start date or end date is missing for this absence.'));
+		}
+		$newDebit = $this->resolveRangeDebitHours($userId, $startForDebit, $newEnd, $workingDays);
+		$oldDebit = $this->resolveRangeDebitHours($userId, $startForDebit, $originalEndDate, max(0.0, $oldDays));
+		$oldEstHours = (float)($oldDebit['hours'] ?? 0.0);
+		$newEstHours = (float)($newDebit['hours'] ?? 0.0);
+		if ($oldHoursStored !== null && is_finite((float)$oldHoursStored) && (float)$oldHoursStored > 0 && $oldEstHours > 0.0001) {
+			$ratio = min(1.0, (float)$oldHoursStored / $oldEstHours);
+			$absence->setDurationHours(
+				$this->vacationUnitService->roundAmount($newEstHours * $ratio)
+			);
+			return;
+		}
+		// Missing stored hours or zero old estimate: authoritative schedule refill.
+		$this->applyVacationDurationHours(
+			$absence,
+			['server_may_fill_hours' => true],
+			$workingDays
+		);
+	}
+
+	/**
+	 * Resolve and attach duration_hours for vacation when org unit is hours.
+	 *
+	 * @param array<string, mixed> $data
+	 */
+	private function applyVacationDurationHours(Absence $absence, array $data, float $workingDays): void
+	{
+		if ($this->vacationUnitService === null || !$this->vacationUnitService->isHoursMode()) {
+			$absence->setDurationHours(null);
+			return;
+		}
+		$start = $absence->getStartDate();
+		$end = $absence->getEndDate();
+		if ($start === null || $end === null) {
+			throw new BusinessRuleException($this->l10n->t('Type, start date, and end date are required'));
+		}
+		$hours = $this->resolveVacationDurationHours(
+			$data,
+			$workingDays,
+			(string)$absence->getUserId(),
+			$start,
+			$end
+		);
+		$absence->setDurationHours($hours);
+	}
+
+	/**
+	 * Hours debit for a range: prefer work-model Sollzeit, never blind org 8 h × days
+	 * when a weekday schedule or model daily hours exist.
+	 *
+	 * @return array{hours: float, one_day: float, average_daily: float, basis: string}
+	 */
+	private function resolveRangeDebitHours(
+		string $userId,
+		\DateTimeInterface $start,
+		\DateTimeInterface $end,
+		float $workingDays,
+	): array {
+		if ($this->vacationHoursDebitService !== null) {
+			$est = $this->vacationHoursDebitService->estimateForUserRange($userId, $start, $end);
+			return [
+				'hours' => (float)$est['hours'],
+				'one_day' => (float)$est['one_day_hours'],
+				'average_daily' => (float)$est['average_daily'],
+				'basis' => (string)$est['basis'],
+			];
+		}
+		// Unit-test / legacy DI without debit service: org conversion factor only.
+		$one = $this->vacationUnitService?->getHoursPerDay() ?? Constants::DEFAULT_VACATION_HOURS_PER_DAY;
+		$max = $this->vacationUnitService !== null
+			? $this->vacationUnitService->daysToHours($workingDays)
+			: round($workingDays * $one, 2);
+		return [
+			'hours' => $max,
+			'one_day' => $one,
+			'average_daily' => $one,
+			'basis' => 'org_hours_per_day',
+		];
+	}
+
+	/**
+	 * @param array<string, mixed> $data
+	 */
+	private function resolveVacationDurationHours(
+		array $data,
+		float $workingDays,
+		string $userId = '',
+		?\DateTimeInterface $start = null,
+		?\DateTimeInterface $end = null,
+	): float {
+		if ($this->vacationUnitService === null) {
+			return 0.0;
+		}
+		$debit = null;
+		if ($userId !== '' && $start !== null && $end !== null) {
+			$debit = $this->resolveRangeDebitHours($userId, $start, $end, $workingDays);
+		}
+		$oneDay = (float)($debit['one_day'] ?? $this->vacationUnitService->getHoursPerDay());
+		$maxForRange = (float)($debit['hours'] ?? $this->vacationUnitService->daysToHours($workingDays));
+
+		if (isset($data['duration_hours']) && $data['duration_hours'] !== '' && $data['duration_hours'] !== null) {
+			$hours = (float)str_replace(',', '.', (string)$data['duration_hours']);
+			if (!is_finite($hours) || $hours <= 0) {
+				throw new BusinessRuleException($this->l10n->t('Vacation hours must be greater than zero.'));
+			}
+			if ($hours > 24.0 * 31.0) {
+				throw new BusinessRuleException($this->l10n->t('Vacation hours exceed the maximum for one request.'));
+			}
+			$hours = $this->vacationUnitService->roundAmount($hours);
+
+			// Hard ceiling: never debit more than schedule-/holiday-aware max for the
+			// selected range. Client Mon–Fri nets (or flat N×hours) often ignore
+			// public holidays; heuristic “looks like flat days” missed BANSS-style
+			// weekday matrices (e.g. 30 h posted vs 21.5 h max after a mid-week holiday).
+			if ($hours > $maxForRange + 0.011) {
+				return $maxForRange;
+			}
+
+			// Expand one-day posts only for legacy/date-only clients that did not
+			// mark the total as authoritative. Unit-aware clients send
+			// require_duration_hours=1 and must not have their preview rewritten.
+			$authoritative = !empty($data['require_duration_hours']);
+			if (!$authoritative && $workingDays >= 1.99 && abs($hours - $oneDay) < 0.011) {
+				return $maxForRange;
+			}
+			return $hours;
+		}
+		if ($workingDays < 0.01) {
+			throw new BusinessRuleException(
+				$this->l10n->t('Vacation must include at least one working day. The selected period contains only weekends or public holidays.')
+			);
+		}
+		// Explicit opt-in for server fill (web backup when field empty) — schedule-aware.
+		if (!empty($data['server_may_fill_hours'])) {
+			return $maxForRange;
+		}
+		if (!empty($data['require_duration_hours'])) {
+			throw new BusinessRuleException(
+				$this->l10n->t('This organisation books vacation in hours. Please enter the number of hours.'),
+				Constants::ABSENCE_HOURS_CLIENT_REQUIRED
+			);
+		}
+		throw new BusinessRuleException(
+			$this->l10n->t('This organisation books vacation in hours. Please update the Employee app and enter the number of hours.'),
+			Constants::ABSENCE_HOURS_CLIENT_REQUIRED
+		);
 	}
 
 	/**
@@ -1446,10 +1847,35 @@ class AbsenceService
 				);
 			}
 			$totalRequested = array_sum($requestedWorkingDaysPerYear);
-			if ($totalRequested < 0.01) {
+			$hoursMode = $this->vacationUnitService?->isHoursMode() === true;
+			$durationHours = null;
+			if ($hoursMode) {
+				// Must use the same schedule-/holiday-aware debit as applyVacationDurationHours
+				// so entitlement checks match the amount that will be stored.
+				$durationHours = $this->resolveVacationDurationHours(
+					$data,
+					(float)$totalRequested,
+					$userId,
+					$startDate,
+					$endDate
+				);
+			}
+			// Hours mode: schedule-/holiday-aware debit is authoritative (Sat work models
+			// can have net hours while Mon–Fri “working days” is 0).
+			if ($hoursMode && ($durationHours === null || $durationHours < 0.01)) {
 				throw new \Exception($this->l10n->t('Vacation must include at least one working day. The selected period contains only weekends or public holidays.'));
 			}
-			$this->assertVacationAllocationForRequest($userId, $startDate, $endDate, $excludeAbsenceId, $vacationRequestCreatedAt);
+			if (!$hoursMode && $totalRequested < 0.01) {
+				throw new \Exception($this->l10n->t('Vacation must include at least one working day. The selected period contains only weekends or public holidays.'));
+			}
+			$this->assertVacationAllocationForRequest(
+				$userId,
+				$startDate,
+				$endDate,
+				$excludeAbsenceId,
+				$vacationRequestCreatedAt,
+				$durationHours
+			);
 		}
 
 		$skipSubstituteRules = !empty($options['skip_substitute_rules']);
@@ -1558,10 +1984,19 @@ class AbsenceService
 		$this->assertAbsenceMutable($absence);
 
 		if ($absence->getType() === Absence::TYPE_VACATION) {
+			$this->assertVacationUnitMigrationIdle();
 			$sd = $absence->getStartDate();
 			$ed = $absence->getEndDate();
 			if ($sd && $ed) {
-				$this->assertVacationAllocationForRequest($absence->getUserId(), $sd, $ed, null, $absence->getCreatedAt());
+				$this->lockVacationApprovalScope($absence->getUserId(), $sd, $ed);
+				$this->assertVacationAllocationForRequest(
+					$absence->getUserId(),
+					$sd,
+					$ed,
+					null,
+					$absence->getCreatedAt(),
+					$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null
+				);
 			}
 		}
 

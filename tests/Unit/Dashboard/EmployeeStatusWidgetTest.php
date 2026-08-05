@@ -154,6 +154,62 @@ class EmployeeStatusWidgetTest extends TestCase {
 		$this->assertStringContainsString('Session: 01:00', $subtitle);
 	}
 
+	public function testVacationSubtitleUsesHoursWhenUnitIsHours(): void {
+		$this->dataService->method('getEmployeeWidgetData')->willReturn([
+			'status' => 'clocked_out',
+			'workingTodayHours' => 0.0,
+			'currentSessionDuration' => 0,
+			'vacationYear' => 2026,
+			'vacationRemaining' => 196.0,
+			'vacationEntitlement' => 200.0,
+			'vacationUnit' => 'hours',
+			'vacationCarryoverUsable' => 16.0,
+			'cumulativeBalance' => 0.0,
+			'impliedDailyHours' => 8.0,
+			'weekHoursWorked' => 0.0,
+			'weekHoursRequired' => 40.0,
+			'breakRequired' => false,
+			'remainingBreakMinutes' => 0,
+		]);
+
+		$widget = $this->createWidget();
+		$items = $widget->getItemsV2('u1');
+		$subtitles = array_map(static fn ($item) => $item->getSubtitle(), $items->getItems());
+		$joined = implode("\n", $subtitles);
+
+		$this->assertStringContainsString('hours remaining', $joined);
+		$this->assertStringNotContainsString('days remaining', $joined);
+		$this->assertStringContainsString(' h · Carryover:', $joined);
+		$this->assertStringNotContainsString(' d · Carryover:', $joined);
+	}
+
+	public function testVacationSubtitleUsesDaysByDefault(): void {
+		$this->dataService->method('getEmployeeWidgetData')->willReturn([
+			'status' => 'clocked_out',
+			'workingTodayHours' => 0.0,
+			'currentSessionDuration' => 0,
+			'vacationYear' => 2026,
+			'vacationRemaining' => 12.0,
+			'vacationEntitlement' => 28.0,
+			'vacationUnit' => 'days',
+			'vacationCarryoverUsable' => 2.0,
+			'cumulativeBalance' => 0.0,
+			'impliedDailyHours' => 8.0,
+			'weekHoursWorked' => 0.0,
+			'weekHoursRequired' => 40.0,
+			'breakRequired' => false,
+			'remainingBreakMinutes' => 0,
+		]);
+
+		$widget = $this->createWidget();
+		$items = $widget->getItemsV2('u1');
+		$subtitles = array_map(static fn ($item) => $item->getSubtitle(), $items->getItems());
+		$joined = implode("\n", $subtitles);
+
+		$this->assertStringContainsString('days remaining', $joined);
+		$this->assertStringContainsString(' d · Carryover:', $joined);
+	}
+
 	public function testReloadIntervalIsPositive(): void {
 		$widget = $this->createWidget();
 		$this->assertGreaterThan(0, $widget->getReloadInterval());

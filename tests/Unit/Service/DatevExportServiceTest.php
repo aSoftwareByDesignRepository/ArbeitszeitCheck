@@ -480,11 +480,12 @@ class DatevExportServiceTest extends TestCase
 	 */
 	public function testGetConfigurationStatusConfigured(): void
 	{
-		$this->config->expects($this->exactly(2))
+		$this->config->expects($this->exactly(3))
 			->method('getAppValue')
 			->willReturnMap([
 				['arbeitszeitcheck', 'datev_beraternummer', '', '1234567'],
-				['arbeitszeitcheck', 'datev_mandantennummer', '', '12345']
+				['arbeitszeitcheck', 'datev_mandantennummer', '', '12345'],
+				['arbeitszeitcheck', \OCA\ArbeitszeitCheck\Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP, '', ''],
 			]);
 
 		$status = $this->service->getConfigurationStatus();
@@ -495,6 +496,7 @@ class DatevExportServiceTest extends TestCase
 		$this->assertTrue($status['mandantennummer_set']);
 		$this->assertEquals('1234567', $status['beraternummer']);
 		$this->assertEquals('12345', $status['mandantennummer']);
+		$this->assertSame([], $status['premium_lohnart_map']);
 	}
 
 	/**
@@ -502,11 +504,12 @@ class DatevExportServiceTest extends TestCase
 	 */
 	public function testGetConfigurationStatusUnconfigured(): void
 	{
-		$this->config->expects($this->exactly(2))
+		$this->config->expects($this->exactly(3))
 			->method('getAppValue')
 			->willReturnMap([
 				['arbeitszeitcheck', 'datev_beraternummer', '', ''],
-				['arbeitszeitcheck', 'datev_mandantennummer', '', '12345']
+				['arbeitszeitcheck', 'datev_mandantennummer', '', '12345'],
+				['arbeitszeitcheck', \OCA\ArbeitszeitCheck\Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP, '', ''],
 			]);
 
 		$status = $this->service->getConfigurationStatus();
@@ -563,5 +566,274 @@ class DatevExportServiceTest extends TestCase
 		// Verify padding: Beraternummer (7 digits), Mandantennummer (5 digits), Personalnummer (8 digits), Lohnart (4 digits)
 		$this->assertStringContainsString('0000123|00045|2024|1', $result); // Header with padding
 		$this->assertStringContainsString('00000123|20240115|0010|8.00|Std|', $result); // Data line with padding
+	}
+
+	/**
+	 * Premium Lohnart lines are additive; normal-hour line stays bit-identical; empty map = no premium lines.
+	 */
+	public function testExportAppendsMappedPremiumHoursOnly(): void
+	{
+		$userId = 'testuser';
+		$startDate = new \DateTime('2024-01-01');
+		// Half-open exclusive end (ExportController contract): Jan inclusive → Feb 1 exclusive.
+		$endDate = new \DateTime('2024-02-01');
+
+		$premium = $this->createMock(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class);
+		$premium->method('isEnabled')->willReturn(true);
+		$premium->method('summariseForUser')->willReturn([
+			'enabled' => true,
+			'buckets' => [
+				['id' => 'sunday', 'label' => 'Sunday', 'hours' => 4.5, 'rate' => 1.0, 'valued_hours' => 4.5],
+				['id' => 'night', 'label' => 'Night', 'hours' => 2.0, 'rate' => 0.5, 'valued_hours' => 1.0],
+				['id' => 'saturday', 'label' => 'Saturday', 'hours' => 3.0, 'rate' => 0.5, 'valued_hours' => 1.5],
+			],
+		]);
+
+		$service = new DatevExportService(
+			$this->timeEntryMapper,
+			$this->config,
+			$this->l10n,
+			$premium
+		);
+
+		$this->config->method('getAppValue')
+			->willReturnCallback(static function (string $app, string $key, $default = '') {
+				$map = [
+					'datev_beraternummer' => '1234567',
+					'datev_mandantennummer' => '12345',
+					'datev_lohnart_normal' => '1000',
+					'datev_lohnart_ueberstunden' => '2000',
+					\OCA\ArbeitszeitCheck\Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP => '{"sunday":"3100","night":"3200"}',
+				];
+				return $map[$key] ?? $default;
+			});
+		$this->config->method('getUserValue')->willReturn('12345678');
+
+		$entry = new TimeEntry();
+		$entry->setId(1);
+		$entry->setUserId($userId);
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime(new \DateTime('2024-01-15 08:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setBreaks(json_encode([[
+			'start' => '2024-01-15T12:00:00+00:00',
+			'end' => '2024-01-15T13:00:00+00:00',
+		]]));
+		$entry->setDescription('Normal day');
+		$entry->setIsManualEntry(false);
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+
+		$this->timeEntryMapper->method('findByUserAndDateRange')->willReturn([$entry]);
+
+		$result = $service->exportTimeEntries($userId, $startDate, $endDate);
+		$lines = explode("\r\n", $result);
+
+		$this->assertSame('1234567|12345|2024|1', $lines[0]);
+		$this->assertStringContainsString('12345678|20240115|1000|8.00|Std|Normal day', $result);
+		$this->assertStringContainsString('12345678|20240131|3100|4.50|Std|Sunday', $result);
+		$this->assertStringContainsString('12345678|20240131|3200|2.00|Std|Night', $result);
+		// Unmapped saturday must not appear; valued_hours must not be exported as Std
+		$this->assertStringNotContainsString('|3200|1.00|', $result);
+		$this->assertStringNotContainsString('Saturday', $result);
+	}
+
+	public function testExportSkipsPremiumWhenMapEmptyEvenIfEnabled(): void
+	{
+		$userId = 'testuser';
+		$startDate = new \DateTime('2024-01-01');
+		$endDate = new \DateTime('2024-02-01');
+
+		$premium = $this->createMock(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class);
+		$premium->method('isEnabled')->willReturn(true);
+		$premium->expects($this->never())->method('summariseForUser');
+
+		$service = new DatevExportService(
+			$this->timeEntryMapper,
+			$this->config,
+			$this->l10n,
+			$premium
+		);
+
+		$this->config->method('getAppValue')
+			->willReturnCallback(static function (string $app, string $key, $default = '') {
+				$map = [
+					'datev_beraternummer' => '1234567',
+					'datev_mandantennummer' => '12345',
+					'datev_lohnart_normal' => '1000',
+					'datev_lohnart_ueberstunden' => '2000',
+					\OCA\ArbeitszeitCheck\Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP => '',
+				];
+				return $map[$key] ?? $default;
+			});
+		$this->config->method('getUserValue')->willReturn('12345678');
+		$this->timeEntryMapper->method('findByUserAndDateRange')->willReturn([]);
+
+		$result = $service->exportTimeEntries($userId, $startDate, $endDate);
+		$this->assertSame('1234567|12345|2024|1', $result);
+	}
+
+	public function testExportPrefersFrozenClosurePremiumOverLive(): void
+	{
+		$userId = 'testuser';
+		$startDate = new \DateTime('2024-01-01');
+		$endDate = new \DateTime('2024-02-01');
+
+		$premium = $this->createMock(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class);
+		$premium->method('isEnabled')->willReturn(true);
+		$premium->expects($this->never())->method('summariseForUser');
+
+		$closure = new \OCA\ArbeitszeitCheck\Db\MonthClosure();
+		$closure->setStatus(\OCA\ArbeitszeitCheck\Db\MonthClosure::STATUS_FINALIZED);
+		$closure->setCanonicalPayload(json_encode([
+			'premium' => [
+				'enabled' => true,
+				'summary' => [
+					'buckets' => [
+						['id' => 'sunday', 'label' => 'Sunday frozen', 'hours' => 6.0, 'rate' => 1.0],
+					],
+				],
+			],
+		], JSON_THROW_ON_ERROR));
+
+		$mapper = $this->createMock(\OCA\ArbeitszeitCheck\Db\MonthClosureMapper::class);
+		$mapper->method('findByUserAndMonthOptional')
+			->with($userId, 2024, 1)
+			->willReturn($closure);
+
+		$service = new DatevExportService(
+			$this->timeEntryMapper,
+			$this->config,
+			$this->l10n,
+			$premium,
+			$mapper
+		);
+
+		$this->config->method('getAppValue')
+			->willReturnCallback(static function (string $app, string $key, $default = '') {
+				$map = [
+					'datev_beraternummer' => '1234567',
+					'datev_mandantennummer' => '12345',
+					'datev_lohnart_normal' => '1000',
+					'datev_lohnart_ueberstunden' => '2000',
+					\OCA\ArbeitszeitCheck\Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP => '{"sunday":"3100"}',
+				];
+				return $map[$key] ?? $default;
+			});
+		$this->config->method('getUserValue')->willReturn('12345678');
+		$this->timeEntryMapper->method('findByUserAndDateRange')->willReturn([]);
+
+		$result = $service->exportTimeEntries($userId, $startDate, $endDate);
+		$this->assertStringContainsString('12345678|20240131|3100|6.00|Std|Sunday frozen', $result);
+	}
+
+	public function testExclusiveEndDoesNotBleedIntoNextMonthLivePremiums(): void
+	{
+		$userId = 'testuser';
+		// Production path: inclusive Jan 1–31 → exclusive Feb 1.
+		$startDate = new \DateTime('2024-01-01');
+		$endExclusive = new \DateTime('2024-02-01');
+
+		$premium = $this->createMock(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class);
+		$premium->method('isEnabled')->willReturn(true);
+		$premium->expects($this->never())->method('summariseForUser');
+
+		$closure = new \OCA\ArbeitszeitCheck\Db\MonthClosure();
+		$closure->setStatus(\OCA\ArbeitszeitCheck\Db\MonthClosure::STATUS_FINALIZED);
+		$closure->setCanonicalPayload(json_encode([
+			'premium' => [
+				'enabled' => true,
+				'summary' => [
+					'buckets' => [
+						['id' => 'sunday', 'label' => 'Sunday frozen', 'hours' => 6.0, 'rate' => 1.0],
+					],
+				],
+			],
+		], JSON_THROW_ON_ERROR));
+
+		$mapper = $this->createMock(\OCA\ArbeitszeitCheck\Db\MonthClosureMapper::class);
+		$mapper->expects($this->once())
+			->method('findByUserAndMonthOptional')
+			->with($userId, 2024, 1)
+			->willReturn($closure);
+
+		$service = new DatevExportService(
+			$this->timeEntryMapper,
+			$this->config,
+			$this->l10n,
+			$premium,
+			$mapper
+		);
+
+		$this->config->method('getAppValue')
+			->willReturnCallback(static function (string $app, string $key, $default = '') {
+				$map = [
+					'datev_beraternummer' => '1234567',
+					'datev_mandantennummer' => '12345',
+					'datev_lohnart_normal' => '1000',
+					'datev_lohnart_ueberstunden' => '2000',
+					\OCA\ArbeitszeitCheck\Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP => '{"sunday":"3100"}',
+				];
+				return $map[$key] ?? $default;
+			});
+		$this->config->method('getUserValue')->willReturn('12345678');
+		$this->timeEntryMapper->method('findByUserAndDateRange')->willReturn([]);
+
+		$result = $service->exportTimeEntries($userId, $startDate, $endExclusive);
+		$this->assertStringContainsString('|20240131|3100|6.00|Std|Sunday frozen', $result);
+		$this->assertStringNotContainsString('|20240201|', $result);
+	}
+
+	public function testPartialClosedMonthStillUsesFrozenNotLive(): void
+	{
+		$userId = 'testuser';
+		// Mid-January range with exclusive end Jan 21 → inclusive Jan 15–20.
+		$startDate = new \DateTime('2024-01-15');
+		$endExclusive = new \DateTime('2024-01-21');
+
+		$premium = $this->createMock(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class);
+		$premium->method('isEnabled')->willReturn(true);
+		$premium->expects($this->never())->method('summariseForUser');
+
+		$closure = new \OCA\ArbeitszeitCheck\Db\MonthClosure();
+		$closure->setStatus(\OCA\ArbeitszeitCheck\Db\MonthClosure::STATUS_FINALIZED);
+		$closure->setCanonicalPayload(json_encode([
+			'premium' => [
+				'enabled' => true,
+				'summary' => [
+					'buckets' => [
+						['id' => 'night', 'label' => 'Night sealed', 'hours' => 9.0, 'rate' => 0.5],
+					],
+				],
+			],
+		], JSON_THROW_ON_ERROR));
+
+		$mapper = $this->createMock(\OCA\ArbeitszeitCheck\Db\MonthClosureMapper::class);
+		$mapper->method('findByUserAndMonthOptional')->willReturn($closure);
+
+		$service = new DatevExportService(
+			$this->timeEntryMapper,
+			$this->config,
+			$this->l10n,
+			$premium,
+			$mapper
+		);
+
+		$this->config->method('getAppValue')
+			->willReturnCallback(static function (string $app, string $key, $default = '') {
+				$map = [
+					'datev_beraternummer' => '1234567',
+					'datev_mandantennummer' => '12345',
+					'datev_lohnart_normal' => '1000',
+					'datev_lohnart_ueberstunden' => '2000',
+					\OCA\ArbeitszeitCheck\Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP => '{"night":"3200"}',
+				];
+				return $map[$key] ?? $default;
+			});
+		$this->config->method('getUserValue')->willReturn('12345678');
+		$this->timeEntryMapper->method('findByUserAndDateRange')->willReturn([]);
+
+		$result = $service->exportTimeEntries($userId, $startDate, $endExclusive);
+		$this->assertStringContainsString('|20240120|3200|9.00|Std|Night sealed', $result);
 	}
 }

@@ -19,10 +19,13 @@ export async function api(page, method, url, { data } = {}) {
   const headers = { requesttoken, 'Content-Type': 'application/json' }
 
   const fullUrl = new URL(url, page.url()).toString()
+  const upper = String(method || 'GET').toUpperCase()
+  const mutating = upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE'
   const res = await page.request.fetch(fullUrl, {
     method,
     headers,
-    data: data ?? undefined,
+    // Always send a JSON body for mutating methods (proxy-safe), even when empty.
+    data: data !== undefined ? data : (mutating ? {} : undefined),
   })
 
   const json = await res.json().catch(() => null)
@@ -39,10 +42,12 @@ export async function apiAllowFailure(page, method, url, { data } = {}) {
   const headers = { requesttoken, 'Content-Type': 'application/json' }
 
   const fullUrl = new URL(url, page.url()).toString()
+  const upper = String(method || 'GET').toUpperCase()
+  const mutating = upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE'
   const res = await page.request.fetch(fullUrl, {
     method,
     headers,
-    data: data ?? undefined,
+    data: data !== undefined ? data : (mutating ? {} : undefined),
   })
 
   const json = await res.json().catch(() => null)

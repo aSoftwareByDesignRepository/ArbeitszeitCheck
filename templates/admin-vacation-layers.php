@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Admin · Vacation entitlement layers (L0 / L1 / L2 / L3 + simulator).
+ * Admin · Vacation entitlement layers (L0 / L1 / L2 + simulator) — one job.
+ *
+ * Org vacation year/unit/carryover rules live on /admin/vacation-rules.
  *
  * @copyright Copyright (c) 2026 Alexander Mäule
  * @license AGPL-3.0-or-later
@@ -14,6 +16,11 @@ declare(strict_types=1);
 $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
 $layeredEnabled = (bool)($_['layeredEnabled'] ?? true);
+$vacationUnit = (string)($_['vacationUnit'] ?? 'days');
+$isVacationHours = $vacationUnit === 'hours';
+$vacationHoursPerDay = (float)($_['vacationHoursPerDay'] ?? 8);
+$policyPages = is_array($_['policyPages'] ?? null) ? $_['policyPages'] : [];
+$employeesAdminUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.users');
 ?>
 
 <?php include __DIR__ . '/common/page-start.php'; ?>
@@ -35,18 +42,38 @@ echo json_encode([
 		'impact' => $urlGenerator->linkToRoute('arbeitszeitcheck.admin.previewVacationLayerImpact'),
 	],
 	'layeredEnabled' => $layeredEnabled,
+	'vacationUnit' => $isVacationHours ? 'hours' : 'days',
+	'vacationHoursPerDay' => $vacationHoursPerDay,
+	'amountMax' => 366,
+	'amountUnitLabel' => $l->t('days'),
+	'amountPerYearLabel' => $l->t('days per year'),
+	'adminInputAlwaysDays' => true,
+	'hoursModeHint' => $isVacationHours
+		? $l->t('You always enter vacation in days (e.g. 25). We convert to hours automatically using %s hours per day.', [(string)$vacationHoursPerDay])
+		: '',
 ], JSON_THROW_ON_ERROR | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>
 	</script>
 
+	<div class="azc-admin-policy-layout azc-admin-vacation-policy-layout">
+		<?php include __DIR__ . '/common/azc-policy-pages-nav.php'; ?>
+
 	<div class="admin-vacation-layers">
 
 		<section class="azc-card admin-vacation-layers__intro" aria-labelledby="vacation-layers-intro-title">
-			<header class="azc-card__header">
+			<header class="azc-card__header azc-card__header--page-title-only">
 				<div class="azc-card__header-text">
-					<h2 id="vacation-layers-intro-title" class="azc-card__title"><?php p($l->t('How vacation entitlement is resolved')); ?></h2>
+					<h2 id="vacation-layers-intro-title" class="azc-card__title visually-hidden"><?php p($l->t('How vacation entitlement is resolved')); ?></h2>
 					<p class="azc-card__lead">
-						<?php p($l->t('Define how many vacation days an employee is entitled to. Rules are evaluated top-down: a higher layer always wins. Use this page to view, edit, and simulate the full precedence chain.')); ?>
+						<?php if ($isVacationHours): ?>
+							<?php p($l->t('Enter annual vacation in days — the same numbers you already know (e.g. 25). Booking and remaining balances use hours; we convert using your hours-per-day factor. A higher layer always wins.')); ?>
+						<?php else: ?>
+							<?php p($l->t('Define how many vacation days people get. A higher layer always wins. Edit organisation, model, and team defaults here; simulate any person.')); ?>
+						<?php endif; ?>
+					</p>
+					<p class="form-help form-help--block" id="vacation-layers-l3-help">
+						<?php p($l->t('Individual (L3) overrides are set on each person under Employees.')); ?>
+						<a href="<?php p($employeesAdminUrl); ?>"><?php p($l->t('Open Employees')); ?></a>
 					</p>
 				</div>
 				<div class="azc-card__header-actions admin-vacation-layers__status">
@@ -58,15 +85,18 @@ echo json_encode([
 				</div>
 			</header>
 			<div class="azc-card__body">
-				<nav class="vacation-layers__stepper" aria-label="<?php p($l->t('Layer precedence overview')); ?>">
-					<ol class="stepper">
-						<li class="stepper__item stepper__item--l3"><span class="stepper__rank">1</span><span class="stepper__label"><?php p($l->t('L3 · Individual')); ?></span></li>
-						<li class="stepper__item stepper__item--l2"><span class="stepper__rank">2</span><span class="stepper__label"><?php p($l->t('L2 · Team / Cohort')); ?></span></li>
-						<li class="stepper__item stepper__item--l1"><span class="stepper__rank">3</span><span class="stepper__label"><?php p($l->t('L1 · Working time model')); ?></span></li>
-						<li class="stepper__item stepper__item--l0"><span class="stepper__rank">4</span><span class="stepper__label"><?php p($l->t('L0 · Organisation default')); ?></span></li>
-						<li class="stepper__item stepper__item--legacy"><span class="stepper__rank">5</span><span class="stepper__label"><?php p($l->t('Legacy fallback (25 d.)')); ?></span></li>
-					</ol>
-				</nav>
+				<details class="azc-settings-more" id="vacation-layers-precedence-more">
+					<summary><?php p($l->t('Which layer wins?')); ?></summary>
+					<nav class="vacation-layers__stepper" aria-label="<?php p($l->t('Layer precedence overview')); ?>">
+						<ol class="stepper">
+							<li class="stepper__item stepper__item--l3"><span class="stepper__rank">1</span><span class="stepper__label"><?php p($l->t('L3 · Individual')); ?></span></li>
+							<li class="stepper__item stepper__item--l2"><span class="stepper__rank">2</span><span class="stepper__label"><?php p($l->t('L2 · Team / Cohort')); ?></span></li>
+							<li class="stepper__item stepper__item--l1"><span class="stepper__rank">3</span><span class="stepper__label"><?php p($l->t('L1 · Working time model')); ?></span></li>
+							<li class="stepper__item stepper__item--l0"><span class="stepper__rank">4</span><span class="stepper__label"><?php p($l->t('L0 · Organisation default')); ?></span></li>
+							<li class="stepper__item stepper__item--legacy"><span class="stepper__rank">5</span><span class="stepper__label"><?php p($l->t('Legacy fallback (25 d.)')); ?></span></li>
+						</ol>
+					</nav>
+				</details>
 			</div>
 		</section>
 
@@ -208,7 +238,11 @@ echo json_encode([
 						<?php p($l->t('Simulator')); ?>
 					</h2>
 					<p class="azc-card__lead">
-						<?php p($l->t('Try out: how many vacation days does an employee actually get on a given date? See exactly which layer was applied and why.')); ?>
+						<?php if ($isVacationHours): ?>
+							<?php p($l->t('Try out: how many vacation hours does an employee actually get on a given date? See exactly which layer was applied and why.')); ?>
+						<?php else: ?>
+							<?php p($l->t('Try out: how many vacation days does an employee actually get on a given date? See exactly which layer was applied and why.')); ?>
+						<?php endif; ?>
 					</p>
 				</div>
 			</header>
@@ -266,7 +300,13 @@ echo json_encode([
 		</section>
 
 	</div>
+	</div>
 </div>
+
+<script nonce="<?php p($_['cspNonce'] ?? ''); ?>">
+window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
+window.ArbeitszeitCheck.adminPolicyPages = <?php echo json_encode($policyPages, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+</script>
 
 <dialog id="layer-dialog" class="layer-dialog azc-native-dialog"
 	aria-modal="true"

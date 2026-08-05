@@ -12,6 +12,9 @@
     const Components = window.ArbeitszeitCheckComponents || {};
     const Messaging = window.ArbeitszeitCheckMessaging || {};
 
+    /** Guard against double Enter / double-click create+update races. */
+    let editorSaveInflight = false;
+
     /** Prefer server-injected l10n; window.t may be unavailable. */
     function wtmMsg(key, englishFallback) {
         const v = window.ArbeitszeitCheck?.l10n?.[key];
@@ -26,6 +29,8 @@
 
     /** Option tags for working-time model type; labels from working-time-models.php l10n. */
     function modelTypeSelectOptions(selectedType) {
+        // Bachus: Type defaults to Full-time when creating (granny never picks from jargon first).
+        const effective = selectedType || 'full_time';
         const rows = [
             ['full_time', 'fullTime', 'Full-Time'],
             ['part_time', 'partTime', 'Part-Time'],
@@ -37,9 +42,36 @@
             const value = row[0];
             const l10nKey = row[1];
             const en = row[2];
-            const sel = selectedType === value ? ' selected' : '';
+            const sel = effective === value ? ' selected' : '';
             return '<option value="' + value + '"' + sel + '>' + Utils.escapeHtml(wtmMsg(l10nKey, en)) + '</option>';
         }).join('');
+    }
+
+    function getEditorHost() {
+        return document.getElementById('wtm-editor-panel');
+    }
+
+    /**
+     * Close the inline create/edit panel (stays on the list — no dashboard dead-end).
+     */
+    function closeEditorPanel() {
+        const host = getEditorHost();
+        if (!host) {
+            return;
+        }
+        // Never tear down the panel while a create/update request is in flight —
+        // that orphans callbacks and can leave a half-written model on reload.
+        if (editorSaveInflight || host.getAttribute('aria-busy') === 'true') {
+            return;
+        }
+        host.hidden = true;
+        host.innerHTML = '';
+        host.removeAttribute('data-mode');
+        host.removeAttribute('aria-busy');
+        const createBtn = Utils.$('#create-model');
+        if (createBtn && typeof createBtn.focus === 'function') {
+            createBtn.focus();
+        }
     }
 
     function parseLocalizedDecimal(value, fallback) {
@@ -179,6 +211,7 @@
         }
         return Math.max(0, (e - s - unpaid) / 60);
     }
+
 
     function refreshWeekdayScheduleTotals(fieldset) {
         if (!fieldset) {
@@ -367,7 +400,9 @@
     function bindEvents() {
         const createBtn = Utils.$('#create-model');
         if (createBtn) {
-            Utils.on(createBtn, 'click', showCreateModal);
+            Utils.on(createBtn, 'click', function() {
+                openEditorPanel('create', null);
+            });
         }
 
         const editButtons = Utils.$$('[data-action="edit-model"]');
@@ -387,107 +422,163 @@
     }
 
     /**
-     * Show create model modal
+     * Inline create/edit panel (Bachus A3 — no modal kitchen-sink for the weekday matrix).
+     *
+     * @param {'create'|'edit'} mode
+     * @param {object|null} model
      */
-    function showCreateModal() {
-        const t = (s) => (window.t ? window.t('arbeitszeitcheck', s) : s);
-        const title = window.ArbeitszeitCheck?.l10n?.createModel || t('Create Working Time Model');
-        const createLabel = window.ArbeitszeitCheck?.l10n?.create || t('Create');
-        const cancelLabel = window.ArbeitszeitCheck?.l10n?.cancel || t('Cancel');
-        const nameLabel = window.ArbeitszeitCheck?.l10n?.name || t('Name');
-        const descriptionLabel = window.ArbeitszeitCheck?.l10n?.description || t('Description');
-        const typeLabel = window.ArbeitszeitCheck?.l10n?.type || t('Type');
-        const weeklyHoursLabel = window.ArbeitszeitCheck?.l10n?.weeklyHours || t('Weekly Hours');
-        const dailyHoursLabel = window.ArbeitszeitCheck?.l10n?.dailyHours || t('Daily Hours');
-        const workDaysPerWeekLabel = window.ArbeitszeitCheck?.l10n?.workDaysPerWeek || t('Work days per week');
-        const isDefaultLabel = window.ArbeitszeitCheck?.l10n?.isDefault || t('Set as Default');
-        
-        const formContent = `
-            <form id="create-model-form" class="form">
+    function openEditorPanel(mode, model) {
+        const host = getEditorHost();
+        if (!host) {
+            return;
+        }
+        if (editorSaveInflight || host.getAttribute('aria-busy') === 'true') {
+            Messaging.showError(
+                window.ArbeitszeitCheck?.l10n?.saveInProgress
+                    || (window.t && window.t('arbeitszeitcheck', 'Please wait until the current save finishes.'))
+                    || 'Please wait until the current save finishes.'
+            );
+            return;
+        }
+
+        const isEdit = mode === 'edit' && model && model.id;
+        const title = isEdit
+            ? (window.ArbeitszeitCheck?.l10n?.editModel || 'Edit Working Time Model')
+            : (window.ArbeitszeitCheck?.l10n?.createModel || 'Create Working Time Model');
+        const submitLabel = isEdit
+            ? (window.ArbeitszeitCheck?.l10n?.save || 'Save')
+            : (window.ArbeitszeitCheck?.l10n?.create || 'Create');
+        const cancelLabel = window.ArbeitszeitCheck?.l10n?.cancel || 'Cancel';
+        const nameLabel = window.ArbeitszeitCheck?.l10n?.name || 'Name';
+        const descriptionLabel = window.ArbeitszeitCheck?.l10n?.description || 'Description';
+        const descriptionMore = window.ArbeitszeitCheck?.l10n?.descriptionOptional
+            || (window.t ? window.t('arbeitszeitcheck', 'Optional description') : 'Optional description');
+        const typeLabel = window.ArbeitszeitCheck?.l10n?.type || 'Type';
+        const weeklyHoursLabel = window.ArbeitszeitCheck?.l10n?.weeklyHours || 'Weekly Hours';
+        const dailyHoursLabel = window.ArbeitszeitCheck?.l10n?.dailyHours || 'Daily Hours';
+        const workDaysPerWeekLabel = window.ArbeitszeitCheck?.l10n?.workDaysPerWeek || 'Work days per week';
+        const isDefaultLabel = window.ArbeitszeitCheck?.l10n?.isDefault || 'Set as Default';
+
+        const nameVal = isEdit ? Utils.escapeHtml(model.name || '') : '';
+        const descVal = isEdit ? Utils.escapeHtml(model.description || '') : '';
+        const descOpen = isEdit && String(model.description || '').trim() !== '' ? ' open' : '';
+        const weeklyVal = isEdit ? (model.weeklyHours || 40) : 40;
+        const dailyVal = isEdit ? (model.dailyHours || 8) : 8;
+        const workDaysVal = isEdit ? (model.workDaysPerWeek || 5) : 5;
+        const typeSelected = isEdit ? (model.type || 'full_time') : 'full_time';
+        const isDefaultChecked = isEdit && model.isDefault ? ' checked' : '';
+        const schedulePrefix = isEdit ? 'edit-wtm' : 'create-wtm';
+        const existingSchedule = (isEdit && model.breakRules && model.breakRules.weekday_schedule)
+            ? model.breakRules.weekday_schedule
+            : null;
+        const existingBreakRules = isEdit ? (model.breakRules || null) : null;
+        const modelId = isEdit ? String(model.id) : '';
+
+        host.hidden = false;
+        host.setAttribute('data-mode', isEdit ? 'edit' : 'create');
+        host.innerHTML = `
+            <header class="azc-card__header">
+                <div class="azc-card__header-text">
+                    <h2 id="wtm-editor-heading" class="azc-card__title">${Utils.escapeHtml(title)}</h2>
+                    <p class="azc-card__lead">${Utils.escapeHtml(
+                        window.ArbeitszeitCheck?.l10n?.editorLead
+                            || (window.t
+                                ? window.t('arbeitszeitcheck', 'Name the schedule, set hours, and optionally fill weekday times. Cancel returns to the list.')
+                                : 'Name the schedule, set hours, and optionally fill weekday times. Cancel returns to the list.')
+                    )}</p>
+                </div>
+            </header>
+            <div class="azc-card__body">
+            <form id="wtm-model-form" class="form wtm-editor-form" novalidate>
+                ${isEdit ? `<input type="hidden" id="wtm-model-id" name="id" value="${Utils.escapeHtml(modelId)}">` : ''}
                 <div class="form-group">
-                    <label for="model-name" class="form-label">${nameLabel} <span class="form-required">*</span></label>
-                    <input type="text" id="model-name" name="name" class="form-input" required 
-                           placeholder="${nameLabel}" aria-describedby="model-name-help">
-                    <p id="model-name-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.modelNameHelp || 'Enter a name for this work schedule (e.g., "Full-Time", "Part-Time")'}</p>
+                    <label for="wtm-model-name" class="form-label">${Utils.escapeHtml(nameLabel)} <span class="form-required">*</span></label>
+                    <input type="text" id="wtm-model-name" name="name" class="form-input" required
+                           value="${nameVal}"
+                           placeholder="${Utils.escapeHtml(nameLabel)}" aria-describedby="wtm-model-name-help"
+                           autocomplete="off">
+                    <p id="wtm-model-name-help" class="form-help">${Utils.escapeHtml(window.ArbeitszeitCheck?.l10n?.modelNameHelp || 'Enter a name for this work schedule (e.g., "Full-Time", "Part-Time")')}</p>
                 </div>
                 <div class="form-group">
-                    <label for="model-description" class="form-label">${descriptionLabel}</label>
-                    <textarea id="model-description" name="description" class="form-textarea" rows="3"
-                              placeholder="${descriptionLabel}"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="model-type" class="form-label">${typeLabel}</label>
-                    <select id="model-type" name="type" class="form-select">
-                        ${modelTypeSelectOptions()}
+                    <label for="wtm-model-type" class="form-label">${Utils.escapeHtml(typeLabel)}</label>
+                    <select id="wtm-model-type" name="type" class="form-select">
+                        ${modelTypeSelectOptions(typeSelected)}
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="model-weekly-hours" class="form-label">${weeklyHoursLabel} <span class="form-required">*</span></label>
-                    <input type="text" id="model-weekly-hours" name="weeklyHours" class="form-input" 
-                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="168" step="0.01" value="40" required
-                           aria-describedby="model-weekly-hours-help">
-                    <p id="model-weekly-hours-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.weeklyHoursHelp || ''}</p>
+                    <label for="wtm-model-weekly-hours" class="form-label">${Utils.escapeHtml(weeklyHoursLabel)} <span class="form-required">*</span></label>
+                    <input type="text" id="wtm-model-weekly-hours" name="weeklyHours" class="form-input"
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="168" step="0.01" value="${weeklyVal}" required
+                           aria-describedby="wtm-model-weekly-hours-help">
+                    <p id="wtm-model-weekly-hours-help" class="form-help">${Utils.escapeHtml(window.ArbeitszeitCheck?.l10n?.weeklyHoursHelp || '')}</p>
                 </div>
                 <div class="form-group">
-                    <label for="model-daily-hours" class="form-label">${dailyHoursLabel} <span class="form-required">*</span></label>
-                    <input type="text" id="model-daily-hours" name="dailyHours" class="form-input" 
-                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="24" step="0.01" value="8" required
-                           aria-describedby="model-daily-hours-help">
-                    <p id="model-daily-hours-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.dailyHoursHelp || ''}</p>
+                    <label for="wtm-model-daily-hours" class="form-label">${Utils.escapeHtml(dailyHoursLabel)} <span class="form-required">*</span></label>
+                    <input type="text" id="wtm-model-daily-hours" name="dailyHours" class="form-input"
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="24" step="0.01" value="${dailyVal}" required
+                           aria-describedby="wtm-model-daily-hours-help">
+                    <p id="wtm-model-daily-hours-help" class="form-help">${Utils.escapeHtml(window.ArbeitszeitCheck?.l10n?.dailyHoursHelp || '')}</p>
                 </div>
                 <div class="form-group">
-                    <label for="model-work-days-per-week" class="form-label">${workDaysPerWeekLabel} <span class="form-required">*</span></label>
-                    <input type="text" id="model-work-days-per-week" name="workDaysPerWeek" class="form-input"
-                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="1" max="7" step="0.01" value="5" required
-                           aria-describedby="model-work-days-per-week-help">
-                    <p id="model-work-days-per-week-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.workDaysPerWeekHelp || ''}</p>
+                    <label for="wtm-model-work-days-per-week" class="form-label">${Utils.escapeHtml(workDaysPerWeekLabel)} <span class="form-required">*</span></label>
+                    <input type="text" id="wtm-model-work-days-per-week" name="workDaysPerWeek" class="form-input"
+                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="1" max="7" step="0.01" value="${workDaysVal}" required
+                           aria-describedby="wtm-model-work-days-per-week-help">
+                    <p id="wtm-model-work-days-per-week-help" class="form-help">${Utils.escapeHtml(window.ArbeitszeitCheck?.l10n?.workDaysPerWeekHelp || '')}</p>
                 </div>
                 <div class="form-group">
                     <div class="form-checkbox">
-                        <input type="checkbox" id="model-is-default" name="isDefault" value="1">
-                        <label for="model-is-default">${isDefaultLabel}</label>
+                        <input type="checkbox" id="wtm-model-is-default" name="isDefault" value="1"${isDefaultChecked}>
+                        <label for="wtm-model-is-default">${Utils.escapeHtml(isDefaultLabel)}</label>
                     </div>
                 </div>
-                ${weekdayScheduleSectionHtml('create-wtm', null)}
-                <div class="form-actions">
-                    <button type="submit" class="btn btn--primary">${createLabel}</button>
-                    <button type="button" class="btn btn--secondary" data-action="close-modal">${cancelLabel}</button>
+                <details class="wtm-editor-desc"${descOpen}>
+                    <summary class="wtm-editor-desc__summary">${Utils.escapeHtml(descriptionMore)}</summary>
+                    <div class="form-group">
+                        <label for="wtm-model-description" class="form-label visually-hidden">${Utils.escapeHtml(descriptionLabel)}</label>
+                        <textarea id="wtm-model-description" name="description" class="form-textarea" rows="3"
+                                  placeholder="${Utils.escapeHtml(descriptionLabel)}">${descVal}</textarea>
+                    </div>
+                </details>
+                ${weekdayScheduleSectionHtml(schedulePrefix, existingSchedule)}
+                <div class="form-actions wtm-editor-actions" role="group" aria-label="${Utils.escapeHtml(submitLabel)}">
+                    <button type="submit" class="azc-btn azc-btn--primary azc-btn--touch" id="wtm-model-submit">${Utils.escapeHtml(submitLabel)}</button>
+                    <button type="button" class="azc-btn azc-btn--secondary azc-btn--touch" data-action="close-editor">${Utils.escapeHtml(cancelLabel)}</button>
                 </div>
             </form>
+            </div>
         `;
 
-        const modal = Components.createModal({
-            id: 'create-model-modal',
-            title: title,
-            content: formContent,
-            size: 'lg',
-            closable: true,
-            onClose: function() {
-                const modalEl = document.getElementById('create-model-modal');
-                if (modalEl && modalEl.parentNode) {
-                    modalEl.parentNode.remove();
-                }
-            }
-        });
+        if (typeof host.scrollIntoView === 'function') {
+            host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
 
-        Components.openModal('create-model-modal');
-
-        // Handle form submission
-        const form = document.getElementById('create-model-form');
+        const form = document.getElementById('wtm-model-form');
         if (form) {
             bindWeekdayScheduleFieldset(form.querySelector('.wtm-weekday-schedule'));
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
-                handleCreateModel(form);
+                if (editorSaveInflight || host.getAttribute('aria-busy') === 'true') {
+                    return;
+                }
+                if (isEdit) {
+                    handleUpdateModel(form, model.id, existingBreakRules);
+                } else {
+                    handleCreateModel(form);
+                }
             });
         }
 
-        // Handle cancel button
-        const cancelBtn = modal.querySelector('[data-action="close-modal"]');
+        const cancelBtn = host.querySelector('[data-action="close-editor"]');
         if (cancelBtn) {
             cancelBtn.addEventListener('click', function() {
-                Components.closeModal(modal);
+                closeEditorPanel();
             });
+        }
+
+        const nameInput = document.getElementById('wtm-model-name');
+        if (nameInput && typeof nameInput.focus === 'function') {
+            nameInput.focus();
         }
     }
 
@@ -502,7 +593,7 @@
             method: 'GET',
             onSuccess: function(data) {
                 if (data.success && data.model) {
-                    showEditModal(data.model);
+                    openEditorPanel('edit', data.model);
                 } else {
                     const errorMsg = (window.ArbeitszeitCheck?.l10n?.failedToLoadModel || (window.t && window.t('arbeitszeitcheck', 'Failed to load model'))) || 'Failed to load model';
                     Messaging.showError(errorMsg);
@@ -618,10 +709,15 @@
                     weeklyHours: Number(model.weeklyHours) || 40,
                     dailyHours: Number(model.dailyHours) || 8,
                     workDaysPerWeek: Number(model.workDaysPerWeek) || 5,
-                    breakRules: model.breakRules || [],
-                    overtimeRules: model.overtimeRules || [],
+                    overtimeRules: (model.overtimeRules && typeof model.overtimeRules === 'object' && !Array.isArray(model.overtimeRules))
+                        ? model.overtimeRules
+                        : {},
                     isDefault: false
                 };
+                // Never send list-encoded breakRules (`[]`) — server rejects that as SCHEDULE_INVALID.
+                if (model.breakRules && typeof model.breakRules === 'object' && !Array.isArray(model.breakRules)) {
+                    payload.breakRules = model.breakRules;
+                }
 
                 Utils.ajax('/apps/arbeitszeitcheck/api/admin/working-time-models', {
                     method: 'POST',
@@ -688,119 +784,17 @@
     }
 
     /**
-     * Show edit modal
-     */
-    function showEditModal(model) {
-        if (!model || !model.id) {
-            const errorMsg = (window.ArbeitszeitCheck?.l10n?.invalidModelData || window.t && window.t('arbeitszeitcheck', 'Invalid model data')) || 'Invalid model data';
-            Messaging.showError(errorMsg);
-            return;
-        }
-
-        const title = window.ArbeitszeitCheck?.l10n?.editModel || 'Edit Working Time Model';
-        const saveLabel = window.ArbeitszeitCheck?.l10n?.save || 'Save';
-        const cancelLabel = window.ArbeitszeitCheck?.l10n?.cancel || 'Cancel';
-        const nameLabel = window.ArbeitszeitCheck?.l10n?.name || 'Name';
-        const descriptionLabel = window.ArbeitszeitCheck?.l10n?.description || 'Description';
-        const typeLabel = window.ArbeitszeitCheck?.l10n?.type || 'Type';
-        const weeklyHoursLabel = window.ArbeitszeitCheck?.l10n?.weeklyHours || 'Weekly Hours';
-        const dailyHoursLabel = window.ArbeitszeitCheck?.l10n?.dailyHours || 'Daily Hours';
-        const workDaysPerWeekLabel = window.ArbeitszeitCheck?.l10n?.workDaysPerWeek || 'Work days per week';
-        const isDefaultLabel = window.ArbeitszeitCheck?.l10n?.isDefault || 'Set as Default';
-        
-        const formContent = `
-            <form id="edit-model-form" class="form">
-                <input type="hidden" id="model-id" name="id" value="${model.id}">
-                <div class="form-group">
-                    <label for="edit-model-name" class="form-label">${nameLabel} <span class="form-required">*</span></label>
-                    <input type="text" id="edit-model-name" name="name" class="form-input" required 
-                           value="${Utils.escapeHtml(model.name || '')}" placeholder="${nameLabel}">
-                </div>
-                <div class="form-group">
-                    <label for="edit-model-description" class="form-label">${descriptionLabel}</label>
-                    <textarea id="edit-model-description" name="description" class="form-textarea" rows="3"
-                              placeholder="${descriptionLabel}">${Utils.escapeHtml(model.description || '')}</textarea>
-                </div>
-                <div class="form-group">
-                    <label for="edit-model-type" class="form-label">${typeLabel}</label>
-                    <select id="edit-model-type" name="type" class="form-select">
-                        ${modelTypeSelectOptions(model.type)}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="edit-model-weekly-hours" class="form-label">${weeklyHoursLabel} <span class="form-required">*</span></label>
-                    <input type="text" id="edit-model-weekly-hours" name="weeklyHours" class="form-input" 
-                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="168" step="0.01" value="${model.weeklyHours || 40}" required
-                           aria-describedby="edit-model-weekly-hours-help">
-                    <p id="edit-model-weekly-hours-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.weeklyHoursHelp || ''}</p>
-                </div>
-                <div class="form-group">
-                    <label for="edit-model-daily-hours" class="form-label">${dailyHoursLabel} <span class="form-required">*</span></label>
-                    <input type="text" id="edit-model-daily-hours" name="dailyHours" class="form-input" 
-                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="0" max="24" step="0.01" value="${model.dailyHours || 8}" required
-                           aria-describedby="edit-model-daily-hours-help">
-                    <p id="edit-model-daily-hours-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.dailyHoursHelp || ''}</p>
-                </div>
-                <div class="form-group">
-                    <label for="edit-model-work-days-per-week" class="form-label">${workDaysPerWeekLabel} <span class="form-required">*</span></label>
-                    <input type="text" id="edit-model-work-days-per-week" name="workDaysPerWeek" class="form-input"
-                           inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]{1,2})?$" min="1" max="7" step="0.01" value="${model.workDaysPerWeek || 5}" required
-                           aria-describedby="edit-model-work-days-per-week-help">
-                    <p id="edit-model-work-days-per-week-help" class="form-help">${window.ArbeitszeitCheck?.l10n?.workDaysPerWeekHelp || ''}</p>
-                </div>
-                <div class="form-group">
-                    <div class="form-checkbox">
-                        <input type="checkbox" id="edit-model-is-default" name="isDefault" value="1" ${model.isDefault ? 'checked' : ''}>
-                        <label for="edit-model-is-default">${isDefaultLabel}</label>
-                    </div>
-                </div>
-                ${weekdayScheduleSectionHtml('edit-wtm', (model.breakRules && model.breakRules.weekday_schedule) ? model.breakRules.weekday_schedule : null)}
-                <div class="form-actions">
-                    <button type="button" class="btn btn--secondary" data-action="close-modal">${cancelLabel}</button>
-                    <button type="submit" class="btn btn--primary">${saveLabel}</button>
-                </div>
-            </form>
-        `;
-
-        const modal = Components.createModal({
-            id: 'edit-model-modal',
-            title: title,
-            content: formContent,
-            size: 'lg',
-            closable: true,
-            onClose: function() {
-                const modalEl = document.getElementById('edit-model-modal');
-                if (modalEl && modalEl.parentNode) {
-                    modalEl.parentNode.remove();
-                }
-            }
-        });
-
-        Components.openModal('edit-model-modal');
-
-        // Handle form submission
-        const form = document.getElementById('edit-model-form');
-        if (form) {
-            bindWeekdayScheduleFieldset(form.querySelector('.wtm-weekday-schedule'));
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                handleUpdateModel(form, model.id, model.breakRules || null);
-            });
-        }
-
-        // Handle cancel button
-        const cancelBtn = modal.querySelector('[data-action="close-modal"]');
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', function() {
-                Components.closeModal(modal);
-            });
-        }
-    }
-
-    /**
      * Handle create model form submission
      */
     function handleCreateModel(form) {
+        if (editorSaveInflight) {
+            return;
+        }
+        const submitBtn = form.querySelector('#wtm-model-submit') || form.querySelector('button[type="submit"]');
+        if (submitBtn && submitBtn.disabled) {
+            return;
+        }
+
         const formData = new FormData(form);
         const breakRules = buildBreakRulesPayload(form, null);
         const data = {
@@ -816,15 +810,32 @@
             data.breakRules = breakRules;
         }
 
+        editorSaveInflight = true;
+        const host = getEditorHost();
+        if (host) {
+            host.setAttribute('aria-busy', 'true');
+        }
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.setAttribute('aria-busy', 'true');
+        }
+
         Utils.ajax('/apps/arbeitszeitcheck/api/admin/working-time-models', {
             method: 'POST',
             data: data,
             onSuccess: function(response) {
+                editorSaveInflight = false;
+                if (host) {
+                    host.removeAttribute('aria-busy');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.removeAttribute('aria-busy');
+                }
                 if (response.success) {
                     const successMsg = window.ArbeitszeitCheck?.l10n?.modelCreated || (window.t && window.t('arbeitszeitcheck', 'Model created successfully')) || 'Model created successfully';
                     Messaging.showSuccess(successMsg);
-                    Components.closeModal(document.getElementById('create-model-modal'));
-                    // Reload page to show new model
+                    closeEditorPanel();
                     setTimeout(() => location.reload(), 1000);
                 } else {
                     const errorMsg = response.error || (window.ArbeitszeitCheck?.l10n?.failedToCreateModel || (window.t && window.t('arbeitszeitcheck', 'Failed to create model'))) || 'Failed to create model';
@@ -832,6 +843,14 @@
                 }
             },
             onError: function(_error) {
+                editorSaveInflight = false;
+                if (host) {
+                    host.removeAttribute('aria-busy');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.removeAttribute('aria-busy');
+                }
                 const errorMsg = window.ArbeitszeitCheck?.l10n?.failedToCreateModel || (window.t && window.t('arbeitszeitcheck', 'Failed to create model')) || 'Failed to create model';
                 Messaging.showError(errorMsg);
             }
@@ -842,6 +861,14 @@
      * Handle update model form submission
      */
     function handleUpdateModel(form, modelId, existingBreakRules) {
+        if (editorSaveInflight) {
+            return;
+        }
+        const submitBtn = form.querySelector('#wtm-model-submit') || form.querySelector('button[type="submit"]');
+        if (submitBtn && submitBtn.disabled) {
+            return;
+        }
+
         const formData = new FormData(form);
         const breakRules = buildBreakRulesPayload(form, existingBreakRules);
         const data = {
@@ -856,23 +883,39 @@
         if (breakRules) {
             data.breakRules = breakRules;
         } else if (existingBreakRules && typeof existingBreakRules === 'object') {
-            // Explicitly clear weekday schedule while keeping other break rule keys
             const cleared = { ...existingBreakRules };
             delete cleared.weekday_schedule;
             data.breakRules = cleared;
+        }
+
+        editorSaveInflight = true;
+        const host = getEditorHost();
+        if (host) {
+            host.setAttribute('aria-busy', 'true');
+        }
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.setAttribute('aria-busy', 'true');
         }
 
         Utils.ajax('/apps/arbeitszeitcheck/api/admin/working-time-models/' + modelId, {
             method: 'PUT',
             data: data,
             onSuccess: function(response) {
+                editorSaveInflight = false;
+                if (host) {
+                    host.removeAttribute('aria-busy');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.removeAttribute('aria-busy');
+                }
                 if (response.success) {
-                    const successMsg = window.ArbeitszeitCheck?.l10n?.modelUpdated || 
-                                        (window.t && window.t('arbeitszeitcheck', 'Model updated successfully')) || 
+                    const successMsg = window.ArbeitszeitCheck?.l10n?.modelUpdated ||
+                                        (window.t && window.t('arbeitszeitcheck', 'Model updated successfully')) ||
                                         'Model updated successfully';
                     Messaging.showSuccess(successMsg);
-                    Components.closeModal(document.getElementById('edit-model-modal'));
-                    // Reload page to show updated model
+                    closeEditorPanel();
                     setTimeout(() => location.reload(), 1000);
                 } else {
                     const errorMsg = response.error || (window.ArbeitszeitCheck?.l10n?.failedToUpdateModel || (window.t && window.t('arbeitszeitcheck', 'Failed to update model'))) || 'Failed to update model';
@@ -880,6 +923,14 @@
                 }
             },
             onError: function(_error) {
+                editorSaveInflight = false;
+                if (host) {
+                    host.removeAttribute('aria-busy');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.removeAttribute('aria-busy');
+                }
                 const errorMsg = window.ArbeitszeitCheck?.l10n?.failedToUpdateModel || (window.t && window.t('arbeitszeitcheck', 'Failed to update model')) || 'Failed to update model';
                 Messaging.showError(errorMsg);
             }
@@ -893,6 +944,9 @@
         const button = e.currentTarget || e.target;
         const modelId = button.dataset.modelId;
         if (!modelId) {
+            return;
+        }
+        if (button.disabled || button.getAttribute('aria-busy') === 'true') {
             return;
         }
 
@@ -928,9 +982,14 @@
             return;
         }
 
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+
         Utils.ajax('/apps/arbeitszeitcheck/api/admin/working-time-models/' + modelId, {
             method: 'DELETE',
             onSuccess: function(data) {
+                button.disabled = false;
+                button.removeAttribute('aria-busy');
                 if (data.success) {
                     const successMsg = window.ArbeitszeitCheck?.l10n?.modelDeleted ||
                         (window.t && window.t('arbeitszeitcheck', 'Working time model deleted successfully')) ||
@@ -946,6 +1005,8 @@
                 }
             },
             onError: function(_error) {
+                button.disabled = false;
+                button.removeAttribute('aria-busy');
                 const errorMsg = window.ArbeitszeitCheck?.l10n?.failedToDeleteModel ||
                     (window.t && window.t('arbeitszeitcheck', 'Failed to delete model')) ||
                     'Failed to delete model';

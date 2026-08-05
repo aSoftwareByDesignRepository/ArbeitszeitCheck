@@ -40,7 +40,7 @@
    Only the kiosk on/off state accents live here; the JS toggles
    .azc-kiosk-stat--on / --off on #azc-kiosk-stat-mode. */
 #app-content.azc-app .azc-kiosk-stat--on {
-	border-left-color: var(--color-success-text, var(--color-success, #2d7a3e));
+	border-left-color: var(--color-success-text, var(--color-success));
 }
 
 #app-content.azc-app .azc-kiosk-stat--off {
@@ -59,7 +59,7 @@
 }
 
 #app-content.azc-app .azc-kiosk-panel .azc-card__title:focus-visible {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 3px;
 	border-radius: 2px;
 }
@@ -71,7 +71,7 @@
 #app-content.azc-app .azc-kiosk-tip {
 	margin: 0.5rem 0 0;
 	padding: 0.35rem 0 0.35rem 0.75rem;
-	border-left: 3px solid var(--color-primary-element, #0082c9);
+	border-left: 3px solid var(--color-primary-element);
 	color: var(--azc-muted, var(--color-text-maxcontrast));
 	font-size: var(--azc-fs-sm, 0.875rem);
 	line-height: 1.45;
@@ -110,8 +110,8 @@
 	flex: 0 0 auto;
 	width: 0.45rem;
 	height: 0.45rem;
-	border-right: 2px solid var(--color-primary-element, #0082c9);
-	border-bottom: 2px solid var(--color-primary-element, #0082c9);
+	border-right: 2px solid var(--color-primary-element);
+	border-bottom: 2px solid var(--color-primary-element);
 	transform: rotate(-45deg);
 	margin-top: -0.1rem;
 	transition: transform 0.15s ease;
@@ -123,7 +123,7 @@
 }
 
 #app-content.azc-app .azc-kiosk-help__summary:focus-visible {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 	border-radius: 2px;
 }
@@ -173,7 +173,7 @@
 #app-content.azc-app .azc-kiosk-help__note {
 	margin: 0.75rem 0 0;
 	padding: 0.35rem 0 0.35rem 0.75rem;
-	border-left: 3px solid var(--color-primary-element, #0082c9);
+	border-left: 3px solid var(--color-primary-element);
 	color: var(--azc-muted, var(--color-text-maxcontrast));
 	font-size: var(--azc-fs-sm, 0.875rem);
 	line-height: 1.45;
@@ -232,7 +232,7 @@
 #app-content.azc-app .azc-kiosk-meter__fill {
 	height: 100%;
 	border-radius: inherit;
-	background: var(--color-primary-element, #0082c9);
+	background: var(--color-primary-element);
 	transition: width 0.25s ease;
 }
 
@@ -269,7 +269,7 @@
 
 #app-content.azc-app .azc-kiosk-page .azc-btn--danger {
 	background: var(--color-error);
-	color: var(--color-primary-text, #fff);
+	color: var(--color-primary-text);
 	border: 2px solid var(--color-error);
 }
 
@@ -337,13 +337,13 @@
 	font-size: 0.85rem;
 	font-weight: 800;
 	line-height: 1;
-	color: var(--color-primary-element-text, #fff);
-	background: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text);
+	background: var(--color-primary-element);
 }
 
 #app-content.azc-app .azc-kiosk-flow__block--muted .azc-kiosk-flow__step {
 	color: var(--color-main-text);
-	background: var(--azc-surface-2, var(--color-background-dark, #e8e8e8));
+	background: var(--azc-surface-2, var(--color-background-dark));
 }
 
 #app-content.azc-app .azc-kiosk-flow__hint {
@@ -398,7 +398,7 @@
 }
 
 #app-content.azc-app .azc-kiosk-search__input:focus-visible {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -450,7 +450,7 @@
 #app-content.azc-app .azc-kiosk-search__option:focus-visible,
 #app-content.azc-app .azc-kiosk-search__results [aria-selected='true'] .azc-kiosk-search__option {
 	background: var(--color-background-hover);
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: -2px;
 }
 
@@ -546,7 +546,7 @@
 #app-content.azc-app .azc-kiosk-assign-card__warn {
 	margin: 0;
 	padding: 0.5rem 0 0.5rem 0.75rem;
-	border-left: 3px solid var(--color-warning, #a67c00);
+	border-left: 3px solid var(--color-warning);
 	background: transparent;
 	font-size: var(--azc-fs-sm, 0.875rem);
 	line-height: 1.45;
@@ -571,26 +571,26 @@
 	padding: 0.85rem 0 0.85rem 1rem;
 	border-radius: 0;
 	border: none;
-	border-left: 3px solid var(--color-primary-element, #0082c9);
+	border-left: 3px solid var(--color-primary-element);
 	background: color-mix(in srgb, var(--color-primary-element) 6%, transparent);
 }
 
 #app-content.azc-app .azc-kiosk-enrollment-panel--waiting {
-	border-left-color: var(--color-primary-element, #0082c9);
+	border-left-color: var(--color-primary-element);
 }
 
 #app-content.azc-app .azc-kiosk-enrollment-panel--success {
-	border-left-color: var(--color-success, #2d7a3e);
+	border-left-color: var(--color-success);
 	background: color-mix(in srgb, var(--color-success) 8%, transparent);
 }
 
 #app-content.azc-app .azc-kiosk-enrollment-panel--error {
-	border-left-color: var(--color-error, #e9322d);
+	border-left-color: var(--color-error);
 	background: color-mix(in srgb, var(--color-error) 8%, transparent);
 }
 
 #app-content.azc-app .azc-kiosk-enrollment-panel--cancelled {
-	border-left-color: var(--color-text-maxcontrast, #6b6b6b);
+	border-left-color: var(--color-text-maxcontrast);
 	background: color-mix(in srgb, var(--color-text-maxcontrast) 6%, transparent);
 }
 
@@ -656,7 +656,7 @@
 #app-content.azc-app .azc-kiosk-modal-backdrop {
 	position: fixed;
 	inset: 0;
-	background: color-mix(in srgb, var(--color-main-text, #000) 48%, transparent);
+	background: color-mix(in srgb, var(--color-main-text) 48%, transparent);
 	z-index: 9998;
 }
 
@@ -725,7 +725,7 @@
 }
 
 #app-content.azc-app .azc-kiosk-modal__dismiss:focus-visible {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -766,7 +766,7 @@
 }
 
 #app-content.azc-app .azc-kiosk-modal__input:focus-visible {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -830,11 +830,11 @@
 }
 
 #app-content.azc-app .azc-kiosk-pin-share-status.is-success {
-	color: var(--color-success-text, var(--color-success, #2d7a3e));
+	color: var(--color-success-text, var(--color-success));
 }
 
 #app-content.azc-app .azc-kiosk-pin-share-status.is-error {
-	color: var(--color-error-text, var(--color-error, #e9322d));
+	color: var(--color-error-text, var(--color-error));
 }
 
 body.azc-kiosk-modal-open {
@@ -873,9 +873,9 @@ body.azc-kiosk-modal-open {
 }
 
 #app-content.azc-app .azc-kiosk-cred-row--focus {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: -2px;
-	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 10%, var(--color-main-background));
+	background: color-mix(in srgb, var(--color-primary-element) 10%, var(--color-main-background));
 }
 
 #app-content.azc-app .azc-kiosk-table {

@@ -70,6 +70,9 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\NotFoundResponse;
+use OCP\AppFramework\Http\RedirectResponse;
+use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IAppConfig;
 use OCP\DB\Exception as DBException;
@@ -141,6 +144,9 @@ class AdminController extends Controller
 	private AuditLogPresenter $auditLogPresenter;
 	private IDBConnection $db;
 	private ?LaborLawProfileFactory $laborLawProfileFactory;
+	private ?\OCP\IConfig $config;
+	private ?\OCP\Lock\ILockingProvider $lockingProvider;
+	private ?\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService $vacationUnitMigrationService;
 
 	private const AUDIT_LOG_PAGE_SIZE = 50;
 
@@ -184,6 +190,9 @@ class AdminController extends Controller
 		LocaleFormatService $localeFormat,
 		IDBConnection $db,
 		?LaborLawProfileFactory $laborLawProfileFactory = null,
+		?\OCP\IConfig $config = null,
+		?\OCP\Lock\ILockingProvider $lockingProvider = null,
+		?\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService $vacationUnitMigrationService = null,
 	) {
 		parent::__construct($appName, $request);
 		$this->timeEntryMapper = $timeEntryMapper;
@@ -222,6 +231,9 @@ class AdminController extends Controller
 		$this->localeFormat = $localeFormat;
 		$this->db = $db;
 		$this->laborLawProfileFactory = $laborLawProfileFactory;
+		$this->config = $config;
+		$this->lockingProvider = $lockingProvider;
+		$this->vacationUnitMigrationService = $vacationUnitMigrationService;
 		$this->setCspService($cspService);
 	}
 
@@ -380,6 +392,17 @@ class AdminController extends Controller
 		\OCA\ArbeitszeitCheck\Db\WorkingTimeModel $model,
 		array $breakRules,
 	): ?JSONResponse {
+		// List-encoded payloads (e.g. JS `[]` fallback) corrupt weekday_schedule
+		// storage — reject so clients must send a map or omit the field.
+		if ($breakRules !== [] && array_is_list($breakRules)) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('Validation failed'),
+				'errors' => ['breakRules' => 'SCHEDULE_INVALID'],
+				'code' => 'SCHEDULE_INVALID',
+			], Http::STATUS_BAD_REQUEST);
+		}
+
 		$scheduleRaw = $breakRules[WeekdaySchedule::KEY] ?? null;
 		if ($scheduleRaw !== null) {
 			if (!is_array($scheduleRaw)) {
@@ -826,11 +849,35 @@ class AdminController extends Controller
 	 *
 	 */
 	#[NoCSRFRequired]
-	public function settings(): TemplateResponse
+	/**
+	 * Global settings index → default section (SETTINGS-PAGES-STANDARD).
+	 */
+	#[NoCSRFRequired]
+	public function settings(): RedirectResponse
 	{
-		$this->registerFrontEndAssets('admin-settings', 'admin-settings', ['common/projectcheck', 'common/country-region'], ['common/settings-jump-nav', 'common/admin-user-picker']);
+		$catalog = new \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog();
+		return new RedirectResponse(
+			$catalog->url($this->urlGenerator, \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::DEFAULT_SECTION)
+		);
+	}
 
+	/**
+	 * Global settings section page (`/admin/settings/{section}`).
+	 */
+	#[NoCSRFRequired]
+	public function settingsSection(string $section): Response
+	{
+		$catalog = new \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog();
+		if (!$catalog->isSection($section)) {
+			return new NotFoundResponse();
+		}
 
+		$this->registerFrontEndAssets(
+			'admin-settings',
+			'admin-settings',
+			['common/projectcheck', 'common/country-region'],
+			['common/admin-user-picker', 'admin-settings-legacy-redirect']
+		);
 
 		$requireSubstituteJson = $this->appConfig->getAppValueString('require_substitute_types', '[]');
 		$requireSubstituteTypes = json_decode($requireSubstituteJson, true);
@@ -848,6 +895,10 @@ class AdminController extends Controller
 			'breakAutoFallbackFlexWindowEnd' => max(1, min(24, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_end', '16'))),
 			'missingClockInRemindersEnabled' => $this->appConfig->getAppValueString('missing_clock_in_reminders_enabled', '1') === '1',
 			'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
+			'datevBeraternummer' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_BERATERNUMMER, ''),
+			'datevMandantennummer' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_MANDANTENNUMMER, ''),
+			'datevLohnartNormal' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_NORMAL, '1000'),
+			'datevLohnartUeberstunden' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_UEBERSTUNDEN, '2000'),
 			'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
 			'monthClosureGraceDaysAfterEom' => max(0, min(90, (int)$this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM, '0'))),
 			'requireSubstituteTypes' => $requireSubstituteTypes,
@@ -885,20 +936,36 @@ class AdminController extends Controller
 
 		$projectCheckAvailable = $this->appManager->isEnabledForUser('projectcheck');
 
-		$response = new TemplateResponse('arbeitszeitcheck', 'admin-settings', array_merge(
-			$this->buildAdminShellParams(
-				'admin-settings',
-				$this->l10n->t('Global settings'),
-				$this->l10n->t('Manage global rules, access control, and compliance settings'),
+		$shell = $this->buildAdminShellParams(
+			'admin-settings',
+			$catalog->label($this->l10n, $section),
+			$catalog->help($this->l10n, $section),
+		);
+		// SETTINGS-PAGES-STANDARD §7: App → Global settings (link) → section
+		$shell['breadcrumbSection'] = '';
+		$shell['breadcrumbParent'] = [
+			'label' => $this->l10n->t('Global settings'),
+			'url' => $catalog->url(
+				$this->urlGenerator,
+				\OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::DEFAULT_SECTION
 			),
+		];
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-settings', array_merge(
+			$shell,
 			[
 				'settings' => $settings,
+				'settingsSection' => $section,
+				'settingsPages' => $catalog->chipBarPayload($this->l10n, $this->urlGenerator, $section),
 				'availableGroups' => $this->getAvailableGroupsForAccessControl(),
 				'availableAppAdmins' => $this->getAvailableAppAdminsForAccessControl(),
 				'availableAccessUsers' => $this->getAvailableAccessUsersForAccessControl(),
 				'urlGenerator' => $this->urlGenerator,
 				'settingsShell' => 'app',
-				'inAppAdminSettingsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings'),
+				'inAppAdminSettingsUrl' => $catalog->url(
+					$this->urlGenerator,
+					\OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::DEFAULT_SECTION
+				),
 				'supportUsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.supportUs'),
 				'projectCheckAvailable' => $projectCheckAvailable,
 				'requesttoken' => Util::callRegister(),
@@ -933,23 +1000,53 @@ class AdminController extends Controller
 	}
 
 	/**
-	 * Admin notifications page (HR office matrix settings).
+	 * Admin notifications page (alerts, calendar email, HR mailbox).
 	 */
 	#[NoCSRFRequired]
 	public function notifications(): TemplateResponse
 	{
-		$this->registerFrontEndAssets('admin-notifications', 'admin-notifications', ['admin-settings'], ['common/settings-jump-nav']);
+		$this->registerFrontEndAssets(
+			'admin-notifications',
+			'admin-notifications',
+			['admin-settings'],
+			['admin-policy-legacy-redirect']
+		);
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-notifications', array_merge(
 			$this->buildAdminShellParams(
 				'admin-notifications',
 				$this->l10n->t('Notifications'),
-				$this->l10n->t('Configure notification rules for absences, overtime alerts, and HR mailbox delivery.'),
+				$this->l10n->t('Reminders, calendar emails, overtime alerts, and HR mailbox.'),
 			),
 			[
 				'settings' => $this->buildNotificationSettingsPayload(),
 				'absenceTypes' => $this->getNotificationAbsenceTypes(),
 				'eventTypes' => $this->getNotificationEventTypes(),
+				'urlGenerator' => $this->urlGenerator,
+				'l' => $this->l10n,
+				'requesttoken' => Util::callRegister(),
+			],
+		));
+
+		return $this->configureCSP($response, 'admin');
+	}
+
+	/**
+	 * Admin overtime settings (bank cap + hour premiums).
+	 */
+	#[NoCSRFRequired]
+	public function overtimeSettings(): TemplateResponse
+	{
+		$this->registerFrontEndAssets('admin-notifications', 'admin-notifications', ['admin-settings']);
+
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-overtime-settings', array_merge(
+			$this->buildAdminShellParams(
+				'admin-overtime-settings',
+				$this->l10n->t('Overtime & premiums'),
+				$this->l10n->t('Overtime bank and hour premiums for reports.'),
+			),
+			[
+				'settings' => $this->buildNotificationSettingsPayload(),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 				'requesttoken' => Util::callRegister(),
@@ -993,6 +1090,42 @@ class AdminController extends Controller
 		$country = strtoupper(trim($this->appConfig->getAppValueString('country', RegionRegistry::COUNTRY_DE)));
 
 		return RegionRegistry::isSupportedCountry($country) ? $country : RegionRegistry::COUNTRY_DE;
+	}
+
+	/**
+	 * Bachus: admin APIs always speak calendar days; storage may be hours.
+	 */
+	private function vacationUnitService(): \OCA\ArbeitszeitCheck\Service\VacationUnitService
+	{
+		$config = $this->config;
+		if ($config === null) {
+			$config = \OCP\Server::get(\OCP\IConfig::class);
+			$this->config = $config;
+		}
+
+		return new \OCA\ArbeitszeitCheck\Service\VacationUnitService($config);
+	}
+
+	private function presentAdminVacationDays(?float $stored): ?float
+	{
+		if ($stored === null) {
+			return null;
+		}
+
+		return $this->vacationUnitService()->storedAmountToAdminDays($stored);
+	}
+
+	/**
+	 * @param array<string, mixed> $summary
+	 * @return array<string, mixed>
+	 */
+	private function presentUserWorkingTimeModelSummary(array $summary): array
+	{
+		if (isset($summary['vacationDaysPerYear']) && $summary['vacationDaysPerYear'] !== null) {
+			$summary['vacationDaysPerYear'] = $this->presentAdminVacationDays((float)$summary['vacationDaysPerYear']);
+		}
+
+		return $summary;
 	}
 
 	/**
@@ -1957,6 +2090,10 @@ class AdminController extends Controller
 				'breakAutoFallbackFlexWindowEnd' => max(1, min(24, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_end', '16'))),
 				'missingClockInRemindersEnabled' => $this->appConfig->getAppValueString('missing_clock_in_reminders_enabled', '1') === '1',
 				'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
+				'datevBeraternummer' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_BERATERNUMMER, ''),
+				'datevMandantennummer' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_MANDANTENNUMMER, ''),
+				'datevLohnartNormal' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_NORMAL, '1000'),
+				'datevLohnartUeberstunden' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_UEBERSTUNDEN, '2000'),
 				'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
 				'monthClosureGraceDaysAfterEom' => max(0, min(90, (int)$this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM, '0'))),
 				'requireSubstituteTypes' => $requireSubstituteTypes,
@@ -2030,6 +2167,25 @@ class AdminController extends Controller
 	{
 		try {
 			$params = $this->request->getParams();
+			$catalog = new \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog();
+			$scopeRaw = (string)($params['settings_section'] ?? $params['settingsSection'] ?? '');
+			$scope = $scopeRaw === ''
+				? \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::SECTION_ALL
+				: $scopeRaw;
+			if (!$catalog->isWritableScope($scope)) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Invalid settings section.'),
+				], Http::STATUS_BAD_REQUEST);
+			}
+			$allowedForScope = $catalog->allowedParamKeys($scope);
+			$paramAllowed = static function (string $key) use ($allowedForScope): bool {
+				return $allowedForScope === null || in_array($key, $allowedForScope, true);
+			};
+			$accessScopeOk = $scope === \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::SECTION_ALL
+				|| $scope === \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::SECTION_ACCESS;
+			$timeCaptureScopeOk = $scope === \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::SECTION_ALL
+				|| $scope === \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::SECTION_TIME_RECORDING;
 
 			// List of allowed admin settings keys
 			$allowedKeys = [
@@ -2076,6 +2232,9 @@ class AdminController extends Controller
 
 			// Update each setting if provided
 			foreach ($allowedKeys as $paramKey => $configKey) {
+				if (!$paramAllowed($paramKey)) {
+					continue;
+				}
 				if (isset($params[$paramKey])) {
 					$value = $params[$paramKey];
 
@@ -2160,10 +2319,14 @@ class AdminController extends Controller
 							$value = '';
 						} else {
 							$max = (float)str_replace(',', '.', $s);
-							if (!is_finite($max) || $max < 0 || $max > 366) {
+							$hoursMode = (new \OCA\ArbeitszeitCheck\Service\VacationUnitService($this->config))->isHoursMode();
+							$ceiling = $hoursMode ? 4000.0 : 366.0;
+							if (!is_finite($max) || $max < 0 || $max > $ceiling) {
 								return new JSONResponse([
 									'success' => false,
-									'error' => $this->l10n->t('Maximum carryover days must be empty (unlimited) or between 0 and 366')
+									'error' => $hoursMode
+										? $this->l10n->t('Maximum carryover hours must be empty (unlimited) or between 0 and 4000')
+										: $this->l10n->t('Maximum carryover days must be empty (unlimited) or between 0 and 366')
 								], Http::STATUS_BAD_REQUEST);
 							}
 							$value = (string)$max;
@@ -2197,6 +2360,61 @@ class AdminController extends Controller
 				}
 			}
 
+			if ($paramAllowed('datevBeraternummer') && (
+				array_key_exists('datevBeraternummer', $params)
+				|| array_key_exists('datevMandantennummer', $params)
+				|| array_key_exists('datevLohnartNormal', $params)
+				|| array_key_exists('datevLohnartUeberstunden', $params)
+			)) {
+				$berater = array_key_exists('datevBeraternummer', $params)
+					? \OCA\ArbeitszeitCheck\Support\DatevOrgCredentials::normalizeDigits($params['datevBeraternummer'])
+					: $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_BERATERNUMMER, '');
+				$mandant = array_key_exists('datevMandantennummer', $params)
+					? \OCA\ArbeitszeitCheck\Support\DatevOrgCredentials::normalizeDigits($params['datevMandantennummer'])
+					: $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_MANDANTENNUMMER, '');
+				$pairErrors = \OCA\ArbeitszeitCheck\Support\DatevOrgCredentials::validatePair($berater, $mandant);
+				if ($pairErrors !== []) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Validation failed'),
+						'code' => $pairErrors[0],
+						'codes' => $pairErrors,
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$lohnNormal = array_key_exists('datevLohnartNormal', $params)
+					? \OCA\ArbeitszeitCheck\Support\DatevOrgCredentials::normalizeDigits($params['datevLohnartNormal'])
+					: $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_NORMAL, '1000');
+				if ($lohnNormal === '') {
+					$lohnNormal = '1000';
+				}
+				$lohnOt = array_key_exists('datevLohnartUeberstunden', $params)
+					? \OCA\ArbeitszeitCheck\Support\DatevOrgCredentials::normalizeDigits($params['datevLohnartUeberstunden'])
+					: $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_UEBERSTUNDEN, '2000');
+				if ($lohnOt === '') {
+					$lohnOt = '2000';
+				}
+				$lohnErrors = array_merge(
+					\OCA\ArbeitszeitCheck\Support\DatevOrgCredentials::validateLohnart($lohnNormal, false),
+					\OCA\ArbeitszeitCheck\Support\DatevOrgCredentials::validateLohnart($lohnOt, false)
+				);
+				if ($lohnErrors !== []) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Validation failed'),
+						'code' => $lohnErrors[0],
+						'codes' => $lohnErrors,
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$this->appConfig->setAppValueString(Constants::CONFIG_DATEV_BERATERNUMMER, $berater);
+				$this->appConfig->setAppValueString(Constants::CONFIG_DATEV_MANDANTENNUMMER, $mandant);
+				$this->appConfig->setAppValueString(Constants::CONFIG_DATEV_LOHNART_NORMAL, $lohnNormal);
+				$this->appConfig->setAppValueString(Constants::CONFIG_DATEV_LOHNART_UEBERSTUNDEN, $lohnOt);
+				$updatedSettings['datevBeraternummer'] = $berater;
+				$updatedSettings['datevMandantennummer'] = $mandant;
+				$updatedSettings['datevLohnartNormal'] = $lohnNormal;
+				$updatedSettings['datevLohnartUeberstunden'] = $lohnOt;
+			}
+
 			// Consistency: default region must always belong to the configured
 			// country. Runs after a non-empty settings write (not on no-op POSTs)
 			// so interleaved region-only + country POSTs cannot leave orphan pairs
@@ -2222,10 +2440,11 @@ class AdminController extends Controller
 				$this->clearLaborLawProfileCache();
 			}
 
-			if (array_key_exists('accessRestrictionEnabled', $params)
+			if ($accessScopeOk && (
+				array_key_exists('accessRestrictionEnabled', $params)
 				|| array_key_exists('accessAllowedGroups', $params)
 				|| array_key_exists('accessAllowedUserIds', $params)
-			) {
+			)) {
 				$restrictionEnabled = array_key_exists('accessRestrictionEnabled', $params)
 					? $this->toBool($params['accessRestrictionEnabled'])
 					: $this->isAccessRestrictionEnabledFromConfig();
@@ -2262,7 +2481,7 @@ class AdminController extends Controller
 				$updatedSettings['accessAllowedUserIds'] = $users;
 			}
 
-			if (array_key_exists('appAdminUserIds', $params)) {
+			if ($accessScopeOk && array_key_exists('appAdminUserIds', $params)) {
 				$userIdsRaw = $params['appAdminUserIds'];
 				$userIds = is_array($userIdsRaw) ? $userIdsRaw : (is_string($userIdsRaw) ? json_decode($userIdsRaw, true) : []);
 				if (!is_array($userIds)) {
@@ -2273,7 +2492,7 @@ class AdminController extends Controller
 				$updatedSettings['appAdminUserIds'] = $normalizedAdminUserIds;
 			}
 
-			if (array_key_exists('clockStampingEnabled', $params) || array_key_exists('manualTimeEntryEnabled', $params)) {
+			if ($timeCaptureScopeOk && (array_key_exists('clockStampingEnabled', $params) || array_key_exists('manualTimeEntryEnabled', $params))) {
 				try {
 					$orgCapture = $this->timeCaptureMethodService->setOrganizationDefaults([
 						'clockStampingEnabled' => array_key_exists('clockStampingEnabled', $params)
@@ -2317,102 +2536,316 @@ class AdminController extends Controller
 	{
 		try {
 			$params = $this->request->getParams();
-			$enabled = $this->toBool($params['enabled'] ?? false);
-			$rawRecipients = $params['recipients'] ?? '';
-			$rawMatrix = $params['matrix'] ?? [];
-			$rawRecipientsString = is_array($rawRecipients) ? implode(',', array_map(static fn (mixed $v): string => (string)$v, $rawRecipients)) : (string)$rawRecipients;
-			if (mb_strlen($rawRecipientsString) > self::MAX_NOTIFICATION_RECIPIENTS_RAW_LENGTH) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Recipient input is too long. Please reduce the number of addresses.'),
-				], Http::STATUS_BAD_REQUEST);
+			// Never gate HR on bare `enabled` alone — query/body pollution could wipe HR.
+			$hasHrSection = array_key_exists('hrNotificationsEnabled', $params)
+				|| array_key_exists('recipients', $params)
+				|| array_key_exists('matrix', $params);
+			$hasTrafficSection = array_key_exists('overtimeTrafficLightEnabled', $params);
+			$hasBankSection = array_key_exists('overtimeBankEnabled', $params);
+
+			// ── Validate all section payloads before any IConfig writes (atomic UX) ──
+			$hrWrite = null;
+			if ($hasHrSection) {
+				$writeHrEnabled = array_key_exists('hrNotificationsEnabled', $params)
+					|| array_key_exists('enabled', $params);
+				$writeHrRecipients = array_key_exists('recipients', $params);
+				$writeHrMatrix = array_key_exists('matrix', $params);
+				$enabled = $writeHrEnabled
+					? $this->toBool($params['hrNotificationsEnabled'] ?? $params['enabled'] ?? false)
+					: null;
+
+				$recipients = [];
+				$matrix = [];
+				if ($writeHrRecipients) {
+					$rawRecipients = $params['recipients'] ?? '';
+					$rawRecipientsString = is_array($rawRecipients)
+						? implode(',', array_map(static fn (mixed $v): string => (string)$v, $rawRecipients))
+						: (string)$rawRecipients;
+					if (mb_strlen($rawRecipientsString) > self::MAX_NOTIFICATION_RECIPIENTS_RAW_LENGTH) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Recipient input is too long. Please reduce the number of addresses.'),
+						], Http::STATUS_BAD_REQUEST);
+					}
+
+					$recipients = $this->normalizeNotificationRecipients($rawRecipients);
+					$invalidRecipients = $this->collectInvalidNotificationRecipients($rawRecipients);
+					if ($invalidRecipients !== []) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Invalid recipient email: %s', [implode(', ', $invalidRecipients)]),
+						], Http::STATUS_BAD_REQUEST);
+					}
+					if (count($recipients) > self::MAX_NOTIFICATION_RECIPIENTS) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('A maximum of 20 HR recipients is allowed.'),
+						], Http::STATUS_BAD_REQUEST);
+					}
+				}
+				if ($writeHrMatrix) {
+					$matrix = $this->normalizeNotificationMatrix($params['matrix'] ?? []);
+				}
+
+				$effectiveEnabled = $writeHrEnabled
+					? (bool)$enabled
+					: $this->toBool($this->appConfig->getAppValueString(Constants::CONFIG_HR_NOTIFICATIONS_ENABLED, '0'));
+				if ($effectiveEnabled) {
+					if ($writeHrRecipients && $recipients === []) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Please enter at least one valid recipient email address.'),
+						], Http::STATUS_BAD_REQUEST);
+					}
+					if ($writeHrEnabled && $enabled === true && !$writeHrRecipients) {
+						$existingRecipients = $this->normalizeNotificationRecipients(
+							$this->appConfig->getAppValueString(Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, '')
+						);
+						if ($existingRecipients === []) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $this->l10n->t('Please enter at least one valid recipient email address.'),
+							], Http::STATUS_BAD_REQUEST);
+						}
+					}
+				}
+
+				$hrWrite = [
+					'writeEnabled' => $writeHrEnabled,
+					'enabled' => $enabled,
+					'recipients' => $recipients,
+					'matrix' => $matrix,
+					'writeRecipients' => $writeHrRecipients,
+					'writeMatrix' => $writeHrMatrix,
+				];
 			}
 
-			$recipients = $this->normalizeNotificationRecipients($rawRecipients);
-			$invalidRecipients = $this->collectInvalidNotificationRecipients($rawRecipients);
-			if ($invalidRecipients !== []) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Invalid recipient email: %s', [implode(', ', $invalidRecipients)]),
-				], Http::STATUS_BAD_REQUEST);
-			}
-			if (count($recipients) > self::MAX_NOTIFICATION_RECIPIENTS) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('A maximum of 20 HR recipients is allowed.'),
-				], Http::STATUS_BAD_REQUEST);
-			}
-			if ($enabled && $recipients === []) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Please enter at least one valid recipient email address.'),
-				], Http::STATUS_BAD_REQUEST);
+			$trafficWrite = null;
+			if ($hasTrafficSection) {
+				$trafficEnabled = $this->toBool($params['overtimeTrafficLightEnabled'] ?? false);
+				$writeRecipients = array_key_exists('overtimeRecipients', $params);
+				$writeMatrix = array_key_exists('overtimeMatrix', $params);
+				$writeThresholds = array_key_exists('overtimeYellowOver', $params)
+					|| array_key_exists('overtimeRedOver', $params)
+					|| array_key_exists('overtimeYellowUnder', $params)
+					|| array_key_exists('overtimeRedUnder', $params);
+
+				$overtimeRecipients = [];
+				$overtimeMatrix = [];
+				$yellowOver = $redOver = $yellowUnder = $redUnder = null;
+				if ($writeRecipients || $trafficEnabled) {
+					$overtimeRecipientsRaw = $params['overtimeRecipients'] ?? '';
+					$overtimeRecipients = $this->normalizeNotificationRecipients($overtimeRecipientsRaw);
+					$overtimeInvalidRecipients = $this->collectInvalidNotificationRecipients($overtimeRecipientsRaw);
+					if ($overtimeInvalidRecipients !== []) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Invalid recipient email: %s', [implode(', ', $overtimeInvalidRecipients)]),
+						], Http::STATUS_BAD_REQUEST);
+					}
+					if (count($overtimeRecipients) > self::MAX_NOTIFICATION_RECIPIENTS) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('A maximum of 20 balance traffic light recipients is allowed.'),
+						], Http::STATUS_BAD_REQUEST);
+					}
+					if ($trafficEnabled && $writeRecipients && $overtimeRecipients === []) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Please enter at least one valid balance traffic light recipient email address (overtime/undertime).'),
+						], Http::STATUS_BAD_REQUEST);
+					}
+				}
+				if ($writeMatrix) {
+					$overtimeMatrix = $this->normalizeOvertimeNotificationMatrix($params['overtimeMatrix'] ?? []);
+				}
+				if ($writeThresholds) {
+					$yellowOver = max(0.0, min(500.0, (float)($params['overtimeYellowOver'] ?? 5)));
+					$redOver = max(0.0, min(500.0, (float)($params['overtimeRedOver'] ?? 15)));
+					$yellowUnder = max(0.0, min(500.0, (float)($params['overtimeYellowUnder'] ?? 5)));
+					$redUnder = max(0.0, min(500.0, (float)($params['overtimeRedUnder'] ?? 15)));
+					if ($yellowOver > $redOver || $yellowUnder > $redUnder) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Yellow thresholds must be less than or equal to red thresholds.'),
+						], Http::STATUS_BAD_REQUEST);
+					}
+				}
+				$trafficWrite = [
+					'enabled' => $trafficEnabled,
+					'writeRecipients' => $writeRecipients,
+					'writeMatrix' => $writeMatrix,
+					'writeThresholds' => $writeThresholds,
+					'recipients' => $overtimeRecipients,
+					'matrix' => $overtimeMatrix,
+					'yellowOver' => $yellowOver,
+					'redOver' => $redOver,
+					'yellowUnder' => $yellowUnder,
+					'redUnder' => $redUnder,
+				];
 			}
 
-			$matrix = $this->normalizeNotificationMatrix($rawMatrix);
+			$bankWrite = null;
+			if ($hasBankSection) {
+				$bankEnabled = $this->toBool($params['overtimeBankEnabled'] ?? false);
+				$writeMax = array_key_exists('overtimeBankMaxHours', $params);
+				$writeYellow = array_key_exists('overtimeBankYellowPercent', $params);
+				$writeRed = array_key_exists('overtimeBankRedPercent', $params);
+				$bankMax = null;
+				$bankYellowPct = null;
+				$bankRedPct = null;
+				if ($writeMax) {
+					$bankMaxRaw = (float)str_replace(',', '.', trim((string)($params['overtimeBankMaxHours'] ?? '100')));
+					$bankMax = is_finite($bankMaxRaw)
+						? max(1.0, min(500.0, round($bankMaxRaw, 2)))
+						: 100.0;
+				}
+				if ($writeYellow) {
+					$bankYellowPct = max(0, min(100, (int)$params['overtimeBankYellowPercent']));
+				}
+				if ($writeRed) {
+					$bankRedPct = max(0, min(100, (int)$params['overtimeBankRedPercent']));
+				}
+				if ($writeYellow && $writeRed && $bankYellowPct > $bankRedPct) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Bank fill yellow percent must be less than or equal to red percent.'),
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$bankWrite = [
+					'enabled' => $bankEnabled,
+					'writeMax' => $writeMax,
+					'writeYellow' => $writeYellow,
+					'writeRed' => $writeRed,
+					'max' => $bankMax,
+					'yellow' => $bankYellowPct,
+					'red' => $bankRedPct,
+				];
+			}
 
-			$trafficEnabled = $this->toBool($params['overtimeTrafficLightEnabled'] ?? false);
-			$overtimeRecipientsRaw = $params['overtimeRecipients'] ?? '';
-			$overtimeRecipients = $this->normalizeNotificationRecipients($overtimeRecipientsRaw);
-			$overtimeInvalidRecipients = $this->collectInvalidNotificationRecipients($overtimeRecipientsRaw);
-			if ($overtimeInvalidRecipients !== []) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Invalid recipient email: %s', [implode(', ', $overtimeInvalidRecipients)]),
-				], Http::STATUS_BAD_REQUEST);
+			// Premium / DATEV: validate before any section writes so bank/HR are not half-committed.
+			$premiumWrite = null;
+			if (array_key_exists('premiumPolicy', $params)) {
+				$policyRaw = $params['premiumPolicy'];
+				if (!is_array($policyRaw)) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Validation failed'),
+						'code' => 'PREMIUM_POLICY_INVALID',
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$errors = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::validate($policyRaw);
+				if ($errors !== []) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Validation failed'),
+						'code' => $errors[0],
+						'codes' => $errors,
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$premiumWrite = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::fromValidated($policyRaw);
 			}
-			if (count($overtimeRecipients) > self::MAX_NOTIFICATION_RECIPIENTS) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('A maximum of 20 balance traffic light recipients is allowed.'),
-				], Http::STATUS_BAD_REQUEST);
-			}
-			if ($trafficEnabled && $overtimeRecipients === []) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Please enter at least one valid balance traffic light recipient email address (overtime/undertime).'),
-				], Http::STATUS_BAD_REQUEST);
-			}
-			$overtimeMatrix = $this->normalizeOvertimeNotificationMatrix($params['overtimeMatrix'] ?? []);
-			$yellowOver = max(0.0, min(500.0, (float)($params['overtimeYellowOver'] ?? 5)));
-			$redOver = max(0.0, min(500.0, (float)($params['overtimeRedOver'] ?? 15)));
-			$yellowUnder = max(0.0, min(500.0, (float)($params['overtimeYellowUnder'] ?? 5)));
-			$redUnder = max(0.0, min(500.0, (float)($params['overtimeRedUnder'] ?? 15)));
-			if ($yellowOver > $redOver || $yellowUnder > $redUnder) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Yellow thresholds must be less than or equal to red thresholds.'),
-				], Http::STATUS_BAD_REQUEST);
+			$datevMapWrite = null;
+			if (array_key_exists('datevLohnartPremiumMap', $params)) {
+				$mapRaw = $params['datevLohnartPremiumMap'];
+				$mapErrors = \OCA\ArbeitszeitCheck\Support\DatevPremiumLohnartMap::validate($mapRaw);
+				if ($mapErrors !== []) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Validation failed'),
+						'code' => $mapErrors[0],
+						'codes' => $mapErrors,
+					], Http::STATUS_BAD_REQUEST);
+				}
+				$datevMapWrite = \OCA\ArbeitszeitCheck\Support\DatevPremiumLohnartMap::normalize($mapRaw);
 			}
 
-			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATIONS_ENABLED, $enabled ? '1' : '0');
-			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, implode(',', $recipients));
-			$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1, (string)json_encode($matrix));
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_TRAFFIC_LIGHT_ENABLED, $trafficEnabled ? '1' : '0');
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_NOTIFICATION_RECIPIENTS, implode(',', $overtimeRecipients));
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_NOTIFICATION_MATRIX_V1, (string)json_encode($overtimeMatrix));
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_YELLOW_OVER, (string)$yellowOver);
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_RED_OVER, (string)$redOver);
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_YELLOW_UNDER, (string)$yellowUnder);
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_RED_UNDER, (string)$redUnder);
-
-			$bankEnabled = $this->toBool($params['overtimeBankEnabled'] ?? false);
-			$bankMaxRaw = (float)str_replace(',', '.', trim((string)($params['overtimeBankMaxHours'] ?? '100')));
-			$bankMax = is_finite($bankMaxRaw)
-				? max(1.0, min(500.0, round($bankMaxRaw, 2)))
-				: 100.0;
-			$bankYellowPct = max(0, min(100, (int)($params['overtimeBankYellowPercent'] ?? 80)));
-			$bankRedPct = max(0, min(100, (int)($params['overtimeBankRedPercent'] ?? 95)));
-			if ($bankYellowPct > $bankRedPct) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Bank fill yellow percent must be less than or equal to red percent.'),
-				], Http::STATUS_BAD_REQUEST);
+			// Vacation year-mode ack must fail closed before sibling vacation keys write.
+			if (isset($params['vacationYearMode'])) {
+				$previous = VacationYearWindowResolver::normalizeMode(
+					$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_YEAR_MODE, Constants::DEFAULT_VACATION_YEAR_MODE)
+				);
+				$nextMode = VacationYearWindowResolver::normalizeMode((string)$params['vacationYearMode']);
+				if ($nextMode !== $previous && $nextMode === Constants::VACATION_YEAR_MODE_ANNIVERSARY) {
+					$missingHire = $this->countUsersMissingEmploymentStart();
+					$ack = $params['vacationYearMissingHireAcknowledged'] ?? $params['vacation_year_missing_hire_acknowledged'] ?? false;
+					$ackOk = $ack === true || $ack === 'true' || $ack === '1' || $ack === 1;
+					if ($missingHire > 0 && !$ackOk) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t(
+								'%s people are missing a hire date. Set their employment start under Employees, or confirm you understand they will have no vacation entitlement until then.',
+								[(string)$missingHire]
+							),
+							'code' => Constants::VAC_YEAR_MISSING_HIRE_ACK_REQUIRED,
+							'missingHireCount' => $missingHire,
+						], Http::STATUS_CONFLICT);
+					}
+				}
 			}
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_BANK_ENABLED, $bankEnabled ? '1' : '0');
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_BANK_MAX_HOURS, (string)$bankMax);
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_BANK_YELLOW_PERCENT, (string)$bankYellowPct);
-			$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_BANK_RED_PERCENT, (string)$bankRedPct);
+
+			// Pre-validate carryover max so invalid values cannot half-commit earlier vacation keys.
+			if (isset($params['vacationCarryoverMaxDays'])) {
+				$s = trim((string)$params['vacationCarryoverMaxDays']);
+				if ($s !== '') {
+					$max = (float)str_replace(',', '.', $s);
+					$hoursMode = (new \OCA\ArbeitszeitCheck\Service\VacationUnitService($this->config))->isHoursMode();
+					$ceiling = $hoursMode ? 4000.0 : 366.0;
+					if (!is_finite($max) || $max < 0 || $max > $ceiling) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $hoursMode
+								? $this->l10n->t('Maximum carryover hours must be empty (unlimited) or between 0 and 4000')
+								: $this->l10n->t('Maximum carryover days must be empty (unlimited) or between 0 and 366')
+						], Http::STATUS_BAD_REQUEST);
+					}
+				}
+			}
+
+			// ── Commit phase ──
+			if ($hrWrite !== null) {
+				if ($hrWrite['writeEnabled']) {
+					$this->appConfig->setAppValueString(
+						Constants::CONFIG_HR_NOTIFICATIONS_ENABLED,
+						$hrWrite['enabled'] ? '1' : '0'
+					);
+				}
+				if ($hrWrite['writeRecipients']) {
+					$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS, implode(',', $hrWrite['recipients']));
+				}
+				if ($hrWrite['writeMatrix']) {
+					$this->appConfig->setAppValueString(Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1, (string)json_encode($hrWrite['matrix']));
+				}
+			}
+
+			if ($trafficWrite !== null) {
+				$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_TRAFFIC_LIGHT_ENABLED, $trafficWrite['enabled'] ? '1' : '0');
+				if ($trafficWrite['writeRecipients']) {
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_NOTIFICATION_RECIPIENTS, implode(',', $trafficWrite['recipients']));
+				}
+				if ($trafficWrite['writeMatrix']) {
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_NOTIFICATION_MATRIX_V1, (string)json_encode($trafficWrite['matrix']));
+				}
+				if ($trafficWrite['writeThresholds']) {
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_YELLOW_OVER, (string)$trafficWrite['yellowOver']);
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_RED_OVER, (string)$trafficWrite['redOver']);
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_YELLOW_UNDER, (string)$trafficWrite['yellowUnder']);
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_THRESHOLD_RED_UNDER, (string)$trafficWrite['redUnder']);
+				}
+			}
+
+			if ($bankWrite !== null) {
+				$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_BANK_ENABLED, $bankWrite['enabled'] ? '1' : '0');
+				if ($bankWrite['writeMax']) {
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_BANK_MAX_HOURS, (string)$bankWrite['max']);
+				}
+				if ($bankWrite['writeYellow']) {
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_BANK_YELLOW_PERCENT, (string)$bankWrite['yellow']);
+				}
+				if ($bankWrite['writeRed']) {
+					$this->appConfig->setAppValueString(Constants::CONFIG_OVERTIME_BANK_RED_PERCENT, (string)$bankWrite['red']);
+				}
+			}
 
 			if (isset($params['overtimePayoutNotifyInApp'])) {
 				$this->appConfig->setAppValueString(
@@ -2452,33 +2885,42 @@ class AdminController extends Controller
 			];
 
 			// Premium policy JSON is validated separately (not a simple string map).
-			if (array_key_exists('premiumPolicy', $params)) {
-				$policyRaw = $params['premiumPolicy'];
-				if (!is_array($policyRaw)) {
+			if ($premiumWrite !== null) {
+				$locking = $this->lockingProvider ?? \OCP\Server::get(\OCP\Lock\ILockingProvider::class);
+				$policyLock = \OCA\ArbeitszeitCheck\Service\DbLockKeys::premiumPolicy();
+				try {
+					$locking->acquireLock($policyLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE, 'Premium policy save');
+				} catch (\OCP\Lock\LockedException $e) {
 					return new JSONResponse([
 						'success' => false,
-						'error' => $this->l10n->t('Validation failed'),
-						'code' => 'PREMIUM_POLICY_INVALID',
-					], Http::STATUS_BAD_REQUEST);
+						'error' => $this->l10n->t('Premium policy is being updated or sealed. Please try again.'),
+						'code' => 'PREMIUM_POLICY_BUSY',
+					], Http::STATUS_CONFLICT);
 				}
-				$errors = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::validate($policyRaw);
-				if ($errors !== []) {
-					return new JSONResponse([
-						'success' => false,
-						'error' => $this->l10n->t('Validation failed'),
-						'code' => $errors[0],
-						'codes' => $errors,
-					], Http::STATUS_BAD_REQUEST);
+				try {
+					$this->appConfig->setAppValueString(
+						Constants::CONFIG_PREMIUM_POLICY_JSON,
+						json_encode($premiumWrite->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)
+					);
+					$ver = (int)$this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, '0');
+					$this->appConfig->setAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, (string)($ver + 1));
+				} finally {
+					try {
+						$locking->releaseLock($policyLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE);
+					} catch (\Throwable) {
+						// best-effort
+					}
 				}
-				$policy = \OCA\ArbeitszeitCheck\Support\PremiumPolicy::fromValidated($policyRaw);
-				$this->appConfig->setAppValueString(
-					Constants::CONFIG_PREMIUM_POLICY_JSON,
-					json_encode($policy->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)
-				);
-				$ver = (int)$this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, '0');
-				$this->appConfig->setAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, (string)($ver + 1));
 			}
 
+			if ($datevMapWrite !== null) {
+				$this->appConfig->setAppValueString(
+					Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP,
+					\OCA\ArbeitszeitCheck\Support\DatevPremiumLohnartMap::toJson($datevMapWrite)
+				);
+			}
+
+			$yearModeFlip = null;
 			foreach ($allowedKeys as $paramKey => $configKey) {
 				if (!isset($params[$paramKey])) {
 					continue;
@@ -2508,16 +2950,18 @@ class AdminController extends Controller
 					);
 					$value = VacationYearWindowResolver::normalizeMode((string)$value);
 					if ($value !== $previous) {
-						$performedBy = $this->getPerformedBy();
-						$this->auditLogMapper->logAction(
-							$performedBy,
-							'vacation_year_mode_changed',
-							'app_config',
-							0,
-							['vacation_year_mode' => $previous],
-							['vacation_year_mode' => $value],
-							$performedBy
-						);
+						$missingHire = 0;
+						if ($value === Constants::VACATION_YEAR_MODE_ANNIVERSARY) {
+							$missingHire = $this->countUsersMissingEmploymentStart();
+						}
+						$yearModeFlip = [
+							'previous' => $previous,
+							'next' => $value,
+							'missing_hire_count' => $missingHire,
+							'missing_hire_acknowledged' => $missingHire > 0,
+						];
+						// Defer IConfig write until exclusive year-mode + migrate-idle shared lock (AC-101.4).
+						continue;
 					}
 				} elseif ($paramKey === 'vacationCarryoverExpiryMonth') {
 					$value = (string)max(1, min(12, (int)$value));
@@ -2529,10 +2973,14 @@ class AdminController extends Controller
 						$value = '';
 					} else {
 						$max = (float)str_replace(',', '.', $s);
-						if (!is_finite($max) || $max < 0 || $max > 366) {
+						$hoursMode = (new \OCA\ArbeitszeitCheck\Service\VacationUnitService($this->config))->isHoursMode();
+						$ceiling = $hoursMode ? 4000.0 : 366.0;
+						if (!is_finite($max) || $max < 0 || $max > $ceiling) {
 							return new JSONResponse([
 								'success' => false,
-								'error' => $this->l10n->t('Maximum carryover days must be empty (unlimited) or between 0 and 366')
+								'error' => $hoursMode
+									? $this->l10n->t('Maximum carryover hours must be empty (unlimited) or between 0 and 4000')
+									: $this->l10n->t('Maximum carryover days must be empty (unlimited) or between 0 and 366')
 							], Http::STATUS_BAD_REQUEST);
 						}
 						$value = (string)$max;
@@ -2544,12 +2992,188 @@ class AdminController extends Controller
 				$this->appConfig->setAppValueString($configKey, $value);
 			}
 
+			$allocationsRefreshed = 0;
+			$allocationsFailed = [];
+			if ($yearModeFlip !== null) {
+				$locking = $this->lockingProvider ?? \OCP\Server::get(\OCP\Lock\ILockingProvider::class);
+				$yearLock = \OCA\ArbeitszeitCheck\Service\DbLockKeys::vacationYearMode();
+				try {
+					$locking->acquireLock($yearLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE, 'Vacation year mode flip');
+				} catch (\OCP\Lock\LockedException $e) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Vacation year mode is being updated. Please try again.'),
+						'code' => 'VAC_YEAR_MODE_BUSY',
+					], Http::STATUS_CONFLICT);
+				}
+				try {
+					$migration = $this->vacationUnitMigrationService
+						?? \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService::class);
+					try {
+						$refreshResult = $migration->withIdleShared(function () use ($yearModeFlip) {
+							$this->appConfig->setAppValueString(
+								Constants::CONFIG_VACATION_YEAR_MODE,
+								$yearModeFlip['next']
+							);
+							$userIds = [];
+							$this->userManager->callForAllUsers(function (IUser $user) use (&$userIds): void {
+								if ($user->isEnabled() !== true) {
+									return;
+								}
+								$uid = $user->getUID();
+								if (!$this->permissionService->isUserAllowedByAccessGroups($uid)) {
+									return;
+								}
+								$userIds[] = $uid;
+							});
+							return $this->vacationAllocationService->refreshOpenAllocationsForUsers($userIds);
+						});
+					} catch (\RuntimeException $e) {
+						if ($e->getMessage() === Constants::VAC_UNIT_MIGRATE_IN_PROGRESS) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $this->l10n->t('Vacation unit migration is in progress. Please try again in a moment.'),
+								'code' => Constants::VAC_UNIT_MIGRATE_IN_PROGRESS,
+							], Http::STATUS_CONFLICT);
+						}
+						throw $e;
+					}
+					$allocationsRefreshed = (int)($refreshResult['refreshed'] ?? 0);
+					$allocationsFailed = array_values(array_filter(
+						(array)($refreshResult['failed'] ?? []),
+						static fn ($id) => is_string($id) && $id !== ''
+					));
+					$performedBy = $this->getPerformedBy();
+					$this->auditLogMapper->logAction(
+						$performedBy,
+						'vacation_year_mode_changed',
+						'app_config',
+						0,
+						['vacation_year_mode' => $yearModeFlip['previous']],
+						[
+							'vacation_year_mode' => $yearModeFlip['next'],
+							'missing_hire_count' => $yearModeFlip['missing_hire_count'],
+							'missing_hire_acknowledged' => $yearModeFlip['missing_hire_acknowledged'],
+							'allocations_refreshed' => $allocationsRefreshed,
+							'allocations_failed_count' => count($allocationsFailed),
+							'allocations_failed' => array_slice($allocationsFailed, 0, 50),
+						],
+						$performedBy
+					);
+				} finally {
+					try {
+						$locking->releaseLock($yearLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE);
+					} catch (\Throwable) {
+						// best-effort
+					}
+				}
+			}
+
+			$policyScope = (string)($params['policyScope'] ?? '');
+			$message = match ($policyScope) {
+				'overtime' => $this->l10n->t('Overtime settings updated successfully'),
+				'vacation' => $this->l10n->t('Vacation settings updated successfully'),
+				default => $this->l10n->t('Notification settings updated successfully'),
+			};
+			if ($yearModeFlip !== null) {
+				if ($allocationsFailed !== []) {
+					$message = $this->l10n->t(
+						'Vacation year mode updated. Open vacation balances were refreshed for %s people (%s could not be refreshed — check employment data).',
+						[(string)$allocationsRefreshed, (string)count($allocationsFailed)]
+					);
+				} else {
+					$message = $this->l10n->t(
+						'Vacation year mode updated. Open vacation balances were refreshed for %s people.',
+						[(string)$allocationsRefreshed]
+					);
+				}
+			}
+
 			return new JSONResponse([
 				'success' => true,
-				'message' => $this->l10n->t('Notification settings updated successfully'),
+				'message' => $message,
 				'settings' => $this->buildNotificationSettingsPayload(),
+				'vacationYearModeFlip' => $yearModeFlip === null ? null : [
+					'from' => $yearModeFlip['previous'],
+					'to' => $yearModeFlip['next'],
+					'allocationsRefreshed' => $allocationsRefreshed,
+					'allocationsFailedCount' => count($allocationsFailed),
+					'missingHireCount' => $yearModeFlip['missing_hire_count'],
+				],
 			]);
 		} catch (\Throwable) {
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Migrate org vacation unit (days ↔ hours) with balance conversion (US-102 / Q3=A / Q8).
+	 */
+	public function migrateVacationUnit(): JSONResponse
+	{
+		try {
+			$user = $this->userSession->getUser();
+			if ($user === null) {
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('User not authenticated')], Http::STATUS_UNAUTHORIZED);
+			}
+			$userId = $user->getUID();
+			if (!$this->permissionService->isAdmin($userId)) {
+				$this->permissionService->logPermissionDenied($userId, 'migrate_vacation_unit', 'app_config');
+				return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Access denied')], Http::STATUS_FORBIDDEN);
+			}
+
+			$params = $this->request->getParams();
+			$target = strtolower(trim((string)($params['targetUnit'] ?? '')));
+			$hoursPerDay = (float)str_replace(',', '.', (string)($params['hoursPerDay'] ?? Constants::DEFAULT_VACATION_HOURS_PER_DAY));
+			$clientConfirmed = ($params['clientConfirmed'] === true || $params['clientConfirmed'] === 'true' || $params['clientConfirmed'] === '1');
+
+			if ($target !== Constants::VACATION_UNIT_HOURS && $target !== Constants::VACATION_UNIT_DAYS) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Validation failed'),
+					'code' => 'VAC_UNIT_INVALID',
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			/** @var \OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService $migration */
+			$migration = \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService::class);
+			try {
+				$result = $migration->migrate($target, $hoursPerDay, $clientConfirmed, $userId);
+			} catch (\RuntimeException $e) {
+				if ($e->getMessage() === Constants::VAC_UNIT_CLIENT_GATE) {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('Confirm that Employee apps are updated before enabling vacation in hours.'),
+						'code' => Constants::VAC_UNIT_CLIENT_GATE,
+					], Http::STATUS_CONFLICT);
+				}
+				if ($e->getMessage() === 'VAC_UNIT_MIGRATE_IN_PROGRESS') {
+					return new JSONResponse([
+						'success' => false,
+						'error' => $this->l10n->t('A vacation unit conversion is already running. Wait a moment and try again.'),
+						'code' => 'VAC_UNIT_MIGRATE_IN_PROGRESS',
+					], Http::STATUS_CONFLICT);
+				}
+				throw $e;
+			} catch (\InvalidArgumentException $e) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('Hours per day must be between 0.25 and 24.'),
+					'code' => 'VAC_UNIT_HOURS_PER_DAY_INVALID',
+				], Http::STATUS_BAD_REQUEST);
+			}
+
+			return new JSONResponse([
+				'success' => true,
+				'message' => $this->l10n->t('Vacation unit converted successfully.'),
+				'result' => $result,
+				'settings' => $this->buildNotificationSettingsPayload(),
+			]);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error('migrateVacationUnit failed: ' . $e->getMessage(), ['exception' => $e]);
 			return new JSONResponse([
 				'success' => false,
 				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
@@ -2754,6 +3378,16 @@ class AdminController extends Controller
 			'vacationYearMode' => VacationYearWindowResolver::normalizeMode(
 				$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_YEAR_MODE, Constants::DEFAULT_VACATION_YEAR_MODE)
 			),
+			'vacationYearMissingHireCount' => $this->countUsersMissingEmploymentStart(),
+			'employeesAdminUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.users'),
+			'vacationUnit' => (string)$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_UNIT, Constants::DEFAULT_VACATION_UNIT) === Constants::VACATION_UNIT_HOURS
+				? Constants::VACATION_UNIT_HOURS
+				: Constants::VACATION_UNIT_DAYS,
+			'vacationHoursPerDay' => (string)$this->appConfig->getAppValueString(
+				Constants::CONFIG_VACATION_HOURS_PER_DAY,
+				(string)Constants::DEFAULT_VACATION_HOURS_PER_DAY
+			),
+			'vacationUnitClientConfirmed' => $this->appConfig->getAppValueString(Constants::CONFIG_VACATION_UNIT_CLIENT_CONFIRMED, '0') === '1',
 			'requireSubstituteTypes' => $requireSubstituteTypes,
 			'sendIcalApprovedAbsences' => $this->appConfig->getAppValueString('send_ical_approved_absences', '1') === '1',
 			'sendIcalToSubstitute' => $this->appConfig->getAppValueString('send_ical_to_substitute', '0') === '1',
@@ -2778,7 +3412,32 @@ class AdminController extends Controller
 			'premiumSurchargesEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_SURCHARGES_ENABLED, '0') === '1',
 			'premiumPolicy' => $this->decodePremiumPolicyForAdmin(),
 			'premiumPolicyVersion' => (int)$this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, '0'),
+			'datevLohnartPremiumMap' => \OCA\ArbeitszeitCheck\Support\DatevPremiumLohnartMap::fromJson(
+				$this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_PREMIUM_MAP, '')
+			),
 		];
+	}
+
+	/**
+	 * How many enabled, access-group-allowed users lack employment_start (Bachus A4).
+	 */
+	private function countUsersMissingEmploymentStart(): int
+	{
+		$count = 0;
+		$this->userManager->callForAllUsers(function (IUser $user) use (&$count): void {
+			if ($user->isEnabled() !== true) {
+				return;
+			}
+			$uid = $user->getUID();
+			if (!$this->permissionService->isUserAllowedByAccessGroups($uid)) {
+				return;
+			}
+			if ($this->userEmploymentSettingsService->getEmploymentStart($uid) === null) {
+				$count++;
+			}
+		});
+
+		return $count;
 	}
 
 	/**
@@ -3333,16 +3992,22 @@ class AdminController extends Controller
 							'dailyHours' => $workingTimeModel->getDailyHours(),
 							'workDaysPerWeek' => $workingTimeModel->getWorkDaysPerWeek(),
 						] : null,
-						'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
+						'vacationDaysPerYear' => $currentModel
+							? $this->presentAdminVacationDays((float)$currentModel->getVacationDaysPerYear())
+							: null,
 						'workingTimeModelStartDate' => $currentModel && ($startDate = $currentModel->getStartDate()) ? $startDate->format('Y-m-d') : null,
 						'workingTimeModelEndDate' => $currentModel && ($endDate = $currentModel->getEndDate()) ? $endDate->format('Y-m-d') : null,
 						'hasTimeEntriesToday' => $hasTimeEntriesToday,
-						'vacationCarryoverDays' => $this->vacationYearBalanceMapper->getCarryoverDays($userId, $currentYear),
+						'vacationCarryoverDays' => $this->presentAdminVacationDays(
+							(float)$this->vacationYearBalanceMapper->getCarryoverDays($userId, $currentYear)
+						),
 						'vacationCarryoverYear' => $currentYear,
 						'vacationPolicy' => $policy ? [
 							'id' => $policy->getId(),
 							'vacationMode' => $policy->getVacationMode(),
-							'manualDays' => $policy->getManualDays(),
+							'manualDays' => $this->presentAdminVacationDays(
+								$policy->getManualDays() !== null ? (float)$policy->getManualDays() : null
+							),
 							'tariffRuleSetId' => $policy->getTariffRuleSetId(),
 							'overrideReason' => $policy->getOverrideReason(),
 							'effectiveFrom' => $policy->getEffectiveFrom()?->format('Y-m-d'),
@@ -3557,13 +4222,23 @@ class AdminController extends Controller
 					'displayName' => $user->getDisplayName(),
 					'email' => $user->getEMailAddress(),
 					'enabled' => $user->isEnabled(),
-					'vacationCarryoverDays' => $this->vacationYearBalanceMapper->getCarryoverDays($userId, $currentYear),
+					'vacationCarryoverDays' => $this->presentAdminVacationDays(
+						(float)$this->vacationYearBalanceMapper->getCarryoverDays($userId, $currentYear)
+					),
 					'vacationCarryoverYear' => $currentYear,
 					'overtimeTrackingFrom' => $this->userOvertimeSettingsService->getTrackingFrom($userId)?->format('Y-m-d'),
 					'overtimeOpeningBalanceHours' => $this->userOvertimeSettingsService->getOpeningBalanceHours($userId, $currentYear),
 					'overtimeOpeningBalanceYear' => $currentYear,
 					'employmentStart' => $this->userEmploymentSettingsService->getEmploymentStart($userId)?->format('Y-m-d'),
 					'employmentEnd' => $this->userEmploymentSettingsService->getEmploymentEnd($userId)?->format('Y-m-d'),
+					'datevPersonalnummer' => $this->config !== null
+						? (string)$this->config->getUserValue(
+							$userId,
+							'arbeitszeitcheck',
+							Constants::USER_DATEV_PERSONALNUMMER,
+							''
+						)
+						: '',
 					'workingTimeModel' => $workingTimeModel ? [
 						'id' => $workingTimeModel->getId(),
 						'name' => $workingTimeModel->getName(),
@@ -3572,7 +4247,9 @@ class AdminController extends Controller
 						'dailyHours' => $workingTimeModel->getDailyHours(),
 						'workDaysPerWeek' => $workingTimeModel->getWorkDaysPerWeek(),
 					] : null,
-					'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
+					'vacationDaysPerYear' => $currentModel
+						? $this->presentAdminVacationDays((float)$currentModel->getVacationDaysPerYear())
+						: null,
 					'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
 					'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
 					'germanState' => $userGermanState,
@@ -3580,11 +4257,13 @@ class AdminController extends Controller
 						? strtoupper($userLaborLawCountry)
 						: '',
 					'instanceCountry' => $this->getConfiguredCountry(),
-					'userWorkingTimeModel' => $currentModel ? $currentModel->getSummary() : null,
+					'userWorkingTimeModel' => $currentModel ? $this->presentUserWorkingTimeModelSummary($currentModel->getSummary()) : null,
 					'vacationPolicy' => $policy ? [
 						'id' => $policy->getId(),
 						'vacationMode' => $policy->getVacationMode(),
-						'manualDays' => $policy->getManualDays(),
+						'manualDays' => $this->presentAdminVacationDays(
+							$policy->getManualDays() !== null ? (float)$policy->getManualDays() : null
+						),
 						'tariffRuleSetId' => $policy->getTariffRuleSetId(),
 						'overrideReason' => $policy->getOverrideReason(),
 						'effectiveFrom' => $policy->getEffectiveFrom()?->format('Y-m-d'),
@@ -3829,27 +4508,25 @@ class AdminController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
-			// If this is set as default, unset other defaults
-			if ($model->getIsDefault()) {
-				$currentDefault = $this->workingTimeModelMapper->findDefault();
-				if ($currentDefault) {
-					$currentDefault->setIsDefault(false);
-					$currentDefault->setUpdatedAt(new \DateTime());
-					$this->workingTimeModelMapper->update($currentDefault);
+			// Atomic: clear other defaults + insert so concurrent creates cannot
+			// leave two is_default=1 rows (TOCTOU on findDefault/update).
+			$savedModel = $this->atomic(function () use ($model) {
+				if ($model->getIsDefault()) {
+					$this->workingTimeModelMapper->clearDefaults();
 				}
-			}
-
-			$savedModel = $this->workingTimeModelMapper->insert($model);
-			$performedBy = $this->getPerformedBy();
-			$this->auditLogMapper->logAction(
-				$performedBy,
-				'working_time_model_created',
-				'working_time_model',
-				$savedModel->getId(),
-				null,
-				$this->workingTimeModelToAuditValues($savedModel),
-				$performedBy
-			);
+				$saved = $this->workingTimeModelMapper->insert($model);
+				$performedBy = $this->getPerformedBy();
+				$this->auditLogMapper->logAction(
+					$performedBy,
+					'working_time_model_created',
+					'working_time_model',
+					$saved->getId(),
+					null,
+					$this->workingTimeModelToAuditValues($saved),
+					$performedBy
+				);
+				return $saved;
+			}, $this->db);
 
 			return new JSONResponse([
 				'success' => true,
@@ -3904,17 +4581,7 @@ class AdminController extends Controller
 				$model->setWorkDaysPerWeek($this->parseDecimalInput($params['workDaysPerWeek'], $model->getWorkDaysPerWeek()));
 			}
 			if (isset($params['isDefault'])) {
-				$newDefaultValue = (bool)$params['isDefault'];
-				// If setting as default, unset other defaults
-				if ($newDefaultValue && !$model->getIsDefault()) {
-					$currentDefault = $this->workingTimeModelMapper->findDefault();
-					if ($currentDefault && $currentDefault->getId() !== $model->getId()) {
-						$currentDefault->setIsDefault(false);
-						$currentDefault->setUpdatedAt(new \DateTime());
-						$this->workingTimeModelMapper->update($currentDefault);
-					}
-				}
-				$model->setIsDefault($newDefaultValue);
+				$model->setIsDefault((bool)$params['isDefault']);
 			}
 			if (isset($params['breakRules']) && is_array($params['breakRules'])) {
 				$scheduleError = $this->applyBreakRulesToWorkingTimeModel($model, $params['breakRules']);
@@ -3943,18 +4610,25 @@ class AdminController extends Controller
 				], Http::STATUS_BAD_REQUEST);
 			}
 
-			$updatedModel = $this->workingTimeModelMapper->update($model);
-			$newValues = $this->workingTimeModelToAuditValues($updatedModel);
-			$performedBy = $this->getPerformedBy();
-			$this->auditLogMapper->logAction(
-				$performedBy,
-				'working_time_model_updated',
-				'working_time_model',
-				$updatedModel->getId(),
-				$oldValues,
-				$newValues,
-				$performedBy
-			);
+			// Atomic: clear other defaults + update (same TOCTOU fix as create).
+			$updatedModel = $this->atomic(function () use ($model, $oldValues) {
+				if ($model->getIsDefault()) {
+					$this->workingTimeModelMapper->clearDefaults($model->getId());
+				}
+				$updated = $this->workingTimeModelMapper->update($model);
+				$newValues = $this->workingTimeModelToAuditValues($updated);
+				$performedBy = $this->getPerformedBy();
+				$this->auditLogMapper->logAction(
+					$performedBy,
+					'working_time_model_updated',
+					'working_time_model',
+					$updated->getId(),
+					$oldValues,
+					$newValues,
+					$performedBy
+				);
+				return $updated;
+			}, $this->db);
 
 			return new JSONResponse([
 				'success' => true,
@@ -3993,32 +4667,62 @@ class AdminController extends Controller
 		try {
 			$model = $this->workingTimeModelMapper->find($id);
 
-			// Check if any users are assigned to this model
-			$userAssignments = $this->userWorkingTimeModelMapper->findByWorkingTimeModel($id, false);
-			if (!empty($userAssignments)) {
+			// Fail closed: never leave the org without an explicit default schedule.
+			if ($model->getIsDefault()) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Cannot delete working time model: %d user(s) are assigned to this model. Please reassign users first.', [count($userAssignments)])
-				], Http::STATUS_BAD_REQUEST);
+					'error' => $this->l10n->t('Cannot delete the default working time model. Set another model as default first.'),
+					'code' => 'DEFAULT_MODEL',
+				], Http::STATUS_CONFLICT);
 			}
 
 			$oldValues = $this->workingTimeModelToAuditValues($model);
 			$performedBy = $this->getPerformedBy();
-			$this->workingTimeModelMapper->delete($model);
-			$this->auditLogMapper->logAction(
-				$performedBy,
-				'working_time_model_deleted',
-				'working_time_model',
-				$id,
-				$oldValues,
-				null,
-				$performedBy
-			);
+
+			// Atomic re-check + vacation-default purge + delete closes the
+			// assign-during-delete TOCTOU and avoids orphan L1 vacation rows.
+			$this->atomic(function () use ($id, $model, $oldValues, $performedBy): void {
+				$fresh = $this->workingTimeModelMapper->find($id);
+				if ($fresh->getIsDefault()) {
+					throw new BusinessRuleException(
+						$this->l10n->t('Cannot delete the default working time model. Set another model as default first.'),
+						'DEFAULT_MODEL'
+					);
+				}
+				$userAssignments = $this->userWorkingTimeModelMapper->findByWorkingTimeModel($id, false);
+				if (!empty($userAssignments)) {
+					throw new BusinessRuleException(
+						$this->l10n->t(
+							'Cannot delete working time model: %d user(s) are assigned to this model. Please reassign users first.',
+							[count($userAssignments)]
+						),
+						'MODEL_IN_USE'
+					);
+				}
+				$this->layeredVacationDefaultsService->deleteDefaultsForWorkingTimeModel($id);
+				$this->workingTimeModelMapper->delete($fresh);
+				$this->auditLogMapper->logAction(
+					$performedBy,
+					'working_time_model_deleted',
+					'working_time_model',
+					$id,
+					$oldValues,
+					null,
+					$performedBy
+				);
+			}, $this->db);
 
 			return new JSONResponse([
 				'success' => true,
-				'message' => 'Working time model deleted successfully'
+				'message' => $this->l10n->t('Working time model deleted successfully'),
 			]);
+		} catch (BusinessRuleException $e) {
+			$status = $e->getReasonCode() === 'DEFAULT_MODEL' ? Http::STATUS_CONFLICT : Http::STATUS_BAD_REQUEST;
+			return new JSONResponse([
+				'success' => false,
+				'error' => $e->getMessage(),
+				'code' => $e->getReasonCode(),
+			], $status);
 		} catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
 			return new JSONResponse([
 				'success' => false,
@@ -4601,11 +5305,13 @@ class AdminController extends Controller
 						$draftMode = Constants::VACATION_MODE_INHERIT;
 					}
 					$policy->setVacationMode($draftMode);
-					$policy->setManualDays(
-						$draftInherit
-							? null
-							: (isset($draftPolicy['manualDays']) ? $this->parseDecimalInput($draftPolicy['manualDays'], 0.0) : null)
-					);
+					$draftManual = null;
+					if (!$draftInherit && isset($draftPolicy['manualDays'])) {
+						$draftManual = $this->parseDecimalInput($draftPolicy['manualDays'], 0.0);
+						// Bachus: simulator draft is always calendar days; store unit may be hours.
+						$draftManual = $this->vacationUnitService()->adminDaysToStoredAmount($draftManual);
+					}
+					$policy->setManualDays($draftManual);
 					$policy->setTariffRuleSetId(
 						$draftInherit
 							? null
@@ -4703,6 +5409,8 @@ class AdminController extends Controller
 			$teams = $this->teamMapper->findAll();
 			$rulesets = $this->tariffRuleSetMapper->findAllOrdered();
 
+			$present = fn ($e) => $this->layeredVacationDefaultsService->presentLayerSummary($e->getSummary());
+
 			return new JSONResponse([
 				'success' => true,
 				'feature' => [
@@ -4710,11 +5418,11 @@ class AdminController extends Controller
 				],
 				'asOfDate' => $asOfDate->format('Y-m-d'),
 				'org' => [
-					'active' => $activeOrg?->getSummary(),
-					'history' => array_map(static fn ($e) => $e->getSummary(), $orgDefaults),
+					'active' => $activeOrg ? $present($activeOrg) : null,
+					'history' => array_map($present, $orgDefaults),
 				],
 				'model' => [
-					'defaults' => array_map(static fn ($e) => $e->getSummary(), $modelDefaults),
+					'defaults' => array_map($present, $modelDefaults),
 					'availableModels' => array_map(static fn ($m) => [
 						'id' => $m->getId(),
 						'name' => $m->getName(),
@@ -4722,7 +5430,7 @@ class AdminController extends Controller
 					], $models),
 				],
 				'team' => [
-					'policies' => array_map(static fn ($e) => $e->getSummary(), $teamPolicies),
+					'policies' => array_map($present, $teamPolicies),
 					'availableTeams' => array_map(static fn ($t) => [
 						'id' => $t->getId(),
 						'name' => $t->getName(),
@@ -5051,6 +5759,9 @@ class AdminController extends Controller
 	{
 		try {
 			$summary = $action();
+			if (is_array($summary)) {
+				$summary = $this->layeredVacationDefaultsService->presentLayerSummary($summary);
+			}
 			return new JSONResponse(['success' => true, 'data' => $summary], Http::STATUS_CREATED);
 		} catch (LayeredVacationValidationException $e) {
 			$translatedFieldErrors = $this->translateFieldErrors($e->fieldErrors);
@@ -5087,25 +5798,64 @@ class AdminController extends Controller
 	}
 
 	/**
-	 * Page route: renders the admin "Vacation entitlement layers" screen.
+	 * Admin vacation rules (year, carryover, unit, pro-rata) — policy Leave → Rules.
+	 */
+	#[NoCSRFRequired]
+	public function vacationRules(): TemplateResponse
+	{
+		$this->registerFrontEndAssets(
+			'admin-notifications',
+			'admin-notifications',
+			['admin-settings'],
+			['admin-policy-legacy-redirect']
+		);
+
+		$catalog = new \OCA\ArbeitszeitCheck\Service\AdminPolicyPagesCatalog();
+		$response = new TemplateResponse('arbeitszeitcheck', 'admin-vacation-rules', array_merge(
+			$this->buildAdminShellParams(
+				'admin-vacation-rules',
+				$catalog->label($this->l10n, \OCA\ArbeitszeitCheck\Service\AdminPolicyPagesCatalog::SECTION_VACATION),
+				$this->l10n->t('Vacation year, carryover, day/hour unit, and pro-rata for the organisation.'),
+			),
+			[
+				'l' => $this->l10n,
+				'urlGenerator' => $this->urlGenerator,
+				'requesttoken' => Util::callRegister(),
+				'vacationPolicySettings' => $this->buildNotificationSettingsPayload(),
+			],
+		));
+		return $this->configureCSP($response, 'admin');
+	}
+
+	/**
+	 * Page route: vacation entitlement layers (L0/L1/L2 + simulator).
 	 * Server-rendered shell + JS hydration mirroring the pattern used by
 	 * `admin#teams`, `admin#workingTimeModels`, etc.
 	 */
 	#[NoCSRFRequired]
 	public function vacationLayers(): TemplateResponse
 	{
-		$this->registerFrontEndAssets('admin-vacation-layers', 'admin-vacation-layers');
+		$this->registerFrontEndAssets(
+			'admin-vacation-layers',
+			'admin-vacation-layers',
+			['admin-settings', 'admin-notifications'],
+			['admin-policy-legacy-redirect']
+		);
 
+		$catalog = new \OCA\ArbeitszeitCheck\Service\AdminPolicyPagesCatalog();
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-vacation-layers', array_merge(
 			$this->buildAdminShellParams(
 				'admin-vacation-layers',
-				$this->l10n->t('Vacation entitlement'),
-				$this->l10n->t('Configure layered vacation entitlement defaults for organisation, working time models, and teams.'),
+				$catalog->label($this->l10n, \OCA\ArbeitszeitCheck\Service\AdminPolicyPagesCatalog::SECTION_VACATION_ENTITLEMENT),
+				$this->l10n->t('Organisation, model, and team vacation amounts — higher layer wins.'),
 			),
 			[
 				'l' => $this->l10n,
 				'urlGenerator' => $this->urlGenerator,
+				'requesttoken' => Util::callRegister(),
 				'layeredEnabled' => $this->vacationEntitlementEngine->isLayeredEnabled(),
+				'vacationUnit' => (new \OCA\ArbeitszeitCheck\Service\VacationUnitService($this->config))->getUnit(),
+				'vacationHoursPerDay' => (new \OCA\ArbeitszeitCheck\Service\VacationUnitService($this->config))->getHoursPerDay(),
 			],
 		));
 		return $this->configureCSP($response, 'admin');

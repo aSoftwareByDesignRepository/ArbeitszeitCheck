@@ -108,6 +108,7 @@ $kioskCredentialsUrl = (string)($_['kioskCredentialsUrl'] ?? ($urlGenerator
 			<a class="admin-user-detail__toc-link" href="#user-edit-overtime"><?php p($l->t('Overtime balance')); ?></a>
 			<a class="admin-user-detail__toc-link" href="#user-edit-validity"><?php p($l->t('Valid from')); ?></a>
 			<a class="admin-user-detail__toc-link" href="#user-edit-employment"><?php p($l->t('Employment period (for pro-rata vacation)')); ?></a>
+			<a class="admin-user-detail__toc-link" href="#user-edit-datev"><?php p($l->t('DATEV Personalnummer')); ?></a>
 			<a class="admin-user-detail__toc-link" href="#assignment-history"><?php p($l->t('Work schedule history')); ?></a>
 			<a class="admin-user-detail__toc-link" href="#user-kiosk-credentials"><?php p($l->t('Badges & PIN')); ?></a>
 		</nav>

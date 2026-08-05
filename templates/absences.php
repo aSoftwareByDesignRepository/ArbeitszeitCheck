@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use OCA\ArbeitszeitCheck\Service\IconCatalog;
 use OCA\ArbeitszeitCheck\Support\BadgeVariant;
+use OCA\ArbeitszeitCheck\Util\TemplateL10n;
 
 /**
  * Absences template for arbeitszeitcheck app
@@ -42,6 +43,33 @@ $absenceFormStartDisplay = ($mode === 'create')
 $absenceFormEndDisplay = ($mode === 'create')
 	? (is_string($prefillEnd) ? $prefillEnd : (is_string($prefillStart) ? $prefillStart : ''))
 	: (($absence && $absence->getEndDate()) ? $absence->getEndDate()->format('d.m.Y') : '');
+$vacationUnit = (string)($stats['vacation_unit'] ?? 'days');
+$isVacationHours = $vacationUnit === 'hours';
+$unitWord = $isVacationHours ? $l->t('hours') : $l->t('days');
+$unitSublabel = $isVacationHours ? $l->t('vacation hours') : $l->t('vacation days');
+$hoursPerDay = (float)($stats['vacation_hours_per_day'] ?? 8);
+if ($hoursPerDay < 0.25) {
+	$hoursPerDay = 8.0;
+}
+$oneDayHours = (float)($stats['vacation_one_day_hours'] ?? $hoursPerDay);
+if ($oneDayHours < 0.25) {
+	$oneDayHours = $hoursPerDay;
+}
+$averageDailyHours = (float)($stats['vacation_average_daily'] ?? $oneDayHours);
+$weekdayNetsJson = json_encode($stats['vacation_weekday_nets'] ?? null, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+$vacationDebitBasis = (string)($stats['vacation_debit_basis'] ?? '');
+$showOrgDebitFallbackWarn = $isVacationHours
+	&& ($mode === 'create' || $mode === 'edit')
+	&& $vacationDebitBasis === 'org_hours_per_day';
+$estimateHoursUrl = \OCP\Server::get(\OCP\IURLGenerator::class)
+	->linkToRoute('arbeitszeitcheck.absence.estimateVacationHours');
+$absenceDurationHoursPrefill = '';
+if ($absence && method_exists($absence, 'getDurationHours')) {
+	$dh = $absence->getDurationHours();
+	if ($dh !== null && (float)$dh > 0) {
+		$absenceDurationHoursPrefill = (string)round((float)$dh, 2);
+	}
+}
 ?>
 
 <?php include __DIR__ . '/common/page-start.php'; ?>
@@ -277,6 +305,54 @@ $absenceFormEndDisplay = ($mode === 'create')
                         </div>
                     </div>
 
+                    <div id="absence-duration-hours-group"
+                         class="form-group absence-duration-hours"
+                         data-hours-mode="<?php echo $isVacationHours ? '1' : '0'; ?>"
+                         data-hours-per-day="<?php p((string)$hoursPerDay); ?>"
+                         data-one-day-hours="<?php p((string)$oneDayHours); ?>"
+                         data-average-daily="<?php p((string)$averageDailyHours); ?>"
+                         data-debit-basis="<?php p($vacationDebitBasis); ?>"
+                         data-weekday-nets="<?php echo $weekdayNetsJson !== false ? $weekdayNetsJson : 'null'; ?>"
+                         data-estimate-url="<?php p($estimateHoursUrl); ?>"
+                         <?php echo $isVacationHours ? '' : 'hidden'; ?>>
+                        <label for="absence-duration-hours" class="form-label">
+                            <?php p($l->t('Hours')); ?>
+                            <span id="absence-duration-hours-req" class="form-required" aria-hidden="true">*</span>
+                        </label>
+                        <input type="number"
+                               id="absence-duration-hours"
+                               name="duration_hours"
+                               class="form-input form-input--hours"
+                               min="0.25"
+                               max="744"
+                               step="0.25"
+                               inputmode="decimal"
+                               value="<?php p($absenceDurationHoursPrefill); ?>"
+                               placeholder="<?php p($l->t('e.g. 4')); ?>"
+                               aria-describedby="absence-duration-hours-help absence-duration-hours-presets<?php echo $showOrgDebitFallbackWarn ? ' absence-org-debit-warn-text' : ''; ?>"
+                               <?php echo $isVacationHours ? '' : 'disabled'; ?>>
+                        <div id="absence-duration-hours-presets" class="absence-hours-presets" role="group" aria-label="<?php p($l->t('Quick hours')); ?>">
+                            <button type="button" class="azc-btn azc-btn--secondary absence-hours-preset" data-hours="4" aria-label="<?php p($l->t('Set 4 hours')); ?>"><?php p($l->t('4 hours')); ?></button>
+                            <button type="button" class="azc-btn azc-btn--secondary absence-hours-preset" data-hours-half="1" aria-label="<?php p($l->t('Set half day')); ?>"><?php p($l->t('Half day')); ?></button>
+                            <button type="button" class="azc-btn azc-btn--secondary absence-hours-preset" data-hours-full="1" aria-label="<?php p($l->t('Set one full day')); ?>"><?php p($l->t('1 full day')); ?></button>
+                            <button type="button" class="azc-btn azc-btn--primary absence-hours-preset" data-hours-range="1" aria-label="<?php p($l->t('Fill planned hours for the date range')); ?>"><?php p($l->t('Full range')); ?></button>
+                        </div>
+                        <p id="absence-duration-hours-help" class="form-help">
+                            <?php p($l->t('Total vacation hours for the whole request (not per day). “Full range” and “1 full day” use your work model (e.g. shorter Friday), not a fixed 8 hours. Public holidays reduce the final debit.')); ?>
+                        </p>
+                        <?php if ($showOrgDebitFallbackWarn): ?>
+                        <div id="absence-org-debit-warn" class="azc-callout azc-callout--warning absence-org-debit-warn" role="status" aria-live="polite">
+                            <span class="azc-callout__icon azc-notif-icon-well" aria-hidden="true"><?php print_unescaped(IconCatalog::render('alert-triangle', 'azc-callout__icon-svg')); ?></span>
+                            <div class="azc-callout__body">
+                                <p class="azc-callout__title"><?php p($l->t('No working-time model assigned')); ?></p>
+                                <p id="absence-org-debit-warn-text" class="azc-callout__text"><?php p($l->t('Hours for this request use the organisation conversion factor until your administrator assigns a working-time model. Ask them to set your schedule so shorter Fridays and weekday nets apply correctly.')); ?></p>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        <p id="absence-duration-hours-preview" class="azc-callout azc-callout--info absence-hours-preview" role="status" aria-live="polite" hidden></p>
+                        <input type="hidden" id="absence-require-duration-hours" name="require_duration_hours" value="1" <?php echo $isVacationHours ? '' : 'disabled'; ?>>
+                    </div>
+
                     <div id="absence-historical-hint"
                          class="azc-callout azc-callout--warning absence-historical-hint"
                          role="status"
@@ -415,7 +491,22 @@ $absenceFormEndDisplay = ($mode === 'create')
                     <p class="absence-detail-period" aria-label="<?php p($l->t('Period and duration')); ?>">
                         <?php p($start->format('d.m.Y')); ?><?php echo ' – '; ?><?php p($end->format('d.m.Y')); ?>
                         <span class="absence-detail-period-sep" aria-hidden="true">·</span>
-                        <?php p($l->n('%n working day', '%n working days', (int)$days)); ?>
+                        <?php
+                        $detailHours = $absence->getDurationHours();
+                        $showHoursDetail = $absence->getType() === 'vacation'
+                            && $detailHours !== null && (float)$detailHours > 0;
+                        if ($showHoursDetail) {
+                            p(sprintf('%s %s', (string)round((float)$detailHours, 1), $l->t('hours')));
+                        } else {
+                            $dayLabel = round((float)$days, 1);
+                            // n() needs an integer for plural selection; show the real amount separately when fractional.
+                            if (abs($dayLabel - (int)$dayLabel) < 0.05) {
+                                p($l->n('%n working day', '%n working days', (int)round($dayLabel)));
+                            } else {
+                                p($l->t('%s working days', [(string)$dayLabel]));
+                            }
+                        }
+                        ?>
                     </p>
                 </div>
 
@@ -495,9 +586,32 @@ $absenceFormEndDisplay = ($mode === 'create')
                             <dd class="absence-detail-value"><?php p($start->format('d.m.Y')); ?> – <?php p($end->format('d.m.Y')); ?></dd>
                         </div>
                         <div class="absence-detail-row">
-                            <dt class="absence-detail-label"><?php p($l->t('Working days')); ?></dt>
-                            <dd class="absence-detail-value"><?php p((string)$days); ?></dd>
+                            <dt class="absence-detail-label"><?php
+                                $detailHoursVal = $absence->getDurationHours();
+                                $detailShowHours = $absence->getType() === 'vacation'
+                                    && $detailHoursVal !== null && (float)$detailHoursVal > 0;
+                                echo $detailShowHours ? $l->t('Duration') : $l->t('Working days');
+                            ?></dt>
+                            <dd class="absence-detail-value"><?php
+                                if ($detailShowHours) {
+                                    p((string)round((float)$detailHoursVal, 1) . ' ' . $l->t('hours'));
+                                } else {
+                                    p((string)$days);
+                                }
+                            ?></dd>
                         </div>
+                        <?php if ($detailShowHours && (float)$days > 0) { ?>
+                        <details class="absence-detail-more">
+                            <summary><?php p($l->t('Schedule note (working days in range)')); ?></summary>
+                            <dl class="absence-detail-list">
+                                <div class="absence-detail-row">
+                                    <dt class="absence-detail-label"><?php p($l->t('Working days in range')); ?></dt>
+                                    <dd class="absence-detail-value"><?php p((string)round((float)$days, 1)); ?></dd>
+                                </div>
+                            </dl>
+                            <p class="form-help"><?php p($l->t('This is the calendar weight for your schedule — not a second vacation balance in days.')); ?></p>
+                        </details>
+                        <?php } ?>
                     </dl>
                 </div>
 
@@ -556,6 +670,9 @@ $absenceFormEndDisplay = ($mode === 'create')
         <?php else: ?>
             <!-- Stats Cards: Vacation only (sick leave etc. excluded) -->
             <section class="section section--stats vacation-stats" aria-labelledby="stats-title">
+                <?php
+                // Unit labels computed once at top of template ($isVacationHours, $unitWord, …).
+                ?>
                 <h2 id="stats-title" class="section__title stats-section-title">
                     <?php
                     $vyLabel = (string)($stats['vacation_year_label'] ?? ($stats['vacation_year'] ?? date('Y')));
@@ -568,7 +685,11 @@ $absenceFormEndDisplay = ($mode === 'create')
                 </p>
                 <?php } ?>
                 <p id="stats-desc" class="stats-section-desc visually-hidden">
-                    <?php p($l->t('Remaining vacation days for this year (annual entitlement plus carryover minus approved vacation). Sick leave and other absences are not deducted.')); ?>
+                    <?php
+                    echo $isVacationHours
+                        ? $l->t('Remaining vacation hours for this year (annual entitlement plus carryover minus approved vacation). Sick leave and other absences are not deducted.')
+                        : $l->t('Remaining vacation days for this year (annual entitlement plus carryover minus approved vacation). Sick leave and other absences are not deducted.');
+                    ?>
                 </p>
                 <?php
                 $carryoverExpiresOn = $stats['vacation_carryover_expires_on'] ?? null;
@@ -584,56 +705,59 @@ $absenceFormEndDisplay = ($mode === 'create')
                 ?>
                 <?php if (!empty($stats)): ?>
                     <p class="stats-section__intro" id="stats-intro">
-                        <?php p($l->t('These numbers only count approved vacation. Carryover days must be used for vacation days on or before the expiry date; after that, new requests use your regular annual entitlement first.')); ?>
+                        <?php
+                        echo $isVacationHours
+                            ? $l->t('These numbers only count approved vacation. Amounts are in hours. Carryover must be used on or before the expiry date; after that, new requests use your regular annual entitlement first.')
+                            : $l->t('These numbers only count approved vacation. Carryover days must be used for vacation days on or before the expiry date; after that, new requests use your regular annual entitlement first.');
+                        ?>
                         <?php if ($carryoverExpiresFmt !== '' && (float)($stats['vacation_carryover_days'] ?? 0) > 0.0001) { ?>
                             <?php p(' ' . $l->t('Carryover expiry this year: %s.', [$carryoverExpiresFmt])); ?>
                         <?php } ?>
                         <?php if (isset($stats['vacation_carryover_max_cap']) && $stats['vacation_carryover_max_cap'] !== null && $stats['vacation_carryover_max_cap'] !== '') { ?>
-                            <?php p(' ' . $l->t('Admin cap on opening carryover: %s days.', [(string)round((float)$stats['vacation_carryover_max_cap'], 1)])); ?>
+                            <?php p(' ' . $l->t('Admin cap on opening carryover: %s %s.', [(string)round((float)$stats['vacation_carryover_max_cap'], 1), $unitWord])); ?>
                         <?php } ?>
                     </p>
                     <?php if ($carryoverLockedAfterDeadline && $carryoverExpiresFmt !== '') { ?>
-                    <div class="vacation-stats__notice vacation-stats__notice--deadline" role="status" aria-live="polite" id="stats-carryover-deadline-notice">
-                        <p class="vacation-stats__notice-text"><?php p($l->t('Carryover deadline has passed (%1$s). New requests can no longer use last year’s remaining days. The opening balance above is your HR record; approved vacation already reduced it.', [$carryoverExpiresFmt])); ?></p>
-                        <p class="vacation-stats__notice-text vacation-stats__notice-text--secondary"><?php p($l->t('You still have days left on paper, but they can no longer be booked as carryover—use your regular annual entitlement for new requests.')); ?></p>
+					<div class="vacation-stats__notice vacation-stats__notice--deadline" role="status" aria-live="polite" id="stats-carryover-deadline-notice">
+                        <p class="vacation-stats__notice-text"><?php
+                            echo $isVacationHours
+                                ? $l->t('Carryover deadline has passed (%1$s). New requests can no longer use last year’s remaining hours. The opening balance above is your HR record; approved vacation already reduced it.', [$carryoverExpiresFmt])
+                                : $l->t('Carryover deadline has passed (%1$s). New requests can no longer use last year’s remaining days. The opening balance above is your HR record; approved vacation already reduced it.', [$carryoverExpiresFmt]);
+                        ?></p>
+                        <p class="vacation-stats__notice-text vacation-stats__notice-text--secondary"><?php
+                            echo $isVacationHours
+                                ? $l->t('You still have hours left on paper, but they can no longer be booked as carryover—use your regular annual entitlement for new requests.')
+                                : $l->t('You still have days left on paper, but they can no longer be booked as carryover—use your regular annual entitlement for new requests.');
+                        ?></p>
                     </div>
                     <?php } ?>
                     <div class="stats-grid" role="group" aria-labelledby="stats-title" aria-describedby="stats-desc stats-intro<?php echo $carryoverLockedAfterDeadline ? ' stats-carryover-deadline-notice' : ''; ?>">
-                        <div class="stat-card stat-card--carryover<?php echo $carryoverLockedAfterDeadline ? ' stat-card--carryover-locked' : ''; ?>">
-                            <span class="stat-label" id="stat-carryover-label"><?php p($l->t('Carryover (opening balance)')); ?></span>
-                            <span class="stat-value" aria-labelledby="stat-carryover-label"><?php p((string)round($stats['vacation_carryover_days'] ?? 0, 1)); ?></span>
-                            <span class="stat-sublabel"><?php p($l->t('vacation days')); ?></span>
-                            <?php if ((float)($stats['vacation_carryover_days'] ?? 0) > 0.0001) { ?>
-                            <span class="stat-card__meta" id="stat-carryover-usable"><?php p($l->t('Still usable for new requests: %s days', [(string)round((float)($stats['vacation_carryover_usable'] ?? 0), 1)])); ?></span>
+                        <div class="stat-card stat-card--remaining stat-card--hero">
+                            <span class="stat-label" id="stat-remaining-label"><?php p($l->t('Remaining')); ?></span>
+                            <span class="stat-value stat-value--hero" aria-labelledby="stat-remaining-label"><?php p((string)round($stats['vacation_days_remaining'] ?? 0, 1)); ?></span>
+                            <span class="stat-sublabel"><?php p($unitSublabel); ?></span>
+                            <?php if ((float)($stats['vacation_carryover_usable'] ?? 0) > 0.0001 && $carryoverExpiresFmt !== '') { ?>
+                            <span class="stat-card__meta" id="stat-carryover-usable"><?php p($l->t('Of which %1$s %2$s carryover until %3$s', [
+								(string)round((float)($stats['vacation_carryover_usable'] ?? 0), 1),
+								$unitWord,
+								$carryoverExpiresFmt,
+							])); ?></span>
+                            <?php } elseif ($carryoverLockedAfterDeadline && $carryoverExpiresFmt !== '') { ?>
+                            <span class="stat-card__meta" id="stat-carryover-usable"><?php p($l->t('Carryover ended %s — book from annual leave only', [$carryoverExpiresFmt])); ?></span>
                             <?php } ?>
                         </div>
                         <div class="stat-card stat-card--entitlement">
                             <span class="stat-label" id="stat-entitlement-label"><?php p($l->t('Annual entitlement')); ?></span>
                             <span class="stat-value" aria-labelledby="stat-entitlement-label"><?php p((string)round($stats['vacation_annual_entitlement'] ?? 0, 1)); ?></span>
-                            <span class="stat-sublabel"><?php p($l->t('vacation days')); ?></span>
+                            <span class="stat-sublabel"><?php p($unitSublabel); ?></span>
                             <button type="button" id="entitlement-explain" class="stat-card__action stat-card__action--explain"
                                     aria-haspopup="dialog" aria-controls="entitlement-explain-dialog"
                                     aria-label="<?php p($l->t('Show how my vacation entitlement was calculated')); ?>"><?php p($l->t('How is this calculated?')); ?></button>
                         </div>
-                        <div class="stat-card stat-card--annual-left">
-                            <span class="stat-label" id="stat-annual-left-label"><?php p($l->t('Annual leave left')); ?></span>
-                            <span class="stat-value" aria-labelledby="stat-annual-left-label"><?php p((string)round((float)($stats['vacation_annual_remaining'] ?? 0), 1)); ?></span>
-                            <span class="stat-sublabel"><?php p($l->t('after approved absences')); ?></span>
-                        </div>
-                        <div class="stat-card stat-card--carryover-pool">
-                            <span class="stat-label" id="stat-carryover-pool-label"><?php p($l->t('Carryover pool left')); ?></span>
-                            <span class="stat-value" aria-labelledby="stat-carryover-pool-label"><?php p((string)round((float)($stats['vacation_carryover_remaining'] ?? 0), 1)); ?></span>
-                            <span class="stat-sublabel"><?php p($l->t('after approved absences')); ?></span>
-                        </div>
-                        <div class="stat-card stat-card--remaining">
-                            <span class="stat-label" id="stat-remaining-label"><?php p($l->t('Remaining')); ?></span>
-                            <span class="stat-value" aria-labelledby="stat-remaining-label"><?php p((string)round($stats['vacation_days_remaining'] ?? 0, 1)); ?></span>
-                            <span class="stat-sublabel"><?php p($l->t('vacation days')); ?></span>
-                        </div>
                         <div class="stat-card stat-card--used">
                             <span class="stat-label" id="stat-used-label"><?php p($l->t('Used this year')); ?></span>
                             <span class="stat-value stat-value--secondary" aria-labelledby="stat-used-label"><?php p((string)round($stats['vacation_days_used_this_year'] ?? 0, 1)); ?></span>
-                            <span class="stat-sublabel"><?php p($l->t('vacation days')); ?></span>
+                            <span class="stat-sublabel"><?php p($unitSublabel); ?></span>
                         </div>
                         <div class="stat-card stat-card--pending">
                             <span class="stat-label" id="stat-pending-label"><?php p($l->t('Pending requests')); ?></span>
@@ -641,6 +765,26 @@ $absenceFormEndDisplay = ($mode === 'create')
                             <span class="stat-sublabel"><?php p($l->t('awaiting approval')); ?></span>
                         </div>
                     </div>
+					<details class="vacation-stats__details" id="vacation-stats-details">
+						<summary><?php p($l->t('More balance details')); ?></summary>
+						<div class="stats-grid stats-grid--compact" role="group" aria-label="<?php p($l->t('Detailed vacation pools')); ?>">
+							<div class="stat-card stat-card--carryover<?php echo $carryoverLockedAfterDeadline ? ' stat-card--carryover-locked' : ''; ?>">
+								<span class="stat-label" id="stat-carryover-label"><?php p($l->t('Carryover (opening balance)')); ?></span>
+								<span class="stat-value" aria-labelledby="stat-carryover-label"><?php p((string)round($stats['vacation_carryover_days'] ?? 0, 1)); ?></span>
+								<span class="stat-sublabel"><?php p($unitSublabel); ?></span>
+							</div>
+							<div class="stat-card stat-card--annual-left">
+								<span class="stat-label" id="stat-annual-left-label"><?php p($l->t('Annual leave left')); ?></span>
+								<span class="stat-value" aria-labelledby="stat-annual-left-label"><?php p((string)round((float)($stats['vacation_annual_remaining'] ?? 0), 1)); ?></span>
+								<span class="stat-sublabel"><?php p($l->t('after approved absences')); ?></span>
+							</div>
+							<div class="stat-card stat-card--carryover-pool">
+								<span class="stat-label" id="stat-carryover-pool-label"><?php p($l->t('Carryover pool left')); ?></span>
+								<span class="stat-value" aria-labelledby="stat-carryover-pool-label"><?php p((string)round((float)($stats['vacation_carryover_remaining'] ?? 0), 1)); ?></span>
+								<span class="stat-sublabel"><?php p($l->t('after approved absences')); ?></span>
+							</div>
+						</div>
+					</details>
                 <?php endif; ?>
             </section>
 
@@ -654,7 +798,7 @@ $absenceFormEndDisplay = ($mode === 'create')
                                 <th scope="col"><?php p($l->t('Type')); ?></th>
                                 <th scope="col"><?php p($l->t('Start Date')); ?></th>
                                 <th scope="col"><?php p($l->t('End Date')); ?></th>
-                                <th scope="col"><?php p($l->t('Days')); ?></th>
+                                <th scope="col"><?php p($isVacationHours ? $l->t('Duration') : $l->t('Days')); ?></th>
                                 <th scope="col"><?php p($l->t('Reason')); ?></th>
                                 <th scope="col"><?php p($l->t('Status')); ?></th>
                                 <th scope="col" class="azc-table-actions-col"><?php p($l->t('Actions')); ?></th>
@@ -692,10 +836,20 @@ $absenceFormEndDisplay = ($mode === 'create')
                                         </td>
                                         <td data-label="<?php p($l->t('Start Date')); ?>"><?php p($absence->getStartDate()->format('d.m.Y')); ?></td>
                                         <td data-label="<?php p($l->t('End Date')); ?>"><?php p($absence->getEndDate()->format('d.m.Y')); ?></td>
-                                        <td data-label="<?php p($l->t('Days')); ?>"><?php
-                                            $d = $absence->getDays();
-                                            $displayD = $d !== null ? (float)$d : (float)(($_['computedWorkingDays'] ?? [])[$absence->getId()] ?? $absence->calculateWorkingDays());
-                                            p((string)round($displayD, 1));
+                                        <td data-label="<?php p($isVacationHours ? $l->t('Duration') : $l->t('Days')); ?>"><?php
+                                            $rowHours = $absence->getDurationHours();
+                                            if ($absence->getType() === 'vacation' && $isVacationHours && $rowHours !== null && (float)$rowHours > 0) {
+                                                p((string)round((float)$rowHours, 1) . ' ' . $l->t('h'));
+                                            } elseif ($absence->getType() === 'vacation' && $isVacationHours) {
+                                                // Missing duration_hours: never invent org×days (BANSS-wrong).
+                                                $d = $absence->getDays();
+                                                $displayD = $d !== null ? (float)$d : (float)(($_['computedWorkingDays'] ?? [])[$absence->getId()] ?? $absence->calculateWorkingDays());
+                                                p((string)round($displayD, 1));
+                                            } else {
+                                                $d = $absence->getDays();
+                                                $displayD = $d !== null ? (float)$d : (float)(($_['computedWorkingDays'] ?? [])[$absence->getId()] ?? $absence->calculateWorkingDays());
+                                                p((string)round($displayD, 1));
+                                            }
                                         ?></td>
                                         <td class="reason-cell" data-label="<?php p($l->t('Reason')); ?>">
                                             <?php 
@@ -826,6 +980,7 @@ $absenceFormEndDisplay = ($mode === 'create')
 <script id="entitlement-explainer-bootstrap" type="application/json" nonce="<?php p($_['cspNonce'] ?? ''); ?>"><?php
 	echo json_encode([
 		'traceUrl' => $entitlementTraceUrl,
+		'vacationUnit' => $isVacationHours ? 'hours' : 'days',
 		'individualRule' => $l->t('Individual rule'),
 		'teamPolicy' => $l->t('Team policy'),
 		'workingTimeModel' => $l->t('Working time model'),
@@ -835,12 +990,18 @@ $absenceFormEndDisplay = ($mode === 'create')
 		'skipped' => $l->t('Skipped'),
 		'partialHistoryHint' => $l->t('(team membership for past dates is best-effort)'),
 		'degradedBanner' => $l->t('Your entitlement was resolved with a safety default. Please contact your HR administrator if this looks wrong.'),
-		'clampedBanner' => $l->t('Your computed entitlement was outside the allowed 0–366 day range and has been adjusted. Please contact HR if you expected a different value.'),
+		'clampedBanner' => $isVacationHours
+			? $l->t('Your computed entitlement was outside the allowed 0–4000 hour range and has been adjusted. Please contact HR if you expected a different value.')
+			: $l->t('Your computed entitlement was outside the allowed 0–366 day range and has been adjusted. Please contact HR if you expected a different value.'),
 		'summaryTitle' => $l->t('Your annual vacation entitlement'),
-		'daysPerYear' => $l->t('days per year'),
+		'daysPerYear' => $isVacationHours ? $l->t('hours per year') : $l->t('days per year'),
 		'asOfDate' => $l->t('Calculated as of %s', ['%s']),
-		'prorationNoteTwelfths' => $l->t('Reduced for your employment period this year: {prorated} of {full} days (employed {months} of 12 months).'),
-		'prorationNoteDaily' => $l->t('Reduced for your employment period this year: {prorated} of {full} days.'),
+		'prorationNoteTwelfths' => $isVacationHours
+			? $l->t('Reduced for your employment period this year: {prorated} of {full} hours (employed {months} of 12 months).')
+			: $l->t('Reduced for your employment period this year: {prorated} of {full} days (employed {months} of 12 months).'),
+		'prorationNoteDaily' => $isVacationHours
+			? $l->t('Reduced for your employment period this year: {prorated} of {full} hours.')
+			: $l->t('Reduced for your employment period this year: {prorated} of {full} days.'),
 		'prorationNoteNone' => $l->t('You were not employed during this calendar year, so no vacation is granted for it.'),
 		'chainTitle' => $l->t('How the system checked each layer'),
 		'layerDeterminedLead' => $l->t('Determined by:'),
@@ -878,6 +1039,7 @@ $absenceFormEndDisplay = ($mode === 'create')
     window.ArbeitszeitCheck.l10n.confirmCancelAbsenceTitle = <?php echo json_encode($l->t('Cancel absence request'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.entitlementExplainer = <?php echo json_encode([
     	'traceUrl' => $entitlementTraceUrl,
+    	'vacationUnit' => $isVacationHours ? 'hours' : 'days',
     	'individualRule' => $l->t('Individual rule'),
     	'teamPolicy' => $l->t('Team policy'),
     	'workingTimeModel' => $l->t('Working time model'),
@@ -887,12 +1049,18 @@ $absenceFormEndDisplay = ($mode === 'create')
     	'skipped' => $l->t('Skipped'),
     	'partialHistoryHint' => $l->t('(team membership for past dates is best-effort)'),
     	'degradedBanner' => $l->t('Your entitlement was resolved with a safety default. Please contact your HR administrator if this looks wrong.'),
-    	'clampedBanner' => $l->t('Your computed entitlement was outside the allowed 0–366 day range and has been adjusted. Please contact HR if you expected a different value.'),
+    	'clampedBanner' => $isVacationHours
+    		? $l->t('Your computed entitlement was outside the allowed 0–4000 hour range and has been adjusted. Please contact HR if you expected a different value.')
+    		: $l->t('Your computed entitlement was outside the allowed 0–366 day range and has been adjusted. Please contact HR if you expected a different value.'),
     	'summaryTitle' => $l->t('Your annual vacation entitlement'),
-    	'daysPerYear' => $l->t('days per year'),
+    	'daysPerYear' => $isVacationHours ? $l->t('hours per year') : $l->t('days per year'),
     	'asOfDate' => $l->t('Calculated as of %s', ['%s']),
-    	'prorationNoteTwelfths' => $l->t('Reduced for your employment period this year: {prorated} of {full} days (employed {months} of 12 months).'),
-    	'prorationNoteDaily' => $l->t('Reduced for your employment period this year: {prorated} of {full} days.'),
+    	'prorationNoteTwelfths' => $isVacationHours
+    		? $l->t('Reduced for your employment period this year: {prorated} of {full} hours (employed {months} of 12 months).')
+    		: $l->t('Reduced for your employment period this year: {prorated} of {full} days (employed {months} of 12 months).'),
+    	'prorationNoteDaily' => $isVacationHours
+    		? $l->t('Reduced for your employment period this year: {prorated} of {full} hours.')
+    		: $l->t('Reduced for your employment period this year: {prorated} of {full} days.'),
     	'prorationNoteNone' => $l->t('You were not employed during this calendar year, so no vacation is granted for it.'),
     	'chainTitle' => $l->t('How the system checked each layer'),
     	'layerDeterminedLead' => $l->t('Determined by:'),
@@ -1029,6 +1197,286 @@ $absenceFormEndDisplay = ($mode === 'create')
             typeSelect.addEventListener('change', updateSubstituteRequiredState);
             updateSubstituteRequiredState();
         }
+
+        (function initVacationHoursField() {
+            const hoursGroup = document.getElementById('absence-duration-hours-group');
+            const hoursInput = document.getElementById('absence-duration-hours');
+            const requireInput = document.getElementById('absence-require-duration-hours');
+            const previewEl = document.getElementById('absence-duration-hours-preview');
+            if (!hoursGroup || !hoursInput) {
+                return;
+            }
+            const hoursMode = hoursGroup.getAttribute('data-hours-mode') === '1';
+            if (!hoursMode) {
+                return;
+            }
+            const orgHoursPerDay = Math.max(0.25, parseFloat(hoursGroup.getAttribute('data-hours-per-day') || '8') || 8);
+            let oneDayHours = Math.max(0.25, parseFloat(hoursGroup.getAttribute('data-one-day-hours') || String(orgHoursPerDay)) || orgHoursPerDay);
+            let averageDaily = Math.max(0.25, parseFloat(hoursGroup.getAttribute('data-average-daily') || String(oneDayHours)) || oneDayHours);
+            let weekdayNets = null;
+            try {
+                weekdayNets = JSON.parse(hoursGroup.getAttribute('data-weekday-nets') || 'null');
+            } catch (e) {
+                weekdayNets = null;
+            }
+            const estimateUrl = hoursGroup.getAttribute('data-estimate-url') || '';
+            let userTouchedHours = false;
+            let lastAutoFill = null;
+            let estimateTimer = null;
+            let estimateSeq = 0;
+            let estimateAbort = null;
+
+            const DOW_TO_NET = { 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat', 0: 'sun' };
+
+            function parseDDMMYYYYLocal(s) {
+                if (!s || !/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return null;
+                const p = s.split('.');
+                return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+            }
+
+            function toYmd(d) {
+                if (!d) return '';
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return y + '-' + m + '-' + day;
+            }
+
+            /** Local estimate from weekday nets (holiday-aware on server). */
+            function countWeekdays(start, end) {
+                if (!start || !end || end < start) {
+                    return 0;
+                }
+                let n = 0;
+                const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+                const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+                while (cur <= last) {
+                    const dow = cur.getDay();
+                    if (dow !== 0 && dow !== 6) {
+                        n += 1;
+                    }
+                    cur.setDate(cur.getDate() + 1);
+                }
+                return n;
+            }
+
+            function netForDate(d) {
+                if (!weekdayNets || typeof weekdayNets !== 'object') {
+                    return averageDaily;
+                }
+                const key = DOW_TO_NET[d.getDay()];
+                const v = Number(weekdayNets[key]);
+                return Number.isFinite(v) && v > 0 ? v : 0;
+            }
+
+            function rangeHoursEstimateLocal() {
+                const start = parseDDMMYYYYLocal(startDateInput && startDateInput.value);
+                const end = parseDDMMYYYYLocal(endDateInput && endDateInput.value);
+                if (!start || !end || end < start) {
+                    return 0;
+                }
+                if (weekdayNets && typeof weekdayNets === 'object') {
+                    let sum = 0;
+                    const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+                    const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+                    while (cur <= last) {
+                        sum += netForDate(cur);
+                        cur.setDate(cur.getDate() + 1);
+                    }
+                    if (sum > 0.009) {
+                        return Math.round(sum * 100) / 100;
+                    }
+                    return 0;
+                }
+                const days = countWeekdays(start, end);
+                if (days < 1) {
+                    return 0;
+                }
+                return Math.round(days * averageDaily * 100) / 100;
+            }
+
+            function fullDayHoursForStart() {
+                const start = parseDDMMYYYYLocal(startDateInput && startDateInput.value);
+                if (!start) {
+                    return 0;
+                }
+                if (weekdayNets) {
+                    const n = netForDate(start);
+                    if (n >= 0.25) {
+                        return Math.round(n * 100) / 100;
+                    }
+                    return 0;
+                }
+                const dow = start.getDay();
+                if (dow === 0 || dow === 6) {
+                    return 0;
+                }
+                return oneDayHours;
+            }
+
+            function updatePreview() {
+                if (!previewEl) {
+                    return;
+                }
+                const isVacation = typeSelect && typeSelect.value === 'vacation';
+                if (!isVacation) {
+                    previewEl.hidden = true;
+                    previewEl.textContent = '';
+                    return;
+                }
+                const raw = parseFloat(String(hoursInput.value || '').replace(',', '.'));
+                if (!isFinite(raw) || raw <= 0) {
+                    previewEl.hidden = true;
+                    previewEl.textContent = '';
+                    return;
+                }
+                const start = parseDDMMYYYYLocal(startDateInput && startDateInput.value);
+                const end = parseDDMMYYYYLocal(endDateInput && endDateInput.value);
+                const weekdays = countWeekdays(start, end);
+                const factorLabel = weekdayNets
+                    ? <?php echo json_encode($l->t('per your work schedule'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+                    : (String(averageDaily) + ' h/day');
+                const tpl = <?php echo json_encode(TemplateL10n::translate($l, 'This request: %s hours across about %s weekdays (%s). Public holidays reduce the final debit on the server.'), TemplateL10n::JSON_ENCODE_FLAGS); ?>;
+                previewEl.textContent = tpl
+                    .replace('%s', String(raw))
+                    .replace('%s', String(weekdays || 1))
+                    .replace('%s', factorLabel);
+                previewEl.hidden = false;
+            }
+
+            function applyEstimate(estimate) {
+                const current = String(hoursInput.value || '').trim();
+                const matchesLastAuto = lastAutoFill !== null && current === String(lastAutoFill);
+                if (!userTouchedHours || current === '' || matchesLastAuto || current === String(oneDayHours) || current === String(orgHoursPerDay)) {
+                    hoursInput.value = String(estimate);
+                    lastAutoFill = estimate;
+                    userTouchedHours = false;
+                }
+                updatePreview();
+            }
+
+            function applyAutoRangeIfNeeded() {
+                const isVacation = typeSelect && typeSelect.value === 'vacation';
+                if (!isVacation) {
+                    return;
+                }
+                const localEstimate = rangeHoursEstimateLocal();
+                applyEstimate(localEstimate);
+                oneDayHours = fullDayHoursForStart();
+
+                if (!estimateUrl || !startDateInput || !endDateInput) {
+                    return;
+                }
+                const start = parseDDMMYYYYLocal(startDateInput.value);
+                const end = parseDDMMYYYYLocal(endDateInput.value);
+                if (!start || !end) {
+                    return;
+                }
+                if (estimateTimer) {
+                    clearTimeout(estimateTimer);
+                }
+                estimateTimer = setTimeout(function () {
+                    if (estimateAbort) {
+                        try { estimateAbort.abort(); } catch (e) { /* ignore */ }
+                    }
+                    const seq = ++estimateSeq;
+                    const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                    estimateAbort = controller;
+                    const qs = 'start_date=' + encodeURIComponent(toYmd(start))
+                        + '&end_date=' + encodeURIComponent(toYmd(end));
+                    const token = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.getRequestToken && window.ArbeitszeitCheck.getRequestToken())
+                        || (typeof OC !== 'undefined' && OC.requestToken) || '';
+                    fetch(estimateUrl + (estimateUrl.indexOf('?') >= 0 ? '&' : '?') + qs, {
+                        credentials: 'same-origin',
+                        headers: token ? { requesttoken: token } : {},
+                        signal: controller ? controller.signal : undefined
+                    }).then(function (r) { return r.json(); }).then(function (j) {
+                        if (seq !== estimateSeq) {
+                            return;
+                        }
+                        if (!j || !j.success || !isFinite(j.hours) || j.hours < 0) {
+                            return;
+                        }
+                        if (j.one_day_hours && isFinite(j.one_day_hours)) {
+                            oneDayHours = Math.max(0.25, Number(j.one_day_hours));
+                        }
+                        if (j.average_daily && isFinite(j.average_daily)) {
+                            averageDaily = Math.max(0.25, Number(j.average_daily));
+                        }
+                        if (j.weekday_nets && typeof j.weekday_nets === 'object') {
+                            weekdayNets = j.weekday_nets;
+                        }
+                        applyEstimate(Math.round(Number(j.hours) * 100) / 100);
+                    }).catch(function () { /* keep local estimate / abort */ });
+                }, 200);
+            }
+
+            function syncHoursVisibility() {
+                const isVacation = typeSelect && typeSelect.value === 'vacation';
+                hoursGroup.hidden = !isVacation;
+                hoursInput.disabled = !isVacation;
+                if (requireInput) {
+                    requireInput.disabled = !isVacation;
+                }
+                if (isVacation) {
+                    hoursInput.setAttribute('required', 'required');
+                    hoursInput.setAttribute('aria-required', 'true');
+                    applyAutoRangeIfNeeded();
+                } else {
+                    hoursInput.removeAttribute('required');
+                    hoursInput.setAttribute('aria-required', 'false');
+                    hoursInput.value = '';
+                    userTouchedHours = false;
+                    lastAutoFill = null;
+                    updatePreview();
+                }
+            }
+
+            hoursInput.addEventListener('input', function () {
+                userTouchedHours = true;
+                updatePreview();
+            });
+
+            hoursGroup.querySelectorAll('.absence-hours-preset').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    let h = parseFloat(btn.getAttribute('data-hours') || '');
+                    if (btn.hasAttribute('data-hours-half')) {
+                        h = Math.round((fullDayHoursForStart() / 2) * 100) / 100;
+                        userTouchedHours = true;
+                    } else if (btn.hasAttribute('data-hours-full')) {
+                        h = fullDayHoursForStart();
+                        userTouchedHours = true;
+                    } else if (btn.hasAttribute('data-hours-range')) {
+                        h = rangeHoursEstimateLocal();
+                        userTouchedHours = false;
+                        lastAutoFill = h;
+                        applyAutoRangeIfNeeded();
+                    } else {
+                        userTouchedHours = true;
+                    }
+                    if (!isFinite(h) || h <= 0) {
+                        return;
+                    }
+                    hoursInput.value = String(h);
+                    hoursInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    updatePreview();
+                    hoursInput.focus();
+                });
+            });
+
+            if (typeSelect) {
+                typeSelect.addEventListener('change', syncHoursVisibility);
+            }
+            if (startDateInput) {
+                startDateInput.addEventListener('change', applyAutoRangeIfNeeded);
+                startDateInput.addEventListener('blur', applyAutoRangeIfNeeded);
+            }
+            if (endDateInput) {
+                endDateInput.addEventListener('change', applyAutoRangeIfNeeded);
+                endDateInput.addEventListener('blur', applyAutoRangeIfNeeded);
+            }
+            syncHoursVisibility();
+        })();
 
         // Validate end date is not before start date
         function parseDDMMYYYY(s) {
@@ -1244,6 +1692,16 @@ $absenceFormEndDisplay = ($mode === 'create')
                 body.set('end_date', endDate);
                 if (reason) body.set('reason', reason);
                 body.set('substitute_user_id', substituteSelect ? substituteSelect.value : '');
+                const durationHoursEl = document.getElementById('absence-duration-hours');
+                const requireHoursEl = document.getElementById('absence-require-duration-hours');
+                if (durationHoursEl && !durationHoursEl.disabled && durationHoursEl.value !== '') {
+                    body.set('duration_hours', String(durationHoursEl.value).replace(',', '.'));
+                }
+                if (requireHoursEl && !requireHoursEl.disabled) {
+                    body.set('require_duration_hours', '1');
+                    // Web may fill from working days if the hours field is empty (backup path).
+                    body.set('server_may_fill_hours', '1');
+                }
                 const requestToken = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.getRequestToken && window.ArbeitszeitCheck.getRequestToken()) || (typeof OC !== 'undefined' && OC.requestToken) || '';
                 if (requestToken) body.set('requesttoken', requestToken);
 

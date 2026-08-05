@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 /**
  * Idempotent rollover of unused vacation carryover (and optionally unused annual days)
- * from calendar year Y into opening carryover for year Y+1, after Y’s carryover deadline.
+ * from year Y into opening carryover for year Y+1, after Y’s carryover deadline.
+ *
+ * Calendar mode: deadline is the configured month/day in calendar year Y.
+ * Anniversary mode (Q2): deadline is N months after each user’s anniversary window start.
  *
  * @copyright Copyright (c) 2026
  * @license AGPL-3.0-or-later
@@ -29,19 +32,13 @@ class VacationRolloverService
 		private IUserManager $userManager,
 		private AuditLogMapper $auditLogMapper,
 		private PermissionService $permissionService,
+		private ?VacationUnitService $vacationUnitService = null,
+		private ?VacationUnitMigrationService $vacationUnitMigrationService = null,
 	) {
 	}
 
 	public function isAutomaticRolloverEnabled(): bool
 	{
-		if ($this->config->getAppValue(
-			'arbeitszeitcheck',
-			Constants::CONFIG_VACATION_YEAR_MODE,
-			Constants::DEFAULT_VACATION_YEAR_MODE
-		) === Constants::VACATION_YEAR_MODE_ANNIVERSARY) {
-			// Q2: anniversary-relative rollover not defined yet — fail closed.
-			return false;
-		}
 		return $this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_ROLLOVER_ENABLED, '1') === '1';
 	}
 
@@ -52,6 +49,8 @@ class VacationRolloverService
 
 	/**
 	 * Calendar years whose carryover deadline is strictly before $today (server date) may be rolled.
+	 * In anniversary mode prefer {@see getEligibleFromYearsForUser()} — this returns the same
+	 * calendar-key scan for eligibility when hire dates are unavailable at org level.
 	 *
 	 * @return int[]
 	 */
@@ -73,11 +72,46 @@ class VacationRolloverService
 	}
 
 	/**
-	 * As-of date for allocation: first calendar day after the carryover deadline (carryover not usable for new requests; remainder reflects FIFO).
+	 * Balance years whose carryover deadline for this user is strictly before $today.
+	 *
+	 * @return int[]
 	 */
-	public function getAllocationAsOfAfterDeadline(int $fromYear): \DateTime
+	public function getEligibleFromYearsForUser(string $userId, \DateTimeInterface $today): array
 	{
-		$exp = $this->vacationAllocationService->getCarryoverExpiryDateForYear($fromYear);
+		if (!$this->vacationAllocationService->isAnniversaryMode()) {
+			return $this->getEligibleFromYears($today);
+		}
+
+		$todayNorm = new \DateTime($today->format('Y-m-d'));
+		$todayNorm->setTime(0, 0, 0);
+		$y = (int)$todayNorm->format('Y');
+		$out = [];
+		for ($fy = $y; $fy >= $y - 20; $fy--) {
+			$window = $this->vacationAllocationService->resolveWindowForUserYear($userId, $fy, $todayNorm);
+			if ($window->missingEmploymentStart) {
+				continue;
+			}
+			$exp = $this->vacationAllocationService->getCarryoverExpiryDateForWindow($window);
+			$expDt = new \DateTime($exp->format('Y-m-d'));
+			$expDt->setTime(0, 0, 0);
+			if ($expDt < $todayNorm) {
+				$out[] = $fy;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * As-of date for allocation: first calendar day after the carryover deadline.
+	 */
+	public function getAllocationAsOfAfterDeadline(int $fromYear, ?string $userId = null): \DateTime
+	{
+		if ($userId !== null && $this->vacationAllocationService->isAnniversaryMode()) {
+			$window = $this->vacationAllocationService->resolveWindowForUserYear($userId, $fromYear);
+			$exp = $this->vacationAllocationService->getCarryoverExpiryDateForWindow($window);
+		} else {
+			$exp = $this->vacationAllocationService->getCarryoverExpiryDateForYear($fromYear);
+		}
 		$d = new \DateTime($exp->format('Y-m-d'));
 		$d->setTime(0, 0, 0);
 		$d->modify('+1 day');
@@ -89,7 +123,7 @@ class VacationRolloverService
 	 */
 	public function computeRolloverAmountParts(string $userId, int $fromYear): array
 	{
-		$asOf = $this->getAllocationAsOfAfterDeadline($fromYear);
+		$asOf = $this->getAllocationAsOfAfterDeadline($fromYear, $userId);
 		$alloc = $this->vacationAllocationService->computeYearAllocation($userId, $fromYear, null, null, null, $asOf, null);
 		$cPart = max(0.0, (float)($alloc['carryover_remaining_after_approved'] ?? 0));
 		$aPart = 0.0;
@@ -116,7 +150,9 @@ class VacationRolloverService
 			return ['action' => 'skipped_already_logged', 'user_id' => $userId, 'from_year' => $fromYear, 'to_year' => $toYear];
 		}
 
-		$existingTarget = $this->vacationYearBalanceMapper->getCarryoverDays($userId, $toYear);
+		$existingTarget = $this->vacationUnitService?->isHoursMode() === true
+			? $this->vacationYearBalanceMapper->getCarryoverAmount($userId, $toYear, true)
+			: $this->vacationYearBalanceMapper->getCarryoverDays($userId, $toYear);
 		if ($existingTarget > 0.0001 && !$force) {
 			return ['action' => 'skipped_target_balance', 'user_id' => $userId, 'from_year' => $fromYear, 'to_year' => $toYear];
 		}
@@ -139,35 +175,53 @@ class VacationRolloverService
 			];
 		}
 
-		$this->vacationYearBalanceMapper->upsert($userId, $toYear, $amount);
-		$this->vacationRolloverLogMapper->insertLog($userId, $fromYear, $toYear, $amount);
-		try {
-			$this->auditLogMapper->logAction(
+		$write = function () use ($userId, $fromYear, $toYear, $amount, $parts): array {
+			$hoursMode = $this->vacationUnitService?->isHoursMode() === true;
+			$this->vacationYearBalanceMapper->upsert(
 				$userId,
-				'vacation_rollover',
-				'vacation_year_balance',
-				null,
-				null,
-				[
-					'from_year' => $fromYear,
-					'to_year' => $toYear,
-					'amount' => $amount,
-					'carryover_part' => $parts['carryover_part'],
-					'annual_part' => $parts['annual_part'],
-				],
-				'system'
+				$toYear,
+				$amount,
+				$hoursMode ? $amount : null,
+				!$hoursMode
 			);
-		} catch (\Throwable $e) {
-			// best-effort
+			$this->vacationRolloverLogMapper->insertLog($userId, $fromYear, $toYear, $amount);
+			try {
+				$this->auditLogMapper->logAction(
+					$userId,
+					'vacation_rollover',
+					'vacation_year_balance',
+					null,
+					null,
+					[
+						'from_year' => $fromYear,
+						'to_year' => $toYear,
+						'amount' => $amount,
+						'carryover_part' => $parts['carryover_part'],
+						'annual_part' => $parts['annual_part'],
+						'vacation_year_mode' => $this->vacationAllocationService->isAnniversaryMode()
+							? Constants::VACATION_YEAR_MODE_ANNIVERSARY
+							: Constants::VACATION_YEAR_MODE_CALENDAR,
+					],
+					'system'
+				);
+			} catch (\Throwable $e) {
+				// best-effort
+			}
+
+			return [
+				'action' => 'applied',
+				'user_id' => $userId,
+				'from_year' => $fromYear,
+				'to_year' => $toYear,
+				'amount' => $amount,
+			];
+		};
+
+		if ($this->vacationUnitMigrationService !== null) {
+			return $this->vacationUnitMigrationService->withIdleShared($write);
 		}
 
-		return [
-			'action' => 'applied',
-			'user_id' => $userId,
-			'from_year' => $fromYear,
-			'to_year' => $toYear,
-			'amount' => $amount,
-		];
+		return $write();
 	}
 
 	/**
@@ -180,24 +234,19 @@ class VacationRolloverService
 			return $stats;
 		}
 		$today = new \DateTime('today');
-		$years = $onlyFromYear !== null ? [$onlyFromYear] : $this->getEligibleFromYears($today);
-		if ($onlyFromYear !== null) {
-			$exp = $this->vacationAllocationService->getCarryoverExpiryDateForYear($onlyFromYear);
-			$expDt = new \DateTime($exp->format('Y-m-d'));
-			$expDt->setTime(0, 0, 0);
-			$todayNorm = new \DateTime($today->format('Y-m-d'));
-			$todayNorm->setTime(0, 0, 0);
-			if ($expDt >= $todayNorm && !$force) {
-				return $stats;
-			}
-		}
 
-		$this->userManager->callForAllUsers(function (\OCP\IUser $user) use (&$stats, $years, $dryRun, $force, $ignoreEnabledCheck) {
+		$this->userManager->callForAllUsers(function (\OCP\IUser $user) use (&$stats, $onlyFromYear, $dryRun, $force, $ignoreEnabledCheck, $today) {
 			$uid = $user->getUID();
 			if ($user->isEnabled() !== true) {
 				return;
 			}
 			if (!$this->permissionService->isUserAllowedByAccessGroups($uid)) {
+				return;
+			}
+			$years = $onlyFromYear !== null
+				? [$onlyFromYear]
+				: $this->getEligibleFromYearsForUser($uid, $today);
+			if ($onlyFromYear !== null && !$force && !$this->isFromYearPastDeadlineForUser($uid, $onlyFromYear, $today)) {
 				return;
 			}
 			foreach ($years as $fromYear) {
@@ -235,16 +284,11 @@ class VacationRolloverService
 			return $stats;
 		}
 		$today = new \DateTime('today');
-		$years = $onlyFromYear !== null ? [$onlyFromYear] : $this->getEligibleFromYears($today);
-		if ($onlyFromYear !== null) {
-			$exp = $this->vacationAllocationService->getCarryoverExpiryDateForYear($onlyFromYear);
-			$expDt = new \DateTime($exp->format('Y-m-d'));
-			$expDt->setTime(0, 0, 0);
-			$todayNorm = new \DateTime($today->format('Y-m-d'));
-			$todayNorm->setTime(0, 0, 0);
-			if ($expDt >= $todayNorm && !$force) {
-				return $stats;
-			}
+		$years = $onlyFromYear !== null
+			? [$onlyFromYear]
+			: $this->getEligibleFromYearsForUser($userId, $today);
+		if ($onlyFromYear !== null && !$force && !$this->isFromYearPastDeadlineForUser($userId, $onlyFromYear, $today)) {
+			return $stats;
 		}
 		foreach ($years as $fromYear) {
 			try {
@@ -260,5 +304,23 @@ class VacationRolloverService
 			}
 		}
 		return $stats;
+	}
+
+	private function isFromYearPastDeadlineForUser(string $userId, int $fromYear, \DateTimeInterface $today): bool
+	{
+		$todayNorm = new \DateTime($today->format('Y-m-d'));
+		$todayNorm->setTime(0, 0, 0);
+		if ($this->vacationAllocationService->isAnniversaryMode()) {
+			$window = $this->vacationAllocationService->resolveWindowForUserYear($userId, $fromYear, $todayNorm);
+			if ($window->missingEmploymentStart) {
+				return false;
+			}
+			$exp = $this->vacationAllocationService->getCarryoverExpiryDateForWindow($window);
+		} else {
+			$exp = $this->vacationAllocationService->getCarryoverExpiryDateForYear($fromYear);
+		}
+		$expDt = new \DateTime($exp->format('Y-m-d'));
+		$expDt->setTime(0, 0, 0);
+		return $expDt < $todayNorm;
 	}
 }

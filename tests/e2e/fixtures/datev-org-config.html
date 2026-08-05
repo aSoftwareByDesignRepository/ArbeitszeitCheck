@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>DATEV organisation numbers</title>
+	<style>
+		:root {
+			--text: #1a1a1a;
+			--muted: #4a4a4a;
+			--border: #cfcfcf;
+			--bg: #f7f7f5;
+			--card: #fff;
+			--focus: #005ebb;
+			--danger: #8b0000;
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: "Segoe UI", system-ui, sans-serif;
+			color: var(--text);
+			background: var(--bg);
+			line-height: 1.45;
+		}
+		main {
+			max-width: 40rem;
+			margin: 1.5rem auto;
+			padding: 1.25rem;
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: 8px;
+		}
+		h1 { font-size: 1.5rem; margin: 0 0 0.35rem; }
+		.lead { color: var(--muted); margin: 0 0 1.25rem; }
+		fieldset {
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			padding: 1rem;
+			margin: 0 0 1rem;
+		}
+		legend { font-weight: 600; padding: 0 0.35rem; }
+		.row {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 1rem;
+		}
+		@media (max-width: 40rem) {
+			.row { grid-template-columns: 1fr; }
+		}
+		label { display: block; font-weight: 600; margin-bottom: 0.35rem; }
+		input {
+			width: 100%;
+			min-height: 44px;
+			font-size: 1rem;
+			padding: 0.4rem 0.6rem;
+			border: 2px solid var(--border);
+			border-radius: 6px;
+		}
+		input:focus-visible {
+			outline: 3px solid var(--focus);
+			outline-offset: 2px;
+		}
+		.help { color: var(--muted); font-size: 0.9rem; margin: 0.35rem 0 0; }
+		.error { color: var(--danger); min-height: 1.25rem; }
+		.save {
+			min-height: 44px;
+			min-width: 8rem;
+			padding: 0.6rem 1.2rem;
+			font-size: 1rem;
+			font-weight: 600;
+			cursor: pointer;
+			border-radius: 6px;
+			border: 2px solid var(--focus);
+			background: var(--focus);
+			color: #fff;
+		}
+		.save:focus-visible { outline: 3px solid #000; outline-offset: 2px; }
+		.status { margin-top: 0.75rem; min-height: 1.25rem; }
+	</style>
+</head>
+<body>
+<main id="datev-org-config" aria-labelledby="datev-title">
+	<h1 id="datev-title">DATEV organisation numbers</h1>
+	<p class="lead">Needed only if you export DATEV files. Leave both empty if you do not use DATEV.</p>
+
+	<form id="datev-form" novalidate>
+		<fieldset aria-describedby="datev-intro">
+			<legend>Organisation</legend>
+			<p id="datev-intro" class="help">Set Beraternummer and Mandantennummer together.</p>
+			<div class="row">
+				<div>
+					<label for="datev-berater">Beraternummer</label>
+					<input id="datev-berater" name="datevBeraternummer" inputmode="numeric" maxlength="7" autocomplete="off" aria-describedby="datev-berater-help">
+					<p id="datev-berater-help" class="help">Up to 7 digits.</p>
+				</div>
+				<div>
+					<label for="datev-mandant">Mandantennummer</label>
+					<input id="datev-mandant" name="datevMandantennummer" inputmode="numeric" maxlength="5" autocomplete="off" aria-describedby="datev-mandant-help">
+					<p id="datev-mandant-help" class="help">Up to 5 digits.</p>
+				</div>
+			</div>
+			<p id="datev-error" class="error" role="alert" aria-live="assertive"></p>
+		</fieldset>
+		<button type="submit" class="save" id="datev-save">Save</button>
+		<p id="datev-status" class="status" role="status" aria-live="polite"></p>
+	</form>
+</main>
+<script>
+(function () {
+	const form = document.getElementById('datev-form');
+	const berater = document.getElementById('datev-berater');
+	const mandant = document.getElementById('datev-mandant');
+	const err = document.getElementById('datev-error');
+	const status = document.getElementById('datev-status');
+
+	function digits(v) {
+		return String(v || '').replace(/\s+/g, '').trim();
+	}
+
+	form.addEventListener('submit', function (e) {
+		e.preventDefault();
+		err.textContent = '';
+		status.textContent = '';
+		const b = digits(berater.value);
+		const m = digits(mandant.value);
+		if ((b === '') !== (m === '')) {
+			err.textContent = 'Set both numbers together, or leave both empty.';
+			(b === '' ? berater : mandant).focus();
+			return;
+		}
+		if (b !== '' && !/^\d{1,7}$/.test(b)) {
+			err.textContent = 'Beraternummer must be 1–7 digits.';
+			berater.focus();
+			return;
+		}
+		if (m !== '' && !/^\d{1,5}$/.test(m)) {
+			err.textContent = 'Mandantennummer must be 1–5 digits.';
+			mandant.focus();
+			return;
+		}
+		status.textContent = 'Saved';
+	});
+})();
+</script>
+</body>
+</html>

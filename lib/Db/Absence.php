@@ -29,6 +29,8 @@ use OCA\ArbeitszeitCheck\Service\HolidayService;
  * @method void setEndDate(\DateTime $endDate)
  * @method float|null getDays()
  * @method void setDays(float|null $days)
+ * @method float|null getDurationHours()
+ * @method void setDurationHours(float|null $durationHours)
  * @method string|null getReason()
  * @method void setReason(string|null $reason)
  * @method string getStatus()
@@ -81,6 +83,9 @@ class Absence extends Entity
 	/** @var float|null */
 	protected $days;
 
+	/** @var float|null */
+	protected $durationHours;
+
 	/** @var string|null */
 	protected $reason;
 
@@ -118,6 +123,7 @@ class Absence extends Entity
 		$this->addType('startDate', 'date');
 		$this->addType('endDate', 'date');
 		$this->addType('days', 'float');
+		$this->addType('durationHours', 'float');
 		$this->addType('reason', 'string');
 		$this->addType('status', 'string');
 		$this->addType('approverComment', 'string');
@@ -312,6 +318,7 @@ class Absence extends Entity
 			'startDate' => $startDate ? $startDate->format('Y-m-d') : null,
 			'endDate' => $endDate ? $endDate->format('Y-m-d') : null,
 			'days' => $this->getDays(),
+			'durationHours' => $this->getDurationHours(),
 			'workingDays' => $this->calculateWorkingDays(),
 			'reason' => $this->getReason(),
 			'status' => $this->getStatus(),

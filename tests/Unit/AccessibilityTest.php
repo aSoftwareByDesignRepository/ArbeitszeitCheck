@@ -58,14 +58,32 @@ class AccessibilityTest extends TestCase {
 			$this->assertTrue($hasButton || $hasLink,
 				"Template should expose at least one interactive control (<button> or <a href>): $templateFile");
 
-			// Check for form labels only when the template contains form controls.
-			// Not all pages include forms/inputs (e.g. dashboard tables).
-			$hasFormControls = (strpos($content, '<input') !== false)
-				|| (strpos($content, '<select') !== false)
-				|| (strpos($content, '<textarea') !== false);
-			if ($hasFormControls) {
+			// Check for form labels only when the template contains visible form controls.
+			// Hidden CSRF tokens alone do not require a sibling <label> in the same file
+			// (policy pages pull real fields via PHP includes).
+			$visibleControls = preg_match('/<(input|select|textarea)\b(?![^>]*\btype=["\']hidden["\'])/i', $content) === 1;
+			if ($visibleControls) {
 				$this->assertStringContainsString('<label', $content,
 					"Template should contain form labels: $templateFile");
+			}
+		}
+
+		// Included policy partials must keep labels next to controls (kitchen-sink split).
+		$policyPartials = [
+			__DIR__ . '/../../templates/partials/admin-policy-clock-reminders.php',
+			__DIR__ . '/../../templates/partials/admin-policy-hr-office.php',
+			__DIR__ . '/../../templates/partials/admin-policy-overtime-alerts.php',
+			__DIR__ . '/../../templates/partials/admin-policy-overtime-bank.php',
+			__DIR__ . '/../../templates/partials/admin-policy-hour-premiums.php',
+			__DIR__ . '/../../templates/partials/admin-policy-vacation.php',
+			__DIR__ . '/../../templates/admin-overtime-settings.php',
+		];
+		foreach ($policyPartials as $templateFile) {
+			$this->assertFileExists($templateFile, "Policy template should exist: $templateFile");
+			$content = (string)file_get_contents($templateFile);
+			$this->assertStringContainsString('aria-', $content, "Policy template needs ARIA: $templateFile");
+			if (str_contains($templateFile, 'partials/')) {
+				$this->assertStringContainsString('<label', $content, "Policy partial needs labels: $templateFile");
 			}
 		}
 	}

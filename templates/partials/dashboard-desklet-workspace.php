@@ -5,13 +5,38 @@ declare(strict_types=1);
 /**
  * Compact punch-clock workspace for the Nextcloud dashboard desklet and optional embeds.
  *
- * @var array $deskletConfig from DashboardDeskletConfigService::buildForUser()
- * @var \OCP\IL10N $l
+ * @var array $_ assigned by DashboardDeskletWorkspaceRenderer
  */
 
-/** @var array $deskletConfig */
-$config = is_array($deskletConfig ?? null) ? $deskletConfig : [];
+/** @var array $config */
+$deskletConfig = is_array($_['deskletConfig'] ?? null) ? $_['deskletConfig'] : [];
+$config = $deskletConfig;
+/** @var \OCP\IL10N $l */
+$l = $_['l'] ?? null;
+if (!$l instanceof \OCP\IL10N) {
+	$l = \OCP\Server::get(\OCP\L10N\IFactory::class)->get('arbeitszeitcheck');
+}
 $l10n = is_array($config['l10n'] ?? null) ? $config['l10n'] : [];
+$projectCheck = is_array($config['projectCheck'] ?? null) ? $config['projectCheck'] : [];
+$projectOptions = [];
+if (!empty($projectCheck['linkingEnabled']) && is_array($projectCheck['projects'] ?? null)) {
+	foreach ($projectCheck['projects'] as $project) {
+		if (!is_array($project)) {
+			continue;
+		}
+		$id = trim((string)($project['id'] ?? ''));
+		if ($id === '') {
+			continue;
+		}
+		$label = trim((string)($project['displayName'] ?? $project['name'] ?? ''));
+		if ($label === '') {
+			$label = $id;
+		}
+		$projectOptions[] = ['id' => $id, 'label' => $label];
+	}
+}
+$showProjectPicker = $projectOptions !== [];
+$showProjectLinkingOff = !empty($projectCheck['available']) && empty($projectCheck['linkingEnabled']);
 ?>
 <div class="dz-workspace" data-arbeitszeitcheck-desklet="1">
 	<script type="application/json" id="dz-config"><?php print_unescaped(json_encode($config, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)); ?></script>
@@ -36,6 +61,13 @@ $l10n = is_array($config['l10n'] ?? null) ? $config['l10n'] : [];
 		</div>
 
 		<div id="dz-capture-notice" class="dz-capture-notice" hidden></div>
+		<div id="dz-daily-max-notice" class="dz-capture-notice dz-capture-notice--warning" role="status" hidden></div>
+		<?php if ($showProjectLinkingOff): ?>
+		<div id="dz-project-linking-off" class="dz-capture-notice dz-capture-notice--neutral" role="status">
+			<p class="dz-capture-notice__title"><?php p($l10n['projectLinkingOffTitle'] ?? $l->t('ProjectCheck linking is turned off')); ?></p>
+			<p class="dz-capture-notice__text"><?php p($l10n['projectLinkingOffBody'] ?? $l->t('An administrator must enable the ProjectCheck connection in Global settings before you can link hours to a project.')); ?></p>
+		</div>
+		<?php endif; ?>
 
 		<article class="dz-status-card" id="dz-status-card" data-status="clocked_out" aria-labelledby="dz-status-badge">
 			<div class="dz-status-card__header">
@@ -59,6 +91,25 @@ $l10n = is_array($config['l10n'] ?? null) ? $config['l10n'] : [];
 				</div>
 			</div>
 		</article>
+
+		<?php if ($showProjectPicker): ?>
+		<div class="dz-project-picker" id="dz-project-picker" role="group" aria-labelledby="dz-project-label">
+			<label for="dz-clock-in-project" id="dz-project-label" class="dz-project-picker__label">
+				<?php p($l10n['projectLabel'] ?? $l->t('Project')); ?>
+			</label>
+			<select id="dz-clock-in-project"
+				class="dz-project-picker__select"
+				aria-describedby="dz-project-help">
+				<option value=""><?php p($l10n['projectNone'] ?? $l->t('No project')); ?></option>
+				<?php foreach ($projectOptions as $opt): ?>
+					<option value="<?php p($opt['id']); ?>"><?php p($opt['label']); ?></option>
+				<?php endforeach; ?>
+			</select>
+			<p id="dz-project-help" class="dz-project-picker__help">
+				<?php p($l10n['projectHelp'] ?? $l->t('Optional. Link these hours to a ProjectCheck project, or leave “No project”.')); ?>
+			</p>
+		</div>
+		<?php endif; ?>
 
 		<div class="dz-button-row" role="group" aria-label="<?php p($l->t('Time tracking actions')); ?>">
 			<button type="button" class="azc-btn azc-btn--primary" id="dz-clock-in"><?php p($l10n['clockIn'] ?? $l->t('Clock In')); ?></button>

@@ -21,6 +21,8 @@ use OCP\Util;
 // post-load [data-lucide] placeholders on other pages.
 Util::addScript('arbeitszeitcheck', 'common/navigation');
 Util::addScript('arbeitszeitcheck', 'common/navigation-icons');
+// Soft keyboard / visualViewport: keep focused notes & inputs above the IME on phones.
+Util::addScript('arbeitszeitcheck', 'common/keep-focused-visible');
 
 $azcNavIcon = static function (string $name): string {
 	return IconCatalog::render($name, 'azc-nav__icon-svg');
@@ -49,7 +51,11 @@ $isAbsences = $pageId === 'absences' || ($pageId === '' && strpos($currentPage, 
 $isReports = $pageId === 'reports' || ($pageId === '' && strpos($currentPage, '/reports') !== false);
 $isCalendar = $pageId === 'calendar' || ($pageId === '' && strpos($currentPage, '/calendar') !== false);
 $isTimeline = $pageId === 'timeline' || ($pageId === '' && strpos($currentPage, '/timeline') !== false);
-$isSettings = $pageId === 'settings' || ($pageId === '' && strpos($currentPage, '/settings') !== false);
+// Employee My settings only — never match /admin/settings via URI fallback.
+$isSettings = $pageId === 'settings'
+	|| ($pageId === ''
+		&& strpos($currentPage, '/admin/settings') === false
+		&& preg_match('#/apps/arbeitszeitcheck/settings(?:/|\?|$)#', $currentPage) === 1);
 $isManagerDashboard = $pageId === 'manager-dashboard';
 $isManagerTimeEntries = $pageId === 'manager-time-entries';
 $isManagerAbsences = $pageId === 'manager-absences';
@@ -83,6 +89,8 @@ $isAdminTeams = $pageId === 'admin-teams'
 	|| ($pageId === '' && strpos($currentPage, '/admin/teams') !== false);
 $isAdminVacationLayers = $pageId === 'admin-vacation-layers'
 	|| ($pageId === '' && strpos($currentPage, '/admin/vacation-layers') !== false);
+$isAdminVacationRules = $pageId === 'admin-vacation-rules'
+	|| ($pageId === '' && strpos($currentPage, '/admin/vacation-rules') !== false);
 $isAdminAuditLog = $pageId === 'admin-audit-log'
 	|| ($pageId === '' && strpos($currentPage, '/admin/audit-log') !== false);
 $isAdminSettingsPage = $pageId === 'admin-settings'
@@ -95,10 +103,18 @@ $isAdminKioskPage = $pageId === 'admin-kiosk'
 	|| ($pageId === '' && strpos($currentPage, '/admin/kiosk') !== false);
 $isAdminNotificationsPage = $pageId === 'admin-notifications'
 	|| ($pageId === '' && strpos($currentPage, '/admin/notifications') !== false);
+$isAdminOvertimeSettingsPage = $pageId === 'admin-overtime-settings'
+	|| ($pageId === '' && strpos($currentPage, '/admin/overtime-settings') !== false);
 $isAdminOvertimePayoutsPage = $pageId === 'admin-overtime-payouts'
 	|| ($pageId === '' && strpos($currentPage, '/admin/overtime-payouts') !== false);
 $isAdminOvertimePayoutAuditPage = $pageId === 'admin-overtime-payout-audit'
 	|| ($pageId === '' && strpos($currentPage, '/admin/overtime-payout-audit') !== false);
+$isAdminPolicyPage = $isAdminVacationLayers
+	|| $isAdminVacationRules
+	|| $isAdminOvertimeSettingsPage
+	|| $isAdminOvertimePayoutsPage
+	|| $isAdminOvertimePayoutAuditPage
+	|| $isAdminNotificationsPage;
 // Dashboard is active if pageId says so, or URI fallback for the app home.
 $isDashboard = $pageId === 'dashboard' ||
     ($pageId === '' && (strpos($currentPage, '/dashboard') !== false ||
@@ -218,6 +234,9 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                         <span class="nav-parent-chevron" aria-hidden="true"></span>
                     </button>
                     <ul id="admin-subnav" class="nav-submenu" <?php p($isAdmin ? '' : 'hidden'); ?>>
+                        <li class="nav-submenu-group">
+                            <p class="nav-submenu-group__title" id="admin-nav-group-overview"><?php p($l->t('Overview')); ?></p>
+                        </li>
                         <li class="<?php p($isAdminDashboard ? 'active' : ''); ?>" <?php p($isAdminDashboard ? 'aria-current="page"' : ''); ?>>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.dashboard')); ?>"
                                 title="<?php p($l->t('Status overview with key metrics and current alerts')); ?>"
@@ -225,53 +244,14 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                                 <span><?php p($l->t('Status')); ?></span>
                             </a>
                         </li>
-                        <li class="<?php p($isAdminNotificationsPage ? 'active' : ''); ?>" <?php p($isAdminNotificationsPage ? 'aria-current="page"' : ''); ?>>
-                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.notifications')); ?>"
-                                title="<?php p($l->t('Configure notification rules for absences and HR mailbox')); ?>"
-                                aria-label="<?php p($l->t('Open notification settings')); ?>">
-                                <span><?php p($l->t('Notifications')); ?></span>
-                            </a>
-                        </li>
-                        <li class="<?php p($isAdminOvertimePayoutsPage ? 'active' : ''); ?>" <?php p($isAdminOvertimePayoutsPage ? 'aria-current="page"' : ''); ?>>
-                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.overtime_payout.index')); ?>"
-                                title="<?php p($l->t('Month-end payout of overtime above the bank cap')); ?>"
-                                aria-label="<?php p($l->t('Open overtime payouts')); ?>">
-                                <span><?php p($l->t('Overtime payouts')); ?></span>
-                            </a>
-                        </li>
-                        <li class="<?php p($isAdminOvertimePayoutAuditPage ? 'active' : ''); ?>" <?php p($isAdminOvertimePayoutAuditPage ? 'aria-current="page"' : ''); ?>>
-                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.overtime_payout.auditIndex')); ?>"
-                                title="<?php p($l->t('Audit registry of recorded overtime payouts')); ?>"
-                                aria-label="<?php p($l->t('Open overtime payout audit')); ?>">
-                                <span><?php p($l->t('Payout audit')); ?></span>
-                            </a>
+                        <li class="nav-submenu-group">
+                            <p class="nav-submenu-group__title" id="admin-nav-group-people"><?php p($l->t('People')); ?></p>
                         </li>
                         <li class="<?php p($isAdminUsers ? 'active' : ''); ?>" <?php p($isAdminUsers ? 'aria-current="page"' : ''); ?>>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.users')); ?>"
                                 title="<?php p($l->t('Manage employees and working time models')); ?>"
                                 aria-label="<?php p($l->t('Manage employees')); ?>">
                                 <span><?php p($l->t('Employees')); ?></span>
-                            </a>
-                        </li>
-                        <li class="<?php p($isAdminWorkingTimeModels ? 'active' : ''); ?>" <?php p($isAdminWorkingTimeModels ? 'aria-current="page"' : ''); ?>>
-                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.workingTimeModels')); ?>"
-                                title="<?php p($l->t('Configure working time models')); ?>"
-                                aria-label="<?php p($l->t('Manage working time models')); ?>">
-                                <span><?php p($l->t('Working time models')); ?></span>
-                            </a>
-                        </li>
-                        <li class="<?php p($isAdminTariffRules ? 'active' : ''); ?>" <?php p($isAdminTariffRules ? 'aria-current="page"' : ''); ?>>
-                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.tariffRuleSets')); ?>"
-                                title="<?php p($l->t('Manage tariff rule sets used for vacation entitlement calculations')); ?>"
-                                aria-label="<?php p($l->t('Manage tariff rule sets')); ?>">
-                                <span><?php p($l->t('Tariff rule sets')); ?></span>
-                            </a>
-                        </li>
-                        <li class="<?php p($isAdminHolidays ? 'active' : ''); ?>" <?php p($isAdminHolidays ? 'aria-current="page"' : ''); ?>>
-                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.holidays')); ?>"
-                                title="<?php p($l->t('Manage state holiday calendars and default calendar')); ?>"
-                                aria-label="<?php p($l->t('Manage holidays and calendars')); ?>">
-                                <span><?php p($l->t('Holidays and calendars')); ?></span>
                             </a>
                         </li>
                         <li class="<?php p($isAdminTeams ? 'active' : ''); ?>" <?php p($isAdminTeams ? 'aria-current="page"' : ''); ?>>
@@ -281,12 +261,49 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                                 <span><?php p($l->t('Teams and locations')); ?></span>
                             </a>
                         </li>
-                        <li class="<?php p($isAdminVacationLayers ? 'active' : ''); ?>" <?php p($isAdminVacationLayers ? 'aria-current="page"' : ''); ?>>
-                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.vacationLayers')); ?>"
-                                title="<?php p($l->t('Configure layered vacation entitlement defaults (organisation, working time models, teams)')); ?>"
-                                aria-label="<?php p($l->t('Open vacation entitlement layers')); ?>">
-                                <span><?php p($l->t('Vacation entitlement')); ?></span>
+                        <li class="nav-submenu-group">
+                            <p class="nav-submenu-group__title" id="admin-nav-group-working-time"><?php p($l->t('Working time')); ?></p>
+                        </li>
+                        <li class="<?php p($isAdminWorkingTimeModels ? 'active' : ''); ?>" <?php p($isAdminWorkingTimeModels ? 'aria-current="page"' : ''); ?>>
+                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.workingTimeModels')); ?>"
+                                title="<?php p($l->t('Configure working time models')); ?>"
+                                aria-label="<?php p($l->t('Manage working time models')); ?>">
+                                <span><?php p($l->t('Working time models')); ?></span>
                             </a>
+                        </li>
+                        <li class="<?php p($isAdminHolidays ? 'active' : ''); ?>" <?php p($isAdminHolidays ? 'aria-current="page"' : ''); ?>>
+                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.holidays')); ?>"
+                                title="<?php p($l->t('Manage state holiday calendars and default calendar')); ?>"
+                                aria-label="<?php p($l->t('Manage holidays and calendars')); ?>">
+                                <span><?php p($l->t('Holidays and calendars')); ?></span>
+                            </a>
+                        </li>
+                        <li class="<?php p($isAdminSettingsPage ? 'active' : ''); ?>" <?php if ($isAdminSettingsPage): ?>aria-current="page"<?php endif; ?>>
+                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings')); ?>"
+                                title="<?php p($l->t('Manage global rules, access control, and compliance settings')); ?>"
+                                aria-label="<?php p($l->t('Open global administration settings')); ?>">
+                                <span><?php p($l->t('Global settings')); ?></span>
+                            </a>
+                        </li>
+                        <li class="nav-submenu-group">
+                            <p class="nav-submenu-group__title" id="admin-nav-group-policy"><?php p($l->t('Policy')); ?></p>
+                        </li>
+                        <li class="<?php p($isAdminPolicyPage ? 'active' : ''); ?>" <?php if ($isAdminPolicyPage): ?>aria-current="page"<?php endif; ?>>
+                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.vacationRules')); ?>"
+                                title="<?php p($l->t('Vacation, overtime, payouts, and notification alerts')); ?>"
+                                aria-label="<?php p($l->t('Open policy settings')); ?>">
+                                <span><?php p($l->t('Policy settings')); ?></span>
+                            </a>
+                        </li>
+                        <li class="<?php p($isAdminTariffRules ? 'active' : ''); ?>" <?php p($isAdminTariffRules ? 'aria-current="page"' : ''); ?>>
+                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.tariffRuleSets')); ?>"
+                                title="<?php p($l->t('Manage tariff rule sets used for vacation entitlement calculations')); ?>"
+                                aria-label="<?php p($l->t('Manage tariff rule sets')); ?>">
+                                <span><?php p($l->t('Tariff rule sets')); ?></span>
+                            </a>
+                        </li>
+                        <li class="nav-submenu-group">
+                            <p class="nav-submenu-group__title" id="admin-nav-group-ops"><?php p($l->t('Operations')); ?></p>
                         </li>
                         <li class="<?php p($isAdminAuditLog ? 'active' : ''); ?>" <?php p($isAdminAuditLog ? 'aria-current="page"' : ''); ?>>
                             <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.auditLog')); ?>"
@@ -307,13 +324,6 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                                 title="<?php p($l->t('Foyer kiosk terminals and employee badges')); ?>"
                                 aria-label="<?php p($l->t('Open kiosk administration')); ?>">
                                 <span><?php p($l->t('Kiosk')); ?></span>
-                            </a>
-                        </li>
-                        <li class="<?php p($isAdminSettingsPage ? 'active' : ''); ?>" <?php p($isAdminSettingsPage ? 'aria-current="page"' : ''); ?>>
-                            <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings')); ?>"
-                                title="<?php p($l->t('Manage global rules, access control, and compliance settings')); ?>"
-                                aria-label="<?php p($l->t('Open global administration settings')); ?>">
-                                <span><?php p($l->t('Global settings')); ?></span>
                             </a>
                         </li>
                         <li class="<?php p($isAdminSupportUsPage ? 'active' : ''); ?>" <?php p($isAdminSupportUsPage ? 'aria-current="page"' : ''); ?>>

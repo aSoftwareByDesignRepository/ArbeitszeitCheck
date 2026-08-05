@@ -89,7 +89,7 @@ class OvertimePayoutController extends Controller
 		$this->registerFrontEndAssets(
 			'admin-overtime-payout-audit',
 			'admin-overtime-payout-audit',
-			[],
+			['admin-notifications'],
 			['common/admin-user-picker'],
 		);
 
@@ -242,7 +242,7 @@ class OvertimePayoutController extends Controller
 	{
 		$this->assertAppAdmin();
 
-		$this->registerFrontEndAssets('admin-overtime-payouts', 'admin-overtime-payouts');
+		$this->registerFrontEndAssets('admin-overtime-payouts', 'admin-overtime-payouts', ['admin-notifications']);
 
 		$now = new \DateTime();
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-overtime-payouts', $this->buildAdminShellParams(

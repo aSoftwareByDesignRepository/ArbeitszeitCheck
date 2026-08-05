@@ -38,8 +38,8 @@
 .month-closure-badge {
 	--azc-bdg-ink: var(--color-main-text);
 	--azc-bdg-fill: var(--color-background-hover, var(--color-main-background));
-	--azc-bdg-edge: var(--color-border-maxcontrast, #7d7d7d);
-	--azc-bdg-dot: var(--color-border-maxcontrast, #7d7d7d);
+	--azc-bdg-edge: var(--color-border-maxcontrast);
+	--azc-bdg-dot: var(--color-border-maxcontrast);
 
 	display: inline-flex;
 	align-items: center;
@@ -105,9 +105,9 @@
 #app-content.azc-app .auto-break-toggle__status--on,
 .azc-projectcheck-connection__badge--on,
 .month-closure-badge--success {
-	--azc-bdg-ink: var(--color-success-text, var(--color-success, #286c39));
-	--azc-bdg-fill: color-mix(in srgb, var(--color-success, #2d7b41) var(--azc-bdg-fill-mix), var(--color-main-background));
-	--azc-bdg-edge: color-mix(in srgb, var(--azc-bdg-ink) var(--azc-bdg-edge-mix), var(--color-border-maxcontrast, #7d7d7d));
+	--azc-bdg-ink: var(--color-success-text, var(--color-success));
+	--azc-bdg-fill: color-mix(in srgb, var(--color-success) var(--azc-bdg-fill-mix), var(--color-main-background));
+	--azc-bdg-edge: color-mix(in srgb, var(--azc-bdg-ink) var(--azc-bdg-edge-mix), var(--color-border-maxcontrast));
 	--azc-bdg-dot: var(--azc-bdg-ink);
 }
 
@@ -125,9 +125,9 @@
 .dz-list-item .dz-badge[data-status="break"],
 .status-badge.break,
 .month-closure-badge--warning {
-	--azc-bdg-ink: var(--color-warning-text, var(--color-warning, #7f5900));
-	--azc-bdg-fill: color-mix(in srgb, var(--color-warning, #a37200) var(--azc-bdg-fill-mix), var(--color-main-background));
-	--azc-bdg-edge: color-mix(in srgb, var(--azc-bdg-ink) var(--azc-bdg-edge-mix), var(--color-border-maxcontrast, #7d7d7d));
+	--azc-bdg-ink: var(--color-warning-text, var(--color-warning));
+	--azc-bdg-fill: color-mix(in srgb, var(--color-warning) var(--azc-bdg-fill-mix), var(--color-main-background));
+	--azc-bdg-edge: color-mix(in srgb, var(--azc-bdg-ink) var(--azc-bdg-edge-mix), var(--color-border-maxcontrast));
 	--azc-bdg-dot: var(--azc-bdg-ink);
 }
 
@@ -140,9 +140,9 @@
 .azc-badge--error,
 .absence-type-badge.type-sick,
 .absence-type-badge.type-sick_leave {
-	--azc-bdg-ink: var(--color-error-text, var(--color-error, #c20505));
-	--azc-bdg-fill: color-mix(in srgb, var(--color-error, #db0606) var(--azc-bdg-fill-mix), var(--color-main-background));
-	--azc-bdg-edge: color-mix(in srgb, var(--azc-bdg-ink) var(--azc-bdg-edge-mix), var(--color-border-maxcontrast, #7d7d7d));
+	--azc-bdg-ink: var(--color-error-text, var(--color-error));
+	--azc-bdg-fill: color-mix(in srgb, var(--color-error) var(--azc-bdg-fill-mix), var(--color-main-background));
+	--azc-bdg-edge: color-mix(in srgb, var(--azc-bdg-ink) var(--azc-bdg-edge-mix), var(--color-border-maxcontrast));
 	--azc-bdg-dot: var(--azc-bdg-ink);
 }
 
@@ -164,9 +164,9 @@
 #app-content.azc-app--admin-holidays .admin-holidays-badge--statutory,
 .dz-status-badge[data-status="paused"],
 .dz-list-item .dz-badge[data-status="paused"] {
-	--azc-bdg-ink: var(--color-info-text, var(--color-info, #006499));
-	--azc-bdg-fill: color-mix(in srgb, var(--color-info, #0071ad) var(--azc-bdg-fill-mix), var(--color-main-background));
-	--azc-bdg-edge: color-mix(in srgb, var(--azc-bdg-ink) var(--azc-bdg-edge-mix), var(--color-border-maxcontrast, #7d7d7d));
+	--azc-bdg-ink: var(--color-info-text, var(--color-info));
+	--azc-bdg-fill: color-mix(in srgb, var(--color-info) var(--azc-bdg-fill-mix), var(--color-main-background));
+	--azc-bdg-edge: color-mix(in srgb, var(--azc-bdg-ink) var(--azc-bdg-edge-mix), var(--color-border-maxcontrast));
 	--azc-bdg-dot: var(--azc-bdg-ink);
 }
 
@@ -192,8 +192,8 @@
 .month-closure-badge--neutral {
 	--azc-bdg-fill: var(--color-background-hover, var(--color-main-background));
 	--azc-bdg-ink: var(--color-main-text);
-	--azc-bdg-edge: var(--color-border-maxcontrast, #7d7d7d);
-	--azc-bdg-dot: var(--color-border-maxcontrast, #7d7d7d);
+	--azc-bdg-edge: var(--color-border-maxcontrast);
+	--azc-bdg-dot: var(--color-border-maxcontrast);
 }
 
 /* ── Per-family geometry tweaks (colour comes from the tokens above) ── */
@@ -277,7 +277,7 @@
 	font-weight: 600;
 	line-height: 1.35;
 	border-radius: var(--border-radius-pill, 999px);
-	border: 1px solid var(--color-border-maxcontrast, #7d7d7d);
+	border: 1px solid var(--color-border-maxcontrast);
 	background: var(--color-background-hover, var(--color-main-background));
 	color: var(--color-main-text);
 	box-sizing: border-box;
@@ -302,7 +302,7 @@
 	width: 1.75rem;
 	height: 1.75rem;
 	border-radius: 999px;
-	border: 1px solid var(--color-border-maxcontrast, #7d7d7d);
+	border: 1px solid var(--color-border-maxcontrast);
 	font-weight: 700;
 	font-size: var(--azc-fs-sm, 0.875rem);
 	background: var(--color-background-hover, var(--color-main-background));
@@ -312,28 +312,39 @@
 
 .azc-reports-stepper__item--current .azc-reports-stepper__badge,
 .manager-mc-step--current .manager-mc-step__badge {
-	--azc-bdg-ink: var(--color-info-text, var(--color-info, #006499));
-	border-color: color-mix(in srgb, var(--azc-bdg-ink) 55%, var(--color-border-maxcontrast, #7d7d7d));
-	background: color-mix(in srgb, var(--color-info, #0071ad) 13%, var(--color-main-background));
+	--azc-bdg-ink: var(--color-info-text, var(--color-info));
+	border-color: color-mix(in srgb, var(--azc-bdg-ink) 55%, var(--color-border-maxcontrast));
+	background: color-mix(in srgb, var(--color-info) 13%, var(--color-main-background));
 	color: var(--azc-bdg-ink);
 }
 
 .azc-reports-stepper__item--done .azc-reports-stepper__badge,
 .manager-mc-step--done .manager-mc-step__badge {
-	--azc-bdg-ink: var(--color-success-text, var(--color-success, #286c39));
-	border-color: color-mix(in srgb, var(--azc-bdg-ink) 55%, var(--color-border-maxcontrast, #7d7d7d));
-	background: color-mix(in srgb, var(--color-success, #2d7b41) 13%, var(--color-main-background));
+	--azc-bdg-ink: var(--color-success-text, var(--color-success));
+	border-color: color-mix(in srgb, var(--azc-bdg-ink) 55%, var(--color-border-maxcontrast));
+	background: color-mix(in srgb, var(--color-success) 13%, var(--color-main-background));
 	color: var(--azc-bdg-ink);
 }
 
 /* ── Scope strip chips (warning links) ─────────────────────── */
+.azc-scope-strip__chip.azc-badge,
 .azc-scope-strip__chip.azc-badge--warning {
 	text-decoration: none;
+	/* Beat generic #app-content-wrapper a { color: primary } — WCAG 1.4.3 */
+	color: var(--azc-bdg-ink) !important;
+	background: var(--azc-bdg-fill);
+	border-color: var(--azc-bdg-edge);
 }
 
 .azc-scope-strip__chip.azc-badge--warning:hover,
 .azc-scope-strip__chip.azc-badge--warning:focus-visible {
 	text-decoration: underline;
+	color: var(--azc-bdg-ink) !important;
+}
+
+.azc-scope-strip__chip.azc-badge--warning:focus-visible {
+	outline: 3px solid var(--color-primary-element);
+	outline-offset: 2px;
 }
 
 /* ── Responsive: touch-friendly on phones ───────────────────── */

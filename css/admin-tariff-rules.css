@@ -145,8 +145,8 @@
 
 #app-content.azc-app--admin-tariff-rules .admin-tariff-rules__modal .form-input[aria-invalid='true'],
 .modal-backdrop .admin-tariff-rules__modal .form-input[aria-invalid='true'] {
-	border-color: var(--color-error, #c32c2c);
-	outline-color: var(--color-error, #c32c2c);
+	border-color: var(--color-error);
+	outline-color: var(--color-error);
 }
 
 #app-content.azc-app--admin-tariff-rules .admin-tariff-rules__conflict-actions,
@@ -164,8 +164,8 @@
 
 #app-content.azc-app--admin-tariff-rules .admin-tariff-rules__row--highlight,
 #app-content.azc-app--admin-tariff-rules .admin-tariff-rules__row--highlight td {
-	background: color-mix(in srgb, var(--color-primary-element, #00679e) 14%, var(--color-main-background));
-	outline: 2px solid var(--color-primary-element, #00679e);
+	background: color-mix(in srgb, var(--color-primary-element) 14%, var(--color-main-background));
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: -2px;
 }
 

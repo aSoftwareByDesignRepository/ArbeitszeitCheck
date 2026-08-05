@@ -89,6 +89,10 @@ class AdminSettings implements ISettings
 			'breakAutoFallbackFlexWindowStart' => max(0, min(23, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_start', '11'))),
 			'breakAutoFallbackFlexWindowEnd' => max(1, min(24, (int)$this->appConfig->getAppValueString('break_auto_fallback_flex_window_end', '16'))),
 			'exportMidnightSplitEnabled' => $this->appConfig->getAppValueString('export_midnight_split_enabled', '1') === '1',
+			'datevBeraternummer' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_BERATERNUMMER, ''),
+			'datevMandantennummer' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_MANDANTENNUMMER, ''),
+			'datevLohnartNormal' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_NORMAL, '1000'),
+			'datevLohnartUeberstunden' => $this->appConfig->getAppValueString(Constants::CONFIG_DATEV_LOHNART_UEBERSTUNDEN, '2000'),
 			'monthClosureEnabled' => $this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_ENABLED, '0') === '1',
 			'monthClosureGraceDaysAfterEom' => max(0, min(90, (int)$this->appConfig->getAppValueString(Constants::CONFIG_MONTH_CLOSURE_GRACE_DAYS_AFTER_EOM, '0'))),
 			'requireSubstituteTypes' => $requireSubstituteTypes,
@@ -120,6 +124,11 @@ class AdminSettings implements ISettings
 		];
 
 		$projectCheckAvailable = $this->appManager->isEnabledForUser('projectcheck');
+		$catalog = new \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog();
+		$ncPages = $catalog->chipBarPayload($this->l10n, $this->urlGenerator, '');
+		// NC mega-form has no single active section — chips only guide into the app.
+		$ncPages['current'] = '';
+		$ncPages['navAriaLabel'] = $this->l10n->t('Open a focused settings page in the app');
 
 		return new TemplateResponse('arbeitszeitcheck', 'admin-settings', [
 			'settings' => $settings,
@@ -129,7 +138,12 @@ class AdminSettings implements ISettings
 			'l' => $this->l10n,
 			'urlGenerator' => $this->urlGenerator,
 			'settingsShell' => 'nextcloud',
-			'inAppAdminSettingsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings'),
+			'inAppAdminSettingsUrl' => $this->urlGenerator->linkToRoute(
+				'arbeitszeitcheck.admin.settingsSection',
+				['section' => \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::DEFAULT_SECTION]
+			),
+			'settingsSection' => \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::SECTION_ALL,
+			'settingsPages' => $ncPages,
 			'supportUsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.supportUs'),
 			'projectCheckAvailable' => $projectCheckAvailable,
 			'requesttoken' => Util::callRegister(),

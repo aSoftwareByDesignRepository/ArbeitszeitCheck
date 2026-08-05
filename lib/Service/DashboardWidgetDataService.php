@@ -28,6 +28,7 @@ class DashboardWidgetDataService {
 		private readonly TimeZoneService $timeZoneService,
 		private readonly TimeCaptureMethodService $timeCaptureMethodService,
 		private readonly ProjectCheckIntegrationService $projectCheckIntegration,
+		private readonly VacationHoursDebitService $vacationHoursDebitService,
 	) {
 	}
 
@@ -64,7 +65,17 @@ class DashboardWidgetDataService {
 		];
 	}
 
-	public function getEmployeeWidgetData(string $userId): array {
+	/**
+	 * Full employee home payload (mobile dashboard + native desklet).
+	 *
+	 * @param bool $vacationUnitAwareClient When false and org is in hours mode,
+	 *                                      vacation amounts are converted to day-equivalents
+	 *                                      and vacationUnit is forced to "days" (NN-08 / Q8).
+	 *                                      Default false (fail-closed): callers must opt in.
+	 *                                      Desklet and unit-aware companions pass true.
+	 * @return array<string, mixed>
+	 */
+	public function getEmployeeWidgetData(string $userId, bool $vacationUnitAwareClient = false): array {
 		$status = $this->timeTrackingService->getStatus($userId);
 
 		// Weekly overtime (also provides cumulative balance and contract target)
@@ -110,8 +121,9 @@ class DashboardWidgetDataService {
 
 		$linkingEnabled = $this->projectCheckIntegration->isLinkingEnabledForUser($userId);
 		$projectCheckAvailable = $this->projectCheckIntegration->isProjectCheckAvailable();
+		$vacationDebitSnap = $this->vacationHoursDebitService->snapshotForUser($userId);
 
-		return [
+		$payload = [
 			'userId'                 => $userId,
 			'status'                 => (string)($status['status'] ?? 'clocked_out'),
 			'currentEntryId'         => $currentEntryId,
@@ -145,14 +157,23 @@ class DashboardWidgetDataService {
 			'vacationRemaining'      => (float)($vacationStats['remaining'] ?? 0.0),
 			'vacationEntitlement'    => (float)($vacationStats['entitlement'] ?? 0.0),
 			'vacationUsed'           => (float)($vacationStats['used'] ?? 0.0),
+			'vacationUnit'           => (string)($vacationStats['vacation_unit'] ?? 'days'),
+			'vacationHoursPerDay'    => (float)($vacationStats['vacation_hours_per_day'] ?? \OCA\ArbeitszeitCheck\Constants::DEFAULT_VACATION_HOURS_PER_DAY),
 			'vacationCarryover'      => (float)($vacationStats['carryover_days'] ?? 0.0),
 			'vacationCarryoverUsable'=> (float)($vacationStats['carryover_usable'] ?? 0.0),
+			// Additive — old companions ignore; Q2 anniversary expiry is per-user date.
+			'vacationCarryoverExpiresOn' => $vacationStats['carryover_expires_on'] ?? null,
 			// Additive Phase B fields — old companions ignore safely (§16).
 			'vacationYearMode'       => (string)($vacationStats['vacation_year_mode'] ?? 'calendar'),
 			'vacationYearLabel'      => (string)($vacationStats['vacation_year_label'] ?? (string)($vacationStats['year'] ?? $vacationYear)),
 			'vacationYearStart'      => $vacationStats['vacation_year_start'] ?? null,
 			'vacationYearEnd'        => $vacationStats['vacation_year_end_inclusive'] ?? null,
 			'vacationYearError'      => $vacationStats['vacation_year_error'] ?? null,
+			// Additive: schedule-aware vacation debit (not org hours_per_day).
+			'vacationDebitBasis'     => $vacationDebitSnap['basis'],
+			'vacationWeekdayNets'    => $vacationDebitSnap['weekday_nets'],
+			'vacationOneDayHours'    => $vacationDebitSnap['one_day_hours'],
+			'vacationAverageDailyHours' => $vacationDebitSnap['average_daily'],
 			'timeCapture'            => $this->timeCaptureMethodService->getSettings($userId),
 			// ProjectCheck linking for mobile/web companions (optional; empty when off).
 			'projectCheck'           => [
@@ -165,6 +186,46 @@ class DashboardWidgetDataService {
 			// Additive Phase D — null when premiums off (old apps ignore).
 			'premiumSummary'         => $this->buildPremiumSummaryForWidget($userId),
 		];
+
+		return $this->applyVacationUnitAwareClientGate($payload, $vacationUnitAwareClient);
+	}
+
+	/**
+	 * Q8 / NN-08: never send hour magnitudes to clients that hardcode a "days" label.
+	 *
+	 * Unaware companions receive day-equivalents with vacationUnit=days so home copy
+	 * stays truthful. Booking still fail-closes without duration_hours on the server.
+	 *
+	 * @param array<string, mixed> $payload
+	 * @return array<string, mixed>
+	 */
+	private function applyVacationUnitAwareClientGate(array $payload, bool $vacationUnitAwareClient): array
+	{
+		$unit = (string)($payload['vacationUnit'] ?? Constants::VACATION_UNIT_DAYS);
+		if ($vacationUnitAwareClient || $unit !== Constants::VACATION_UNIT_HOURS) {
+			$payload['vacationClientUpdateRequired'] = false;
+			return $payload;
+		}
+
+		$hpd = (float)($payload['vacationHoursPerDay'] ?? Constants::DEFAULT_VACATION_HOURS_PER_DAY);
+		if ($hpd < 0.0001 || !is_finite($hpd)) {
+			$hpd = (float)Constants::DEFAULT_VACATION_HOURS_PER_DAY;
+		}
+
+		foreach (['vacationRemaining', 'vacationEntitlement', 'vacationUsed', 'vacationCarryover', 'vacationCarryoverUsable'] as $key) {
+			if (!array_key_exists($key, $payload) || $payload[$key] === null) {
+				continue;
+			}
+			$raw = (float)$payload[$key];
+			if (!is_finite($raw)) {
+				continue;
+			}
+			$payload[$key] = round($raw / $hpd, 2, PHP_ROUND_HALF_UP);
+		}
+
+		$payload['vacationUnit'] = Constants::VACATION_UNIT_DAYS;
+		$payload['vacationClientUpdateRequired'] = true;
+		return $payload;
 	}
 
 	/**

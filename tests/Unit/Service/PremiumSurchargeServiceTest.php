@@ -188,6 +188,61 @@ class PremiumSurchargeServiceTest extends TestCase
 		$this->assertNull($svc->buildClosureAuditBlock('u1', 2026, 8));
 	}
 
+	public function testSummariseForUserHonoursPolicyOverrideWithoutRereadingConfig(): void
+	{
+		$stored = PremiumPolicy::atStarterPreset();
+		$override = PremiumPolicy::fromValidated(array_merge($stored, [
+			'categories' => array_map(static function (array $c): array {
+				if (($c['id'] ?? '') === 'sunday') {
+					$c['enabled'] = false;
+				}
+				return $c;
+			}, $stored['categories']),
+		]));
+
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, $default = '') use ($stored) {
+				if ($key === Constants::CONFIG_PREMIUM_SURCHARGES_ENABLED) {
+					return '1';
+				}
+				if ($key === Constants::CONFIG_PREMIUM_POLICY_JSON) {
+					return json_encode($stored, JSON_THROW_ON_ERROR);
+				}
+				return $default;
+			}
+		);
+
+		$tz = new \DateTimeZone('Europe/Vienna');
+		$entry = $this->completedEntry(
+			new \DateTime('2026-08-09 10:00:00', $tz),
+			new \DateTime('2026-08-09 12:00:00', $tz)
+		);
+		$entries = $this->createMock(TimeEntryMapper::class);
+		$entries->method('findByUserAndDateRange')->willReturn([$entry]);
+
+		$svc = $this->service($config, $entries);
+		$withStored = $svc->summariseForUser('u1', new \DateTime('2026-08-01'), new \DateTime('2026-08-31'));
+		$withOverride = $svc->summariseForUser(
+			'u1',
+			new \DateTime('2026-08-01'),
+			new \DateTime('2026-08-31'),
+			$override
+		);
+
+		$this->assertGreaterThan(0.0, $withStored['total_classified_hours']);
+		$sundayStored = array_values(array_filter(
+			$withStored['buckets'],
+			static fn (array $b): bool => ($b['id'] ?? '') === 'sunday'
+		));
+		$this->assertNotEmpty($sundayStored);
+		$sundayOverride = array_values(array_filter(
+			$withOverride['buckets'],
+			static fn (array $b): bool => ($b['id'] ?? '') === 'sunday'
+		));
+		$this->assertSame([], $sundayOverride);
+	}
+
 	public function testBuildPeriodReportDisabledShape(): void
 	{
 		$config = $this->createMock(IConfig::class);

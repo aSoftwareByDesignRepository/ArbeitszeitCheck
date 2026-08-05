@@ -145,6 +145,11 @@ final class MonthClosurePdfDocumentBuilder
 			$this->renderOvertimeBankSection($bank);
 		}
 
+		$premium = $snap['premium'] ?? null;
+		if (is_array($premium) && !empty($premium['enabled'])) {
+			$this->renderPremiumSection($premium);
+		}
+
 		$entries = $snap['time_entries'] ?? [];
 		if (!is_array($entries)) {
 			$entries = [];
@@ -298,6 +303,61 @@ final class MonthClosurePdfDocumentBuilder
 		}
 
 		$this->keyValues($rows);
+	}
+
+	/**
+	 * Frozen hour-premium snapshot (orthogonal to Saldo / Auszahlung).
+	 *
+	 * @param array<string, mixed> $premium
+	 */
+	private function renderPremiumSection(array $premium): void
+	{
+		$this->ensureSpace(140);
+		$this->section($this->l->t('month_closure_pdf_section_premium'));
+
+		$h = $this->l->t('month_closure_pdf_hours_suffix');
+		$summary = is_array($premium['summary'] ?? null) ? $premium['summary'] : [];
+		$rows = [
+			[$this->l->t('month_closure_pdf_label_premium_policy_version'), (string)(int)($premium['policy_version'] ?? 0)],
+			[$this->l->t('month_closure_pdf_label_premium_classified'), $this->fmtNum($summary['total_classified_hours'] ?? 0) . ' ' . $h],
+			[$this->l->t('month_closure_pdf_label_premium_valued'), $this->fmtNum($summary['total_valued_hours'] ?? 0) . ' ' . $h],
+			[$this->l->t('month_closure_pdf_label_premium_note'), $this->l->t('month_closure_pdf_premium_orthogonal_note')],
+		];
+		$this->keyValues($rows);
+
+		$buckets = is_array($summary['buckets'] ?? null) ? $summary['buckets'] : [];
+		$headers = [
+			$this->l->t('month_closure_pdf_col_premium_category'),
+			$this->l->t('month_closure_pdf_col_premium_hours'),
+			$this->l->t('month_closure_pdf_col_premium_rate'),
+			$this->l->t('month_closure_pdf_col_premium_valued'),
+		];
+		$widths = [200.0, 90.0, 90.0, 136.0];
+		$data = [];
+		if ($buckets === []) {
+			$data[] = [
+				$this->l->t('month_closure_pdf_premium_no_buckets'),
+				'-',
+				'-',
+				'-',
+			];
+		} else {
+			foreach ($buckets as $bucket) {
+				if (!is_array($bucket)) {
+					continue;
+				}
+				$rate = (float)($bucket['rate'] ?? 0);
+				$pct = (string)(int)round($rate * 100) . '%';
+				$data[] = [
+					$this->truncate((string)($bucket['label'] ?? $bucket['id'] ?? '-'), 80),
+					$this->fmtNum($bucket['hours'] ?? 0),
+					$pct,
+					$this->fmtNum($bucket['valued_hours'] ?? 0),
+				];
+			}
+		}
+		$this->ensureSpace(70);
+		$this->table($headers, $widths, $data);
 	}
 
 	private function labelAbsenceStatus(string $status): string

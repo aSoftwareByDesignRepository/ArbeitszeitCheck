@@ -60,7 +60,7 @@
 }
 
 #app-content.azc-app--admin-overtime-payouts .admin-ot-payouts__summary.azc-callout--warning {
-	border-color: var(--color-warning, #bf7c00);
+	border-color: var(--color-warning);
 }
 
 #app-content.azc-app--admin-overtime-payouts .admin-ot-payouts__table .table-container {
@@ -104,11 +104,11 @@
 }
 
 #app-content.azc-app--admin-overtime-payouts .admin-ot-payouts__live.admin-ot-payouts__live--success {
-	border-color: color-mix(in srgb, var(--color-success, #46ba61) 35%, var(--color-border));
+	border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border));
 	border-left-width: 4px;
-	border-left-color: var(--color-success, #46ba61);
+	border-left-color: var(--color-success);
 	color: var(--color-main-text);
-	background-color: color-mix(in srgb, var(--color-success, #46ba61) 14%, var(--color-main-background));
+	background-color: color-mix(in srgb, var(--color-success) 14%, var(--color-main-background));
 }
 
 @media (max-width: 767px) {

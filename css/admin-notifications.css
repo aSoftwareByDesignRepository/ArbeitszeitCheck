@@ -1,19 +1,25 @@
 /**
- * Admin notifications — long-form settings (card sections, WCAG 2.1 AA, responsive).
- * All rules are scoped under #app-content.azc-app--admin-notifications (never #app-navigation).
- *
+ * Admin policy settings pages (notifications, overtime, vacation rules/entitlement).
+ * Scoped under admin-notifications / admin-overtime-settings / admin-vacation-rules /
+ * admin-vacation-layers shells (+ payout pages for chip bar).
  * @license AGPL-3.0-or-later
  */
 
 /* ── Page shell ─────────────────────────────────────────────── */
-#app-content.azc-app--admin-notifications #azc-main-content {
+#app-content.azc-app--admin-notifications #azc-main-content,
+#app-content.azc-app--admin-overtime-settings #azc-main-content,
+#app-content.azc-app--admin-vacation-rules #azc-main-content,
+#app-content.azc-app--admin-vacation-layers #azc-main-content {
 	gap: var(--azc-space-5);
 	align-items: stretch;
 	width: 100%;
 }
 
-/* Single-column layout — no sidebar jump nav */
-#app-content.azc-app--admin-notifications .azc-admin-notifications-layout {
+
+#app-content.azc-app--admin-notifications .azc-admin-notifications-layout,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-layout,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-layout,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-layout {
 	display: flex;
 	flex-direction: column;
 	gap: var(--azc-space-5);
@@ -21,7 +27,10 @@
 	min-width: 0;
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-form {
+#app-content.azc-app--admin-notifications .admin-notifications-form,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form {
 	display: flex;
 	flex-direction: column;
 	gap: var(--azc-space-5);
@@ -31,70 +40,26 @@
 	align-items: stretch;
 }
 
-/* Horizontal in-page section links (above the form cards) */
-#app-content.azc-app--admin-notifications .azc-jump-nav--bar {
-	position: static;
-	margin: 0;
-	padding: var(--azc-space-4) var(--azc-space-5);
-	border: 1px solid var(--azc-border);
-	border-radius: var(--azc-radius-md);
-	background: var(--azc-bg-card);
-	box-shadow: var(--azc-shadow-sm);
-}
 
-#app-content.azc-app--admin-notifications .azc-jump-nav--bar .azc-jump-nav__label {
-	margin: 0 0 var(--azc-space-3);
-	font-size: var(--azc-fs-xs);
-	font-weight: 600;
-	line-height: var(--azc-line-tight);
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
-	color: var(--azc-muted);
-}
 
-#app-content.azc-app--admin-notifications .azc-jump-nav--bar .azc-jump-nav__list {
-	flex-direction: row;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--azc-space-2);
-}
 
-#app-content.azc-app--admin-notifications .azc-jump-nav--bar .azc-jump-nav__link {
-	min-height: 2.5rem;
-	padding: var(--azc-space-2) var(--azc-space-4);
-	border: 1px solid var(--azc-border);
-	border-radius: 999px;
-	background: var(--azc-bg-soft);
-	color: var(--azc-text);
-	font-size: var(--azc-fs-sm);
-	font-weight: 500;
-	white-space: nowrap;
-}
 
-#app-content.azc-app--admin-notifications .azc-jump-nav--bar .azc-jump-nav__link:hover {
-	background: var(--azc-bg-soft);
-	border-color: var(--azc-border-strong);
-	color: var(--color-primary-element, #0082c9);
-	text-decoration: none;
-}
 
-#app-content.azc-app--admin-notifications .azc-jump-nav--bar .azc-jump-nav__link[aria-current="location"] {
-	border-color: var(--color-primary-element, #0082c9);
-	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 12%, var(--azc-bg-card));
-	color: var(--azc-text);
-	font-weight: 600;
-}
 
-@media (min-width: 768px) {
-	#app-content.azc-app--admin-notifications .azc-jump-nav--bar {
-		position: sticky;
-		top: var(--azc-space-2);
-		z-index: 5;
-	}
-}
+
+
+
+
+
+
+
+
 
 /* ── Section stack (clear vertical rhythm) ──────────────────── */
-#app-content.azc-app--admin-notifications .azc-admin-notifications-form__sections {
+#app-content.azc-app--admin-notifications .azc-admin-notifications-form__sections,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-form__sections,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-form__sections,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-form__sections {
 	display: flex;
 	flex-direction: column;
 	gap: var(--azc-space-5);
@@ -102,7 +67,10 @@
 	min-width: 0;
 }
 
-#app-content.azc-app--admin-notifications .azc-admin-notifications-section.admin-settings-section {
+#app-content.azc-app--admin-notifications .azc-admin-notifications-section.admin-settings-section,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-section.admin-settings-section,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-section.admin-settings-section,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-section.admin-settings-section {
 	margin: 0;
 	padding: 0;
 	border: none;
@@ -112,16 +80,25 @@
 	scroll-margin-top: calc(var(--azc-space-6) + 3rem);
 }
 
-#app-content.azc-app--admin-notifications .azc-admin-notifications-section.azc-card {
+#app-content.azc-app--admin-notifications .azc-admin-notifications-section.azc-card,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-section.azc-card,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-section.azc-card,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-section.azc-card {
 	overflow: hidden;
 }
 
-#app-content.azc-app--admin-notifications .azc-admin-notifications-section .azc-card__body {
+#app-content.azc-app--admin-notifications .azc-admin-notifications-section .azc-card__body,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-section .azc-card__body,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-section .azc-card__body,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-section .azc-card__body {
 	gap: var(--azc-space-5);
 }
 
 /* ── Subsections ────────────────────────────────────────────── */
-#app-content.azc-app--admin-notifications .admin-settings-subsection__title {
+#app-content.azc-app--admin-notifications .admin-settings-subsection__title,
+#app-content.azc-app--admin-overtime-settings .admin-settings-subsection__title,
+#app-content.azc-app--admin-vacation-rules .admin-settings-subsection__title,
+#app-content.azc-app--admin-vacation-layers .admin-settings-subsection__title {
 	margin: var(--azc-space-5) 0 var(--azc-space-3);
 	font-size: var(--azc-fs-md);
 	font-weight: 600;
@@ -131,12 +108,24 @@
 }
 
 #app-content.azc-app--admin-notifications .azc-card__body > .admin-settings-subsection__title:first-child,
-#app-content.azc-app--admin-notifications .azc-card__body > .form-group:first-child .admin-settings-subsection__title {
+#app-content.azc-app--admin-notifications .azc-card__body > .form-group:first-child .admin-settings-subsection__title,
+#app-content.azc-app--admin-overtime-settings .azc-card__body > .admin-settings-subsection__title:first-child,
+#app-content.azc-app--admin-overtime-settings .azc-card__body > .form-group:first-child .admin-settings-subsection__title,
+#app-content.azc-app--admin-vacation-rules .azc-card__body > .admin-settings-subsection__title:first-child,
+#app-content.azc-app--admin-vacation-rules .azc-card__body > .form-group:first-child .admin-settings-subsection__title,
+#app-content.azc-app--admin-vacation-layers .azc-card__body > .admin-settings-subsection__title:first-child,
+#app-content.azc-app--admin-vacation-layers .azc-card__body > .form-group:first-child .admin-settings-subsection__title {
 	margin-top: 0;
 }
 
 #app-content.azc-app--admin-notifications .admin-settings-subsection__intro,
-#app-content.azc-app--admin-notifications .form-help--block {
+#app-content.azc-app--admin-notifications .form-help--block,
+#app-content.azc-app--admin-overtime-settings .admin-settings-subsection__intro,
+#app-content.azc-app--admin-overtime-settings .form-help--block,
+#app-content.azc-app--admin-vacation-rules .admin-settings-subsection__intro,
+#app-content.azc-app--admin-vacation-rules .form-help--block,
+#app-content.azc-app--admin-vacation-layers .admin-settings-subsection__intro,
+#app-content.azc-app--admin-vacation-layers .form-help--block {
 	display: block;
 	max-width: 72ch;
 	margin: 0 0 var(--azc-space-4);
@@ -144,14 +133,45 @@
 	line-height: var(--azc-line-base);
 }
 
-#app-content.azc-app--admin-notifications .form-help--note {
+#app-content.azc-app--admin-notifications .form-help--note,
+#app-content.azc-app--admin-overtime-settings .form-help--note,
+#app-content.azc-app--admin-vacation-rules .form-help--note,
+#app-content.azc-app--admin-vacation-layers .form-help--note {
 	padding: var(--azc-space-3) var(--azc-space-4);
 	border-radius: var(--azc-radius-sm);
-	border-left: 3px solid var(--color-warning, #c98600);
+	border-left: 3px solid var(--color-warning);
 	background: var(--azc-tint-warning);
+	color: var(--azc-text, var(--color-main-text));
 }
 
-#app-content.azc-app--admin-notifications .azc-settings-subsection {
+#app-content.azc-app--admin-notifications .form-help a:not(.btn):not(.azc-btn),
+#app-content.azc-app--admin-overtime-settings .form-help a:not(.btn):not(.azc-btn),
+#app-content.azc-app--admin-vacation-rules .form-help a:not(.btn):not(.azc-btn),
+#app-content.azc-app--admin-vacation-layers .form-help a:not(.btn):not(.azc-btn) {
+	/* !important: NC #body-user a primary blue fails WCAG AA on dark themes (~2.7:1). */
+	color: var(--azc-text, var(--color-main-text)) !important;
+	font-weight: 700;
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+#app-content.azc-app--admin-notifications .form-help a:not(.btn):not(.azc-btn):hover,
+#app-content.azc-app--admin-overtime-settings .form-help a:not(.btn):not(.azc-btn):hover,
+#app-content.azc-app--admin-vacation-rules .form-help a:not(.btn):not(.azc-btn):hover,
+#app-content.azc-app--admin-vacation-layers .form-help a:not(.btn):not(.azc-btn):hover,
+#app-content.azc-app--admin-notifications .form-help a:not(.btn):not(.azc-btn):focus-visible,
+#app-content.azc-app--admin-overtime-settings .form-help a:not(.btn):not(.azc-btn):focus-visible,
+#app-content.azc-app--admin-vacation-rules .form-help a:not(.btn):not(.azc-btn):focus-visible,
+#app-content.azc-app--admin-vacation-layers .form-help a:not(.btn):not(.azc-btn):focus-visible {
+	color: var(--azc-text, var(--color-main-text)) !important;
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 60%, transparent);
+	outline-offset: 2px;
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-subsection,
+#app-content.azc-app--admin-overtime-settings .azc-settings-subsection,
+#app-content.azc-app--admin-vacation-rules .azc-settings-subsection,
+#app-content.azc-app--admin-vacation-layers .azc-settings-subsection {
 	display: flex;
 	flex-direction: column;
 	gap: var(--azc-space-4);
@@ -161,12 +181,18 @@
 	background: var(--azc-bg-soft);
 }
 
-#app-content.azc-app--admin-notifications .azc-settings-subsection > .admin-settings-subsection__title:first-child {
+#app-content.azc-app--admin-notifications .azc-settings-subsection > .admin-settings-subsection__title:first-child,
+#app-content.azc-app--admin-overtime-settings .azc-settings-subsection > .admin-settings-subsection__title:first-child,
+#app-content.azc-app--admin-vacation-rules .azc-settings-subsection > .admin-settings-subsection__title:first-child,
+#app-content.azc-app--admin-vacation-layers .azc-settings-subsection > .admin-settings-subsection__title:first-child {
 	margin-top: 0;
 }
 
 /* Toggle-gated settings panels */
-#app-content.azc-app--admin-notifications .admin-notifications-dependent-block {
+#app-content.azc-app--admin-notifications .admin-notifications-dependent-block,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-dependent-block,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-dependent-block,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-dependent-block {
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
@@ -176,20 +202,29 @@
 	padding: var(--azc-space-4) var(--azc-space-5);
 	border: 1px solid var(--azc-border);
 	border-radius: var(--azc-radius-md);
-	border-left: 4px solid var(--color-primary-element, #0082c9);
+	border-left: 4px solid var(--color-primary-element);
 	background: var(--azc-bg-card);
 	text-align: start;
 	transition: opacity 0.15s ease, border-color 0.15s ease;
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-dependent-block[data-settings-disabled='true'] {
+#app-content.azc-app--admin-notifications .admin-notifications-dependent-block[data-settings-disabled='true'],
+#app-content.azc-app--admin-overtime-settings .admin-notifications-dependent-block[data-settings-disabled='true'],
+#app-content.azc-app--admin-vacation-rules .admin-notifications-dependent-block[data-settings-disabled='true'],
+#app-content.azc-app--admin-vacation-layers .admin-notifications-dependent-block[data-settings-disabled='true'] {
 	border-left-color: var(--azc-border);
 	opacity: 0.55;
 }
 
 /* ── Form rows (thresholds, dates) ──────────────────────────── */
 #app-content.azc-app--admin-notifications .form-row--inline,
-#app-content.azc-app--admin-notifications .form-row--thresholds {
+#app-content.azc-app--admin-notifications .form-row--thresholds,
+#app-content.azc-app--admin-overtime-settings .form-row--inline,
+#app-content.azc-app--admin-overtime-settings .form-row--thresholds,
+#app-content.azc-app--admin-vacation-rules .form-row--inline,
+#app-content.azc-app--admin-vacation-rules .form-row--thresholds,
+#app-content.azc-app--admin-vacation-layers .form-row--inline,
+#app-content.azc-app--admin-vacation-layers .form-row--thresholds {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
 	gap: var(--azc-space-4);
@@ -198,7 +233,13 @@
 }
 
 #app-content.azc-app--admin-notifications .form-row--inline .form-group,
-#app-content.azc-app--admin-notifications .form-row--thresholds .form-group {
+#app-content.azc-app--admin-notifications .form-row--thresholds .form-group,
+#app-content.azc-app--admin-overtime-settings .form-row--inline .form-group,
+#app-content.azc-app--admin-overtime-settings .form-row--thresholds .form-group,
+#app-content.azc-app--admin-vacation-rules .form-row--inline .form-group,
+#app-content.azc-app--admin-vacation-rules .form-row--thresholds .form-group,
+#app-content.azc-app--admin-vacation-layers .form-row--inline .form-group,
+#app-content.azc-app--admin-vacation-layers .form-row--thresholds .form-group {
 	min-width: 0;
 	max-width: none;
 	margin-bottom: 0;
@@ -206,13 +247,22 @@
 }
 
 #app-content.azc-app--admin-notifications #admin-notifications-form .form-input,
-#app-content.azc-app--admin-notifications #admin-notifications-form .form-select {
+#app-content.azc-app--admin-notifications #admin-notifications-form .form-select,
+#app-content.azc-app--admin-overtime-settings #admin-notifications-form .form-input,
+#app-content.azc-app--admin-overtime-settings #admin-notifications-form .form-select,
+#app-content.azc-app--admin-vacation-rules #admin-notifications-form .form-input,
+#app-content.azc-app--admin-vacation-rules #admin-notifications-form .form-select,
+#app-content.azc-app--admin-vacation-layers #admin-notifications-form .form-input,
+#app-content.azc-app--admin-vacation-layers #admin-notifications-form .form-select {
 	width: 100%;
 	max-width: min(20rem, 100%);
 	box-sizing: border-box;
 }
 
-#app-content.azc-app--admin-notifications #admin-notifications-form textarea.form-input {
+#app-content.azc-app--admin-notifications #admin-notifications-form textarea.form-input,
+#app-content.azc-app--admin-overtime-settings #admin-notifications-form textarea.form-input,
+#app-content.azc-app--admin-vacation-rules #admin-notifications-form textarea.form-input,
+#app-content.azc-app--admin-vacation-layers #admin-notifications-form textarea.form-input {
 	display: block;
 	width: 100%;
 	max-width: min(42rem, 100%);
@@ -220,20 +270,32 @@
 	resize: vertical;
 }
 
-#app-content.azc-app--admin-notifications #vacationCarryoverMaxDays {
+#app-content.azc-app--admin-notifications #vacationCarryoverMaxDays,
+#app-content.azc-app--admin-overtime-settings #vacationCarryoverMaxDays,
+#app-content.azc-app--admin-vacation-rules #vacationCarryoverMaxDays,
+#app-content.azc-app--admin-vacation-layers #vacationCarryoverMaxDays {
 	max-width: min(16rem, 100%);
 }
 
-#app-content.azc-app--admin-notifications .form-group {
+#app-content.azc-app--admin-notifications .form-group,
+#app-content.azc-app--admin-overtime-settings .form-group,
+#app-content.azc-app--admin-vacation-rules .form-group,
+#app-content.azc-app--admin-vacation-layers .form-group {
 	margin-bottom: var(--azc-space-4);
 }
 
-#app-content.azc-app--admin-notifications .form-group:last-child {
+#app-content.azc-app--admin-notifications .form-group:last-child,
+#app-content.azc-app--admin-overtime-settings .form-group:last-child,
+#app-content.azc-app--admin-vacation-rules .form-group:last-child,
+#app-content.azc-app--admin-vacation-layers .form-group:last-child {
 	margin-bottom: 0;
 }
 
 /* ── Matrix tables ──────────────────────────────────────────── */
-#app-content.azc-app--admin-notifications .admin-notifications-matrix-wrap {
+#app-content.azc-app--admin-notifications .admin-notifications-matrix-wrap,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-matrix-wrap,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-matrix-wrap,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-matrix-wrap {
 	inline-size: 100%;
 	max-inline-size: 100%;
 	overflow-x: auto;
@@ -244,7 +306,10 @@
 	background: var(--azc-bg-card);
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix {
+#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix {
 	inline-size: max-content;
 	min-inline-size: 100%;
 	margin: 0;
@@ -252,26 +317,41 @@
 	font-size: var(--azc-fs-sm);
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix caption {
+#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix caption,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix caption,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix caption,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix caption {
 	padding: var(--azc-space-3);
 }
 
 #app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix th,
-#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix td {
+#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix td,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix th,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix td,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix th,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix td,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix th,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix td {
 	vertical-align: middle;
 	text-align: start;
 	padding: var(--azc-space-3) var(--azc-space-4);
 	border-bottom: 1px solid var(--azc-border);
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix thead th {
+#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix thead th,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix thead th,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix thead th,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix thead th {
 	font-weight: 700;
 	background: var(--azc-bg-soft);
 	border-bottom: 2px solid var(--azc-border-strong, var(--azc-border));
 	white-space: nowrap;
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix tbody th {
+#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix tbody th,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix tbody th,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix tbody th,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix tbody th {
 	font-weight: 600;
 	background: var(--azc-bg-soft);
 	position: sticky;
@@ -281,11 +361,20 @@
 }
 
 #app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix tbody tr:last-child th,
-#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix tbody tr:last-child td {
+#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix tbody tr:last-child td,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix tbody tr:last-child th,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix tbody tr:last-child td,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix tbody tr:last-child th,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix tbody tr:last-child td,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix tbody tr:last-child th,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix tbody tr:last-child td {
 	border-bottom: none;
 }
 
-#app-content.azc-app--admin-notifications .form-checkbox--center {
+#app-content.azc-app--admin-notifications .form-checkbox--center,
+#app-content.azc-app--admin-overtime-settings .form-checkbox--center,
+#app-content.azc-app--admin-vacation-rules .form-checkbox--center,
+#app-content.azc-app--admin-vacation-layers .form-checkbox--center {
 	display: flex;
 	justify-content: center;
 	align-items: center;
@@ -294,7 +383,10 @@
 }
 
 /* ── Overtime quick links ───────────────────────────────────── */
-#app-content.azc-app--admin-notifications .admin-overtime-quicklinks {
+#app-content.azc-app--admin-notifications .admin-overtime-quicklinks,
+#app-content.azc-app--admin-overtime-settings .admin-overtime-quicklinks,
+#app-content.azc-app--admin-vacation-rules .admin-overtime-quicklinks,
+#app-content.azc-app--admin-vacation-layers .admin-overtime-quicklinks {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -306,7 +398,10 @@
 	background: var(--azc-bg-soft);
 }
 
-#app-content.azc-app--admin-notifications .admin-overtime-quicklinks__label {
+#app-content.azc-app--admin-notifications .admin-overtime-quicklinks__label,
+#app-content.azc-app--admin-overtime-settings .admin-overtime-quicklinks__label,
+#app-content.azc-app--admin-vacation-rules .admin-overtime-quicklinks__label,
+#app-content.azc-app--admin-vacation-layers .admin-overtime-quicklinks__label {
 	flex: 1 1 100%;
 	margin: 0 0 var(--azc-space-1);
 	font-size: var(--azc-fs-sm);
@@ -315,7 +410,10 @@
 }
 
 /* ── Save feedback (callout-aligned, theme-safe) ─────────── */
-#app-content.azc-app--admin-notifications .admin-notifications-live {
+#app-content.azc-app--admin-notifications .admin-notifications-live,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-live,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-live,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-live {
 	margin: 0;
 	min-height: 0;
 	font-size: var(--azc-fs-md);
@@ -323,7 +421,10 @@
 	color: var(--color-main-text);
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-live:not(:empty) {
+#app-content.azc-app--admin-notifications .admin-notifications-live:not(:empty),
+#app-content.azc-app--admin-overtime-settings .admin-notifications-live:not(:empty),
+#app-content.azc-app--admin-vacation-rules .admin-notifications-live:not(:empty),
+#app-content.azc-app--admin-vacation-layers .admin-notifications-live:not(:empty) {
 	padding: var(--azc-space-4) var(--azc-space-5);
 	border-radius: var(--azc-radius-md);
 	border: 2px solid var(--color-border);
@@ -335,14 +436,20 @@
 	max-width: 65ch;
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-live--error {
+#app-content.azc-app--admin-notifications .admin-notifications-live--error,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-live--error,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-live--error,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-live--error {
 	border-color: var(--color-error-text, var(--color-error));
 	border-left-color: var(--color-error-text, var(--color-error));
 	background: var(--azc-tint-danger);
 	color: var(--color-main-text);
 }
 
-#app-content.azc-app--admin-notifications .admin-notifications-live--success {
+#app-content.azc-app--admin-notifications .admin-notifications-live--success,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-live--success,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-live--success,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-live--success {
 	border-color: var(--color-success-text, var(--color-success));
 	border-left-color: var(--color-success-text, var(--color-success));
 	background: var(--azc-tint-success);
@@ -350,7 +457,10 @@
 }
 
 @media (forced-colors: active) {
-	#app-content.azc-app--admin-notifications .admin-notifications-live:not(:empty) {
+	#app-content.azc-app--admin-notifications .admin-notifications-live:not(:empty),
+#app-content.azc-app--admin-overtime-settings .admin-notifications-live:not(:empty),
+#app-content.azc-app--admin-vacation-rules .admin-notifications-live:not(:empty),
+#app-content.azc-app--admin-vacation-layers .admin-notifications-live:not(:empty) {
 		border: 2px solid CanvasText;
 		background: Canvas;
 		color: CanvasText;
@@ -358,7 +468,10 @@
 }
 
 /* ── Form actions (static bar — not sticky; stays at end of the form) ── */
-#app-content.azc-app--admin-notifications .azc-admin-notifications-form__actions {
+#app-content.azc-app--admin-notifications .azc-admin-notifications-form__actions,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-form__actions,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-form__actions,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-form__actions {
 	display: flex;
 	flex-direction: column;
 	gap: var(--azc-space-4);
@@ -368,7 +481,10 @@
 	border-top: 1px solid var(--azc-border);
 }
 
-#app-content.azc-app--admin-notifications .azc-admin-notifications-form__footer {
+#app-content.azc-app--admin-notifications .azc-admin-notifications-form__footer,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-form__footer,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-form__footer,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-form__footer {
 	position: static;
 	inset: auto;
 	z-index: auto;
@@ -386,53 +502,81 @@
 }
 
 /* Override shared sticky footer from app.css if class is still present */
-#app-content.azc-app--admin-notifications .azc-settings-form__footer {
+#app-content.azc-app--admin-notifications .azc-settings-form__footer,
+#app-content.azc-app--admin-overtime-settings .azc-settings-form__footer,
+#app-content.azc-app--admin-vacation-rules .azc-settings-form__footer,
+#app-content.azc-app--admin-vacation-layers .azc-settings-form__footer {
 	position: static;
 	inset: auto;
 	z-index: auto;
 	box-shadow: var(--azc-shadow-sm);
 }
 
-#app-content.azc-app--admin-notifications [data-settings-disabled='true'] {
+#app-content.azc-app--admin-notifications [data-settings-disabled='true'],
+#app-content.azc-app--admin-overtime-settings [data-settings-disabled='true'],
+#app-content.azc-app--admin-vacation-rules [data-settings-disabled='true'],
+#app-content.azc-app--admin-vacation-layers [data-settings-disabled='true'] {
 	pointer-events: none;
 }
 
-#app-content.azc-app--admin-notifications [data-settings-disabled='true'] .form-checkbox input {
+#app-content.azc-app--admin-notifications [data-settings-disabled='true'] .form-checkbox input,
+#app-content.azc-app--admin-overtime-settings [data-settings-disabled='true'] .form-checkbox input,
+#app-content.azc-app--admin-vacation-rules [data-settings-disabled='true'] .form-checkbox input,
+#app-content.azc-app--admin-vacation-layers [data-settings-disabled='true'] .form-checkbox input {
 	pointer-events: none;
 }
 
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 767px) {
-	#app-content.azc-app--admin-notifications .azc-jump-nav--bar .azc-jump-nav__link {
-		flex: 1 1 calc(50% - var(--azc-space-2));
-		justify-content: center;
-		text-align: center;
-		white-space: normal;
-	}
+	
 	#app-content.azc-app--admin-notifications .form-row--inline,
-	#app-content.azc-app--admin-notifications .form-row--thresholds {
+	#app-content.azc-app--admin-notifications .form-row--thresholds,
+#app-content.azc-app--admin-overtime-settings .form-row--inline,
+	#app-content.azc-app--admin-overtime-settings .form-row--thresholds,
+#app-content.azc-app--admin-vacation-rules .form-row--inline,
+	#app-content.azc-app--admin-vacation-rules .form-row--thresholds,
+#app-content.azc-app--admin-vacation-layers .form-row--inline,
+	#app-content.azc-app--admin-vacation-layers .form-row--thresholds {
 		grid-template-columns: 1fr;
 	}
 
-	#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix {
+	#app-content.azc-app--admin-notifications .admin-notifications-form .admin-notifications-matrix,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-form .admin-notifications-matrix,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-form .admin-notifications-matrix,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-form .admin-notifications-matrix {
 		min-inline-size: 36rem;
 	}
 
 	#app-content.azc-app--admin-notifications .azc-admin-notifications-form__footer,
-	#app-content.azc-app--admin-notifications .azc-settings-form__footer {
+	#app-content.azc-app--admin-notifications .azc-settings-form__footer,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-form__footer,
+	#app-content.azc-app--admin-overtime-settings .azc-settings-form__footer,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-form__footer,
+	#app-content.azc-app--admin-vacation-rules .azc-settings-form__footer,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-form__footer,
+	#app-content.azc-app--admin-vacation-layers .azc-settings-form__footer {
 		flex-direction: column;
 		align-items: stretch;
 	}
 
 	#app-content.azc-app--admin-notifications .azc-admin-notifications-form__footer .azc-btn,
-	#app-content.azc-app--admin-notifications .azc-settings-form__footer .azc-btn {
+	#app-content.azc-app--admin-notifications .azc-settings-form__footer .azc-btn,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-form__footer .azc-btn,
+	#app-content.azc-app--admin-overtime-settings .azc-settings-form__footer .azc-btn,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-form__footer .azc-btn,
+	#app-content.azc-app--admin-vacation-rules .azc-settings-form__footer .azc-btn,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-form__footer .azc-btn,
+	#app-content.azc-app--admin-vacation-layers .azc-settings-form__footer .azc-btn {
 		width: 100%;
 		justify-content: center;
 	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-	#app-content.azc-app--admin-notifications .admin-notifications-dependent-block {
+	#app-content.azc-app--admin-notifications .admin-notifications-dependent-block,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-dependent-block,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-dependent-block,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-dependent-block {
 		transition: none;
 	}
 }
@@ -441,22 +585,46 @@
 	#app-content.azc-app--admin-notifications .azc-admin-notifications-section.azc-card,
 	#app-content.azc-app--admin-notifications .admin-notifications-dependent-block,
 	#app-content.azc-app--admin-notifications .azc-settings-subsection,
-	#app-content.azc-app--admin-notifications .admin-notifications-matrix-wrap {
+	#app-content.azc-app--admin-notifications .admin-notifications-matrix-wrap,
+#app-content.azc-app--admin-overtime-settings .azc-admin-notifications-section.azc-card,
+	#app-content.azc-app--admin-overtime-settings .admin-notifications-dependent-block,
+	#app-content.azc-app--admin-overtime-settings .azc-settings-subsection,
+	#app-content.azc-app--admin-overtime-settings .admin-notifications-matrix-wrap,
+#app-content.azc-app--admin-vacation-rules .azc-admin-notifications-section.azc-card,
+	#app-content.azc-app--admin-vacation-rules .admin-notifications-dependent-block,
+	#app-content.azc-app--admin-vacation-rules .azc-settings-subsection,
+	#app-content.azc-app--admin-vacation-rules .admin-notifications-matrix-wrap,
+#app-content.azc-app--admin-vacation-layers .azc-admin-notifications-section.azc-card,
+	#app-content.azc-app--admin-vacation-layers .admin-notifications-dependent-block,
+	#app-content.azc-app--admin-vacation-layers .azc-settings-subsection,
+	#app-content.azc-app--admin-vacation-layers .admin-notifications-matrix-wrap {
 		border-color: CanvasText;
 	}
 
-	#app-content.azc-app--admin-notifications [data-settings-disabled='true'] {
+	#app-content.azc-app--admin-notifications [data-settings-disabled='true'],
+#app-content.azc-app--admin-overtime-settings [data-settings-disabled='true'],
+#app-content.azc-app--admin-vacation-rules [data-settings-disabled='true'],
+#app-content.azc-app--admin-vacation-layers [data-settings-disabled='true'] {
 		opacity: 1;
 	}
 
 	#app-content.azc-app--admin-notifications .admin-notifications-live--error,
-	#app-content.azc-app--admin-notifications .admin-notifications-live--success {
+	#app-content.azc-app--admin-notifications .admin-notifications-live--success,
+#app-content.azc-app--admin-overtime-settings .admin-notifications-live--error,
+	#app-content.azc-app--admin-overtime-settings .admin-notifications-live--success,
+#app-content.azc-app--admin-vacation-rules .admin-notifications-live--error,
+	#app-content.azc-app--admin-vacation-rules .admin-notifications-live--success,
+#app-content.azc-app--admin-vacation-layers .admin-notifications-live--error,
+	#app-content.azc-app--admin-vacation-layers .admin-notifications-live--success {
 		border: 2px solid CanvasText;
 	}
 }
 
 /* Vacation year mode radios (Phase B / Bachus) */
-#app-content.azc-app--admin-notifications .wtm-vacation-year-mode {
+#app-content.azc-app--admin-notifications .wtm-vacation-year-mode,
+#app-content.azc-app--admin-overtime-settings .wtm-vacation-year-mode,
+#app-content.azc-app--admin-vacation-rules .wtm-vacation-year-mode,
+#app-content.azc-app--admin-vacation-layers .wtm-vacation-year-mode {
 	margin: 0;
 	padding: var(--azc-space-3, 0.75rem);
 	border: 1px solid var(--azc-border, var(--color-border));
@@ -467,38 +635,280 @@
 	background: var(--azc-surface-muted, var(--color-background-dark));
 }
 
-#app-content.azc-app--admin-notifications .wtm-vacation-year-mode > legend {
+#app-content.azc-app--admin-notifications .wtm-vacation-year-mode > legend,
+#app-content.azc-app--admin-overtime-settings .wtm-vacation-year-mode > legend,
+#app-content.azc-app--admin-vacation-rules .wtm-vacation-year-mode > legend,
+#app-content.azc-app--admin-vacation-layers .wtm-vacation-year-mode > legend {
 	padding-inline: var(--azc-space-1, 0.25rem);
 	font-weight: 600;
 }
 
-#app-content.azc-app--admin-notifications .wtm-vacation-year-mode .form-radio {
+#app-content.azc-app--admin-notifications .wtm-vacation-year-mode .form-radio,
+#app-content.azc-app--admin-overtime-settings .wtm-vacation-year-mode .form-radio,
+#app-content.azc-app--admin-vacation-rules .wtm-vacation-year-mode .form-radio,
+#app-content.azc-app--admin-vacation-layers .wtm-vacation-year-mode .form-radio {
 	display: flex;
 	align-items: flex-start;
 	gap: var(--azc-space-2, 0.5rem);
 	min-height: 2.5rem;
 }
 
-#app-content.azc-app--admin-notifications .wtm-vacation-year-mode .form-radio input[type='radio'] {
+#app-content.azc-app--admin-notifications .wtm-vacation-year-mode .form-radio input[type='radio'],
+#app-content.azc-app--admin-overtime-settings .wtm-vacation-year-mode .form-radio input[type='radio'],
+#app-content.azc-app--admin-vacation-rules .wtm-vacation-year-mode .form-radio input[type='radio'],
+#app-content.azc-app--admin-vacation-layers .wtm-vacation-year-mode .form-radio input[type='radio'] {
 	margin-block-start: 0.35rem;
 	inline-size: 1.125rem;
 	block-size: 1.125rem;
 	accent-color: var(--azc-accent, var(--color-primary-element));
 }
 
-#app-content.azc-app--admin-notifications .wtm-vacation-year-mode .form-radio label {
+#app-content.azc-app--admin-notifications .wtm-vacation-year-mode .form-radio label,
+#app-content.azc-app--admin-overtime-settings .wtm-vacation-year-mode .form-radio label,
+#app-content.azc-app--admin-vacation-rules .wtm-vacation-year-mode .form-radio label,
+#app-content.azc-app--admin-vacation-layers .wtm-vacation-year-mode .form-radio label {
 	line-height: 1.4;
 	cursor: pointer;
 }
 
-#app-content.azc-app--admin-notifications .premium-presets {
+#app-content.azc-app--admin-notifications .premium-presets,
+#app-content.azc-app--admin-overtime-settings .premium-presets,
+#app-content.azc-app--admin-vacation-rules .premium-presets,
+#app-content.azc-app--admin-vacation-layers .premium-presets {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--azc-space-2, 0.5rem);
 	margin-block: 0 var(--azc-space-3, 0.75rem);
 }
 
-#app-content.azc-app--admin-notifications .premium-categories-table .form-input {
+#app-content.azc-app--admin-notifications .premium-categories-table .form-input,
+#app-content.azc-app--admin-overtime-settings .premium-categories-table .form-input,
+#app-content.azc-app--admin-vacation-rules .premium-categories-table .form-input,
+#app-content.azc-app--admin-vacation-layers .premium-categories-table .form-input {
 	max-inline-size: 6rem;
 	min-height: 2.5rem;
+}
+
+/* ── SETTINGS-PAGES-STANDARD chip bar (grouped topics) ── */
+#app-content.azc-app--admin-notifications .azc-settings-nav,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-4);
+	margin: 0 0 var(--azc-space-2);
+	padding: 0 0 var(--azc-space-4);
+	border-bottom: 1px solid var(--azc-border, var(--color-border));
+	width: 100%;
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-nav__title,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__title,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__title,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__title,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__title,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__title {
+	margin: 0;
+	font-size: var(--azc-fs-sm);
+	font-weight: 700;
+	line-height: var(--azc-line-tight, 1.2);
+	color: var(--azc-text, var(--color-main-text));
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-nav__group,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__group,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__group,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__group,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__group,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-2);
+	min-width: 0;
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-nav__group-label,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__group-label,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__group-label,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__group-label,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__group-label,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__group-label {
+	margin: 0;
+	font-size: var(--azc-fs-xs);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-nav__chips,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__chips,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__chips,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__chips,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__chips,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--azc-space-2);
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-nav__link,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__link,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__link,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__link,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__link,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: var(--azc-touch, 44px);
+	min-width: var(--azc-touch, 44px);
+	padding: var(--azc-space-2) var(--azc-space-3);
+	border: 1px solid var(--azc-border);
+	border-radius: var(--azc-radius-sm);
+	background: var(--azc-bg-card);
+	color: var(--azc-text) !important;
+	text-decoration: none;
+	font-weight: 600;
+	font-size: var(--azc-fs-sm);
+	line-height: 1.2;
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-nav__link:hover,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__link:hover,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__link:hover,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__link:hover,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__link:hover,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__link:hover {
+	border-color: var(--color-primary-element);
+	background: var(--azc-bg-soft);
+	color: var(--azc-text, var(--color-main-text));
+	text-decoration: none;
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-nav__link:focus-visible,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__link:focus-visible,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__link:focus-visible,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__link:focus-visible,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__link:focus-visible,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__link:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 60%, transparent);
+	outline-offset: 2px;
+}
+
+#app-content.azc-app--admin-notifications .azc-settings-nav__link.is-active,
+#app-content.azc-app--admin-notifications .azc-settings-nav__link[aria-current="page"],
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__link.is-active,
+#app-content.azc-app--admin-overtime-settings .azc-settings-nav__link[aria-current="page"],
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__link.is-active,
+#app-content.azc-app--admin-vacation-rules .azc-settings-nav__link[aria-current="page"],
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__link.is-active,
+#app-content.azc-app--admin-vacation-layers .azc-settings-nav__link[aria-current="page"],
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__link.is-active,
+#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__link[aria-current="page"],
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__link.is-active,
+#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__link[aria-current="page"] {
+	border-color: var(--color-primary-element);
+	background: var(--azc-tint-info, color-mix(in srgb, var(--color-primary-element) 16%, var(--color-main-background)));
+	color: var(--azc-text, var(--color-main-text)) !important;
+	font-weight: 700;
+}
+
+#app-content.azc-app--admin-notifications .azc-admin-policy-layout,
+#app-content.azc-app--admin-overtime-settings .azc-admin-policy-layout,
+#app-content.azc-app--admin-vacation-rules .azc-admin-policy-layout,
+#app-content.azc-app--admin-vacation-layers .azc-admin-policy-layout {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-5);
+	width: 100%;
+	min-width: 0;
+}
+
+#app-content.azc-app--admin-notifications .azc-admin-policy-form__actions--sticky,
+#app-content.azc-app--admin-overtime-settings .azc-admin-policy-form__actions--sticky,
+#app-content.azc-app--admin-vacation-rules .azc-admin-policy-form__actions--sticky {
+	position: sticky;
+	bottom: 0;
+	z-index: 5;
+	margin-top: var(--azc-space-4);
+	padding: var(--azc-space-3) 0 calc(var(--azc-space-3) + env(safe-area-inset-bottom, 0px));
+	background: var(--color-main-background);
+	backdrop-filter: blur(6px);
+}
+
+#app-content.azc-app--admin-notifications .azc-btn--touch,
+#app-content.azc-app--admin-overtime-settings .azc-btn--touch,
+#app-content.azc-app--admin-vacation-rules .azc-btn--touch,
+#app-content.azc-app--admin-vacation-layers .azc-btn--touch,
+#app-content.azc-app--admin-overtime-payouts .azc-btn--touch,
+#app-content.azc-app--admin-overtime-payout-audit .azc-btn--touch {
+	min-height: var(--azc-touch-lg, 48px);
+	min-width: 8rem;
+	padding-inline: var(--azc-space-5);
+	font-size: var(--azc-fs-md);
+	font-weight: 700;
+}
+
+#app-content.azc-app--admin-notifications .azc-card__header--page-title-only,
+#app-content.azc-app--admin-overtime-settings .azc-card__header--page-title-only,
+#app-content.azc-app--admin-vacation-rules .azc-card__header--page-title-only,
+#app-content.azc-app--admin-vacation-layers .azc-card__header--page-title-only {
+	padding-bottom: 0;
+}
+
+@media (max-width: 640px) {
+	#app-content.azc-app--admin-notifications .azc-settings-nav__chips,
+	#app-content.azc-app--admin-overtime-settings .azc-settings-nav__chips,
+	#app-content.azc-app--admin-vacation-rules .azc-settings-nav__chips,
+	#app-content.azc-app--admin-vacation-layers .azc-settings-nav__chips,
+	#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__chips,
+	#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__chips {
+		flex-direction: column;
+	}
+	#app-content.azc-app--admin-notifications .azc-settings-nav__link,
+	#app-content.azc-app--admin-overtime-settings .azc-settings-nav__link,
+	#app-content.azc-app--admin-vacation-rules .azc-settings-nav__link,
+	#app-content.azc-app--admin-vacation-layers .azc-settings-nav__link,
+	#app-content.azc-app--admin-overtime-payouts .azc-settings-nav__link,
+	#app-content.azc-app--admin-overtime-payout-audit .azc-settings-nav__link {
+		width: 100%;
+		justify-content: flex-start;
+	}
+}
+
+/* Premium categories table — inline % field (Bachus A2 layout contract) */
+#app-content.azc-app--admin-overtime-settings .premium-cat-rate-wrap,
+#app-content.azc-app--admin-notifications .premium-cat-rate-wrap {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--azc-space-2);
+	max-inline-size: 8rem;
+}
+
+#app-content.azc-app--admin-overtime-settings .premium-cat-rate-wrap .form-input,
+#app-content.azc-app--admin-notifications .premium-cat-rate-wrap .form-input {
+	max-inline-size: 5rem;
+	min-height: var(--azc-touch, 44px);
+}
+
+#app-content.azc-app--admin-overtime-settings .premium-cat-name,
+#app-content.azc-app--admin-notifications .premium-cat-name {
+	display: block;
+	text-align: start;
+	font-weight: 600;
+	color: var(--azc-text, var(--color-main-text));
+}
+
+#app-content.azc-app--admin-overtime-settings .premium-categories-table,
+#app-content.azc-app--admin-notifications .premium-categories-table {
+	width: 100%;
+}
+
+#app-content.azc-app--admin-overtime-settings .premium-categories-table__pct,
+#app-content.azc-app--admin-notifications .premium-categories-table__pct {
+	white-space: nowrap;
 }

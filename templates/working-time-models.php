@@ -22,6 +22,11 @@ $models = $_['models'] ?? [];
 
         <div class="azc-page-stack">
 
+        <section id="wtm-editor-panel"
+                 class="azc-card wtm-editor-panel"
+                 hidden
+                 aria-labelledby="wtm-editor-heading"></section>
+
         <section class="azc-card working-time-models-card" aria-labelledby="working-time-models-heading">
             <header class="azc-card__header">
                 <div class="azc-card__header-text">
@@ -138,6 +143,8 @@ $models = $_['models'] ?? [];
     window.ArbeitszeitCheck.l10n.cancel = <?php echo json_encode($l->t('Cancel'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.name = <?php echo json_encode($l->t('Name'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.description = <?php echo json_encode($l->t('Description'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.descriptionOptional = <?php echo json_encode($l->t('Optional description'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.l10n.editorLead = <?php echo json_encode($l->t('Name the schedule, set hours, and optionally fill weekday times. Cancel returns to the list.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.type = <?php echo json_encode($l->t('Type'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.weeklyHours = <?php echo json_encode($l->t('Weekly Hours'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     window.ArbeitszeitCheck.l10n.dailyHours = <?php echo json_encode($l->t('Daily Hours'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

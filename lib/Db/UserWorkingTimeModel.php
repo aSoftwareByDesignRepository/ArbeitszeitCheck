@@ -121,8 +121,8 @@ class UserWorkingTimeModel extends Entity
             $errors['vacationDaysPerYear'] = 'Vacation days cannot be negative';
         }
 
-        if ($this->vacationDaysPerYear > 366) {
-            $errors['vacationDaysPerYear'] = 'Vacation days cannot exceed 366';
+        if ($this->vacationDaysPerYear > 4000) {
+            $errors['vacationDaysPerYear'] = 'Vacation entitlement cannot exceed 4000';
         }
 
         // Validate dates

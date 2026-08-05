@@ -765,13 +765,11 @@ require __DIR__ . '/common/user-display-timezone.php';
             </section>
         <?php else: ?>
             <section id="filter-section" class="azc-card azc-filter-panel time-entries-page__filter" style="display: none;" aria-labelledby="time-entries-filter-title">
-                <header class="azc-card__header">
-                    <div class="azc-card__header-text">
-                        <h2 id="time-entries-filter-title" class="azc-card__title"><?php p($l->t('Filter')); ?></h2>
-                        <p class="azc-card__lead"><?php p($l->t('Narrow the list by date range or status, then click Apply.')); ?></p>
-                    </div>
+                <header class="azc-filter-panel__head">
+                    <h2 id="time-entries-filter-title"><?php p($l->t('Filter')); ?></h2>
+                    <p class="azc-filter-panel__intro"><?php p($l->t('Narrow the list by date range or status, then click Apply.')); ?></p>
                 </header>
-                <div class="azc-card__body">
+                <div class="azc-filter-panel__body">
                     <form class="azc-filter-panel__form" novalidate>
                         <div class="azc-filter-grid time-entries-page__filter-grid" role="group" aria-label="<?php p($l->t('Filter options')); ?>">
                             <div class="azc-filter-field">

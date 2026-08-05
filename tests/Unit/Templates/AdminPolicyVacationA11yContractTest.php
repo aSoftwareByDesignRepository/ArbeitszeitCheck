@@ -1,0 +1,53 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Admin vacation policy template: anniversary day field must not stay required
+ * when hidden; unit choice must not nest radiogroup inside fieldset.
+ *
+ * @copyright Copyright (c) 2026
+ * @license AGPL-3.0-or-later
+ */
+
+namespace OCA\ArbeitszeitCheck\Tests\Unit\Templates;
+
+use PHPUnit\Framework\TestCase;
+
+class AdminPolicyVacationA11yContractTest extends TestCase
+{
+	private function template(): string
+	{
+		$path = dirname(__DIR__, 3) . '/templates/partials/admin-policy-vacation.php';
+		$this->assertFileExists($path);
+		$src = file_get_contents($path);
+		$this->assertIsString($src);
+		return $src;
+	}
+
+	public function testAnniversaryModeOmitsRequiredOnHiddenDayInput(): void
+	{
+		$src = $this->template();
+		// PHP emits required only when NOT anniversary (ternary).
+		$this->assertMatchesRegularExpression(
+			'/vacationCarryoverExpiryDay[\s\S]*?<\?php echo \$vacationYearMode === \'anniversary\' \? \'\' : \'required\'; \?>/',
+			$src
+		);
+		// Must not unconditionally hardcode required on the day input.
+		$this->assertDoesNotMatchRegularExpression(
+			'/id="vacationCarryoverExpiryDay"[^>]*\srequired\s/',
+			$src
+		);
+	}
+
+	public function testUnitChoiceFieldsetHasNoNestedRadiogroup(): void
+	{
+		$src = $this->template();
+		$this->assertStringContainsString('id="vacation-unit-choice"', $src);
+		$this->assertStringContainsString('class="vacation-unit-radios azc-choice-cards"', $src);
+		$this->assertStringNotContainsString(
+			'vacation-unit-radios azc-choice-cards" role="radiogroup"',
+			$src
+		);
+	}
+}

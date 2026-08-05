@@ -52,7 +52,8 @@ class ShellAccessibilityTest extends TestCase
 
 		$this->assertStringContainsString("settingsShell", $content);
 		$this->assertStringContainsString('azc-nc-admin-settings', $content);
-		$this->assertStringContainsString('Open full settings in app', $content);
+		$this->assertStringContainsString('Open in app', $content);
+		$this->assertStringNotContainsString('Cancel and go back', $content);
 	}
 
 	public function testProjectCheckAdminSettingsPartialIsAccessibleSwitch(): void

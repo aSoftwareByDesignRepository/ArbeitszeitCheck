@@ -94,14 +94,15 @@ textarea:focus-visible {
 }
 
 .btn--danger {
-  background-color: var(--color-error);
-  border-color: var(--color-error);
-  color: var(--color-primary-text);
+  background-color: var(--azc-danger-fill);
+  border-color: var(--azc-danger-fill);
+  color: var(--azc-danger-on-fill);
 }
 
 .btn--danger:hover:not(:disabled) {
-  background-color: var(--color-error-hover);
-  border-color: var(--color-error-hover);
+  background-color: color-mix(in srgb, var(--azc-danger-fill) 85%, var(--color-main-text));
+  border-color: color-mix(in srgb, var(--azc-danger-fill) 85%, var(--color-main-text));
+  color: var(--azc-danger-on-fill);
 }
 
 .btn--success {
@@ -236,15 +237,16 @@ textarea:focus-visible {
 
 .button.error,
 .btn-danger {
-  background-color: var(--color-error);
-  border-color: var(--color-error);
-  color: var(--color-primary-text);
+  background-color: var(--azc-danger-fill);
+  border-color: var(--azc-danger-fill);
+  color: var(--azc-danger-on-fill);
 }
 
 .button.error:hover:not(:disabled),
 .btn-danger:hover:not(:disabled) {
-  background-color: var(--color-error-hover);
-  border-color: var(--color-error-hover);
+  background-color: color-mix(in srgb, var(--azc-danger-fill) 85%, var(--color-main-text));
+  border-color: color-mix(in srgb, var(--azc-danger-fill) 85%, var(--color-main-text));
+  color: var(--azc-danger-on-fill);
 }
 
 .button.small,
@@ -433,6 +435,8 @@ textarea:focus-visible {
   resize: vertical;
   width: 100%;
   box-sizing: border-box;
+  scroll-margin-bottom: min(45vh, 20rem);
+  scroll-margin-top: 5rem;
 }
 
 .form-textarea--large {
@@ -1951,11 +1955,11 @@ body[data-theme-dark-highcontrast] .form-input.form-select option {
 .team-compliance-stat--clickable:hover,
 .team-compliance-stat--clickable:focus-visible {
   border-color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element));
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--azc-shadow-sm);
 }
 
 .team-compliance-stat--clickable:focus-visible {
-  outline: 3px solid var(--color-primary-element, #0082c9);
+  outline: 3px solid var(--color-primary-element);
   outline-offset: 2px;
 }
 

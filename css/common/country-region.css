@@ -10,8 +10,9 @@
 .azc-country-grid {
 	display: grid;
 	gap: var(--space-3, 0.75rem);
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-	margin-bottom: var(--space-3, 0.75rem);
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr));
+	max-width: 100%;
+	min-width: 0;	margin-bottom: var(--space-3, 0.75rem);
 }
 
 .azc-country-card {
@@ -27,12 +28,12 @@
 }
 
 .azc-country-card:has(.azc-country-card__radio:checked) {
-	border-color: var(--color-primary-element, #0082c9);
+	border-color: var(--color-primary-element);
 	background: color-mix(in srgb, var(--color-main-background) 90%, var(--color-primary-element) 10%);
 }
 
 .azc-country-card:has(.azc-country-card__radio:focus-visible) {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -41,7 +42,7 @@
 	height: 1.25rem;
 	margin-top: 0.15rem;
 	flex-shrink: 0;
-	accent-color: var(--color-primary-element, #0082c9);
+	accent-color: var(--color-primary-element);
 }
 
 .azc-country-card__radio:disabled {

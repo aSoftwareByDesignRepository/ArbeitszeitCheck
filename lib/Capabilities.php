@@ -93,6 +93,10 @@ class Capabilities implements ICapability {
 					'monthClosure' => MonthClosureFeature::isEnabledFromIConfig($this->config),
 					'overtimeBank' => $this->overtimeBankService->isEnabled(),
 					'layeredVacationEntitlements' => $this->appConfig->getAppValueString('layered_entitlements_enabled', '0') === '1',
+					'vacationUnit' => (string)$this->config->getAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_UNIT, Constants::DEFAULT_VACATION_UNIT) === Constants::VACATION_UNIT_HOURS
+						? Constants::VACATION_UNIT_HOURS
+						: Constants::VACATION_UNIT_DAYS,
+					'vacationUnitAware' => true,
 					'timeCapture' => $timeCapture,
 					'projectCheck' => [
 						'available' => $projectCheckAvailable,

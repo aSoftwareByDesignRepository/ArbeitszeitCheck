@@ -1044,12 +1044,20 @@
         }
 
         const url = OC.generateUrl('/apps/arbeitszeitcheck/api/admin/state-holidays/' + encodeURIComponent(String(id)));
-        fetch(url, {
-            method: 'DELETE',
-            headers: {
-                'requesttoken': OC.requestToken
-            }
-        }).then(function(response) {
+        const deleteInit = Utils.normalizeMutatingFetchInit
+            ? Utils.normalizeMutatingFetchInit({
+                method: 'DELETE',
+                headers: { requesttoken: OC.requestToken },
+            })
+            : {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    requesttoken: OC.requestToken,
+                },
+                body: JSON.stringify({}),
+            };
+        fetch(url, deleteInit).then(function(response) {
             return response.json();
         }).then(function(data) {
             if (data && data.success) {

@@ -1,6 +1,6 @@
 /**
  * Personal settings (My settings) — scoped to azc-app--settings
- * Cards use shared azc-card from app.css; this file only covers form chrome.
+ * Cards use shared azc-card from app.css; this file covers form chrome + multipage chips.
  *
  * @copyright Copyright (c) 2024, Nextcloud GmbH
  * @license AGPL-3.0-or-later
@@ -13,6 +13,93 @@
 	width: 100%;
 	max-width: none;
 	min-width: 0;
+}
+
+/* SETTINGS-PAGES-STANDARD chip bar — grouped topics */
+#app-content.azc-app--settings .azc-settings-nav {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-4);
+	margin: 0 0 var(--azc-space-2);
+	padding: 0 0 var(--azc-space-4);
+	border-bottom: 1px solid var(--azc-border, var(--color-border));
+	width: 100%;
+}
+
+#app-content.azc-app--settings .azc-settings-nav__title {
+	margin: 0;
+	font-size: var(--azc-fs-sm);
+	font-weight: 700;
+	line-height: var(--azc-line-tight, 1.2);
+	color: var(--azc-text, var(--color-main-text));
+}
+
+#app-content.azc-app--settings .azc-settings-nav__group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-2);
+	min-width: 0;
+}
+
+#app-content.azc-app--settings .azc-settings-nav__group-label {
+	margin: 0;
+	font-size: var(--azc-fs-xs);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#app-content.azc-app--settings .azc-settings-nav__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--azc-space-2);
+}
+
+#app-content.azc-app--settings .azc-settings-nav__link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: var(--azc-touch, 44px);
+	min-width: var(--azc-touch, 44px);
+	padding: var(--azc-space-2) var(--azc-space-3);
+	border: 1px solid var(--azc-border);
+	border-radius: var(--azc-radius-sm);
+	background: var(--azc-bg-card);
+	color: var(--azc-text, var(--color-main-text)) !important;
+	text-decoration: none;
+	font-weight: 600;
+	font-size: var(--azc-fs-sm);
+	line-height: 1.2;
+}
+
+#app-content.azc-app--settings .azc-settings-nav__link:hover {
+	border-color: var(--color-primary-element);
+	background: var(--azc-bg-soft);
+	color: var(--azc-text, var(--color-main-text));
+	text-decoration: none;
+}
+
+#app-content.azc-app--settings .azc-settings-nav__link:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 60%, transparent);
+	outline-offset: 2px;
+}
+
+#app-content.azc-app--settings .azc-settings-nav__link.is-active,
+#app-content.azc-app--settings .azc-settings-nav__link[aria-current="page"] {
+	border-color: var(--color-primary-element);
+	background: var(--azc-tint-info, color-mix(in srgb, var(--color-primary-element) 16%, var(--color-main-background)));
+	color: var(--azc-text, var(--color-main-text)) !important;
+	font-weight: 700;
+}
+
+#app-content.azc-app--settings .azc-card__header--page-title-only {
+	padding-block-end: 0;
+	min-height: 0;
+}
+
+#app-content.azc-app--settings .azc-card__header--page-title-only .azc-card__header-text {
+	margin: 0;
 }
 
 #app-content.azc-app--settings .settings-section .azc-card__body {
@@ -52,7 +139,7 @@
 	padding: 0;
 	cursor: pointer;
 	box-sizing: border-box;
-	accent-color: var(--color-primary-element, #0082c9);
+	accent-color: var(--color-primary-element);
 	background-color: var(--arbeitszeitcheck-color-form-background, var(--color-main-background));
 	border: 1px solid var(--arbeitszeitcheck-color-form-border, var(--color-border));
 	border-radius: 3px;
@@ -62,7 +149,7 @@
 }
 
 #app-content.azc-app--settings .settings-form__checkbox input[type='checkbox']:focus-visible {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -111,6 +198,23 @@
 	margin-bottom: 0;
 }
 
+#app-content.azc-app--settings .settings-about-version {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-2, 0.5rem);
+	margin: 0;
+	padding-top: var(--azc-space-2, 0.5rem);
+	border-top: 1px solid var(--azc-border, var(--color-border));
+}
+
+#app-content.azc-app--settings .settings-about-version__title {
+	margin: 0;
+	font-size: var(--azc-fs-md, 1rem);
+	font-weight: 700;
+	line-height: var(--azc-line-tight, 1.2);
+	color: var(--azc-text, var(--color-main-text));
+}
+
 #app-content.azc-app--settings .settings-version-line {
 	margin: 0;
 	font-size: var(--azc-fs-md, 1rem);
@@ -130,6 +234,15 @@
 }
 
 @media (max-width: 640px) {
+	#app-content.azc-app--settings .azc-settings-nav__chips {
+		flex-direction: column;
+	}
+
+	#app-content.azc-app--settings .azc-settings-nav__link {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
 	#app-content.azc-app--settings .settings-form__actions,
 	#app-content.azc-app--settings .settings-privacy-actions {
 		flex-direction: column;

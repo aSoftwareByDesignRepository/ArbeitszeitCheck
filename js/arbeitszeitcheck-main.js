@@ -1613,7 +1613,7 @@
          * @param {object|null} data - Data to send (null for GET/DELETE)
          * @param {boolean} reloadOnSuccess - Whether to reload page on success (default: true)
          */
-        callApi: function(endpoint, method = 'POST', data = null, reloadOnSuccess = true) {
+		callApi: function(endpoint, method = 'POST', data = null, reloadOnSuccess = true) {
             const url = this.resolveRequestUrl(endpoint);
 
             // Build request options (requesttoken required for CSRF)
@@ -1626,12 +1626,18 @@
                 }
             };
 
-            // Add body for POST/PUT requests; include requesttoken in body so Nextcloud finds it in decoded JSON (post)
-            if (data !== null && (method === 'POST' || method === 'PUT')) {
-                const bodyData = typeof data === 'object' && data !== null && !Array.isArray(data)
-                    ? { ...data, requesttoken: requestToken }
-                    : data;
-                options.body = JSON.stringify(bodyData);
+            // Always send a JSON body for mutating methods. Empty POSTs without a
+            // body (clock-out / break / enforce-daily-maximum) are rejected as opaque
+            // HTTP 400 by some reverse proxies when Content-Type claims JSON.
+            const upper = String(method || 'GET').toUpperCase();
+            if (upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE') {
+                const payload = (typeof data === 'object' && data !== null && !Array.isArray(data))
+                    ? { ...data }
+                    : {};
+                if (requestToken) {
+                    payload.requesttoken = requestToken;
+                }
+                options.body = JSON.stringify(payload);
             }
 
             // Show loading state

@@ -9,6 +9,9 @@ declare(strict_types=1);
  * @license AGPL-3.0-or-later
  */
 
+use OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog;
+use OCA\ArbeitszeitCheck\Service\EmployeeSettingsSectionCatalog;
+
 return [
 	'routes' => [
 		// Main page routes
@@ -20,6 +23,7 @@ return [
 		['name' => 'page#calendar', 'url' => '/calendar', 'verb' => 'GET'],
 		['name' => 'page#timeline', 'url' => '/timeline', 'verb' => 'GET'],
 		['name' => 'page#settings', 'url' => '/settings', 'verb' => 'GET'],
+		['name' => 'page#settingsSection', 'url' => '/settings/{section}', 'verb' => 'GET', 'requirements' => ['section' => EmployeeSettingsSectionCatalog::routeRequirement()]],
 
 		// Time tracking routes
 		['name' => 'time_tracking#clockIn', 'url' => '/api/clock/in', 'verb' => 'POST'],
@@ -84,6 +88,7 @@ return [
 
 		// API routes for absences (specific routes must come before parameterized routes)
 		['name' => 'absence#stats', 'url' => '/api/absences/stats', 'verb' => 'GET'],
+		['name' => 'absence#estimateVacationHours', 'url' => '/api/absences/estimate-hours', 'verb' => 'GET'],
 		['name' => 'absence#entitlementTrace', 'url' => '/api/absences/entitlement-trace', 'verb' => 'GET'],
 		['name' => 'absence#users', 'url' => '/api/colleagues', 'verb' => 'GET'],
 		['name' => 'absence#index', 'url' => '/api/absences', 'verb' => 'GET'],
@@ -110,6 +115,7 @@ return [
 		['name' => 'manager#createEmployeeTimeEntry', 'url' => '/api/manager/employee-time-entries', 'verb' => 'POST'],
 		['name' => 'manager#getManagerAssignableProjectcheckProjects', 'url' => '/api/manager/employees/{employeeId}/projectcheck-assignable-projects', 'verb' => 'GET'],
 		['name' => 'manager#getEmployeeAbsences', 'url' => '/api/manager/employee-absences', 'verb' => 'GET'],
+		['name' => 'manager#estimateEmployeeVacationHours', 'url' => '/api/manager/employee-absences/estimate-hours', 'verb' => 'GET'],
 		['name' => 'manager#createEmployeeAbsence', 'url' => '/api/manager/employee-absences', 'verb' => 'POST'],
 		['name' => 'manager#getPendingApprovals', 'url' => '/api/manager/pending-approvals', 'verb' => 'GET'],
 		['name' => 'manager#getTeamCompliance', 'url' => '/api/manager/team-compliance', 'verb' => 'GET'],
@@ -166,6 +172,7 @@ return [
 		['name' => 'admin#users', 'url' => '/admin/users', 'verb' => 'GET'],
 		['name' => 'admin#userDetail', 'url' => '/admin/users/{userId}', 'verb' => 'GET'],
 		['name' => 'admin#settings', 'url' => '/admin/settings', 'verb' => 'GET'],
+		['name' => 'admin#settingsSection', 'url' => '/admin/settings/{section}', 'verb' => 'GET', 'requirements' => ['section' => AdminSettingsSectionCatalog::routeRequirement()]],
 		['name' => 'admin#supportUs', 'url' => '/admin/support-us', 'verb' => 'GET'],
 		['name' => 'license_admin#index', 'url' => '/admin/license', 'verb' => 'GET'],
 		['name' => 'license_admin#applyLicense', 'url' => '/api/admin/license', 'verb' => 'POST'],
@@ -197,6 +204,7 @@ return [
 		['name' => 'kiosk#heartbeat', 'url' => '/api/kiosk/heartbeat', 'verb' => 'POST'],
 		['name' => 'kiosk#enrollScan', 'url' => '/api/kiosk/enroll-scan', 'verb' => 'POST'],
 		['name' => 'admin#notifications', 'url' => '/admin/notifications', 'verb' => 'GET'],
+		['name' => 'admin#overtimeSettings', 'url' => '/admin/overtime-settings', 'verb' => 'GET'],
 		['name' => 'overtime_payout#index', 'url' => '/admin/overtime-payouts', 'verb' => 'GET'],
 		['name' => 'overtime_payout#listMonth', 'url' => '/api/admin/overtime-payouts', 'verb' => 'GET'],
 		['name' => 'overtime_payout#processOne', 'url' => '/api/admin/overtime-payouts/process', 'verb' => 'POST'],
@@ -213,6 +221,7 @@ return [
 		['name' => 'admin#updateAdminSettings', 'url' => '/api/admin/settings', 'verb' => 'POST'],
 		['name' => 'admin#getNotificationSettings', 'url' => '/api/admin/notifications/settings', 'verb' => 'GET'],
 		['name' => 'admin#updateNotificationSettings', 'url' => '/api/admin/notifications/settings', 'verb' => 'POST'],
+		['name' => 'admin#migrateVacationUnit', 'url' => '/api/admin/vacation-unit/migrate', 'verb' => 'POST'],
 		// Legacy company_holidays JSON (kept for backward compatibility; new code should use state-holidays endpoints)
 		['name' => 'admin#getCompanyHolidays', 'url' => '/api/admin/holidays', 'verb' => 'GET'],
 		['name' => 'admin#saveCompanyHoliday', 'url' => '/api/admin/holidays', 'verb' => 'POST'],
@@ -252,6 +261,7 @@ return [
 		['name' => 'admin#simulateVacationPolicy', 'url' => '/api/admin/vacation-policy/simulate', 'verb' => 'POST'],
 
 		// Layered vacation entitlement (L0/L1/L2) admin endpoints
+		['name' => 'admin#vacationRules', 'url' => '/admin/vacation-rules', 'verb' => 'GET'],
 		['name' => 'admin#vacationLayers', 'url' => '/admin/vacation-layers', 'verb' => 'GET'],
 		['name' => 'admin#getVacationLayers', 'url' => '/api/admin/vacation-layers', 'verb' => 'GET'],
 		['name' => 'admin#saveOrgVacationDefault', 'url' => '/api/admin/vacation-layers/org', 'verb' => 'POST'],

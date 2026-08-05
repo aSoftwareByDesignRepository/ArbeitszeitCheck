@@ -57,6 +57,7 @@ class VacationProrationService
 	public function __construct(
 		private readonly UserEmploymentSettingsService $employmentSettings,
 		private readonly IConfig $config,
+		private readonly ?VacationUnitService $vacationUnitService = null,
 	) {
 	}
 
@@ -87,8 +88,21 @@ class VacationProrationService
 	{
 		$start = $this->employmentSettings->getEmploymentStart($userId);
 		$end = $this->employmentSettings->getEmploymentEnd($userId);
+		$hoursMode = $this->vacationUnitService?->isHoursMode() === true;
+		$maxAmount = $hoursMode ? 4000.0 : 366.0;
+		$unitSize = $hoursMode
+			? max(0.25, $this->vacationUnitService->getHoursPerDay())
+			: 1.0;
 
-		return self::computeProration($year, $fullAnnualDays, $start, $end, $this->getConfiguredMethod());
+		return self::computeProration(
+			$year,
+			$fullAnnualDays,
+			$start,
+			$end,
+			$this->getConfiguredMethod(),
+			$maxAmount,
+			$unitSize,
+		);
 	}
 
 	/**
@@ -98,15 +112,24 @@ class VacationProrationService
 	 *
 	 * @return array<string, mixed> See class docblock for the contract.
 	 */
+	/**
+	 * @param float $maxAmount Ceiling for entitlement in the active unit (366 days / 4000 hours).
+	 * @param float $unitSize Size of one “day” in the active unit (1.0 for days, hours_per_day for hours).
+	 *                        Used so BUrlG §5(2) half-day rounding stays day-equivalent in hours mode.
+	 */
 	public static function computeProration(
 		int $year,
 		float $fullAnnualDays,
 		?\DateTimeImmutable $employmentStart,
 		?\DateTimeImmutable $employmentEnd,
 		string $method,
+		float $maxAmount = 366.0,
+		float $unitSize = 1.0,
 	): array {
 		$method = self::normalizeMethod($method);
-		$fullDays = self::sanitizeDays($fullAnnualDays);
+		$maxAmount = is_finite($maxAmount) && $maxAmount > 0 ? $maxAmount : 366.0;
+		$unitSize = is_finite($unitSize) && $unitSize >= 0.25 ? $unitSize : 1.0;
+		$fullDays = self::sanitizeDays($fullAnnualDays, $maxAmount);
 
 		$yearStart = (new \DateTimeImmutable(sprintf('%04d-01-01', $year)))->setTime(0, 0, 0);
 		$yearEnd = (new \DateTimeImmutable(sprintf('%04d-12-31', $year)))->setTime(0, 0, 0);
@@ -192,7 +215,7 @@ class VacationProrationService
 		if ($method === Constants::VACATION_PRORATION_METHOD_DAILY) {
 			$proratedDays = self::roundDays($fullDays * ($coveredDays / $daysInYear));
 		} else {
-			$proratedDays = self::applyStatutoryRounding($fullDays * ($monthsCovered / 12.0));
+			$proratedDays = self::applyStatutoryRounding($fullDays * ($monthsCovered / 12.0), $unitSize);
 		}
 
 		// Proration is a reduction: never exceed the full entitlement and
@@ -225,16 +248,21 @@ class VacationProrationService
 	 * kept verbatim (the statute mandates rounding up only — rounding down
 	 * would drop the employee below their proportional minimum), normalised to
 	 * two decimal places.
+	 *
+	 * In hours mode `$unitSize` is hours_per_day so “half a day” stays
+	 * day-equivalent (e.g. 4.0 hours when factor is 8).
 	 */
-	private static function applyStatutoryRounding(float $value): float
+	private static function applyStatutoryRounding(float $value, float $unitSize = 1.0): float
 	{
 		if (!is_finite($value) || $value <= 0.0) {
 			return 0.0;
 		}
-		$floor = floor($value);
-		$fraction = $value - $floor;
+		$unitSize = is_finite($unitSize) && $unitSize >= 0.25 ? $unitSize : 1.0;
+		$inUnits = $value / $unitSize;
+		$floor = floor($inUnits);
+		$fraction = $inUnits - $floor;
 		if ($fraction >= 0.5 - 1e-9) {
-			return $floor + 1.0;
+			return ($floor + 1.0) * $unitSize;
 		}
 
 		return round($value, 2, PHP_ROUND_HALF_UP);
@@ -249,12 +277,13 @@ class VacationProrationService
 		return round(max(0.0, $value), 2, PHP_ROUND_HALF_UP);
 	}
 
-	private static function sanitizeDays(float $value): float
+	private static function sanitizeDays(float $value, float $maxAmount = 366.0): float
 	{
 		if (!is_finite($value)) {
 			return 0.0;
 		}
+		$maxAmount = is_finite($maxAmount) && $maxAmount > 0 ? $maxAmount : 366.0;
 
-		return round(max(0.0, min(366.0, $value)), 2, PHP_ROUND_HALF_UP);
+		return round(max(0.0, min($maxAmount, $value)), 2, PHP_ROUND_HALF_UP);
 	}
 }

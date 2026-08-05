@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<title>Manager vacation hours recording</title>
+	<style>
+		body { font-family: system-ui, sans-serif; margin: 1.5rem; line-height: 1.45; }
+		label { display: block; font-weight: 600; margin-top: 0.75rem; }
+		input, select { min-height: 44px; font-size: 1rem; padding: 0.4rem 0.6rem; }
+		.presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+		.presets button { min-height: 44px; padding: 0.5rem 0.9rem; }
+		.help { color: #444; max-width: 40rem; }
+		.preview { margin-top: 0.5rem; padding: 0.75rem; background: #eef6fb; border-radius: 8px; }
+	</style>
+</head>
+<body>
+<main id="manager-vacation-hours" aria-labelledby="mgr-hours-title" data-vacation-unit="hours">
+	<h1 id="mgr-hours-title">Record absence (hours)</h1>
+	<p class="help" id="mgr-hours-help">
+		Total vacation hours for the whole request. Full day / Full range follow the employee work schedule
+		(e.g. shorter Friday). Public holidays reduce the final debit.
+	</p>
+	<label for="manager-absence-record-hours">Hours <span aria-hidden="true">*</span></label>
+	<input
+		id="manager-absence-record-hours"
+		type="text"
+		inputmode="decimal"
+		value="38.5"
+		aria-required="true"
+		aria-describedby="mgr-hours-help manager-absence-record-hours-preview"
+	/>
+	<div class="presets" role="group" aria-label="Quick hours">
+		<button type="button" class="manager-absence-hours-preset" data-hours="4">4 hours</button>
+		<button type="button" class="manager-absence-hours-preset" data-hours-half="1">Half day</button>
+		<button type="button" class="manager-absence-hours-preset" data-hours-full="1">1 full day</button>
+		<button type="button" class="manager-absence-hours-preset" data-hours-range="1">Full range</button>
+	</div>
+	<p id="manager-absence-record-hours-preview" class="preview" role="status">
+		This request: 38.5 hours across about 5 weekdays (work model). Public holidays reduce the final debit.
+	</p>
+</main>
+</body>
+</html>

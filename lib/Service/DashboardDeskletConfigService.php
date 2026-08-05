@@ -20,6 +20,7 @@ class DashboardDeskletConfigService
 		private readonly PermissionService $permissionService,
 		private readonly IL10N $l10n,
 		private readonly IAppManager $appManager,
+		private readonly ProjectCheckIntegrationService $projectCheckIntegration,
 	) {
 	}
 
@@ -32,6 +33,11 @@ class DashboardDeskletConfigService
 
 		$isManager = $this->permissionService->canAccessManagerDashboard($userId);
 		$isAdmin = $this->permissionService->isAdmin($userId);
+		$linkingEnabled = $this->projectCheckIntegration->isLinkingEnabledForUser($userId);
+		$projectCheckAvailable = $this->projectCheckIntegration->isProjectCheckAvailable();
+		$projects = $linkingEnabled
+			? $this->projectCheckIntegration->getAvailableProjects($userId)
+			: [];
 
 		return [
 			'employeeDataUrl' => $this->deskletRouteUrl('arbeitszeitcheck.dashboard_widget.employeeData', '/api/dashboard-widget/employee'),
@@ -45,6 +51,11 @@ class DashboardDeskletConfigService
 			'timeEntriesUrl' => $this->deskletRouteUrl('arbeitszeitcheck.page.timeEntries', '/time-entries'),
 			'isManager' => $isManager,
 			'isAdmin' => $isAdmin,
+			'projectCheck' => [
+				'available' => $projectCheckAvailable,
+				'linkingEnabled' => $linkingEnabled,
+				'projects' => $projects,
+			],
 			'l10n' => $this->buildL10n(),
 		];
 	}
@@ -134,6 +145,13 @@ class DashboardDeskletConfigService
 			'stampingDisabledPausedBody' => TemplateL10n::translate($l, 'Finish the paused session on the dashboard, or contact your administrator.'),
 			'deskletTitle' => TemplateL10n::translate($l, 'Quick time tracking'),
 			'deskletLead' => TemplateL10n::translate($l, 'Clock in, take a break, or clock out from here.'),
+			'projectLabel' => TemplateL10n::translate($l, 'Project'),
+			'projectHelp' => TemplateL10n::translate($l, 'Optional. Link these hours to a ProjectCheck project, or leave “No project”.'),
+			'projectNone' => TemplateL10n::translate($l, 'No project'),
+			'projectLinkingOffTitle' => TemplateL10n::translate($l, 'ProjectCheck linking is turned off'),
+			'projectLinkingOffBody' => TemplateL10n::translate($l, 'An administrator must enable the ProjectCheck connection in Global settings before you can link hours to a project.'),
+			'dailyMaximumTitle' => TemplateL10n::translate($l, 'Daily maximum reached'),
+			'dailyMaximumBody' => TemplateL10n::translate($l, 'You already reached today’s working-time limit. Clock-in is available again tomorrow.'),
 		];
 	}
 }

@@ -32,8 +32,8 @@
 	left: -9999px;
 	top: var(--azc-space-2);
 	padding: var(--azc-space-2) var(--azc-space-4);
-	background: var(--color-primary-element, #0082c9);
-	color: var(--color-primary-element-text, #fff);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
 	border-radius: var(--azc-radius-sm);
 	z-index: 1000;
 	font-weight: 600;
@@ -42,7 +42,7 @@
 .azc-skip-link:focus,
 .azc-skip-link:focus-visible {
 	left: var(--azc-space-3);
-	outline: 3px solid var(--color-primary-element-text, #fff);
+	outline: 3px solid var(--color-primary-element-text);
 	outline-offset: 2px;
 }
 .azc-sr-only {
@@ -64,6 +64,22 @@
 #content.app-arbeitszeitcheck #app-navigation .nav-parent-toggle {
 	justify-content: flex-start;
 	text-align: left;
+}
+
+/* Beat NC guest/error `body { text-align:center }` and
+ * `form input[type=checkbox] + label { text-align:center }` if a 500 ever leaks guest.css. */
+#app-content.azc-app .form-checkbox,
+#app-content.azc-app .form-radio,
+#app-content.azc-app .form-checkbox .form-label,
+#app-content.azc-app .form-radio .form-label,
+#app-content.azc-app .form-checkbox label,
+#app-content.azc-app .form-radio label,
+#app-content.azc-app label.form-checkbox,
+#app-content.azc-app .form-label,
+#app-content.azc-app .form-help,
+#app-content.azc-app .form-legend,
+#app-content.azc-app legend {
+	text-align: start;
 }
 
 #app-content.azc-app {
@@ -103,7 +119,7 @@
 	gap: var(--azc-space-4);
 }
 #azc-main-content.azc-main:focus-visible {
-	outline: 3px solid color-mix(in srgb, var(--color-primary-element, #0082c9) 60%, transparent);
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 60%, transparent);
 	outline-offset: 2px;
 }
 
@@ -165,7 +181,7 @@
 	text-decoration: underline;
 }
 #app-content.azc-app .azc-breadcrumb__link:focus-visible {
-	outline: 3px solid color-mix(in srgb, var(--color-primary-element, #0082c9) 55%, transparent);
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 55%, transparent);
 	outline-offset: 2px;
 }
 #app-content.azc-app .azc-breadcrumb__text {
@@ -198,7 +214,7 @@
 	height: 56px;
 	border-radius: var(--azc-radius-md);
 	background: var(--azc-tint-info);
-	color: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element);
 }
 .azc-page-header__icon-svg {
 	width: 28px;
@@ -290,7 +306,7 @@
 .azc-nc-admin-settings .azc-btn:focus-visible,
 .azc-nc-settings-panel .azc-btn:focus-visible,
 .azc-app .btn:focus-visible {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -300,9 +316,9 @@
 .azc-nc-settings-panel .azc-btn--primary,
 .azc-app .btn--primary {
 	/* !important: link + theme cascades must not flatten CTAs to underlined text. */
-	background-color: var(--color-primary-element, #0082c9) !important;
-	border-color: var(--color-primary-element, #0082c9) !important;
-	color: var(--color-primary-element-text, #fff) !important;
+	background-color: var(--color-primary-element) !important;
+	border-color: var(--color-primary-element) !important;
+	color: var(--color-primary-element-text) !important;
 }
 
 #app-content.azc-app .azc-btn--primary:hover,
@@ -312,7 +328,7 @@
 .azc-app .btn--primary:hover {
 	background-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
 	border-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
-	color: var(--color-primary-element-text, #fff) !important;
+	color: var(--color-primary-element-text) !important;
 }
 
 #app-content.azc-app .azc-btn--primary:active,
@@ -320,9 +336,9 @@
 .azc-nc-admin-settings .azc-btn--primary:active,
 .azc-nc-settings-panel .azc-btn--primary:active,
 .azc-app .btn--primary:active {
-	background-color: var(--color-primary-element, #0082c9) !important;
-	border-color: var(--color-primary-element, #0082c9) !important;
-	color: var(--color-primary-element-text, #fff) !important;
+	background-color: var(--color-primary-element) !important;
+	border-color: var(--color-primary-element) !important;
+	color: var(--color-primary-element-text) !important;
 }
 
 #app-content.azc-app .azc-btn--secondary,
@@ -350,9 +366,9 @@
 .azc-nc-admin-settings .azc-btn--danger,
 .azc-nc-settings-panel .azc-btn--danger,
 .azc-app .btn--danger {
-	background-color: var(--color-error, #cc4646) !important;
-	border-color: var(--color-error, #cc4646) !important;
-	color: var(--color-primary-text, #fff) !important;
+	background-color: var(--azc-danger-fill) !important;
+	border-color: var(--azc-danger-fill) !important;
+	color: var(--azc-danger-on-fill) !important;
 }
 
 #app-content.azc-app .azc-btn--danger:hover,
@@ -360,9 +376,9 @@
 .azc-nc-admin-settings .azc-btn--danger:hover,
 .azc-nc-settings-panel .azc-btn--danger:hover,
 .azc-app .btn--danger:hover {
-	background-color: var(--color-error-hover, var(--color-error)) !important;
-	border-color: var(--color-error-hover, var(--color-error)) !important;
-	color: var(--color-primary-text, #fff) !important;
+	background-color: color-mix(in srgb, var(--azc-danger-fill) 85%, var(--color-main-text)) !important;
+	border-color: color-mix(in srgb, var(--azc-danger-fill) 85%, var(--color-main-text)) !important;
+	color: var(--azc-danger-on-fill) !important;
 }
 
 #app-content.azc-app .azc-btn--ghost,
@@ -696,8 +712,9 @@
 
 #app-content.azc-app .azc-jump-nav,
 .azc-nc-admin-settings .azc-jump-nav {
-	position: sticky;
-	top: var(--azc-space-2);
+	/* Static: sticky jump chrome fights focus/select and causes page jumps. */
+	position: static;
+	top: auto;
 	margin: 0;
 	padding: var(--azc-space-4);
 	border: 1px solid var(--azc-border);
@@ -757,7 +774,7 @@
 
 #app-content.azc-app .azc-jump-nav__link:focus-visible,
 .azc-nc-admin-settings .azc-jump-nav__link:focus-visible {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 	background: var(--azc-bg-soft);
 	text-decoration: none;
@@ -765,8 +782,8 @@
 
 #app-content.azc-app .azc-jump-nav__link[aria-current="location"],
 .azc-nc-admin-settings .azc-jump-nav__link[aria-current="location"] {
-	border-color: var(--color-primary-element, #0082c9);
-	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 12%, var(--azc-bg-card));
+	border-color: var(--color-primary-element);
+	background: color-mix(in srgb, var(--color-primary-element) 12%, var(--azc-bg-card));
 	color: var(--azc-text);
 	font-weight: 600;
 }
@@ -1115,5 +1132,5 @@ dialog.azc-dialog::backdrop,
 dialog.azc-native-dialog::backdrop,
 dialog.layer-dialog::backdrop,
 dialog.entitlement-explain-dialog::backdrop {
-	background: color-mix(in srgb, var(--color-main-text, #000) 45%, transparent);
+	background: color-mix(in srgb, var(--color-main-text) 45%, transparent);
 }

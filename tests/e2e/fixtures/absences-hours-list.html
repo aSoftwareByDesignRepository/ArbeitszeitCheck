@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Absences duration hours list</title>
+	<style>
+		body { font-family: "Segoe UI", sans-serif; margin: 0; background: #f4f6f4; color: #1a1a1a; }
+		main { max-width: 40rem; margin: 1.5rem auto; padding: 1.25rem; background: #fff; border: 1px solid #c8c8c8; border-radius: 8px; }
+		table { width: 100%; border-collapse: collapse; }
+		th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #ddd; font-size: 1.05rem; }
+		th { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.03em; }
+		.hero { font-size: 2.5rem; font-weight: 700; color: #0b6e4f; min-height: 2.75rem; }
+		:focus-visible { outline: 3px solid #005fcc; outline-offset: 2px; }
+	</style>
+</head>
+<body>
+<main id="absences-hours-list" aria-labelledby="list-title">
+	<h1 id="list-title">Absences</h1>
+	<p id="stat-remaining-label">Remaining</p>
+	<p id="stat-remaining" class="hero" aria-labelledby="stat-remaining-label">196.0</p>
+	<p>vacation hours</p>
+	<table aria-label="Absence requests">
+		<thead>
+			<tr>
+				<th scope="col">Type</th>
+				<th scope="col">Start</th>
+				<th scope="col">End</th>
+				<th scope="col" id="duration-heading">Duration</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td>Vacation</td>
+				<td>04.08.2026</td>
+				<td>04.08.2026</td>
+				<td id="row-duration">4.0 h</td>
+			</tr>
+		</tbody>
+	</table>
+</main>
+</body>
+</html>

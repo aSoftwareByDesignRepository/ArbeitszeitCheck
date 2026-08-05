@@ -77,7 +77,7 @@
 #app-content.azc-app--admin-teams .teams-tree__item--selected:focus-within {
 	background: var(--color-primary-element-light, var(--color-primary-light));
 	color: var(--color-primary-element-light-text, var(--color-main-text));
-	border-color: var(--color-primary-element, #0082c9);
+	border-color: var(--color-primary-element);
 }
 
 #app-content.azc-app--admin-teams .teams-tree__item--selected .teams-tree__edit,
@@ -103,7 +103,7 @@
 }
 
 #app-content.azc-app--admin-teams .teams-tree__label[role='button']:focus-visible {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -127,7 +127,7 @@
 
 #app-content.azc-app--admin-teams .teams-tree__edit:focus-visible,
 #app-content.azc-app--admin-teams .teams-tree__delete:focus-visible {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -160,13 +160,13 @@
 }
 
 #app-content.azc-app--admin-teams .admin-teams__tab[aria-selected='true'] {
-	color: var(--color-primary-element, #0082c9);
-	border-bottom-color: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element);
+	border-bottom-color: var(--color-primary-element);
 	font-weight: 600;
 }
 
 #app-content.azc-app--admin-teams .admin-teams__tab:focus-visible {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -225,7 +225,7 @@
 
 #app-content.azc-app--admin-teams .team-list__remove:focus-visible {
 	opacity: 1;
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 

@@ -96,6 +96,26 @@ class WorkingTimeModelMapper extends QBMapper
 	}
 
 	/**
+	 * Clear the default flag on every model (optionally keeping one id).
+	 *
+	 * Prefer this over read-modify-write so concurrent "set default" requests
+	 * cannot leave two rows with is_default=1.
+	 */
+	public function clearDefaults(?int $exceptId = null): void
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->update($this->getTableName())
+			->set('is_default', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+			->where($qb->expr()->eq('is_default', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+
+		if ($exceptId !== null) {
+			$qb->andWhere($qb->expr()->neq('id', $qb->createNamedParameter($exceptId, IQueryBuilder::PARAM_INT)));
+		}
+
+		$qb->executeStatement();
+	}
+
+	/**
 	 * Find working time models by type
 	 *
 	 * @param string $type

@@ -215,6 +215,84 @@ describe('ArbeitszeitCheckUtils', () => {
     expect(u.isExternalUrl('https://example.org/apps/arbeitszeitcheck/api/admin/users')).toBe(true)
   })
 
+  it('normalizeMutatingFetchInit fills JSON {} on bare POST with Content-Type', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const init = u.normalizeMutatingFetchInit({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', requesttoken: 'tok' },
+    })
+    expect(init.body).toBe(JSON.stringify({}))
+    expect(init.headers['Content-Type']).toBe('application/json')
+  })
+
+  it('normalizeMutatingFetchInit fills JSON {} on bare DELETE without Content-Type', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const init = u.normalizeMutatingFetchInit({
+      method: 'DELETE',
+      headers: { requesttoken: 'tok' },
+    })
+    expect(init.body).toBe(JSON.stringify({}))
+    expect(init.headers['Content-Type']).toBe('application/json')
+  })
+
+  it('normalizeMutatingFetchInit preserves explicit JSON bodies', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const body = JSON.stringify({ licenseKey: 'AZC2' })
+    const init = u.normalizeMutatingFetchInit({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    })
+    expect(init.body).toBe(body)
+  })
+
+  it('normalizeMutatingFetchInit leaves GET untouched', () => {
+    const u = window.ArbeitszeitCheckUtils
+    const init = u.normalizeMutatingFetchInit({
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    })
+    expect(init.body).toBeUndefined()
+  })
+
+  it('ajax sends JSON {} body on bare mutating POST', async () => {
+    const u = window.ArbeitszeitCheckUtils
+    window.OC = { ...(window.OC || {}), requestToken: 'tok-ajax', generateUrl: (p) => p }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    })
+
+    await u.ajax('/apps/arbeitszeitcheck/api/dashboard-widget/clock/out', { method: 'POST' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const init = fetchSpy.mock.calls[0][1]
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe(JSON.stringify({}))
+    expect(init.headers['Content-Type']).toBe('application/json')
+
+    fetchSpy.mockRestore()
+  })
+
+  it('ajax preserves explicit JSON payloads on POST', async () => {
+    const u = window.ArbeitszeitCheckUtils
+    window.OC = { ...(window.OC || {}), requestToken: 'tok-ajax', generateUrl: (p) => p }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    })
+
+    await u.ajax('/apps/arbeitszeitcheck/api/dashboard-widget/clock/in', {
+      method: 'POST',
+      data: { projectCheckProjectId: '9' },
+    })
+    const init = fetchSpy.mock.calls[0][1]
+    expect(JSON.parse(init.body)).toEqual({ projectCheckProjectId: '9' })
+
+    fetchSpy.mockRestore()
+  })
+
   it('ajax blocks external URLs by default', async () => {
     const u = window.ArbeitszeitCheckUtils
     const fetchSpy = vi.spyOn(globalThis, 'fetch')

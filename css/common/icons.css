@@ -66,7 +66,7 @@ svg[class*='__glyph'],
 /* Notification icon fills: common/notification-surfaces.css */
 
 .form-error__icon {
-	color: var(--color-error, #c32c2c);
+	color: var(--color-error);
 }
 
 /* Confirm dialogs (portaled modals) */
@@ -153,7 +153,7 @@ svg[class*='__glyph'],
 }
 
 .azc-datepicker-toggle:focus-visible {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 

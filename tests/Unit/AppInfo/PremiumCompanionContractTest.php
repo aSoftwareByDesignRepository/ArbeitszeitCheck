@@ -43,6 +43,7 @@ class PremiumCompanionContractTest extends TestCase
 		$this->assertNotFalse($src);
 		// companion.min must stay exact "1" for additive-only Phase D.
 		$this->assertStringContainsString("'arbeitszeitcheck.companion.min' => 1", $src);
+		$this->assertStringContainsString("'vacationUnitAware' => true", $src);
 		$this->assertStringNotContainsString('premium_surcharges', $src);
 	}
 

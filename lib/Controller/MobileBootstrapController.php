@@ -71,6 +71,7 @@ class MobileBootstrapController extends Controller {
 		// Envelope is always returned when a mobile plan exists so clients can verify
 		// the org license locally and show LicenseGate (no seat) vs UnofficialServer.
 		$envelope = $planActive ? $this->licenseService->buildEnvelope() : null;
+		$unitAware = $this->isVacationUnitAwareClient();
 
 		return new JSONResponse([
 			'success' => true,
@@ -81,7 +82,7 @@ class MobileBootstrapController extends Controller {
 				'canManage' => $canManage,
 				'isAdmin' => $isAdmin,
 				'pushAvailable' => $pushAvailable,
-				'employee' => $this->widgetDataService->getEmployeeWidgetData($userId),
+				'employee' => $this->widgetDataService->getEmployeeWidgetData($userId, $unitAware),
 				'capabilities' => $this->capabilities->getCapabilities()['arbeitszeitcheck'] ?? [],
 				'features' => [
 					'monthClosure' => MonthClosureFeature::isEnabledFromIConfig($this->config),
@@ -127,7 +128,20 @@ class MobileBootstrapController extends Controller {
 
 		return new JSONResponse([
 			'success' => true,
-			'data' => $this->widgetDataService->getEmployeeWidgetData($user->getUID()),
+			'data' => $this->widgetDataService->getEmployeeWidgetData(
+				$user->getUID(),
+				$this->isVacationUnitAwareClient()
+			),
 		]);
+	}
+
+	/**
+	 * Employee companion declares hours-unit support via X-AZC-Vacation-Unit-Aware: 1.
+	 * Absent/unknown → treat as unaware (Q8 fail-closed for NN-08).
+	 */
+	private function isVacationUnitAwareClient(): bool
+	{
+		$raw = trim((string)$this->request->getHeader('X-AZC-Vacation-Unit-Aware'));
+		return $raw === '1' || strcasecmp($raw, 'true') === 0;
 	}
 }

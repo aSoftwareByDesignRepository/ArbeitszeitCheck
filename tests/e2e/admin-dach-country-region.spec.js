@@ -95,7 +95,7 @@ test.describe('DACH country & region (admin)', () => {
 
 	test('settings UI: country radios, region filter, aria-live (keyboard)', async ({ page }) => {
 		await login(page, credsFromEnv('ADMIN'))
-		await page.goto('/apps/arbeitszeitcheck/admin/settings')
+		await page.goto('/apps/arbeitszeitcheck/admin/settings/regional')
 		await assertArbeitszeitcheckLoaded(page)
 		await page.waitForSelector('#section-regional-heading', { timeout: 30000 })
 

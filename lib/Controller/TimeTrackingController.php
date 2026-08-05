@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\BusinessRuleCode;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCA\ArbeitszeitCheck\Exception\TimeCaptureForbiddenException;
@@ -86,16 +87,25 @@ class TimeTrackingController extends Controller
 		}
 
 		if ($e instanceof BusinessRuleException) {
-			return new JSONResponse([
+			$payload = [
 				'success' => false,
 				'error' => $e->getMessage(),
-			], Http::STATUS_BAD_REQUEST);
+				'message' => $e->getMessage(),
+			];
+			$reasonCode = $e->getReasonCode();
+			if ($reasonCode !== null && $reasonCode !== '') {
+				$payload['error_code'] = $reasonCode;
+			}
+			return new JSONResponse($payload, Http::STATUS_BAD_REQUEST);
 		}
 
 		if ($e instanceof LockedException) {
+			$message = $this->l10n->t('Another time-tracking action is in progress on your account. Please wait a moment and try again.');
 			return new JSONResponse([
 				'success' => false,
-				'error' => $this->l10n->t('Another time-tracking action is in progress on your account. Please wait a moment and try again.'),
+				'error' => $message,
+				'message' => $message,
+				'error_code' => BusinessRuleCode::LOCKED,
 			], Http::STATUS_LOCKED);
 		}
 
@@ -110,6 +120,21 @@ class TimeTrackingController extends Controller
 			'success' => false,
 			'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.'),
 		], Http::STATUS_INTERNAL_SERVER_ERROR);
+	}
+
+	/**
+	 * @return JSONResponse HTTP 409 with stable error_code for closed months
+	 */
+	private function monthFinalizedResponse(?string $errorOverride = null): JSONResponse
+	{
+		$message = $errorOverride
+			?? $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.');
+		return new JSONResponse([
+			'success' => false,
+			'error' => $message,
+			'message' => $message,
+			'error_code' => BusinessRuleCode::MONTH_FINALIZED,
+		], Http::STATUS_CONFLICT);
 	}
 
 	/**
@@ -137,10 +162,7 @@ class TimeTrackingController extends Controller
 				'timeEntry' => $summary
 			]);
 		} catch (MonthFinalizedException $e) {
-			return new JSONResponse([
-				'success' => false,
-				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
-			], Http::STATUS_CONFLICT);
+			return $this->monthFinalizedResponse();
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
 			return $this->buildSafeErrorResponse($e);
@@ -172,10 +194,7 @@ class TimeTrackingController extends Controller
 				'timeEntry' => $summary
 			]);
 		} catch (MonthFinalizedException $e) {
-			return new JSONResponse([
-				'success' => false,
-				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
-			], Http::STATUS_CONFLICT);
+			return $this->monthFinalizedResponse();
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
 			return $this->buildSafeErrorResponse($e);
@@ -226,6 +245,8 @@ class TimeTrackingController extends Controller
 				return new JSONResponse([
 					'success' => false,
 					'error' => $this->l10n->t('Automatic clock-out blocked: this calendar month has been finalized. Please contact an administrator.'),
+					'message' => $this->l10n->t('Automatic clock-out blocked: this calendar month has been finalized. Please contact an administrator.'),
+					'error_code' => BusinessRuleCode::MONTH_FINALIZED,
 					'status' => $this->timeTrackingService->getStatus($userId),
 				], Http::STATUS_CONFLICT);
 			}
@@ -269,10 +290,7 @@ class TimeTrackingController extends Controller
 				'timeEntry' => $summary
 			]);
 		} catch (MonthFinalizedException $e) {
-			return new JSONResponse([
-				'success' => false,
-				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
-			], Http::STATUS_CONFLICT);
+			return $this->monthFinalizedResponse();
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
 			return $this->buildSafeErrorResponse($e);
@@ -304,10 +322,7 @@ class TimeTrackingController extends Controller
 				'timeEntry' => $summary
 			]);
 		} catch (MonthFinalizedException $e) {
-			return new JSONResponse([
-				'success' => false,
-				'error' => $this->l10n->t('This calendar month is finalized. Contact an administrator if a correction must be made.'),
-			], Http::STATUS_CONFLICT);
+			return $this->monthFinalizedResponse();
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in TimeTrackingController: ' . $e->getMessage(), ["exception" => $e]);
 			return $this->buildSafeErrorResponse($e);

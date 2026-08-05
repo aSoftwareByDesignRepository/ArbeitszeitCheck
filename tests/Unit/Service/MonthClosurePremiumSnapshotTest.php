@@ -93,4 +93,52 @@ class MonthClosurePremiumSnapshotTest extends TestCase
 		$payload = $this->makeService($premium)->buildCanonicalPayload('u1', 2026, 8);
 		$this->assertArrayNotHasKey('premium', $payload);
 	}
+
+	public function testGetFinalizedMonthlyReportAttachesFrozenPremium(): void
+	{
+		$closure = new \OCA\ArbeitszeitCheck\Db\MonthClosure();
+		$closure->setStatus(\OCA\ArbeitszeitCheck\Db\MonthClosure::STATUS_FINALIZED);
+		$closure->setCanonicalPayload(json_encode([
+			'report' => ['type' => 'monthly', 'total_hours' => 160],
+			'premium' => [
+				'enabled' => true,
+				'policy_version' => 7,
+				'summary' => ['buckets' => [['id' => 'night', 'hours' => 3.5, 'label' => 'Night']]],
+			],
+		], JSON_THROW_ON_ERROR));
+		$closure->setSnapshotHash('abc123');
+		$closure->setVersion(2);
+
+		$mapper = $this->createMock(MonthClosureMapper::class);
+		$mapper->method('findByUserAndMonthOptional')->with('u1', 2026, 8)->willReturn($closure);
+
+		$reporting = $this->createMock(ReportingService::class);
+		$svc = new MonthClosureService(
+			$mapper,
+			$this->createMock(MonthClosureRevisionMapper::class),
+			$reporting,
+			$this->createMock(TimeEntryMapper::class),
+			$this->createMock(AbsenceMapper::class),
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(IDBConnection::class),
+			$this->createMock(IConfig::class),
+			$this->createMock(IUserManager::class),
+			$this->createMock(LoggerInterface::class),
+			$this->createMock(PermissionService::class),
+			$this->createMock(OvertimeBankService::class),
+			$this->createMock(OvertimePayoutMapper::class),
+			null,
+			null,
+			$this->createMock(PremiumSurchargeService::class),
+		);
+
+		$report = $svc->getFinalizedMonthlyReportForUser('u1', 2026, 8);
+		$this->assertNotNull($report);
+		$this->assertTrue($report['from_month_closure_snapshot']);
+		$this->assertSame('abc123', $report['snapshot_hash']);
+		$this->assertSame(2, $report['month_closure_version']);
+		$this->assertTrue($report['premium']['enabled']);
+		$this->assertSame(7, $report['premium']['policy_version']);
+		$this->assertSame(3.5, $report['premium']['summary']['buckets'][0]['hours']);
+	}
 }

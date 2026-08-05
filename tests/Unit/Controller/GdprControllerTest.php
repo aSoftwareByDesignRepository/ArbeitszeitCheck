@@ -26,6 +26,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
+use OCP\IDBConnection;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -84,6 +85,7 @@ class GdprControllerTest extends TestCase
 		$this->request = $this->createMock(IRequest::class);
 		$this->config = $this->createMock(IConfig::class);
 		$this->config->method('getAppValue')->willReturn('2');
+		$db = $this->createMock(IDBConnection::class);
 
 		$this->controller = new GdprController(
 			'arbeitszeitcheck',
@@ -95,7 +97,8 @@ class GdprControllerTest extends TestCase
 			$this->auditLogMapper,
 			$this->userSession,
 			$this->l10n,
-			$this->config
+			$this->config,
+			$db
 		);
 	}
 

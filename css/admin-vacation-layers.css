@@ -15,6 +15,21 @@
  * @license AGPL-3.0-or-later
  */
 
+/* WCAG 1.4.1 + 1.4.3: inline help links — main-text ink (exclude CTA anchors). */
+#app-content.azc-app--admin-vacation-layers .form-help a:not(.btn):not(.azc-btn) {
+	color: var(--azc-text, var(--color-main-text)) !important;
+	font-weight: 700;
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+#app-content.azc-app--admin-vacation-layers .form-help a:not(.btn):not(.azc-btn):hover,
+#app-content.azc-app--admin-vacation-layers .form-help a:not(.btn):not(.azc-btn):focus-visible {
+	color: var(--azc-text, var(--color-main-text)) !important;
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 60%, transparent);
+	outline-offset: 2px;
+}
+
 /* -------------------------------------------------------------------------
    Page layout (unified shell — matches admin-holidays)
    ------------------------------------------------------------------------- */
@@ -115,7 +130,7 @@
   width: 2.25rem;
   height: 1.75rem;
   border-radius: 6px;
-  border: 2px solid var(--color-primary-element, #00679e);
+  border: 2px solid var(--color-primary-element);
   background: var(--color-main-background);
   color: var(--color-main-text);
   font-size: .8125rem;
@@ -125,12 +140,12 @@
   letter-spacing: .02em;
 }
 .layer-card--l2 .layer-card__chip {
-  border-color: var(--color-warning, #b08100);
-  background: color-mix(in srgb, var(--color-warning, #b08100) 10%, var(--color-main-background));
+  border-color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-main-background));
 }
 .layer-card--l1 .layer-card__chip {
-  border-color: var(--color-primary-element, #00679e);
-  background: color-mix(in srgb, var(--color-primary-element, #00679e) 10%, var(--color-main-background));
+  border-color: var(--color-primary-element);
+  background: color-mix(in srgb, var(--color-primary-element) 10%, var(--color-main-background));
 }
 .layer-card--l0 .layer-card__chip {
   border-color: var(--color-border);

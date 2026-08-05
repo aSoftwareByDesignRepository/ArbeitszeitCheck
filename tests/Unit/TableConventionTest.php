@@ -16,6 +16,10 @@ class TableConventionTest extends TestCase
 {
 	private const TEMPLATE_SKIP = [
 		'admin-notifications.php', // matrix grids use azc-table--matrix
+		'admin-overtime-settings.php', // hosts premium + bank partials
+		'admin-policy-overtime-alerts.php', // matrix grids use azc-table--matrix
+		'admin-policy-hr-office.php', // matrix grids use azc-table--matrix
+		'admin-policy-hour-premiums.php', // premium category table
 		'admin-kiosk.php', // compact kiosk credential tables (azc-table, no hover)
 		'admin-license.php', // license seat matrix (azc-license-seats-table)
 	];

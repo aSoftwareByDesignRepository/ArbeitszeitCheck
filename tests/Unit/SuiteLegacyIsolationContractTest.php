@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Suite legacy isolation (CHECK-SUITE L1): ArbeitszeitCheck must remain usable
- * without CustomerCheck / InvoicingCheck / InventoryCheck / MaintenanceCheck.
+ * without CustomerCheck / InvoiceCheck / InventoryCheck / MaintenanceCheck.
  *
  * @see planning/check-productivity-suite/LEGACY-SAFETY.md
  */

@@ -21,7 +21,7 @@
 }
 
 #app-content.azc-app--admin-holidays .admin-holidays__help a {
-	color: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element);
 	text-decoration: underline;
 }
 
@@ -82,7 +82,7 @@
 }
 
 #app-content.azc-app--admin-holidays .admin-holidays__auto-reseed-notice a {
-	color: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element);
 	text-decoration: underline;
 }
 

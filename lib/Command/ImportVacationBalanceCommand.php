@@ -13,9 +13,12 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Command;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
+use OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService;
+use OCA\ArbeitszeitCheck\Service\VacationUnitService;
 use OCP\IUserManager;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -31,6 +34,8 @@ class ImportVacationBalanceCommand extends Command
 		private VacationYearBalanceMapper $vacationYearBalanceMapper,
 		private AuditLogMapper $auditLogMapper,
 		private VacationAllocationService $vacationAllocationService,
+		private VacationUnitService $vacationUnitService,
+		private VacationUnitMigrationService $vacationUnitMigrationService,
 	) {
 		parent::__construct();
 	}
@@ -40,7 +45,7 @@ class ImportVacationBalanceCommand extends Command
 		$this
 			->setName('arbeitszeitcheck:import-vacation-balance')
 			->setDescription('Import vacation carryover (Resturlaub) opening balances from a CSV file.')
-			->addArgument('file', InputArgument::REQUIRED, 'Path to CSV file (columns: user_id,year,carryover_days)')
+			->addArgument('file', InputArgument::REQUIRED, 'Path to CSV file (columns: user_id,year,carryover_days — amount is in the active vacation unit)')
 			->addOption('dry-run', null, InputOption::VALUE_NONE, 'Parse and validate only; do not write to the database.');
 	}
 
@@ -81,7 +86,10 @@ class ImportVacationBalanceCommand extends Command
 		$ok = 0;
 		$skipped = 0;
 		$lineNum = 1;
+		$hoursMode = $this->vacationUnitService->isHoursMode();
+		$amountCeiling = $hoursMode ? 4000.0 : 366.0;
 
+		$rows = [];
 		while (($row = fgetcsv($fh)) !== false) {
 			$lineNum++;
 			if (count($row) < 3) {
@@ -97,8 +105,8 @@ class ImportVacationBalanceCommand extends Command
 				$skipped++;
 				continue;
 			}
-			if ($days < 0 || $days > 366) {
-				$io->warning("Line $lineNum: carryover_days out of range, skipped.");
+			if ($days < 0 || $days > $amountCeiling) {
+				$io->warning("Line $lineNum: carryover amount out of range (0–{$amountCeiling}), skipped.");
 				$skipped++;
 				continue;
 			}
@@ -110,33 +118,56 @@ class ImportVacationBalanceCommand extends Command
 				continue;
 			}
 
-			if (!$dryRun) {
-				$stored = $this->vacationAllocationService->applyCapToOpeningBalance($days);
-				$this->vacationYearBalanceMapper->upsert($userId, $year, $stored);
-				try {
-					$this->auditLogMapper->logAction(
-						$userId,
-						'vacation_balance_import',
-						'vacation_year_balance',
-						null,
-						null,
-						['year' => $year, 'carryover_days' => $stored, 'carryover_days_csv' => $days],
-						'cli'
-					);
-				} catch (\Throwable $e) {
-					// Audit is best-effort for CLI
-				}
-			}
-			$ok++;
+			$rows[] = ['user_id' => $userId, 'year' => $year, 'days' => $days, 'line' => $lineNum];
 		}
 		fclose($fh);
 
 		if ($dryRun) {
-			$io->success("Dry run: $ok rows would be imported ($skipped skipped).");
-		} else {
-			$io->success("Imported $ok carryover rows ($skipped skipped).");
+			$io->success('Dry run: ' . count($rows) . " rows would be imported ($skipped skipped).");
+			return Command::SUCCESS;
 		}
 
+		try {
+			$this->vacationUnitMigrationService->withIdleShared(function () use ($rows, $hoursMode, &$ok): void {
+				foreach ($rows as $row) {
+					$stored = $this->vacationAllocationService->applyCapToOpeningBalance($row['days']);
+					$this->vacationYearBalanceMapper->upsert(
+						$row['user_id'],
+						$row['year'],
+						$stored,
+						$hoursMode ? $stored : null,
+						!$hoursMode
+					);
+					try {
+						$this->auditLogMapper->logAction(
+							$row['user_id'],
+							'vacation_balance_import',
+							'vacation_year_balance',
+							null,
+							null,
+							[
+								'year' => $row['year'],
+								'carryover_days' => $stored,
+								'carryover_days_csv' => $row['days'],
+								'vacation_unit' => $hoursMode ? 'hours' : 'days',
+							],
+							'cli'
+						);
+					} catch (\Throwable $e) {
+						// Audit is best-effort for CLI
+					}
+					$ok++;
+				}
+			});
+		} catch (\RuntimeException $e) {
+			if ($e->getMessage() === Constants::VAC_UNIT_MIGRATE_IN_PROGRESS) {
+				$io->error('Vacation unit migration is in progress. Retry the import after it finishes.');
+				return Command::FAILURE;
+			}
+			throw $e;
+		}
+
+		$io->success("Imported $ok carryover rows ($skipped skipped).");
 		return Command::SUCCESS;
 	}
 }

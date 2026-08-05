@@ -163,16 +163,17 @@ test.describe('Admin Support & Us page', () => {
 		await expect(partnerCta).toBeFocused()
 	})
 
-	test('settings no longer embeds Support Us; cross-link reaches the page', async ({ page }) => {
+	test('settings no longer embeds Support Us; nav reaches the page', async ({ page }) => {
 		await page.setViewportSize({ width: 1280, height: 900 })
 		await login(page, credsFromEnv('ADMIN'))
-		await page.goto('/apps/arbeitszeitcheck/admin/settings')
+		await page.goto('/apps/arbeitszeitcheck/admin/settings/access')
 		await assertArbeitszeitcheckLoaded(page)
 
 		await expect(page.locator('#azc-support-us')).toHaveCount(0)
-		const crossLink = page.locator('.azc-admin-settings__support-link a')
-		await expect(crossLink).toBeVisible()
-		await crossLink.click()
+		await expect(page.locator('.azc-admin-settings__support-link')).toHaveCount(0)
+		const supportNav = page.locator('#admin-subnav a[href*="/admin/support-us"]')
+		await expect(supportNav).toBeVisible()
+		await supportNav.click()
 		await expect(page).toHaveURL(/\/admin\/support-us/)
 		await expect(page.locator('#azc-support-us')).toBeVisible()
 	})

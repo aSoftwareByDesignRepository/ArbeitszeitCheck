@@ -113,7 +113,7 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
                             — <?php p($l->t('(no data yet)')); ?>
                         <?php endif; ?>
                         <span class="form-help compliance-dashboard__score-hint">
-                            <?php p($l->t('This shows how well your working time follows the configured labour law. 100% means everything is perfect.')); ?>
+                            <?php p($l->t('This shows how well your working time follows the configured labour law. 100%% means everything is perfect.')); ?>
                         </span>
                     </p>
                 <?php endif; ?>

@@ -39,6 +39,10 @@
 	--azc-icon-stroke: 2;
 
 	--azc-tab-num: tabular-nums;
+
+	/* Touch targets (WCAG 2.5.5 / design-system §0.4) */
+	--azc-touch: 44px;
+	--azc-touch-lg: 48px;
 }
 
 /* Theme-bound tokens — must follow body [data-theme-*] where NC defines --color-* */
@@ -60,15 +64,39 @@ body {
 	--azc-tint-danger: color-mix(in srgb, var(--color-error-text, var(--color-error)) 18%, var(--color-main-background));
 	--azc-tint-info: color-mix(in srgb, var(--color-primary-element) 16%, var(--color-main-background));
 
+	--azc-shadow-sm: 0 1px 2px color-mix(in srgb, var(--color-main-text) 8%, transparent);
+	--azc-shadow-md: 0 8px 24px color-mix(in srgb, var(--color-main-text) 12%, transparent);
+
+	/* Modal / drawer scrim — theme-aware, never raw black rgba */
+	--azc-scrim: color-mix(in srgb, var(--color-main-text) 45%, transparent);
+
+	/*
+	 * Solid danger CTA fill (design-system §3.3 / WCAG 1.4.3).
+	 * NC 30+ maps --color-error to a pale tint — never put on-fill text on that.
+	 * Use --color-element-error; dark themes darken the fill so ink stays ≥ 4.5:1.
+	 */
+	--azc-danger-fill: var(--color-element-error, var(--color-error));
+	--azc-danger-on-fill: var(--color-primary-element-text, var(--color-primary-text));
+	--azc-danger-ink: var(--color-error-text, var(--color-error));
+
 	/*
 	 * Notification icon wells — pale tint + semantic stroke (see .azc-page-header__icon).
 	 * NC *-text tokens are tuned per theme for contrast on main-background.
 	 */
-	--azc-notif-fg-info: var(--color-primary-element, #00679e);
-	--azc-notif-fg-warning: var(--color-warning-text, var(--color-warning, #a37200));
-	--azc-notif-fg-success: var(--color-success-text, var(--color-success, #2d7b46));
-	--azc-notif-fg-danger: var(--color-error-text, var(--color-error, #db0606));
+	--azc-notif-fg-info: var(--color-primary-element);
+	--azc-notif-fg-warning: var(--color-warning-text, var(--color-warning));
+	--azc-notif-fg-success: var(--color-success-text, var(--color-success));
+	--azc-notif-fg-danger: var(--color-error-text, var(--color-error));
+}
 
-	--azc-shadow-sm: 0 1px 2px color-mix(in srgb, var(--color-main-text) 8%, transparent);
-	--azc-shadow-md: 0 8px 24px color-mix(in srgb, var(--color-main-text) 12%, transparent);
+/* Bright accent fills on dark themes fail AA with white/black ink — darken fill + use main-text. */
+body[data-theme-dark],
+body[data-theme-dark-highcontrast] {
+	--azc-danger-fill: color-mix(
+		in srgb,
+		var(--color-element-error, var(--color-error)) 40%,
+		var(--color-main-background)
+	);
+	/* primary-element-text is often black (for light CTAs) — unusable on medium red */
+	--azc-danger-on-fill: var(--color-main-text);
 }

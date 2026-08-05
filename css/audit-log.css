@@ -152,14 +152,14 @@
 #app-content.azc-app--admin-audit-log .audit-log-filter__field .azc-datepicker-toggle:focus-visible,
 #app-content.azc-app--admin-audit-log .audit-log-filter__field .form-input:focus-visible,
 #app-content.azc-app--admin-audit-log .audit-log-filter__field .form-select:focus-visible {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
 #app-content.azc-app--admin-audit-log .audit-log-filter__field .form-input[aria-invalid='true'],
 #app-content.azc-app--admin-audit-log .audit-log-filter__field .form-select[aria-invalid='true'] {
-	border-color: var(--color-error, #e9322d);
-	outline-color: var(--color-error, #e9322d);
+	border-color: var(--color-error);
+	outline-color: var(--color-error);
 }
 
 #app-content.azc-app--admin-audit-log .audit-log-filter__actions {

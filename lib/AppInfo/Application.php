@@ -242,6 +242,9 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IL10N::class),
 				$c->query(IDBConnection::class),
 				$c->query(\OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService::class),
 			);
 		});
 
@@ -560,6 +563,17 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Service\MonthClosureService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\TimeZoneService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\VacationYearWindowResolver::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationHoursDebitService::class),
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\VacationHoursDebitService::class, function ($c) {
+			return new \OCA\ArbeitszeitCheck\Service\VacationHoursDebitService(
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper::class),
+				$c->query(HolidayService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class),
 			);
 		});
 
@@ -657,6 +671,28 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Service\EntitlementSnapshotService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\VacationProrationService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\VacationYearWindowResolver::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationHoursDebitService::class),
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class, function ($c) {
+			return new \OCA\ArbeitszeitCheck\Service\VacationUnitService(
+				$c->query(\OCP\IConfig::class),
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService::class, function ($c) {
+			return new \OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService(
+				$c->query(\OCP\IConfig::class),
+				$c->query(\OCP\IDBConnection::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\OrgVacationDefaultMapper::class),
+				null,
+				$c->query(\OCP\Lock\ILockingProvider::class),
 			);
 		});
 
@@ -696,7 +732,8 @@ class Application extends App implements IBootstrap {
 				$c->query(IDBConnection::class),
 				$c->query(\OCP\Lock\ILockingProvider::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\TeamMemberMapper::class),
-				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class)
+				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class)
 			);
 		});
 
@@ -708,7 +745,20 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCA\ArbeitszeitCheck\Db\VacationRolloverLogMapper::class),
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
-				$c->query(PermissionService::class)
+				$c->query(PermissionService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService::class),
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Command\ImportVacationBalanceCommand::class, function ($c) {
+			return new \OCA\ArbeitszeitCheck\Command\ImportVacationBalanceCommand(
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\AuditLogMapper::class),
+				$c->query(VacationAllocationService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService::class),
 			);
 		});
 
@@ -827,7 +877,9 @@ class Application extends App implements IBootstrap {
 			return new DatevExportService(
 				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),
 				$c->query(\OCP\IConfig::class),
-				$c->query(\OCP\IL10N::class)
+				$c->query(\OCP\IL10N::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\PremiumSurchargeService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\MonthClosureMapper::class)
 			);
 		});
 

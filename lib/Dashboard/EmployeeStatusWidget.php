@@ -142,24 +142,46 @@ class EmployeeStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, 
 		);
 
 		// ── Item 5: vacation summary ─────────────────────────────────────────────
+		$vacationYearError = $data['vacationYearError'] ?? null;
+		$vacationYearLabel = trim((string)($data['vacationYearLabel'] ?? ''));
 		$vacationYear = (int)$data['vacationYear'];
 		$vacationRemaining = number_format((float)$data['vacationRemaining'], 1);
 		$vacationTotal = number_format((float)$data['vacationEntitlement'], 1);
-		$items[] = new WidgetItem(
-			$this->l10n->t('Vacation %1$s', [(string)$vacationYear]),
-			$this->l10n->t('%1$s / %2$s days remaining', [$vacationRemaining, $vacationTotal]),
-			$url, $icon, $ts . '-vacation'
-		);
+		$vacationUnit = (string)($data['vacationUnit'] ?? 'days');
+		$vacationTitle = $vacationYearLabel !== ''
+			? $this->l10n->t('Vacation %1$s', [$vacationYearLabel])
+			: $this->l10n->t('Vacation %1$s', [(string)$vacationYear]);
+		if ($vacationYearError) {
+			$items[] = new WidgetItem(
+				$vacationTitle,
+				$this->l10n->t('Ask your admin to set your hire date'),
+				$url, $icon, $ts . '-vacation'
+			);
+		} else {
+			$vacationSubtitle = $vacationUnit === 'hours'
+				? $this->l10n->t('%1$s / %2$s hours remaining', [$vacationRemaining, $vacationTotal])
+				: $this->l10n->t('%1$s / %2$s days remaining', [$vacationRemaining, $vacationTotal]);
+			$items[] = new WidgetItem(
+				$vacationTitle,
+				$vacationSubtitle,
+				$url, $icon, $ts . '-vacation'
+			);
+		}
 
 		// ── Item 6: vacation pool split (annual + carryover) ───────────────────
-		$carryover = number_format((float)$data['vacationCarryoverUsable'], 1);
-		$annualPool = max(0.0, (float)$data['vacationRemaining'] - (float)$data['vacationCarryoverUsable']);
-		$annual = number_format($annualPool, 1);
-		$items[] = new WidgetItem(
-			$this->l10n->t('Vacation pool'),
-			$this->l10n->t('Annual: %1$s d · Carryover: %2$s d', [$annual, $carryover]),
-			$url, $icon, $ts . '-vacation-pool'
-		);
+		if (!$vacationYearError) {
+			$carryover = number_format((float)$data['vacationCarryoverUsable'], 1);
+			$annualPool = max(0.0, (float)$data['vacationRemaining'] - (float)$data['vacationCarryoverUsable']);
+			$annual = number_format($annualPool, 1);
+			$poolSubtitle = $vacationUnit === 'hours'
+				? $this->l10n->t('Annual: %1$s h · Carryover: %2$s h', [$annual, $carryover])
+				: $this->l10n->t('Annual: %1$s d · Carryover: %2$s d', [$annual, $carryover]);
+			$items[] = new WidgetItem(
+				$this->l10n->t('Vacation pool'),
+				$poolSubtitle,
+				$url, $icon, $ts . '-vacation-pool'
+			);
+		}
 
 		// ── Item 7 (conditional): break compliance warning ──────────────────────
 		if ((bool)$data['breakRequired'] && (int)$data['remainingBreakMinutes'] > 0) {
@@ -253,7 +275,7 @@ class EmployeeStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, 
 			return $this->cachedWidgetData;
 		}
 		try {
-			$this->cachedWidgetData = $this->widgetDataService->getEmployeeWidgetData($userId);
+			$this->cachedWidgetData = $this->widgetDataService->getEmployeeWidgetData($userId, true);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Employee dashboard widget: failed to load data', [
 				'exception' => $e,
@@ -286,14 +308,23 @@ class EmployeeStatusWidget implements IAPIWidgetV2, IButtonWidget, IIconWidget, 
 			'remainingBreakMinutes' => 0,
 			'breakWarningLevel' => 'none',
 			'vacationYear' => $y,
+			'vacationYearLabel' => (string)$y,
+			'vacationYearError' => null,
 			'vacationRemaining' => 0.0,
 			'vacationEntitlement' => 0.0,
 			'vacationUsed' => 0.0,
+			'vacationUnit' => 'days',
 			'vacationCarryover' => 0.0,
 			'vacationCarryoverUsable' => 0.0,
 			'timeCapture' => [
 				'clockStampingEnabled' => true,
 				'manualTimeEntryEnabled' => true,
+			],
+			'atDailyMaximum' => false,
+			'projectCheck' => [
+				'available' => false,
+				'linkingEnabled' => false,
+				'projects' => [],
 			],
 		];
 	}

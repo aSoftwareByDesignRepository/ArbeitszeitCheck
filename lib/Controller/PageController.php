@@ -29,12 +29,15 @@ use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\OvertimeDisplayService;
 use OCA\ArbeitszeitCheck\Service\OvertimeBankService;
 use OCA\ArbeitszeitCheck\Service\OvertimePayoutService;
+use OCA\ArbeitszeitCheck\Service\EmployeeSettingsSectionCatalog;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfile;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCP\AppFramework\Controller;
-use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\NotFoundResponse;
+use OCP\AppFramework\Http\RedirectResponse;
+use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IConfig;
 use OCP\IRequest;
@@ -382,6 +385,8 @@ class PageController extends Controller
 					'vacation_year_mode' => (string)($vacationStats['vacation_year_mode'] ?? 'calendar'),
 					'vacation_year_label' => (string)($vacationStats['vacation_year_label'] ?? (string)$currentYear),
 					'vacation_year_error' => $vacationStats['vacation_year_error'] ?? null,
+					'vacation_unit' => (string)($vacationStats['vacation_unit'] ?? 'days'),
+					'vacation_hours_per_day' => (float)($vacationStats['vacation_hours_per_day'] ?? Constants::DEFAULT_VACATION_HOURS_PER_DAY),
 				],
 			];
 
@@ -651,6 +656,8 @@ class PageController extends Controller
 				'vacation_year_mode' => (string)($vacationStats['vacation_year_mode'] ?? 'calendar'),
 				'vacation_year_label' => (string)($vacationStats['vacation_year_label'] ?? (string)$currentYear),
 				'vacation_year_error' => $vacationStats['vacation_year_error'] ?? null,
+				'vacation_unit' => (string)($vacationStats['vacation_unit'] ?? 'days'),
+				'vacation_hours_per_day' => (float)($vacationStats['vacation_hours_per_day'] ?? Constants::DEFAULT_VACATION_HOURS_PER_DAY),
 				'pending_requests' => $pendingCount,
 			],
 			'employeeHasAssignableManager' => $employeeHasAssignableManager,
@@ -866,14 +873,36 @@ class PageController extends Controller
 	}
 
 	/**
-	 * Settings page
-	 *
+	 * My settings index → default section (SETTINGS-PAGES-STANDARD).
 	 */
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function settings(): TemplateResponse
+	public function settings(): RedirectResponse
 	{
-		$this->registerFrontEndAssets('settings', 'settings', ['common/projectcheck']);
+		$catalog = new EmployeeSettingsSectionCatalog();
+		return new RedirectResponse(
+			$catalog->url($this->urlGenerator, EmployeeSettingsSectionCatalog::DEFAULT_SECTION)
+		);
+	}
+
+	/**
+	 * My settings section page (`/settings/{section}`).
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function settingsSection(string $section): Response
+	{
+		$catalog = new EmployeeSettingsSectionCatalog();
+		if (!$catalog->isSection($section)) {
+			return new NotFoundResponse();
+		}
+
+		$this->registerFrontEndAssets(
+			'settings',
+			'settings',
+			['common/projectcheck'],
+			['employee-settings-legacy-redirect']
+		);
 
 		try {
 			$userId = $this->getUserId();
@@ -881,12 +910,25 @@ class PageController extends Controller
 			$absenceCount = $this->absenceMapper->countByUser($userId);
 			$navFlags = $this->getNavigationFlags($userId);
 
-			$params = $this->buildShellParams(
+			$shell = $this->buildShellParams(
 				'settings',
-				$this->l10n->t('My settings'),
-				$this->l10n->t('Your personal preferences: notifications and break settings'),
+				$catalog->label($this->l10n, $section),
+				$catalog->help($this->l10n, $section),
 				$navFlags,
-			) + [
+			);
+			// SETTINGS-PAGES-STANDARD §7: App → My settings (link) → section
+			$shell['breadcrumbSection'] = '';
+			$shell['breadcrumbParent'] = [
+				'label' => $this->l10n->t('My settings'),
+				'url' => $catalog->url(
+					$this->urlGenerator,
+					EmployeeSettingsSectionCatalog::DEFAULT_SECTION
+				),
+			];
+
+			$params = $shell + [
+				'settingsSection' => $section,
+				'settingsPages' => $catalog->chipBarPayload($this->l10n, $this->urlGenerator, $section),
 				'stats' => [
 					'total_time_entries' => $timeEntryCount,
 					'total_absences' => $absenceCount,
@@ -898,17 +940,29 @@ class PageController extends Controller
 			$response = new TemplateResponse('arbeitszeitcheck', 'settings', $params);
 			return $this->configureCSP($response);
 		} catch (\Throwable $e) {
-			\OCP\Log\logger('arbeitszeitcheck')->error('Error in PageController::settings: ' . $e->getMessage(), ["exception" => $e]);
+			\OCP\Log\logger('arbeitszeitcheck')->error('Error in PageController::settingsSection: ' . $e->getMessage(), ['exception' => $e]);
 			$errorMessage = $this->buildSafePageErrorMessage($e);
 			$navFlags = $this->getNavigationFlagsForSession();
-			$response = new TemplateResponse('arbeitszeitcheck', 'settings', $this->buildShellParams(
+			$shell = $this->buildShellParams(
 				'settings',
-				$this->l10n->t('My settings'),
-				$this->l10n->t('Your personal preferences: notifications and break settings'),
+				$catalog->label($this->l10n, $section),
+				$catalog->help($this->l10n, $section),
 				$navFlags,
-			) + [
+			);
+			$shell['breadcrumbSection'] = '';
+			$shell['breadcrumbParent'] = [
+				'label' => $this->l10n->t('My settings'),
+				'url' => $catalog->url(
+					$this->urlGenerator,
+					EmployeeSettingsSectionCatalog::DEFAULT_SECTION
+				),
+			];
+			$response = new TemplateResponse('arbeitszeitcheck', 'settings', $shell + [
+				'settingsSection' => $section,
+				'settingsPages' => $catalog->chipBarPayload($this->l10n, $this->urlGenerator, $section),
 				'error' => $errorMessage,
 				'stats' => ['total_time_entries' => 0, 'total_absences' => 0],
+				'complianceProfile' => $this->buildComplianceProfileForSettings(),
 			]);
 			return $this->configureCSP($response);
 		}

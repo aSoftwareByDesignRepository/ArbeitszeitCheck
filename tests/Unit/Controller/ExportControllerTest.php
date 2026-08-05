@@ -221,8 +221,13 @@ class ExportControllerTest extends TestCase
 			->method('exportTimeEntries')
 			->with(
 				$userId,
-				$this->isInstanceOf(\DateTime::class),
-				$this->isInstanceOf(\DateTime::class)
+				$this->callback(static function (\DateTime $start): bool {
+					return $start->format('Y-m-d H:i:s') === '2024-01-01 00:00:00';
+				}),
+				$this->callback(static function (\DateTime $endExclusive): bool {
+					// Inclusive end 2024-01-31 → exclusive 2024-02-01 (last-day hours included).
+					return $endExclusive->format('Y-m-d H:i:s') === '2024-02-01 00:00:00';
+				})
 			)
 			->willReturn('DATEV export content');
 
@@ -447,6 +452,189 @@ class ExportControllerTest extends TestCase
 		$this->assertTrue($data['success']);
 		$this->assertArrayHasKey('config', $data);
 		$this->assertTrue($data['config']['configured']);
+		$this->assertFalse($data['config']['personalnummer_set_for_viewer']);
+		$this->assertFalse($data['config']['ready_for_self_export']);
+	}
+
+	public function testDatevConfigMarksReadyWhenPersonalnummerSet(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin-user');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->with('admin-user')->willReturn(true);
+		$this->datevExportService->method('getConfigurationStatus')->willReturn([
+			'configured' => true,
+			'beraternummer' => '1234567',
+			'mandantennummer' => '12345',
+		]);
+		$this->config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default = ''): string {
+				if ($uid === 'admin-user' && $key === \OCA\ArbeitszeitCheck\Constants::USER_DATEV_PERSONALNUMMER) {
+					return '12345678';
+				}
+				return $default;
+			});
+
+		$response = $this->controller->datevConfig();
+		$data = $response->getData();
+		$this->assertTrue($data['config']['personalnummer_set_for_viewer']);
+		$this->assertTrue($data['config']['ready_for_self_export']);
+	}
+
+	public function testDatevEndpointUsesExclusiveEndBound(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin-user');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->willReturn(true);
+
+		$this->datevExportService->expects($this->once())
+			->method('exportTimeEntries')
+			->with(
+				'admin-user',
+				$this->callback(static fn (\DateTime $s): bool => $s->format('Y-m-d') === '2024-03-01'),
+				$this->callback(static fn (\DateTime $e): bool => $e->format('Y-m-d H:i:s') === '2024-04-01 00:00:00')
+			)
+			->willReturn("HEADER\n");
+
+		$response = $this->controller->datev('2024-03-01', '2024-03-31');
+		$this->assertInstanceOf(DataDownloadResponse::class, $response);
+	}
+
+	public function testDatevOrganizationDeniedForNonAdmin(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('regular-user');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->expects($this->once())
+			->method('isAdmin')
+			->with('regular-user')
+			->willReturn(false);
+		$this->permissionService->expects($this->once())
+			->method('logPermissionDenied')
+			->with('regular-user', 'export_datev_org', 'datev_export');
+		$this->datevExportService->expects($this->never())->method('exportMultipleUsers');
+		$this->datevExportService->expects($this->never())->method('exportTimeEntries');
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			if ($name === 'scope') {
+				return 'organization';
+			}
+			return $default ?? '';
+		});
+		$controller = new ExportController(
+			'arbeitszeitcheck',
+			$request,
+			$this->timeEntryMapper,
+			$this->absenceMapper,
+			$this->violationMapper,
+			$this->datevExportService,
+			new TimeEntryExportTransformer($this->config),
+			$this->userSession,
+			$this->l10n,
+			$this->config,
+			$this->permissionService
+		);
+
+		$response = $controller->datev('2024-01-01', '2024-01-31');
+		$this->assertInstanceOf(DataDownloadResponse::class, $response);
+		$content = $response->render();
+		$this->assertStringContainsString('Access denied', $content);
+	}
+
+	public function testDatevOtherUserDeniedForNonAdmin(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('regular-user');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->willReturn(false);
+		$this->permissionService->expects($this->once())
+			->method('logPermissionDenied')
+			->with('regular-user', 'export_datev_user', 'datev_export', 'victim');
+		$this->datevExportService->expects($this->never())->method('exportTimeEntries');
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			if ($name === 'userId') {
+				return 'victim';
+			}
+			if ($name === 'scope') {
+				return 'self';
+			}
+			return $default ?? '';
+		});
+		$controller = new ExportController(
+			'arbeitszeitcheck',
+			$request,
+			$this->timeEntryMapper,
+			$this->absenceMapper,
+			$this->violationMapper,
+			$this->datevExportService,
+			new TimeEntryExportTransformer($this->config),
+			$this->userSession,
+			$this->l10n,
+			$this->config,
+			$this->permissionService
+		);
+
+		$response = $controller->datev('2024-01-01', '2024-01-07');
+		$this->assertStringContainsString('Access denied', $response->render());
+	}
+
+	public function testDatevOrganizationExportsEnabledUsers(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin-user');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->with('admin-user')->willReturn(true);
+
+		$u1 = $this->createMock(IUser::class);
+		$u1->method('getUID')->willReturn('alice');
+		$u1->method('isEnabled')->willReturn(true);
+		$u2 = $this->createMock(IUser::class);
+		$u2->method('getUID')->willReturn('bob');
+		$u2->method('isEnabled')->willReturn(false);
+		$userManager = $this->createMock(\OCP\IUserManager::class);
+		$userManager->method('search')->with('')->willReturn([$u1, $u2]);
+
+		$this->datevExportService->expects($this->once())
+			->method('exportMultipleUsers')
+			->with(
+				['alice'],
+				$this->callback(static fn (\DateTime $s): bool => $s->format('Y-m-d') === '2024-01-01'),
+				$this->callback(static fn (\DateTime $e): bool => $e->format('Y-m-d H:i:s') === '2024-02-01 00:00:00')
+			)
+			->willReturn("ORG\n");
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			if ($name === 'scope') {
+				return 'organization';
+			}
+			return $default ?? '';
+		});
+		$controller = new ExportController(
+			'arbeitszeitcheck',
+			$request,
+			$this->timeEntryMapper,
+			$this->absenceMapper,
+			$this->violationMapper,
+			$this->datevExportService,
+			new TimeEntryExportTransformer($this->config),
+			$this->userSession,
+			$this->l10n,
+			$this->config,
+			$this->permissionService,
+			$userManager
+		);
+
+		$response = $controller->datev('2024-01-01', '2024-01-31');
+		$this->assertInstanceOf(DataDownloadResponse::class, $response);
+		$headers = method_exists($response, 'getHeaders') ? $response->getHeaders() : [];
+		$cd = $headers['Content-Disposition'] ?? $headers['content-disposition'] ?? '';
+		$this->assertStringContainsString('datev-export-org-', $cd);
+		$this->assertSame("ORG\n", $response->render());
 	}
 
 	/**

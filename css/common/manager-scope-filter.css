@@ -195,8 +195,8 @@
 	top: 50% !important;
 	transform: translateY(-50%) !important;
 	color: var(--color-main-text, var(--azc-text));
-	background: color-mix(in srgb, var(--color-primary-element, #0082c9) 12%, var(--color-main-background, #fff));
-	border: 1px solid color-mix(in srgb, var(--color-primary-element, #0082c9) 35%, var(--color-border, #ddd));
+	background: color-mix(in srgb, var(--color-primary-element) 12%, var(--color-main-background));
+	border: 1px solid color-mix(in srgb, var(--color-primary-element) 35%, var(--color-border));
 	border-radius: var(--azc-radius-sm, 6px);
 }
 
@@ -204,7 +204,7 @@
 #app-content.azc-app--manager-absences .manager-scope-page__toolbar .azc-date-range__part .azc-datepicker-toggle:focus-visible,
 #app-content.azc-app--manager-time-entries .manager-scope-page__toolbar .azc-date-range__part .datepicker-input:focus-visible,
 #app-content.azc-app--manager-absences .manager-scope-page__toolbar .azc-date-range__part .datepicker-input:focus-visible {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -259,7 +259,7 @@
 
 #app-content.azc-app--manager-time-entries .manager-scope-page__toolbar .user-picker__clear:focus-visible,
 #app-content.azc-app--manager-absences .manager-scope-page__toolbar .user-picker__clear:focus-visible {
-	outline: 2px solid var(--color-primary-element, #0082c9);
+	outline: 2px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 

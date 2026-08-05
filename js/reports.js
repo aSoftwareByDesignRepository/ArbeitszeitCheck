@@ -486,11 +486,45 @@
 		}
 
 		// Render report data as HTML (never show raw JSON). Handles daily, weekly, monthly, overtime, absence, team, compliance.
+		function renderPremiumBucketTable(buckets, L, reportTd, title) {
+			let html = '';
+			html += `<h4 class="report-subhead">${esc(title || L.premiumsTitle || 'Hour premiums')}</h4>`;
+			html += `<div class="table-container" role="region"><table class="table table--hover azc-table--responsive report-table"><thead><tr>`
+				+ `<th>${esc(L.premiumBucket || 'Category')}</th>`
+				+ `<th>${esc(L.hours || 'Hours')}</th>`
+				+ `<th>${esc(L.premiumRate || 'Rate')}</th>`
+				+ `<th>${esc(L.premiumValued || 'Valued hours')}</th>`
+				+ `</tr></thead><tbody>`;
+			if (!buckets.length) {
+				html += `<tr>`
+					+ reportTd(L.premiumBucket || 'Category', '—')
+					+ reportTd(L.hours || 'Hours', '0')
+					+ reportTd(L.premiumRate || 'Rate', '—')
+					+ reportTd(L.premiumValued || 'Valued hours', '0')
+					+ `</tr>`;
+			} else {
+				buckets.forEach((b) => {
+					const pct = b.rate_percent != null ? `${b.rate_percent}%` : (b.rate != null ? `${b.rate}%` : '—');
+					html += `<tr>`
+						+ reportTd(L.premiumBucket || 'Category', esc(b.label || b.id || '-'))
+						+ reportTd(L.hours || 'Hours', esc(b.hours != null ? b.hours : '0'))
+						+ reportTd(L.premiumRate || 'Rate', esc(pct))
+						+ reportTd(L.premiumValued || 'Valued hours', esc(b.valued_hours != null ? b.valued_hours : '0'))
+						+ `</tr>`;
+				});
+			}
+			html += '</tbody></table></div>';
+			return html;
+		}
+
 		function renderReportHtml(report) {
 			if (!report) return '';
 			const L = A.l10n || {};
 			const reportTd = (label, content) => `<td data-label="${esc(label)}">${content}</td>`;
 			let html = '<div class="report-result">';
+			if (report.from_month_closure_snapshot) {
+				html += `<p class="report-meta report-meta--sealed" role="status">${esc(L.monthClosureSealed || 'This month is sealed. Figures below match the closed-month snapshot (including frozen hour premiums).')}</p>`;
+			}
 			if (report.date) html += `<p class="report-meta"><strong>${L.date || 'Date'}:</strong> ${esc(report.date)}</p>`;
 			const periodStr = formatPeriod(report.period);
 			if (periodStr) html += `<p class="report-meta"><strong>${L.period || 'Period'}:</strong> ${esc(periodStr)}</p>`;
@@ -676,6 +710,27 @@
 						html += `<tr>${reportTd(L.date || 'Date', esc(day.date || d))}${reportTd(L.hours || 'Hours', esc(day.total_hours != null ? day.total_hours : '-'))}</tr>`;
 					});
 				html += '</tbody></table></div>';
+			}
+			// Sealed monthly report: frozen premiums from month-closure snapshot (NN-06).
+			if (report.type !== 'premium' && report.premium && typeof report.premium === 'object' && report.premium.enabled) {
+				const frozen = report.premium;
+				html += `<p class="report-meta form-help">${esc(L.premiumHint || 'Hours with a percentage for reporting — not pay, and not your overtime Saldo.')}</p>`;
+				if (frozen.policy_version != null) {
+					html += `<p class="report-meta"><strong>${esc(L.policyVersion || 'Policy version')}:</strong> ${esc(frozen.policy_version)}</p>`;
+				}
+				const summary = frozen.summary && typeof frozen.summary === 'object' ? frozen.summary : {};
+				const buckets = Array.isArray(summary.buckets) ? summary.buckets : [];
+				if (!buckets.length) {
+					html += `<h4 class="report-subhead">${esc(L.frozenPremiumsTitle || L.premiumsTitle || 'Frozen hour premiums')}</h4>`;
+					html += `<p class="report-meta" role="status">${esc(L.premiumEmpty || 'No premium hours in this period.')}</p>`;
+				} else {
+					html += renderPremiumBucketTable(
+						buckets,
+						L,
+						reportTd,
+						L.frozenPremiumsTitle || L.premiumsTitle || 'Frozen hour premiums'
+					);
+				}
 			}
 			if (report.summary) {
 				const readyMsg = (A.l10n && A.l10n.reportReady) ? String(A.l10n.reportReady).trim() : '';
@@ -1363,6 +1418,140 @@
 				fetchAndShowReport();
 			});
 		}
+
+		// Admin DATEV payroll downloads (same date range as the report form).
+		(function initDatevExportPanel() {
+			if (!A.isAdmin) {
+				return;
+			}
+			const panel = document.getElementById('datev-export-panel');
+			const statusEl = document.getElementById('datev-export-status');
+			const errorEl = document.getElementById('datev-export-error');
+			const btnSelf = document.getElementById('btn-datev-self');
+			const btnOrg = document.getElementById('btn-datev-org');
+			if (!panel || !statusEl || !btnSelf || !btnOrg) {
+				return;
+			}
+			const L = A.l10n || {};
+			const exportUrls = A.exportUrl || {};
+			let orgConfigured = false;
+			let selfReady = false;
+
+			function setError(msg) {
+				if (!errorEl) {
+					return;
+				}
+				if (!msg) {
+					errorEl.hidden = true;
+					errorEl.textContent = '';
+					return;
+				}
+				errorEl.hidden = false;
+				errorEl.textContent = msg;
+			}
+
+			function refreshButtons() {
+				btnSelf.disabled = !selfReady;
+				btnOrg.disabled = !orgConfigured;
+			}
+
+			function readDates() {
+				const start = startDateInput && startDateInput.value ? startDateInput.value.trim() : '';
+				const end = endDateInput && endDateInput.value ? endDateInput.value.trim() : '';
+				return { start, end };
+			}
+
+			function triggerDatevDownload(scope) {
+				setError('');
+				const { start, end } = readDates();
+				if (!start || !end) {
+					setError(L.datevNeedDates || 'Choose a start and end date above before downloading DATEV.');
+					return;
+				}
+				if (start > end) {
+					setError(L.dateRangeInvalid || 'Start date must be before or equal to end date.');
+					return;
+				}
+				const base = exportUrls.datev;
+				if (!base) {
+					setError(L.datevLoadFailed || 'Could not load DATEV status. Refresh the page or check your permissions.');
+					return;
+				}
+				try {
+					const urlObj = new URL(toDownloadHref(base));
+					urlObj.searchParams.set('startDate', start);
+					urlObj.searchParams.set('endDate', end);
+					if (scope === 'organization') {
+						urlObj.searchParams.set('scope', 'organization');
+					}
+					const a = document.createElement('a');
+					a.href = urlObj.toString();
+					a.style.display = 'none';
+					a.setAttribute('download', '');
+					document.body.appendChild(a);
+					a.click();
+					document.body.removeChild(a);
+					announceToScreenReader(L.datevDownloadStarted || 'DATEV download started.');
+				} catch (e) {
+					setError(L.errorTryAgain || 'An error occurred. Please try again.');
+				}
+			}
+
+			btnSelf.addEventListener('click', (e) => {
+				e.preventDefault();
+				triggerDatevDownload('self');
+			});
+			btnOrg.addEventListener('click', (e) => {
+				e.preventDefault();
+				triggerDatevDownload('organization');
+			});
+
+			const configUrl = exportUrls.datevConfig;
+			if (!configUrl) {
+				statusEl.textContent = L.datevLoadFailed || 'Could not load DATEV status. Refresh the page or check your permissions.';
+				refreshButtons();
+				return;
+			}
+
+			fetch(toDownloadHref(configUrl), {
+				credentials: 'same-origin',
+				headers: {
+					requesttoken: getRequestToken(),
+					Accept: 'application/json',
+				},
+			})
+				.then((r) => r.json().then((body) => ({ ok: r.ok, status: r.status, body })))
+				.then(({ ok, body }) => {
+					if (!ok || !body || !body.success || !body.config) {
+						statusEl.textContent = L.datevLoadFailed || 'Could not load DATEV status. Refresh the page or check your permissions.';
+						refreshButtons();
+						return;
+					}
+					const cfg = body.config;
+					orgConfigured = !!cfg.configured;
+					selfReady = !!cfg.ready_for_self_export;
+					if (!orgConfigured) {
+						statusEl.textContent = L.datevNeedConfig
+							|| 'Set Beraternummer and Mandantennummer in Administration → Global settings before downloading DATEV files.';
+					} else if (!selfReady) {
+						statusEl.textContent = L.datevNeedPersonal
+							|| 'Organisation numbers are set, but your DATEV Personalnummer is missing. Add it on your employee profile to download your own file.';
+					} else {
+						statusEl.textContent = L.datevReadySelf
+							|| 'DATEV organisation numbers are set. You can download your own file if your Personalnummer is set.';
+					}
+					if (orgConfigured) {
+						statusEl.textContent += ' '
+							+ (L.datevReadyOrg
+								|| 'Organisation download skips people without a Personalnummer.');
+					}
+					refreshButtons();
+				})
+				.catch(() => {
+					statusEl.textContent = L.datevLoadFailed || 'Could not load DATEV status. Refresh the page or check your permissions.';
+					refreshButtons();
+				});
+		})();
 	});
 })();
 

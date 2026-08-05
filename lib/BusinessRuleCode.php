@@ -18,4 +18,8 @@ final class BusinessRuleCode
 	public const NOT_ON_BREAK = 'not_on_break';
 	public const DAILY_HOURS_LIMIT = 'daily_hours_limit';
 	public const REST_PERIOD_REQUIRED = 'rest_period_required';
+	public const PROJECT_NOT_ALLOWED = 'project_not_allowed';
+	public const PROJECT_ID_TOO_LONG = 'project_id_too_long';
+	public const MONTH_FINALIZED = 'month_finalized';
+	public const LOCKED = 'locked';
 }

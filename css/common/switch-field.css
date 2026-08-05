@@ -24,7 +24,7 @@
 
 #app-content.azc-app .azc-switch-field__input:focus-visible + .azc-switch-field__label .azc-switch-field__track,
 .modal-backdrop .azc-switch-field__input:focus-visible + .azc-switch-field__label .azc-switch-field__track {
-	outline: 3px solid var(--color-primary-element, #0082c9);
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
@@ -68,8 +68,8 @@
 
 #app-content.azc-app .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track,
 .modal-backdrop .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track {
-	background: var(--color-primary-element, #0082c9);
-	border-color: var(--color-primary-element, #0082c9);
+	background: var(--color-primary-element);
+	border-color: var(--color-primary-element);
 }
 
 #app-content.azc-app .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track::after,

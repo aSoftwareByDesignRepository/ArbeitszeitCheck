@@ -12,7 +12,7 @@ $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class
 include __DIR__ . '/common/admin-overtime-payout-l10n.php';
 
 $bankEnabled = (bool)($_['bankEnabled'] ?? false);
-$notificationsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.notifications') . '#overtime-bank-heading';
+$notificationsUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.admin.overtimeSettings') . '#overtime-bank-heading';
 $payoutUrl = $_['payoutProcessUrl'] ?? $urlGenerator->linkToRoute('arbeitszeitcheck.overtime_payout.index');
 $defaultYear = (int)($_['defaultYear'] ?? (int)date('Y'));
 $monthLabels = is_array($_['monthLabels'] ?? null) ? $_['monthLabels'] : [];
@@ -21,13 +21,17 @@ $monthLabels = is_array($_['monthLabels'] ?? null) ? $_['monthLabels'] : [];
 <?php include __DIR__ . '/common/page-start.php'; ?>
 
         <div class="azc-page-stack">
-        <div class="header-actions azc-page-actions-source">
-            <a href="<?php p($payoutUrl); ?>" class="azc-btn azc-btn--secondary">
-                <?php p($l->t('Process payouts')); ?>
-            </a>
-        </div>
+        <?php
+        $policyPages = is_array($_['policyPages'] ?? null) ? $_['policyPages'] : [];
+        include __DIR__ . '/common/azc-policy-pages-nav.php';
+        ?>
 
         <div class="admin-ot-payout-audit">
+            <p class="azc-admin-policy-layout__lead admin-ot-audit__actions-lead">
+                <a href="<?php p($payoutUrl); ?>" class="azc-btn azc-btn--primary azc-btn--touch">
+                    <?php p($l->t('Process payouts')); ?>
+                </a>
+            </p>
             <?php if (!$bankEnabled): ?>
             <?php
             $calloutVariant = 'warning';

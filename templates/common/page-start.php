@@ -19,6 +19,7 @@ $shellWidthClass = match ($shellWidth) {
 $pageTitle = (string)($_['pageTitle'] ?? '');
 $pageHelp = (string)($_['pageHelp'] ?? '');
 $breadcrumbSection = (string)($_['breadcrumbSection'] ?? '');
+$breadcrumbParent = is_array($_['breadcrumbParent'] ?? null) ? $_['breadcrumbParent'] : null;
 $roleLabel = (string)($_['roleLabel'] ?? $l->t('Employee'));
 $urls = $_['urls'] ?? [];
 $clientHints = $_['clientHints'] ?? ['locale' => 'en-US', 'htmlLang' => 'en-US', 'timezone' => 'UTC'];
@@ -86,7 +87,13 @@ $roleSlug = (string)($_['roleSlug'] ?? 'employee');
 							<?php p($l->t('ArbeitszeitCheck')); ?>
 						</a>
 					</li>
-					<?php if ($breadcrumbSection !== ''): ?>
+					<?php if (is_array($breadcrumbParent) && ($breadcrumbParent['label'] ?? '') !== ''): ?>
+						<li class="azc-breadcrumb__item">
+							<a class="azc-breadcrumb__link" href="<?php p((string)($breadcrumbParent['url'] ?? '#')); ?>">
+								<?php p((string)$breadcrumbParent['label']); ?>
+							</a>
+						</li>
+					<?php elseif ($breadcrumbSection !== ''): ?>
 						<li class="azc-breadcrumb__item">
 							<span class="azc-breadcrumb__text"><?php p($breadcrumbSection); ?></span>
 						</li>

@@ -348,4 +348,56 @@ class AdminUserProfileUpdateServiceTest extends TestCase
 		$this->assertSame(5, $result['policyId']);
 		$this->assertTrue($result['unchanged']);
 	}
+
+	public function testApplyDatevSettingsPersistsPersonalnummer(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$this->userManager->method('get')->with('alice')->willReturn($user);
+
+		$config = $this->createMock(\OCP\IConfig::class);
+		$config->expects($this->once())
+			->method('getUserValue')
+			->with('alice', 'arbeitszeitcheck', Constants::USER_DATEV_PERSONALNUMMER, '')
+			->willReturn('');
+		$config->expects($this->once())
+			->method('setUserValue')
+			->with('alice', 'arbeitszeitcheck', Constants::USER_DATEV_PERSONALNUMMER, '12345678');
+
+		$audit = $this->createMock(AuditLogMapper::class);
+		$audit->expects($this->once())->method('logAction');
+
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnCallback(fn ($s) => $s);
+
+		$service = new AdminUserProfileUpdateService(
+			$this->userManager,
+			$this->userWorkingTimeModelMapper,
+			$this->workingTimeModelMapper,
+			$audit,
+			$this->createMock(UserSettingsMapper::class),
+			$this->createMock(VacationYearBalanceMapper::class),
+			$this->createMock(VacationAllocationService::class),
+			$this->createMock(TariffRuleSetMapper::class),
+			$this->vacationPolicyMapper,
+			$this->createMock(UserOvertimeSettingsService::class),
+			$this->createMock(UserEmploymentSettingsService::class),
+			$this->createMock(TimeCaptureMethodService::class),
+			$l10n,
+			$this->createMock(IDBConnection::class),
+			null,
+			$config,
+		);
+
+		$result = $service->applyDatevSettings('alice', ['personalnummer' => '1234 5678'], 'admin');
+		$this->assertSame('12345678', $result['datevPersonalnummer']);
+	}
+
+	public function testApplyDatevSettingsRejectsInvalidPersonalnummer(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$this->userManager->method('get')->with('alice')->willReturn($user);
+
+		$this->expectException(AdminUserProfileUpdateException::class);
+		$this->service->applyDatevSettings('alice', ['personalnummer' => 'abc'], 'admin');
+	}
 }

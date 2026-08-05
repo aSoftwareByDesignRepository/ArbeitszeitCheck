@@ -72,6 +72,24 @@
 		return num.toFixed(1);
 	}
 
+	function formatDuration(entry) {
+		const hoursRaw = entry && (entry.durationHours != null ? entry.durationHours : entry.duration_hours);
+		const hours = hoursRaw === null || hoursRaw === undefined || hoursRaw === '' ? null : Number(hoursRaw);
+		if (hours !== null && !Number.isNaN(hours) && hours > 0) {
+			return hours.toFixed(1) + ' ' + t('h', 'h');
+		}
+		const type = entry && (entry.type || '');
+		const unit = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.vacationUnit) || 'days';
+		const hpd = Number((window.ArbeitszeitCheck && window.ArbeitszeitCheck.vacationHoursPerDay) || 8) || 8;
+		if (unit === 'hours' && type === 'vacation') {
+			const days = Number(entry.days);
+			if (!Number.isNaN(days) && days > 0) {
+				return (days * hpd).toFixed(1) + ' ' + t('h', 'h');
+			}
+		}
+		return formatDays(entry && entry.days);
+	}
+
 	function isPastRecord(entry) {
 		const rawEnd = entry && (entry.endDate || entry.end_date || entry.startDate || entry.start_date);
 		if (!rawEnd) {
@@ -185,7 +203,7 @@
 			td(t('Type', 'Type'), escapeHtml(entry.typeLabel || entry.type || '-')),
 			td(t('Start date', 'Start date'), escapeHtml(formatDate(entry.startDate))),
 			td(t('End date', 'End date'), escapeHtml(formatDate(entry.endDate))),
-			td(t('Days', 'Days'), escapeHtml(formatDays(entry.days))),
+			td(t('Duration', 'Duration'), escapeHtml(formatDuration(entry))),
 			td(t('Status', 'Status'), statusCell),
 			td(t('Reason', 'Reason'), escapeHtml(entry.reason || t('No reason', 'No reason')), 'reason-cell'),
 			'</tr>',
@@ -653,15 +671,254 @@
 		updateManagerRecordHistoricalHint();
 	}
 
-	function bindRecordForm() {
+		function bindRecordForm() {
 		const form = document.getElementById('manager-absence-record-form');
 		const submitBtn = document.getElementById('manager-absence-record-submit');
+		const hoursField = document.getElementById('manager-absence-record-hours-field');
+		const hoursInput = document.getElementById('manager-absence-record-hours');
+		const hoursPreview = document.getElementById('manager-absence-record-hours-preview');
+		const typeSel = document.getElementById('manager-absence-record-type');
+		const startEl = document.getElementById('manager-absence-record-start');
+		const endEl = document.getElementById('manager-absence-record-end');
+		const hoursMode = ((window.ArbeitszeitCheck && window.ArbeitszeitCheck.vacationUnit) || 'days') === 'hours';
+		const orgHoursPerDay = Number((window.ArbeitszeitCheck && window.ArbeitszeitCheck.vacationHoursPerDay) || 8) || 8;
+		let oneDayHours = orgHoursPerDay;
+		let averageDaily = orgHoursPerDay;
+		let weekdayNets = null;
+		let hoursTouched = false;
+		let lastAutoFill = null;
+		let estimateTimer = null;
+		let estimateSeq = 0;
+		let estimateAbort = null;
 		if (!form || !submitBtn) {
 			return;
 		}
+
+		function parseDDMMYYYY(s) {
+			if (!s || !/^\d{2}\.\d{2}\.\d{4}$/.test(s)) {
+				return null;
+			}
+			const p = s.split('.');
+			return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+		}
+		function toYmd(d) {
+			if (!d) {
+				return '';
+			}
+			const y = d.getFullYear();
+			const m = String(d.getMonth() + 1).padStart(2, '0');
+			const day = String(d.getDate()).padStart(2, '0');
+			return y + '-' + m + '-' + day;
+		}
+		const DOW_TO_NET = { 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat', 0: 'sun' };
+		function countWeekdays(start, end) {
+			if (!start || !end || end < start) {
+				return 0;
+			}
+			let n = 0;
+			const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+			const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+			while (cur <= last) {
+				const dow = cur.getDay();
+				if (dow !== 0 && dow !== 6) {
+					n += 1;
+				}
+				cur.setDate(cur.getDate() + 1);
+			}
+			return n;
+		}
+		function selectedEmployeeId() {
+			const hidden = document.getElementById('manager-absence-record-employee');
+			return hidden && hidden.value ? String(hidden.value) : '';
+		}
+		function netForDate(d) {
+			if (!weekdayNets || typeof weekdayNets !== 'object') {
+				return averageDaily;
+			}
+			const key = DOW_TO_NET[d.getDay()];
+			const v = Number(weekdayNets[key]);
+			return Number.isFinite(v) && v > 0 ? v : 0;
+		}
+		function rangeHoursEstimate() {
+			const start = parseDDMMYYYY(startEl && startEl.value);
+			const end = parseDDMMYYYY(endEl && endEl.value);
+			if (!start || !end || end < start) {
+				return 0;
+			}
+			if (weekdayNets && typeof weekdayNets === 'object') {
+				let sum = 0;
+				const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+				const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+				while (cur <= last) {
+					sum += netForDate(cur);
+					cur.setDate(cur.getDate() + 1);
+				}
+				if (sum > 0.009) {
+					return Math.round(sum * 100) / 100;
+				}
+				return 0;
+			}
+			const days = countWeekdays(start, end);
+			if (days < 1) {
+				return 0;
+			}
+			return Math.round(days * averageDaily * 100) / 100;
+		}
+		function updateHoursPreview() {
+			if (!hoursPreview || !hoursInput) {
+				return;
+			}
+			const show = hoursMode && typeSel && typeSel.value === 'vacation';
+			const raw = parseFloat(String(hoursInput.value || '').replace(',', '.'));
+			if (!show || !Number.isFinite(raw) || raw <= 0) {
+				hoursPreview.hidden = true;
+				hoursPreview.textContent = '';
+				return;
+			}
+			const weekdays = countWeekdays(parseDDMMYYYY(startEl && startEl.value), parseDDMMYYYY(endEl && endEl.value)) || 1;
+			const tpl = t(
+				'This request: %s hours across about %s weekdays (work model). Public holidays reduce the final debit.',
+				'This request: %s hours across about %s weekdays (work model). Public holidays reduce the final debit.'
+			);
+			hoursPreview.textContent = tpl
+				.replace('%s', String(raw))
+				.replace('%s', String(weekdays));
+			hoursPreview.hidden = false;
+		}
+		function applyEstimate(estimate) {
+			if (!hoursInput) {
+				return;
+			}
+			const current = String(hoursInput.value || '').trim();
+			if (!hoursTouched || current === '' || current === String(lastAutoFill) || current === String(orgHoursPerDay) || current === String(oneDayHours)) {
+				hoursInput.value = String(estimate);
+				lastAutoFill = estimate;
+				hoursTouched = false;
+			}
+			updateHoursPreview();
+		}
+		function applyAutoRangeIfNeeded() {
+			if (!hoursInput || !typeSel || !(hoursMode && typeSel.value === 'vacation')) {
+				return;
+			}
+			applyEstimate(rangeHoursEstimate());
+			const userId = selectedEmployeeId();
+			const start = parseDDMMYYYY(startEl && startEl.value);
+			const end = parseDDMMYYYY(endEl && endEl.value);
+			const url = window.ArbeitszeitCheck && window.ArbeitszeitCheck.estimateEmployeeVacationHoursUrl;
+			if (!userId || !start || !end || !url) {
+				return;
+			}
+			if (estimateTimer) {
+				clearTimeout(estimateTimer);
+			}
+			estimateTimer = setTimeout(function () {
+				if (estimateAbort) {
+					try { estimateAbort.abort(); } catch (e) { /* ignore */ }
+				}
+				const seq = ++estimateSeq;
+				const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+				estimateAbort = controller;
+				const qs = 'userId=' + encodeURIComponent(userId)
+					+ '&startDate=' + encodeURIComponent(toYmd(start))
+					+ '&endDate=' + encodeURIComponent(toYmd(end));
+				const token = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.getRequestToken && window.ArbeitszeitCheck.getRequestToken())
+					|| (typeof OC !== 'undefined' && OC.requestToken) || '';
+				fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + qs, {
+					credentials: 'same-origin',
+					headers: token ? { requesttoken: token } : {},
+					signal: controller ? controller.signal : undefined
+				}).then(function (r) { return r.json(); }).then(function (j) {
+					if (seq !== estimateSeq) {
+						return;
+					}
+					if (!j || !j.success || !Number.isFinite(j.hours) || j.hours < 0) {
+						return;
+					}
+					if (j.one_day_hours && Number.isFinite(j.one_day_hours)) {
+						oneDayHours = Math.max(0.25, Number(j.one_day_hours));
+					}
+					if (j.average_daily && Number.isFinite(j.average_daily)) {
+						averageDaily = Math.max(0.25, Number(j.average_daily));
+					}
+					if (j.weekday_nets && typeof j.weekday_nets === 'object') {
+						weekdayNets = j.weekday_nets;
+					}
+					applyEstimate(Math.round(Number(j.hours) * 100) / 100);
+				}).catch(function () { /* keep local estimate / abort */ });
+			}, 200);
+		}
+
+		function syncHoursField() {
+			if (!hoursField || !hoursInput || !typeSel) {
+				return;
+			}
+			const show = hoursMode && typeSel.value === 'vacation';
+			hoursField.hidden = !show;
+			hoursInput.required = show;
+			hoursInput.setAttribute('aria-required', show ? 'true' : 'false');
+			if (!show) {
+				hoursInput.value = '';
+				hoursTouched = false;
+				lastAutoFill = null;
+				if (hoursPreview) {
+					hoursPreview.hidden = true;
+					hoursPreview.textContent = '';
+				}
+			} else {
+				applyAutoRangeIfNeeded();
+			}
+		}
+
+		if (typeSel) {
+			typeSel.addEventListener('change', syncHoursField);
+		}
+		if (hoursInput) {
+			hoursInput.addEventListener('input', () => {
+				hoursTouched = true;
+				updateHoursPreview();
+			});
+		}
+		[startEl, endEl].forEach((el) => {
+			if (!el) {
+				return;
+			}
+			el.addEventListener('change', applyAutoRangeIfNeeded);
+			el.addEventListener('input', applyAutoRangeIfNeeded);
+		});
+		document.querySelectorAll('.manager-absence-hours-preset').forEach((btn) => {
+			btn.addEventListener('click', (e) => {
+				e.preventDefault();
+				if (!hoursInput) {
+					return;
+				}
+				let h = parseFloat(btn.getAttribute('data-hours') || '');
+				if (btn.hasAttribute('data-hours-half')) {
+					h = Math.round((oneDayHours / 2) * 100) / 100;
+					hoursTouched = true;
+				} else if (btn.hasAttribute('data-hours-full')) {
+					h = oneDayHours;
+					hoursTouched = true;
+				} else if (btn.hasAttribute('data-hours-range')) {
+					h = rangeHoursEstimate();
+					hoursTouched = false;
+					lastAutoFill = h;
+					applyAutoRangeIfNeeded();
+				} else {
+					hoursTouched = true;
+				}
+				if (!Number.isFinite(h) || h <= 0) {
+					return;
+				}
+				hoursInput.value = String(h);
+				updateHoursPreview();
+				hoursInput.focus();
+			});
+		});
+		syncHoursField();
+
 		form.addEventListener('submit', (event) => {
 			event.preventDefault();
-			const typeSel = document.getElementById('manager-absence-record-type');
 			const rs = document.getElementById('manager-absence-record-start');
 			const re = document.getElementById('manager-absence-record-end');
 			const reasonEl = document.getElementById('manager-absence-record-reason');
@@ -688,17 +945,32 @@
 				Messaging?.showError?.(t('Please select start and end date.', 'Please select start and end date.'));
 				return;
 			}
+			const needHours = hoursMode && type === 'vacation';
+			const durationHours = hoursInput ? Number(String(hoursInput.value || '').replace(',', '.')) : NaN;
+			if (needHours && (!Number.isFinite(durationHours) || durationHours <= 0)) {
+				Messaging?.showError?.(t('Please enter vacation hours.', 'Please enter vacation hours.'));
+				if (hoursInput) {
+					hoursInput.focus();
+				}
+				return;
+			}
 			const original = submitBtn.textContent;
 			submitBtn.disabled = true;
+			const payload = {
+				userId,
+				type,
+				startDate,
+				endDate,
+				reason,
+			};
+			if (needHours) {
+				payload.durationHours = durationHours;
+				payload.requireDurationHours = true;
+				payload.serverMayFillHours = true;
+			}
 			Utils.ajax('/apps/arbeitszeitcheck/api/manager/employee-absences', {
 				method: 'POST',
-				data: {
-					userId,
-					type,
-					startDate,
-					endDate,
-					reason,
-				},
+				data: payload,
 				onSuccess: () => {
 					submitBtn.disabled = false;
 					submitBtn.textContent = original;
@@ -711,13 +983,20 @@
 					if (reasonEl) {
 						reasonEl.value = '';
 					}
+					if (hoursInput) {
+						hoursInput.value = '';
+					}
 					state.offset = 0;
 					loadEntries();
 				},
 				onError: (err) => {
 					submitBtn.disabled = false;
 					submitBtn.textContent = original;
-					const message = err?.error || t('Could not save absence.', 'Could not save absence.');
+					const code = err?.error_code || err?.code || err?.data?.error_code || err?.data?.code || '';
+					let message = err?.error || t('Could not save absence.', 'Could not save absence.');
+					if (code === 'ABSENCE_HOURS_CLIENT_REQUIRED') {
+						message = t('Please enter vacation hours.', 'Please enter vacation hours.');
+					}
 					Messaging?.showError?.(message);
 				},
 			});

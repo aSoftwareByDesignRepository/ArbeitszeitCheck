@@ -111,6 +111,46 @@ class DashboardWidgetControllerTest extends TestCase {
 		);
 	}
 
+	public function testClockInForwardsBusinessRuleMessageAndCode(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$this->timeTrackingService->method('clockIn')
+			->willThrowException(new \OCA\ArbeitszeitCheck\Exception\BusinessRuleException(
+				'Cannot clock in: rest period required',
+				\OCA\ArbeitszeitCheck\BusinessRuleCode::REST_PERIOD_REQUIRED,
+			));
+
+		$response = $this->controller->clockIn();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('Cannot clock in: rest period required', $data['error']);
+		$this->assertSame('Cannot clock in: rest period required', $data['message']);
+		$this->assertSame(
+			\OCA\ArbeitszeitCheck\BusinessRuleCode::REST_PERIOD_REQUIRED,
+			$data['error_code'],
+		);
+	}
+
+	public function testClockInPassesOptionalProjectId(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$entry = $this->createMock(TimeEntry::class);
+		$entry->method('getSummary')->willReturn(['id' => 9, 'status' => 'active']);
+		$this->timeTrackingService->expects($this->once())
+			->method('clockIn')
+			->with('u1', '42')
+			->willReturn($entry);
+		$this->timeTrackingService->method('getStatus')->willReturn(['status' => 'active']);
+
+		$response = $this->controller->clockIn('42');
+		$this->assertTrue($response->getData()['success']);
+	}
+
 	public function testManagerDataClampsLimit(): void {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('u1');

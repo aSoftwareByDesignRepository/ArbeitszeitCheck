@@ -56,5 +56,9 @@ class DbLockKeysTest extends TestCase
 		$this->assertLessThanOrEqual(64, strlen(DbLockKeys::monthClosure($uid, 2026, 7)));
 		$this->assertLessThanOrEqual(64, strlen(DbLockKeys::timeTrackingUser($uid)));
 		$this->assertLessThanOrEqual(64, strlen(DbLockKeys::absenceUser($uid)));
+		$this->assertLessThanOrEqual(64, strlen(DbLockKeys::vacationUnitMigration()));
+		$this->assertSame('azc/vu/migrate', DbLockKeys::vacationUnitMigration());
+		$this->assertLessThanOrEqual(64, strlen(DbLockKeys::premiumPolicy()));
+		$this->assertSame('azc/pp/policy', DbLockKeys::premiumPolicy());
 	}
 }

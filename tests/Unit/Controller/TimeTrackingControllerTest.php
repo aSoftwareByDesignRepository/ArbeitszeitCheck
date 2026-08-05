@@ -179,7 +179,7 @@ class TimeTrackingControllerTest extends TestCase
 
 		$this->timeTrackingService->expects($this->once())
 			->method('clockIn')
-			->willThrowException(new BusinessRuleException('User is already clocked in'));
+			->willThrowException(new BusinessRuleException('User is already clocked in', 'already_clocked_in'));
 
 		$response = $this->controller->clockIn();
 
@@ -188,6 +188,30 @@ class TimeTrackingControllerTest extends TestCase
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 		$this->assertEquals('User is already clocked in', $data['error']);
+		$this->assertEquals('User is already clocked in', $data['message']);
+		$this->assertEquals('already_clocked_in', $data['error_code']);
+	}
+
+	/**
+	 * Concurrent mutation lock maps to HTTP 423 with stable error_code.
+	 */
+	public function testClockInLockedExceptionMapsTo423(): void
+	{
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$this->timeTrackingService->expects($this->once())
+			->method('clockIn')
+			->willThrowException(new \OCP\Lock\LockedException('user-clock'));
+
+		$response = $this->controller->clockIn();
+		$this->assertEquals(Http::STATUS_LOCKED, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame($data['error'], $data['message']);
+		$this->assertSame('locked', $data['error_code']);
 	}
 
 	/**

@@ -49,9 +49,18 @@
 			if (method !== 'GET' && method !== 'HEAD' && token) {
 				headers.set('requesttoken', token);
 			}
+
+			const isMutating = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+			let body = options.body;
 			if (options.json !== undefined) {
 				headers.set('Content-Type', 'application/json');
 				headers.set('Accept', 'application/json');
+				body = JSON.stringify(options.json);
+			} else if (isMutating && (body === undefined || body === null || body === '')) {
+				// Bare mutating requests must still send JSON — see mobile clock-in 400.
+				headers.set('Content-Type', 'application/json');
+				const payload = token ? { requesttoken: token } : {};
+				body = JSON.stringify(payload);
 			}
 			if (!headers.has('Accept')) {
 				headers.set('Accept', 'application/json');
@@ -62,7 +71,7 @@
 				method,
 				headers,
 				credentials: options.credentials || 'same-origin',
-				body: options.json !== undefined ? JSON.stringify(options.json) : options.body,
+				body,
 			};
 			delete init.json;
 			delete init.silent;

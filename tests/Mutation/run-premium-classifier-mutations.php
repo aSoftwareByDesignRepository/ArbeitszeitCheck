@@ -69,6 +69,18 @@ $mutations = [
 		'to' => 'if (false) {',
 		'filters' => ['PremiumSurchargeClassifierTest::testMaxSingleRatePrefersSundayOverNight'],
 	],
+	[
+		'name' => 'tagged_multi_sums_money',
+		'file' => 'lib/Support/PremiumSurchargeClassifier.php',
+		'from' => 'if ($stacking === PremiumPolicy::STACKING_ADDITIVE
+				|| $stacking === PremiumPolicy::STACKING_MAX_SINGLE) {
+				$totalValued += $valued;
+			}',
+		'to' => 'if (true) {
+				$totalValued += $valued;
+			}',
+		'filters' => ['PremiumSurchargeClassifierTest::testTaggedMultiDoesNotSumMoney'],
+	],
 ];
 
 $failures = 0;

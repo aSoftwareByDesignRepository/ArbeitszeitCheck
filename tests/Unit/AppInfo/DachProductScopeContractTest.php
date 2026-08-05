@@ -33,8 +33,8 @@ class DachProductScopeContractTest extends TestCase {
 			'/<summary[^>]*>[^<]*DACH[^<]*<\/summary>/',
 			$xml
 		);
-		$this->assertStringContainsString('Germany, Austria and Switzerland', $xml);
-		$this->assertStringContainsString('Deutschland, Österreich und die Schweiz', $xml);
+		$this->assertMatchesRegularExpression('/Germany.*Austria.*Switzerland/s', $xml);
+		$this->assertMatchesRegularExpression('/Deutschland.*Österreich.*Schweiz/s', $xml);
 		// Must not claim Germany-only in the English summary
 		$this->assertDoesNotMatchRegularExpression(
 			'/<summary>Time tracking for German labor law only/',

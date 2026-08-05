@@ -162,7 +162,7 @@ $maxManagerListDateRangeDays = (int)($_['maxManagerListDateRangeDays'] ?? Consta
 								<th scope="col"><?php p($l->t('Type')); ?></th>
 								<th scope="col"><?php p($l->t('Start date')); ?></th>
 								<th scope="col"><?php p($l->t('End date')); ?></th>
-								<th scope="col"><?php p($l->t('Days')); ?></th>
+								<th scope="col" id="employee-absences-duration-heading"><?php p($l->t('Duration')); ?></th>
 								<th scope="col"><?php p($l->t('Status')); ?></th>
 								<th scope="col"><?php p($l->t('Reason')); ?></th>
 							</tr>
@@ -245,6 +245,20 @@ $maxManagerListDateRangeDays = (int)($_['maxManagerListDateRangeDays'] ?? Consta
 								<input id="manager-absence-record-end" name="record_end_date" type="text" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly required autocomplete="off" aria-label="<?php p($l->t('To')); ?>" />
 							</div>
 						</div>
+						<div class="azc-filter-field" id="manager-absence-record-hours-field" hidden>
+							<label for="manager-absence-record-hours" class="azc-filter-field__label"><?php p($l->t('Hours')); ?></label>
+							<div class="azc-filter-field__control">
+								<input id="manager-absence-record-hours" name="record_duration_hours" type="number" class="form-input" min="0.25" max="744" step="0.25" inputmode="decimal" placeholder="<?php p($l->t('e.g. 4')); ?>" aria-describedby="manager-absence-record-hours-help" />
+							</div>
+							<p id="manager-absence-record-hours-help" class="form-help"><?php p($l->t('Total vacation hours for the whole request (not per day). Full range uses the employee’s work model (schedule), not a fixed 8 hours.')); ?></p>
+							<p id="manager-absence-record-hours-preview" class="azc-callout azc-callout--info" role="status" aria-live="polite" hidden></p>
+							<div class="absence-hours-presets" role="group" aria-label="<?php p($l->t('Quick hours')); ?>">
+								<button type="button" class="azc-btn azc-btn--secondary manager-absence-hours-preset" data-hours="4"><?php p($l->t('4 hours')); ?></button>
+								<button type="button" class="azc-btn azc-btn--secondary manager-absence-hours-preset" data-hours-half="1"><?php p($l->t('Half day')); ?></button>
+								<button type="button" class="azc-btn azc-btn--secondary manager-absence-hours-preset" data-hours-full="1"><?php p($l->t('1 full day')); ?></button>
+								<button type="button" class="azc-btn azc-btn--primary manager-absence-hours-preset" data-hours-range="1"><?php p($l->t('Full range')); ?></button>
+							</div>
+						</div>
 						<div class="azc-filter-actions">
 							<button type="submit" class="azc-btn azc-btn--primary" id="manager-absence-record-submit"><?php p($l->t('Save as approved')); ?></button>
 						</div>
@@ -261,5 +275,11 @@ $maxManagerListDateRangeDays = (int)($_['maxManagerListDateRangeDays'] ?? Consta
 </div>
 
 <?php include __DIR__ . '/common/manager-employee-list-l10n.php'; ?>
+<script>
+window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
+window.ArbeitszeitCheck.vacationUnit = <?php echo json_encode((string)($_['vacationUnit'] ?? 'days'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.vacationHoursPerDay = <?php echo json_encode((float)($_['vacationHoursPerDay'] ?? 8), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.estimateEmployeeVacationHoursUrl = <?php echo json_encode(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.manager.estimateEmployeeVacationHours'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+</script>
 
 <?php include __DIR__ . '/common/page-end.php'; ?>
