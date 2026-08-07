@@ -28,11 +28,7 @@
 
 	const FOCUSABLE =
 		'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [contenteditable=""], [contenteditable="true"]';
-	/**
-	 * Soft-keyboard reveal is only useful for typed text. Never yank the page for:
-	 * checkboxes/radios/buttons, native selects/dropdowns, or date/time pickers.
-	 * Those caused wild scroll loops (focusin → scrollIntoView → visualViewport scroll → again).
-	 */
+	/** Inputs that never open a soft keyboard — never pad/scroll for these. */
 	const NO_IME_INPUT_TYPES = {
 		checkbox: true,
 		radio: true,
@@ -59,6 +55,8 @@
 	const INSTALL_ATTR = 'azcKeepFocusedVisible';
 
 	const DIALOG_HOST_SEL = [
+		// Prefer InventoryCheck hosts first (shared Check-family helper).
+		'.iv-dialog',
 		'[role="dialog"]',
 		'.modal',
 		'.oc-dialog',
@@ -66,17 +64,18 @@
 		'.bc-dialog',
 		'.crm-dialog',
 		'.mn-dialog',
-		'.iv-dialog',
 		'.ic-dialog',
 		'.tc-dialog',
 		'.mc-dialog',
 		'.azc-dialog',
 		'.pc-dialog',
+		'.dk-dialog',
 		'.helpdesk-dialog',
 		'.dialog',
 	].join(', ');
 
 	const DIALOG_INNER_SEL = [
+		'.iv-dialog__body',
 		'.modal-body',
 		'.modal__content',
 		'.dialog__content',
@@ -85,21 +84,30 @@
 		'.dialog-body',
 	].join(', ');
 
+	/** Full-viewport fixed layers — never treat as sticky bottom chrome. */
+	const OVERLAY_CHROME_SKIP_SEL = [
+		'.modal-backdrop',
+		'.iv-dialog-overlay',
+		'.oc-dialog-dim',
+		'[role="presentation"]',
+	].join(', ');
+
 	const FORM_HOST_SEL = [
+		'.iv-main',
+		'#iv-main-content',
+		'.iv-form',
 		'.time-entry-form',
 		'.pc-main',
 		'.azc-main',
 		'.dc-main',
 		'.bc-main',
 		'.crm-main',
-		'.iv-main',
 		'.ic-main',
 		'.mn-main',
 		'.mc-main',
 		'.tc-main',
 		'#pc-main-content',
 		'#ic-main-content',
-		'#iv-main-content',
 		'#dc-main-content',
 		'#mn-main-content',
 		'#mc-main-content',
@@ -114,26 +122,26 @@
 		'.ticket-form',
 		'.mn-form',
 		'.mc-form',
-		'.iv-form',
 		'.ic-form',
 		'.projectcheck-admin',
 	].join(', ');
 
 	const PAGE_HOST_SELECTORS = [
+		'.iv-main',
+		'#iv-main-content',
+		'.iv-form',
 		'.time-entry-form',
 		'.pc-main',
 		'.azc-main',
 		'.dc-main',
 		'.bc-main',
 		'.crm-main',
-		'.iv-main',
 		'.ic-main',
 		'.mn-main',
 		'.mc-main',
 		'.tc-main',
 		'#pc-main-content',
 		'#ic-main-content',
-		'#iv-main-content',
 		'#dc-main-content',
 		'#mn-main-content',
 		'#mc-main-content',
@@ -145,7 +153,6 @@
 		'.ticket-form',
 		'.mn-form',
 		'.mc-form',
-		'.iv-form',
 		'.ic-form',
 		'.projectcheck-admin',
 		'form[id$="-form"]',
@@ -159,6 +166,7 @@
 	const BOTTOM_CHROME_SEL = [
 		'.tc-banner',
 		'.modal-footer',
+		'.iv-dialog__actions',
 		'.helpdesk-form-actions',
 		'.sticky-actions',
 		'.form-actions--sticky',
@@ -262,11 +270,19 @@
 		if (style.display === 'none' || style.visibility === 'hidden') {
 			return 0;
 		}
+		if (typeof node.matches === 'function' && node.matches(OVERLAY_CHROME_SKIP_SEL)) {
+			return 0;
+		}
 		if (typeof node.getBoundingClientRect !== 'function') {
 			return 0;
 		}
 		const rect = node.getBoundingClientRect();
 		if (!(rect.height > 0)) {
+			return 0;
+		}
+		const usable = band.bottom - band.top;
+		// Full-screen fixed overlays / dialog shells are not bottom chrome.
+		if (usable > 0 && rect.height > usable * 0.45) {
 			return 0;
 		}
 		// Overlaps the lower edge of the visible band (above the soft keyboard).
@@ -479,8 +495,8 @@
 	}
 
 	/**
-	 * Desktop mouse focus must never scroll the page. Reveal only when the soft
-	 * keyboard has already shrunk the visual viewport (resize listener re-runs then).
+	 * Desktop mouse focus must never grow dialogs with fake IME padding.
+	 * Reveal only when the soft keyboard has already shrunk the visual viewport.
 	 *
 	 * @param {Element|null|undefined} el
 	 * @param {Window|undefined|null} win
@@ -547,8 +563,7 @@
 		if (primary) {
 			primary.scrollTop += delta;
 		}
-		// Never use block:'center' — it yanks long admin pages. Nearest is enough
-		// to clear the soft keyboard band.
+		// Never use block:'center' — it yanks long lists/dialogs. Nearest is enough.
 		if (typeof el.scrollIntoView === 'function') {
 			el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
 		}
@@ -608,6 +623,8 @@
 		function scheduleReveal() {
 			clearTimers();
 			if (!softKeyboardLikelyOpen(win)) {
+				// Keyboard dismissed / desktop: never leave sticky IME padding behind.
+				ensureKeyboardScrollRoom(doc, 0, null);
 				return;
 			}
 			const epoch = ++focusEpoch;
