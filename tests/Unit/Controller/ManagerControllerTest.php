@@ -1440,4 +1440,325 @@ class ManagerControllerTest extends TestCase
 		$this->assertSame('alice', $data['users'][0]['userId']);
 	}
 
+	/**
+	 * Manager-recorded absence must read JSON via public IRequest::getParams() (NC 34).
+	 */
+	public function testCreateEmployeeAbsenceCreatesApprovedAbsenceFromGetParams(): void
+	{
+		$managerId = 'manager1';
+		$employeeId = 'employee1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$employee = $this->createMock(IUser::class);
+		$employee->method('isEnabled')->willReturn(true);
+		$this->userManager->method('get')->with($employeeId)->willReturn($employee);
+
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with($managerId, $employeeId)
+			->willReturn(true);
+
+		$this->request->expects($this->once())
+			->method('getParams')
+			->willReturn([
+				'userId' => $employeeId,
+				'type' => Absence::TYPE_SICK_LEAVE,
+				'startDate' => '2026-07-28',
+				'endDate' => '2026-07-31',
+				'reason' => 'Doctor note',
+			]);
+
+		$absence = new Absence();
+		$absence->setId(42);
+		$absence->setUserId($employeeId);
+		$absence->setType(Absence::TYPE_SICK_LEAVE);
+		$absence->setStartDate(new \DateTime('2026-07-28'));
+		$absence->setEndDate(new \DateTime('2026-07-31'));
+		$absence->setStatus(Absence::STATUS_APPROVED);
+		$absence->setApprovedByUserId($managerId);
+		$absence->setCreatedAt(new \DateTime());
+		$absence->setUpdatedAt(new \DateTime());
+
+		$this->absenceService->expects($this->once())
+			->method('createApprovedAbsenceForEmployeeByManager')
+			->with(
+				$managerId,
+				$employeeId,
+				$this->callback(static function (array $data): bool {
+					return ($data['type'] ?? null) === Absence::TYPE_SICK_LEAVE
+						&& ($data['start_date'] ?? null) === '2026-07-28'
+						&& ($data['end_date'] ?? null) === '2026-07-31'
+						&& ($data['reason'] ?? null) === 'Doctor note';
+				})
+			)
+			->willReturn($absence);
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_CREATED, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertSame(42, $data['absence']['id']);
+		$this->assertSame($employeeId, $data['absence']['userId']);
+		$this->assertSame(Absence::TYPE_SICK_LEAVE, $data['absence']['type']);
+	}
+
+	public function testCreateEmployeeAbsenceCreatesVacationWithHoursFlags(): void
+	{
+		$managerId = 'manager1';
+		$employeeId = 'employee1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$employee = $this->createMock(IUser::class);
+		$employee->method('isEnabled')->willReturn(true);
+		$this->userManager->method('get')->with($employeeId)->willReturn($employee);
+
+		$this->permissionService->method('canManageEmployee')->willReturn(true);
+		$this->request->method('getParams')->willReturn([
+			'userId' => $employeeId,
+			'type' => Absence::TYPE_VACATION,
+			'startDate' => '2026-08-03',
+			'endDate' => '2026-08-07',
+			'durationHours' => 32.5,
+			'requireDurationHours' => true,
+			'serverMayFillHours' => true,
+		]);
+
+		$absence = new Absence();
+		$absence->setId(7);
+		$absence->setUserId($employeeId);
+		$absence->setType(Absence::TYPE_VACATION);
+		$absence->setStartDate(new \DateTime('2026-08-03'));
+		$absence->setEndDate(new \DateTime('2026-08-07'));
+		$absence->setStatus(Absence::STATUS_APPROVED);
+		$absence->setApprovedByUserId($managerId);
+		$absence->setCreatedAt(new \DateTime());
+		$absence->setUpdatedAt(new \DateTime());
+
+		$this->absenceService->expects($this->once())
+			->method('createApprovedAbsenceForEmployeeByManager')
+			->with(
+				$managerId,
+				$employeeId,
+				$this->callback(static function (array $data): bool {
+					return ($data['type'] ?? null) === Absence::TYPE_VACATION
+						&& ($data['duration_hours'] ?? null) === '32.5'
+						&& !empty($data['require_duration_hours'])
+						&& !empty($data['server_may_fill_hours']);
+				})
+			)
+			->willReturn($absence);
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_CREATED, $response->getStatus());
+		$this->assertTrue($response->getData()['success']);
+	}
+
+	public function testCreateEmployeeAbsenceRejectsMissingRequiredFields(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'userId' => 'employee1',
+			'type' => Absence::TYPE_VACATION,
+			// missing dates
+		]);
+		$this->absenceService->expects($this->never())->method('createApprovedAbsenceForEmployeeByManager');
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertStringContainsString('required', strtolower($response->getData()['error']));
+	}
+
+	public function testCreateEmployeeAbsenceCoercesArrayParamsToScalars(): void
+	{
+		$managerId = 'manager1';
+		$employeeId = 'employee1';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$employee = $this->createMock(IUser::class);
+		$employee->method('isEnabled')->willReturn(true);
+		$this->userManager->method('get')->with($employeeId)->willReturn($employee);
+		$this->permissionService->method('canManageEmployee')->willReturn(true);
+
+		$this->request->method('getParams')->willReturn([
+			'userId' => [$employeeId, 'ignored'],
+			'type' => [Absence::TYPE_SICK_LEAVE],
+			'startDate' => ['2026-07-28'],
+			'endDate' => ['2026-07-29'],
+			'reason' => ['ok'],
+		]);
+
+		$absence = new Absence();
+		$absence->setId(9);
+		$absence->setUserId($employeeId);
+		$absence->setType(Absence::TYPE_SICK_LEAVE);
+		$absence->setStartDate(new \DateTime('2026-07-28'));
+		$absence->setEndDate(new \DateTime('2026-07-29'));
+		$absence->setStatus(Absence::STATUS_APPROVED);
+		$absence->setApprovedByUserId($managerId);
+		$absence->setCreatedAt(new \DateTime());
+		$absence->setUpdatedAt(new \DateTime());
+
+		$this->absenceService->expects($this->once())
+			->method('createApprovedAbsenceForEmployeeByManager')
+			->with(
+				$managerId,
+				$employeeId,
+				$this->callback(static function (array $data): bool {
+					return ($data['type'] ?? null) === Absence::TYPE_SICK_LEAVE
+						&& ($data['start_date'] ?? null) === '2026-07-28'
+						&& ($data['end_date'] ?? null) === '2026-07-29'
+						&& ($data['reason'] ?? null) === 'ok';
+				})
+			)
+			->willReturn($absence);
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_CREATED, $response->getStatus());
+	}
+
+	public function testCreateEmployeeAbsenceForbidsUnmanagedEmployee(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'userId' => 'outsider',
+			'type' => Absence::TYPE_SICK_LEAVE,
+			'startDate' => '2026-07-28',
+			'endDate' => '2026-07-29',
+		]);
+		$this->permissionService->expects($this->once())
+			->method('canManageEmployee')
+			->with('manager1', 'outsider')
+			->willReturn(false);
+		$this->permissionService->expects($this->once())
+			->method('logPermissionDenied')
+			->with('manager1', 'create_employee_absence', 'user', 'outsider');
+		$this->absenceService->expects($this->never())->method('createApprovedAbsenceForEmployeeByManager');
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testCreateEmployeeAbsenceRejectsDisabledUser(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'userId' => 'employee1',
+			'type' => Absence::TYPE_SICK_LEAVE,
+			'startDate' => '2026-07-28',
+			'endDate' => '2026-07-29',
+		]);
+		$this->permissionService->method('canManageEmployee')->willReturn(true);
+		$employee = $this->createMock(IUser::class);
+		$employee->method('isEnabled')->willReturn(false);
+		$this->userManager->method('get')->with('employee1')->willReturn($employee);
+		$this->absenceService->expects($this->never())->method('createApprovedAbsenceForEmployeeByManager');
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+	}
+
+	public function testCreateEmployeeAbsenceRejectsInvalidDateFormat(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'userId' => 'employee1',
+			'type' => Absence::TYPE_SICK_LEAVE,
+			'startDate' => '28.07.2026',
+			'endDate' => '2026-07-29',
+		]);
+		$this->permissionService->method('canManageEmployee')->willReturn(true);
+		$employee = $this->createMock(IUser::class);
+		$employee->method('isEnabled')->willReturn(true);
+		$this->userManager->method('get')->willReturn($employee);
+		$this->absenceService->expects($this->never())->method('createApprovedAbsenceForEmployeeByManager');
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertStringContainsString('YYYY-MM-DD', $response->getData()['error']);
+	}
+
+	public function testCreateEmployeeAbsenceReturnsConflictWhenMonthFinalized(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'userId' => 'employee1',
+			'type' => Absence::TYPE_SICK_LEAVE,
+			'startDate' => '2026-07-28',
+			'endDate' => '2026-07-29',
+		]);
+		$this->permissionService->method('canManageEmployee')->willReturn(true);
+		$employee = $this->createMock(IUser::class);
+		$employee->method('isEnabled')->willReturn(true);
+		$this->userManager->method('get')->willReturn($employee);
+		$this->monthClosureService->method('assertDateRangeMutable')
+			->willThrowException(new \OCA\ArbeitszeitCheck\Exception\MonthFinalizedException('finalized'));
+		$this->absenceService->expects($this->never())->method('createApprovedAbsenceForEmployeeByManager');
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_CONFLICT, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testCreateEmployeeAbsenceSurfacesBusinessRuleErrorCode(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'userId' => 'employee1',
+			'type' => Absence::TYPE_VACATION,
+			'startDate' => '2026-07-28',
+			'endDate' => '2026-07-29',
+		]);
+		$this->permissionService->method('canManageEmployee')->willReturn(true);
+		$employee = $this->createMock(IUser::class);
+		$employee->method('isEnabled')->willReturn(true);
+		$this->userManager->method('get')->willReturn($employee);
+
+		$ex = new \OCA\ArbeitszeitCheck\Exception\BusinessRuleException(
+			'Please enter vacation hours.',
+			'ABSENCE_HOURS_CLIENT_REQUIRED'
+		);
+		$this->absenceService->method('createApprovedAbsenceForEmployeeByManager')->willThrowException($ex);
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('ABSENCE_HOURS_CLIENT_REQUIRED', $data['code']);
+		$this->assertSame('ABSENCE_HOURS_CLIENT_REQUIRED', $data['error_code']);
+	}
+
+	public function testCreateEmployeeAbsenceDeniesNonManagers(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('employee1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->canAccessManagerDashboard = false;
+		$this->isAdminAccess = false;
+		$this->request->expects($this->never())->method('getParams');
+		$this->absenceService->expects($this->never())->method('createApprovedAbsenceForEmployeeByManager');
+
+		$response = $this->controller->createEmployeeAbsence();
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
 }

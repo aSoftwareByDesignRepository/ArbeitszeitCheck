@@ -343,6 +343,26 @@ class ManagerController extends Controller
 	}
 
 	/**
+	 * Read a scalar request param as trimmed string (array values → first element).
+	 *
+	 * @param array<string, mixed> $params
+	 */
+	private function requestParamString(array $params, string $key): string
+	{
+		if (!array_key_exists($key, $params)) {
+			return '';
+		}
+		$value = $params[$key];
+		if (is_array($value)) {
+			$value = !empty($value) ? reset($value) : '';
+		}
+		if (is_bool($value) || is_object($value)) {
+			return '';
+		}
+		return trim((string)$value);
+	}
+
+	/**
 	 * Shared template values for manager employee list / filter pages.
 	 *
 	 * @return array<string, mixed>
@@ -1616,20 +1636,15 @@ class ManagerController extends Controller
 				return $accessResponse;
 			}
 
-			$raw = $this->request->getContent();
-			$payload = is_string($raw) && $raw !== '' ? json_decode($raw, true) : null;
-			if (!is_array($payload)) {
-				return new JSONResponse([
-					'success' => false,
-					'error' => $this->l10n->t('Invalid request body.'),
-				], Http::STATUS_BAD_REQUEST);
-			}
+			// Public OCP API only: Request::getContent() is protected (NC 34+) and is not on IRequest.
+			// JSON / form bodies are already mapped into getParams() by AppFramework (same as createEmployeeTimeEntry).
+			$payload = $this->request->getParams();
 
-			$targetUserId = isset($payload['userId']) ? trim((string)$payload['userId']) : '';
-			$type = isset($payload['type']) ? trim((string)$payload['type']) : '';
-			$startDate = isset($payload['startDate']) ? trim((string)$payload['startDate']) : '';
-			$endDate = isset($payload['endDate']) ? trim((string)$payload['endDate']) : '';
-			$reason = isset($payload['reason']) ? trim((string)$payload['reason']) : '';
+			$targetUserId = $this->requestParamString($payload, 'userId');
+			$type = $this->requestParamString($payload, 'type');
+			$startDate = $this->requestParamString($payload, 'startDate');
+			$endDate = $this->requestParamString($payload, 'endDate');
+			$reason = $this->requestParamString($payload, 'reason');
 
 			if ($targetUserId === '' || $type === '' || $startDate === '' || $endDate === '') {
 				return new JSONResponse([
