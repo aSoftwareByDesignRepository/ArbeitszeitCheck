@@ -108,6 +108,9 @@ class AdminControllerTest extends TestCase
 
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
 	private $request;
+	/** @var \OCA\ArbeitszeitCheck\Service\PermissionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $permissionService;
+	private bool $accessRestrictionEnabled = false;
 	/** @var IGroupManager|\PHPUnit\Framework\MockObject\MockObject */
 	private $groupManager;
 	/** @var IAppManager|\PHPUnit\Framework\MockObject\MockObject */
@@ -192,7 +195,11 @@ class AdminControllerTest extends TestCase
 			'clockStampingEnabled' => true,
 			'manualTimeEntryEnabled' => true,
 		]);
-		$permissionService = $this->createMock(\OCA\ArbeitszeitCheck\Service\PermissionService::class);
+		$this->permissionService = $this->createMock(\OCA\ArbeitszeitCheck\Service\PermissionService::class);
+		$this->permissionService->method('isAccessRestrictionEnabled')->willReturnCallback(
+			fn (): bool => $this->accessRestrictionEnabled,
+		);
+		$this->permissionService->method('isUserAllowedByAccessGroups')->willReturn(true);
 		$localeFormat = $this->createMock(\OCA\ArbeitszeitCheck\Service\LocaleFormatService::class);
 		$localeFormat->method('clientHints')->willReturn([
 			'locale' => 'en-US',
@@ -223,6 +230,14 @@ class AdminControllerTest extends TestCase
 			$this->timeCaptureMethodService,
 			$l10n,
 			$db,
+		);
+
+		$adminEmployeeDirectoryService = new \OCA\ArbeitszeitCheck\Service\AdminEmployeeDirectoryService(
+			$this->userManager,
+			$this->permissionService,
+			$this->timeEntryMapper,
+			$l10n,
+			$this->createMock(\Psr\Log\LoggerInterface::class),
 		);
 
 		$this->controller = new AdminController(
@@ -260,8 +275,9 @@ class AdminControllerTest extends TestCase
 			$vacationProrationService,
 			$this->timeCaptureMethodService,
 			$adminUserProfileUpdateService,
+			$adminEmployeeDirectoryService,
 			$auditLogPresenter,
-			$permissionService,
+			$this->permissionService,
 			$localeFormat,
 			$db,
 			null,
@@ -1341,6 +1357,54 @@ class AdminControllerTest extends TestCase
 		$this->assertArrayHasKey('users', $data);
 		$this->assertCount(1, $data['users']);
 		$this->assertEquals('user1', $data['users'][0]['userId']);
+		$this->assertArrayHasKey('filter', $data);
+		$this->assertArrayHasKey('defaultFilter', $data);
+	}
+
+	/**
+	 * Invalid filter returns HTTP 400 with stable error code.
+	 */
+	public function testGetUsersRejectsInvalidFilter(): void
+	{
+		$this->request->method('getParam')->willReturnCallback(
+			static function (string $key, $default = null) {
+				return match ($key) {
+					'filter' => 'not-a-filter',
+					default => $default,
+				};
+			}
+		);
+
+		$response = $this->controller->getUsers();
+		$data = $response->getData();
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertFalse($data['success']);
+		$this->assertSame('INVALID_EMPLOYEE_LIST_FILTER', $data['code']);
+	}
+
+	/**
+	 * Restricted mode without filter param defaults to app_access in API response.
+	 */
+	public function testGetUsersDefaultsToAppAccessWhenRestricted(): void
+	{
+		$this->accessRestrictionEnabled = true;
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('user1');
+		$user->method('getDisplayName')->willReturn('User One');
+		$user->method('getEMailAddress')->willReturn('user1@example.com');
+		$user->method('isEnabled')->willReturn(true);
+
+		$this->userManager->method('search')->willReturn([$user]);
+		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
+
+		$response = $this->controller->getUsers();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success']);
+		$this->assertSame('app_access', $data['filter']);
+		$this->assertSame('app_access', $data['defaultFilter']);
 	}
 
 	/**
@@ -2776,6 +2840,76 @@ class AdminControllerTest extends TestCase
 		$contentDisposition = $headers['Content-Disposition'] ?? $headers['content-disposition'] ?? '';
 		$this->assertStringContainsString('users-export-', $contentDisposition);
 		$this->assertStringContainsString('.csv', $contentDisposition);
+	}
+
+	/**
+	 * AC-013: Restricted export without filter param uses app_access default (filename suffix).
+	 */
+	public function testExportUsersDefaultsToAppAccessWhenRestricted(): void
+	{
+		$this->accessRestrictionEnabled = true;
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('user1');
+		$user->method('getDisplayName')->willReturn('User One');
+		$user->method('getEMailAddress')->willReturn('user1@example.com');
+		$user->method('isEnabled')->willReturn(true);
+
+		$this->userManager->method('search')->willReturn([$user]);
+		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
+
+		$response = $this->controller->exportUsers('csv');
+		$headers = method_exists($response, 'getHeaders') ? $response->getHeaders() : [];
+		$contentDisposition = $headers['Content-Disposition'] ?? $headers['content-disposition'] ?? '';
+		$this->assertStringContainsString('users-export-app-access-', $contentDisposition);
+	}
+
+	/**
+	 * AS-05: scan-cap truncation is visible in the export filename.
+	 */
+	public function testExportUsersFilenameMarksTruncation(): void
+	{
+		$users = [];
+		$cap = \OCA\ArbeitszeitCheck\Constants::ADMIN_EMPLOYEE_FILTER_MAX_SCAN;
+		for ($i = 0; $i < $cap + 1; $i++) {
+			$user = $this->createMock(IUser::class);
+			$user->method('getUID')->willReturn('u' . $i);
+			$user->method('getDisplayName')->willReturn('User ' . $i);
+			$user->method('getEMailAddress')->willReturn(null);
+			$user->method('isEnabled')->willReturn(true);
+			$users[] = $user;
+		}
+		$this->userManager->method('search')->willReturn($users);
+		$this->userWorkingTimeModelMapper->method('findCurrentByUser')->willReturn(null);
+
+		$response = $this->controller->exportUsers('csv');
+		$this->assertInstanceOf(DataDownloadResponse::class, $response);
+		$headers = method_exists($response, 'getHeaders') ? $response->getHeaders() : [];
+		$contentDisposition = $headers['Content-Disposition'] ?? $headers['content-disposition'] ?? '';
+		$this->assertStringContainsString('users-export-all-truncated-', $contentDisposition);
+	}
+
+	/**
+	 * AC-007 parity: invalid export filter returns HTTP 400 with stable code (no download body).
+	 */
+	public function testExportUsersRejectsInvalidFilter(): void
+	{
+		$this->request->method('getParam')->willReturnCallback(
+			static function (string $key, $default = null) {
+				return match ($key) {
+					'filter' => 'hacked',
+					default => $default,
+				};
+			}
+		);
+
+		$response = $this->controller->exportUsers('csv');
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$data = $response->getData();
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertFalse($data['success']);
+		$this->assertSame('INVALID_EMPLOYEE_LIST_FILTER', $data['code']);
 	}
 
 	/**

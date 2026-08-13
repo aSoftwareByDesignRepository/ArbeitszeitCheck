@@ -134,7 +134,7 @@ Registro de tiempo para Alemania, Austria y Suiza (DACH). Registra horas de trab
 - PHP 8.1–8.5
 	]]></description>
 
-	<version>1.6.6</version>
+	<version>1.6.8</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="info@software-by-design.de" homepage="http://nextcloud.software-by-design.de">Alexander Mäule</author>
 

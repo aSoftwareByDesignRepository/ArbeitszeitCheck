@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.8 - 2026-08-12
+
+### Added
+
+- **Half-day vacation in days mode:** employees and managers can book a single calendar day as half vacation (`day_fraction=0.5`) without switching the organisation to hours mode. Server computes the debit (never trusts client `days`); allocation honors trusted stored `0.5`; multi-day half requests are rejected; mail/UI show fractional days; one-click “Half day today” / next-workday shortcut with WCAG 2.1 AA length radios.
+- **Admin employee list access filter:** filter the employees page by “Can open ArbeitszeitCheck” vs “All Nextcloud accounts” (default follows access restriction). Server-enforced via `AdminEmployeeDirectoryService`; picker mode unchanged. Filter panel, hidden-count banner, truncated scan banner, CSV export with filter suffix, WCAG 2.1 AA UI, unit/integration/E2E and mutation coverage.
+
+## 1.6.7 - 2026-08-12
+
+### Fixed
+
+- **Opaque “400” overlay on clock-in (mobile web):** non-JSON / HTML error bodies from reverse proxies or gateways are no longer injected into toasts via `innerHTML`. Toasts escape all title/message text; `AzcApi.mapApiError` and dashboard `callApi` replace HTML, bare status codes, and guest-box noise with a localized “HTTP %s — reload” message. `callApi` always sends `Accept: application/json`.
+- **Manual Ruhezeit after overnight (ArbZG §5):** `checkRestPeriodForStartTime` no longer treats “same calendar day as end” as a blanket exemption. Intraday geteilte Arbeitszeit still skips rest only when the previous block started and ended on that same day; Wachdienst that crossed midnight (e.g. 22:00→06:00) still requires elapsed rest before a morning start.
+- **Stamp-path Ruhezeit:** live clock-in keeps elapsed-only rest (no calendar-day shortcut) so night-shift ends after midnight cannot clear the 11h gate. Mid-session interruptions remain Pause, not Gehen→Kommen.
+- **Paused resume + different ProjectCheck project:** completes the paused row at its pause instant (keeps original project billing) then starts a fresh session — no overwrite of earlier hours onto another project.
+- **ProjectCheck attach vs picker:** `userMayAttachProjectCheckProjectToOwnTime` prefers ProjectCheck’s `canUserAddTimeEntryForProject` so the attach gate matches the picker.
+- **Dashboard desklet/widget errors:** unexpected failures return HTTP 500 with a safe message (not opaque 400 “Action failed”); unauthenticated actions return 401; `getSummary` failures no longer abort a successful stamp.
+- **Version metadata:** `appinfo/version` was still `1.6.5` while `info.xml` said `1.6.6` — aligned for 1.6.7.
+
+### Changed
+
+- **Dashboard project help:** clarifies ArbeitszeitCheck = attendance (one active session); multi-project billing belongs in ProjectCheck — do not use out→in as a project switcher.
+
 ## 1.6.6 - 2026-08-08
 
 ### Fixed

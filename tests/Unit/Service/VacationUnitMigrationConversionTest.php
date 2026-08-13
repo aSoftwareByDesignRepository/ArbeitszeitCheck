@@ -19,12 +19,14 @@ use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
 use OCA\ArbeitszeitCheck\Service\VacationProrationService;
 use OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService;
 use OCA\ArbeitszeitCheck\Service\VacationUnitService;
+use OCA\ArbeitszeitCheck\Tests\Unit\Support\SchemaReadyDbMock;
 use OCP\IConfig;
 use OCP\IDBConnection;
 use PHPUnit\Framework\TestCase;
 
 class VacationUnitMigrationConversionTest extends TestCase
 {
+	use SchemaReadyDbMock;
 	public function testOrgDefaultMapperIsNeverUpdatedDuringMigrate(): void
 	{
 		$config = $this->createMock(IConfig::class);
@@ -203,7 +205,7 @@ class VacationUnitMigrationConversionTest extends TestCase
 			}
 		);
 
-		$db = $this->createMock(IDBConnection::class);
+		$db = $this->createSchemaReadyDbMock();
 		$db->expects($this->never())->method('beginTransaction');
 
 		$audit = $this->createMock(AuditLogMapper::class);

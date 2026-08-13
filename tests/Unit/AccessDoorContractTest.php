@@ -14,7 +14,7 @@ final class AccessDoorContractTest extends TestCase
 {
 	public function testAdminSettingsExposeOpenRestrictedAndUserPicker(): void
 	{
-		$html = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/admin-settings.php');
+		$html = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/partials/admin-settings/access.php');
 		self::assertStringContainsString('name="accessRestrictionEnabled"', $html);
 		self::assertStringContainsString('Open — every logged-in Nextcloud user', $html);
 		self::assertStringContainsString('Restricted — only allow-listed', $html);

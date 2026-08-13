@@ -1716,6 +1716,11 @@ class ManagerController extends Controller
 			if (!empty($payload['serverMayFillHours']) || !empty($payload['server_may_fill_hours'])) {
 				$data['server_may_fill_hours'] = true;
 			}
+			// day_fraction only (SEC-02): never copy request `days` / `working_days`.
+			if (array_key_exists('dayFraction', $payload) || array_key_exists('day_fraction', $payload)) {
+				$df = $payload['dayFraction'] ?? $payload['day_fraction'];
+				$data['day_fraction'] = is_array($df) ? (string)reset($df) : (string)$df;
+			}
 
 			try {
 				$absence = $this->absenceService->createApprovedAbsenceForEmployeeByManager($actorUserId, $targetUserId, $data);

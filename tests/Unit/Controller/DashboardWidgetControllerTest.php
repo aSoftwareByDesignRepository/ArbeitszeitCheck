@@ -163,4 +163,54 @@ class DashboardWidgetControllerTest extends TestCase {
 		$response = $this->controller->managerData(5000);
 		$this->assertSame(Http::STATUS_OK, $response->getStatus());
 	}
+
+	public function testClockInReturnsUnauthorizedWhenNoUser(): void {
+		$this->userSession->method('getUser')->willReturn(null);
+
+		$response = $this->controller->clockIn();
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertStringContainsString('not authenticated', strtolower($response->getData()['error']));
+	}
+
+	public function testClockInMapsUnexpectedFailuresToInternalServerError(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$this->timeTrackingService->method('clockIn')
+			->willThrowException(new \RuntimeException('db blew up'));
+
+		$response = $this->controller->clockIn();
+		$this->assertSame(Http::STATUS_INTERNAL_SERVER_ERROR, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertStringNotContainsString('db blew up', $data['error']);
+		$this->assertStringContainsString('unexpected error', strtolower($data['error']));
+	}
+
+	public function testClockInSurvivesGetSummaryFailure(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$broken = new class extends TimeEntry {
+			public function getSummary(?\DateTimeZone $displayTz = null): array {
+				throw new \RuntimeException('summary boom');
+			}
+		};
+		$broken->setId(7);
+		$broken->setUserId('u1');
+		$broken->setStatus(TimeEntry::STATUS_ACTIVE);
+
+		$this->timeTrackingService->method('clockIn')->willReturn($broken);
+		$this->timeTrackingService->method('getStatus')->willReturn(['status' => 'active']);
+
+		$response = $this->controller->clockIn();
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertSame(7, $data['timeEntry']['id']);
+		$this->assertSame('active', $data['timeEntry']['status']);
+	}
 }

@@ -671,6 +671,10 @@
 				if (window.OC?.requestToken) {
 					return window.OC.requestToken;
 				}
+				const fromHead = document.head?.getAttribute?.('data-requesttoken');
+				if (fromHead) {
+					return fromHead;
+				}
 				const meta = document.head.querySelector('meta[name="requesttoken"]');
 				return meta ? meta.getAttribute('content') : '';
 			})();

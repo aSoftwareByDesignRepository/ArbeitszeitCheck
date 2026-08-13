@@ -34,7 +34,7 @@ final class FilterPanelLayoutContractTest extends TestCase
 
 	public function testAbsencesAndTimeEntriesFiltersMatchPartialChrome(): void
 	{
-		foreach (['templates/absences.php', 'templates/time-entries.php'] as $rel) {
+		foreach (['templates/absences.php', 'templates/time-entries.php', 'templates/admin-users.php'] as $rel) {
 			$html = (string)file_get_contents($this->root . '/' . $rel);
 			$this->assertStringContainsString('azc-card azc-filter-panel', $html, $rel);
 			preg_match_all('/<section[^>]*\bazc-filter-panel\b[^>]*>[\s\S]*?<\/section>/', $html, $blocks);

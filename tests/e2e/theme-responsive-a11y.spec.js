@@ -31,6 +31,7 @@ const adminRoutes = [
 	{ id: 'vacation', path: '/apps/arbeitszeitcheck/admin/vacation-rules', ready: '#admin-vacation-policy-form' },
 	{ id: 'vacation-entitlement', path: '/apps/arbeitszeitcheck/admin/vacation-layers', ready: '#layer-l0' },
 	{ id: 'settings-access', path: '/apps/arbeitszeitcheck/admin/settings/access', ready: '#admin-settings-form' },
+	{ id: 'admin-users', path: '/apps/arbeitszeitcheck/admin/users', ready: '#employee-list-filter-title' },
 	{ id: 'working-time-models', path: '/apps/arbeitszeitcheck/admin/working-time-models', ready: '#create-model' },
 ]
 

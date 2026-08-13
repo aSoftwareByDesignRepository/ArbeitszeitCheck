@@ -10,6 +10,7 @@ declare(strict_types=1);
  */
 
 
+use OCA\ArbeitszeitCheck\Service\AdminEmployeeDirectoryService;
 use OCA\ArbeitszeitCheck\Util\TemplateL10n;
 
 /** @var array $_ */
@@ -17,9 +18,24 @@ use OCA\ArbeitszeitCheck\Util\TemplateL10n;
 $l = $_['l'] ?? \OCP\Util::getL10N('arbeitszeitcheck');
 
 $users = $_['users'] ?? [];
-$total = $_['total'] ?? 0;
+$total = (int)($_['total'] ?? 0);
+$accessFilter = (string)($_['accessFilter'] ?? AdminEmployeeDirectoryService::FILTER_ALL);
+$defaultFilter = (string)($_['defaultFilter'] ?? $accessFilter);
+$hiddenCount = (int)($_['hiddenCount'] ?? 0);
+$isAccessRestricted = (bool)($_['isAccessRestricted'] ?? false);
+$listTruncated = (bool)($_['truncated'] ?? false);
 /** @var \OCP\IURLGenerator|null $urlGenerator */
 $urlGenerator = $_['urlGenerator'] ?? null;
+$accessSettingsUrl = $urlGenerator
+	? $urlGenerator->linkToRoute('arbeitszeitcheck.admin.settingsAccess')
+	: '/apps/arbeitszeitcheck/admin/settings/access';
+$exportBaseUrl = $urlGenerator
+	? $urlGenerator->linkToRoute('arbeitszeitcheck.admin.exportUsers', ['format' => 'csv'])
+	: '/apps/arbeitszeitcheck/api/admin/users/export?format=csv';
+$exportHref = $exportBaseUrl . (str_contains($exportBaseUrl, '?') ? '&' : '?') . 'filter=' . rawurlencode($accessFilter);
+$filterIntro = $isAccessRestricted
+	? $l->t('Search by name. Choose who appears: people who can open the app, or every Nextcloud account.')
+	: $l->t('Search by name or login. Everyone with a Nextcloud account is listed.');
 ?>
 
 <?php include __DIR__ . '/common/page-start.php'; ?>
@@ -27,37 +43,108 @@ $urlGenerator = $_['urlGenerator'] ?? null;
 
         <div class="azc-page-stack">
 
-        <section class="azc-card admin-users-card" aria-labelledby="admin-users-list-heading">
+        <section class="azc-card azc-filter-panel admin-users-filter-panel" aria-labelledby="employee-list-filter-title">
+            <header class="azc-filter-panel__head">
+                <h2 id="employee-list-filter-title"><?php p($l->t('Find employees')); ?></h2>
+                <p class="azc-filter-panel__intro"><?php p($filterIntro); ?></p>
+            </header>
+            <div class="azc-filter-panel__body">
+                <form class="azc-filter-panel__form admin-users-filter-form" role="search" aria-labelledby="employee-list-filter-title" novalidate>
+                    <div class="azc-filter-grid azc-filter-grid--search admin-users-filter-grid">
+                        <div class="azc-filter-field admin-users-toolbar__search">
+                            <label for="user-search" class="azc-filter-field__label form-label visually-hidden"><?php p($l->t('Find an employee')); ?></label>
+                            <div class="azc-filter-field__control admin-users-search-control">
+                                <input type="search"
+                                    id="user-search"
+                                    class="form-input admin-users-search-input"
+                                    autocomplete="off"
+                                    autocapitalize="none"
+                                    spellcheck="false"
+                                    enterkeyhint="search"
+                                    placeholder="<?php p($l->t('Search by name or login…')); ?>"
+                                    aria-describedby="user-search-help users-pagination">
+                            </div>
+                            <p id="user-search-help" class="form-help">
+                                <?php p($l->t('Type at least 2 characters. Leave empty to browse page by page.')); ?>
+                            </p>
+                        </div>
+                        <fieldset class="azc-filter-field admin-users-access-filter" aria-labelledby="employee-access-filter-legend">
+                            <legend id="employee-access-filter-legend" class="azc-filter-field__label form-label"><?php p($l->t('Who to show')); ?></legend>
+                            <div class="admin-users-access-filter__options" role="presentation">
+                                <label class="admin-users-access-filter__option">
+                                    <input type="radio"
+                                        name="employee-list-access-filter"
+                                        id="employee-list-filter-app-access"
+                                        value="<?php p(AdminEmployeeDirectoryService::FILTER_APP_ACCESS); ?>"
+                                        <?php if ($accessFilter === AdminEmployeeDirectoryService::FILTER_APP_ACCESS) {
+                                        	p('checked');
+                                        } ?>>
+                                    <span><?php p($l->t('Can open ArbeitszeitCheck')); ?></span>
+                                </label>
+                                <label class="admin-users-access-filter__option">
+                                    <input type="radio"
+                                        name="employee-list-access-filter"
+                                        id="employee-list-filter-all"
+                                        value="<?php p(AdminEmployeeDirectoryService::FILTER_ALL); ?>"
+                                        <?php if ($accessFilter === AdminEmployeeDirectoryService::FILTER_ALL) {
+                                        	p('checked');
+                                        } ?>>
+                                    <span><?php p($l->t('All Nextcloud accounts')); ?></span>
+                                </label>
+                            </div>
+                        </fieldset>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <div id="employee-list-hidden-banner"
+            class="azc-inline-hint admin-users-hidden-banner"
+            role="status"
+            aria-live="polite"
+            <?php if ($hiddenCount <= 0 || $accessFilter !== AdminEmployeeDirectoryService::FILTER_APP_ACCESS) {
+            	p('hidden');
+            } ?>>
+            <p class="admin-users-hidden-banner__text">
+                <span class="admin-users-hidden-banner__prefix"><?php p(str_replace('{count}', (string)$hiddenCount, $l->t('{count} Nextcloud accounts without app access are hidden.'))); ?></span>
+                <button type="button" id="employee-list-show-all" class="azc-btn azc-btn--primary azc-btn--sm">
+                    <?php p($l->t('Show all accounts')); ?>
+                </button>
+            </p>
+        </div>
+
+        <div id="employee-list-truncated-banner"
+            class="azc-inline-hint admin-users-truncated-banner"
+            role="status"
+            aria-live="polite"
+            <?php if (!$listTruncated) {
+            	p('hidden');
+            } ?>>
+            <p><?php p($l->t('The list was shortened — more than 10,000 accounts exist. Refine your search to find a specific person.')); ?></p>
+        </div>
+
+        <section class="azc-card admin-users-card" id="admin-users-list-card" aria-labelledby="admin-users-list-heading">
             <header class="azc-card__header">
                 <div class="azc-card__header-text">
                     <h2 id="admin-users-list-heading" class="azc-card__title"><?php p($l->t('Employee list')); ?></h2>
-                    <p class="azc-card__lead"><?php p($l->t('Review work schedules, vacation days, and overtime settings. Open an employee to change their setup.')); ?></p>
+                    <p class="azc-card__lead"><?php p($l->t('Open a person to change their work schedule, vacation, or overtime.')); ?></p>
                 </div>
-                <div class="azc-card__header-actions">
-                    <button type="button" id="refresh-users" class="azc-btn azc-btn--secondary">
-                        <?php p($l->t('Refresh list')); ?>
+                <div class="azc-card__header-actions admin-users-header-actions">
+                    <a href="<?php p($exportHref); ?>"
+                        id="export-users-csv"
+                        class="azc-btn azc-btn--secondary"
+                        data-export-base="<?php p($exportBaseUrl); ?>"
+                        aria-label="<?php p($l->t('Export employee list as CSV')); ?>">
+                        <?php p($l->t('Export CSV')); ?>
+                    </a>
+                    <button type="button" id="refresh-users" class="azc-btn azc-btn--secondary" title="<?php p($l->t('Clear search and reload the list')); ?>">
+                        <?php p($l->t('Reset')); ?>
                     </button>
                 </div>
             </header>
             <div class="azc-card__body">
-                <div class="admin-users-toolbar">
-                    <div class="admin-users-toolbar__search">
-                        <label for="user-search" class="form-label"><?php p($l->t('Find an employee')); ?></label>
-                        <input type="search"
-                            id="user-search"
-                            class="form-input"
-                            autocomplete="off"
-                            autocapitalize="none"
-                            spellcheck="false"
-                            placeholder="<?php p($l->t('Search by name or login…')); ?>"
-                            aria-describedby="user-search-help users-pagination">
-                        <p id="user-search-help" class="form-help">
-                            <?php p($l->t('Type at least 2 characters to search. Leave empty to browse the list page by page.')); ?>
-                        </p>
-                    </div>
-                </div>
-
-                <div class="table-container" role="region" aria-label="<?php p($l->t('Employee list')); ?>">
+                <p id="users-list-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+                <div class="table-container" role="region" aria-label="<?php p($l->t('Employee list')); ?>" id="users-table-region">
                     <table class="table table--hover azc-table--responsive" id="users-table" role="table" aria-label="<?php p($l->t('Employee list')); ?>">
                         <thead>
                             <tr>
@@ -73,9 +160,21 @@ $urlGenerator = $_['urlGenerator'] ?? null;
                         </thead>
                         <tbody id="users-tbody">
                             <?php if (empty($users)): ?>
-                                <tr>
-                                    <td colspan="8" class="text-center">
-                                        <?php p($l->t('No users found')); ?>
+                                <tr id="users-empty-row">
+                                    <td colspan="8" class="text-center admin-users-empty-cell">
+                                        <?php if ($isAccessRestricted && $accessFilter === AdminEmployeeDirectoryService::FILTER_APP_ACCESS): ?>
+                                            <p class="admin-users-empty-message"><?php p($l->t('No one with app access yet. Add people under Access control, or show all Nextcloud accounts.')); ?></p>
+                                            <div class="admin-users-empty-actions">
+                                                <a class="azc-btn azc-btn--primary" href="<?php p($accessSettingsUrl); ?>">
+                                                    <?php p($l->t('Open access control')); ?>
+                                                </a>
+                                                <button type="button" class="azc-btn azc-btn--secondary" id="employee-list-empty-show-all" data-action="show-all-accounts">
+                                                    <?php p($l->t('Show all accounts')); ?>
+                                                </button>
+                                            </div>
+                                        <?php else: ?>
+                                            <p class="admin-users-empty-message"><?php p($l->t('No users found')); ?></p>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php else: ?>
@@ -162,13 +261,20 @@ $urlGenerator = $_['urlGenerator'] ?? null;
                         $shown = count($users);
                         $from = $shown > 0 ? 1 : 0;
                         $to = $shown;
-                        p(str_replace(
+                        $paginationText = str_replace(
                             ['{from}', '{to}', '{total}'],
                             [(string) $from, (string) $to, (string) $total],
                             $l->t('Showing employees {from}–{to} of {total}')
-                        ));
+                        );
+                        if ($isAccessRestricted && $accessFilter === AdminEmployeeDirectoryService::FILTER_APP_ACCESS) {
+                        	$paginationText .= ' ' . $l->t('(with app access only)');
+                        } elseif ($isAccessRestricted && $accessFilter === AdminEmployeeDirectoryService::FILTER_ALL) {
+                        	$paginationText .= ' ' . $l->t('(all Nextcloud accounts)');
+                        }
+                        p($paginationText);
                     ?></p>
                 </div>
+                <p id="export-status" class="sr-only" aria-live="polite"></p>
             </div><!-- /.azc-card__body -->
         </section><!-- /.azc-card -->
 <?php $urlGenerator = $_['urlGenerator'] ?? $urlGenerator ?? null; ?>
@@ -180,6 +286,12 @@ $urlGenerator = $_['urlGenerator'] ?? null;
         'initialOffset' => 0,
         'initialTotal' => (int) $total,
         'initialShown' => count($users),
+        'accessFilter' => $accessFilter,
+        'defaultFilter' => $defaultFilter,
+        'hiddenCount' => $hiddenCount,
+        'isAccessRestricted' => $isAccessRestricted,
+        'truncated' => $listTruncated,
+        'accessSettingsUrl' => $accessSettingsUrl,
         'organizationTimeCapture' => $_['organizationTimeCapture'] ?? ['clockStampingEnabled' => true, 'manualTimeEntryEnabled' => true],
         'userDetailUrlTemplate' => ($urlGenerator
             ? $urlGenerator->linkToRoute('arbeitszeitcheck.admin.userDetail', ['userId' => '__USER_ID__'])

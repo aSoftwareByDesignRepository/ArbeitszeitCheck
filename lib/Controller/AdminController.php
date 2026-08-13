@@ -33,6 +33,8 @@ use OCA\ArbeitszeitCheck\Db\UserVacationPolicyAssignment;
 use OCA\ArbeitszeitCheck\Db\UserVacationPolicyAssignmentMapper;
 use OCA\ArbeitszeitCheck\Exception\AdminUserProfileUpdateException;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
+use OCA\ArbeitszeitCheck\Exception\InvalidEmployeeListFilterException;
+use OCA\ArbeitszeitCheck\Service\AdminEmployeeDirectoryService;
 use OCA\ArbeitszeitCheck\Service\AdminUserProfileUpdateService;
 use OCA\ArbeitszeitCheck\Service\AuditLogPresenter;
 use OCA\ArbeitszeitCheck\Service\CSPService;
@@ -141,6 +143,7 @@ class AdminController extends Controller
 	private VacationProrationService $vacationProrationService;
 	private TimeCaptureMethodService $timeCaptureMethodService;
 	private AdminUserProfileUpdateService $adminUserProfileUpdateService;
+	private AdminEmployeeDirectoryService $adminEmployeeDirectoryService;
 	private AuditLogPresenter $auditLogPresenter;
 	private IDBConnection $db;
 	private ?LaborLawProfileFactory $laborLawProfileFactory;
@@ -185,6 +188,7 @@ class AdminController extends Controller
 		VacationProrationService $vacationProrationService,
 		TimeCaptureMethodService $timeCaptureMethodService,
 		AdminUserProfileUpdateService $adminUserProfileUpdateService,
+		AdminEmployeeDirectoryService $adminEmployeeDirectoryService,
 		AuditLogPresenter $auditLogPresenter,
 		PermissionService $permissionService,
 		LocaleFormatService $localeFormat,
@@ -226,6 +230,7 @@ class AdminController extends Controller
 		$this->vacationProrationService = $vacationProrationService;
 		$this->timeCaptureMethodService = $timeCaptureMethodService;
 		$this->adminUserProfileUpdateService = $adminUserProfileUpdateService;
+		$this->adminEmployeeDirectoryService = $adminEmployeeDirectoryService;
 		$this->auditLogPresenter = $auditLogPresenter;
 		$this->permissionService = $permissionService;
 		$this->localeFormat = $localeFormat;
@@ -722,46 +727,25 @@ class AdminController extends Controller
 	{
 		$this->registerFrontEndAssets('admin-users', 'admin-users', [], ['common/datepicker']);
 
+		$pageSize = 50;
+		$listResult = $this->adminEmployeeDirectoryService->listUsers(
+			null,
+			'',
+			$pageSize,
+			0,
+			false,
+		);
 
-
-		// Get initial users list (first 50)
-		$users = $this->userManager->search('', 50, 0);
 		$usersData = [];
-		foreach ($users as $user) {
-			$userId = $user->getUID();
-			$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
-			$workingTimeModel = null;
-			if ($currentModel) {
-				try {
-					$workingTimeModel = $this->workingTimeModelMapper->find($currentModel->getWorkingTimeModelId());
-				} catch (\Throwable $e) {
-					// Model might have been deleted
-				}
-			}
-
-			$startDate = $currentModel ? $currentModel->getStartDate() : null;
-			$endDate = $currentModel ? $currentModel->getEndDate() : null;
-
-			$usersData[] = [
-				'userId' => $userId,
-				'displayName' => $user->getDisplayName(),
-				'email' => $user->getEMailAddress(),
-				'enabled' => $user->isEnabled(),
-				'workingTimeModel' => $workingTimeModel ? [
-					'id' => $workingTimeModel->getId(),
-					'name' => $workingTimeModel->getName()
-				] : null,
-				'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
-				'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
-				'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
-				'overtimeTrackingFrom' => $this->userOvertimeSettingsService->getTrackingFrom($userId)?->format('Y-m-d'),
-			];
+		foreach ($listResult['users'] as $user) {
+			$usersData[] = $this->buildAdminUserSsrPayload($user);
 		}
 
-		$totalCount = $this->userManager->countUsersTotal(0, false);
-		if ($totalCount === false) {
-			$totalCount = count($usersData);
-		}
+		$totalCount = $listResult['total'];
+		$accessFilter = $listResult['filter'];
+		$defaultFilter = $listResult['defaultFilter'];
+		$hiddenCount = $listResult['hiddenCount'] ?? 0;
+		$isAccessRestricted = $this->permissionService->isAccessRestrictionEnabled();
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-users', array_merge(
 			$this->buildAdminShellParams(
@@ -772,6 +756,11 @@ class AdminController extends Controller
 			[
 				'users' => $usersData,
 				'total' => $totalCount,
+				'accessFilter' => $accessFilter,
+				'defaultFilter' => $defaultFilter,
+				'hiddenCount' => $hiddenCount,
+				'isAccessRestricted' => $isAccessRestricted,
+				'truncated' => $listResult['truncated'],
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 				'organizationTimeCapture' => $this->timeCaptureMethodService->getOrganizationDefaults(),
@@ -1126,6 +1115,117 @@ class AdminController extends Controller
 		}
 
 		return $summary;
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function buildAdminUserSsrPayload(\OCP\IUser $user): array
+	{
+		$userId = $user->getUID();
+		$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
+		$workingTimeModel = null;
+		if ($currentModel) {
+			try {
+				$workingTimeModel = $this->workingTimeModelMapper->find($currentModel->getWorkingTimeModelId());
+			} catch (\Throwable $e) {
+				// Model might have been deleted
+			}
+		}
+
+		$startDate = $currentModel ? $currentModel->getStartDate() : null;
+		$endDate = $currentModel ? $currentModel->getEndDate() : null;
+
+		return [
+			'userId' => $userId,
+			'displayName' => $user->getDisplayName(),
+			'email' => $user->getEMailAddress(),
+			'enabled' => $user->isEnabled(),
+			'workingTimeModel' => $workingTimeModel ? [
+				'id' => $workingTimeModel->getId(),
+				'name' => $workingTimeModel->getName(),
+			] : null,
+			'vacationDaysPerYear' => $currentModel ? $currentModel->getVacationDaysPerYear() : null,
+			'workingTimeModelStartDate' => $startDate ? $startDate->format('Y-m-d') : null,
+			'workingTimeModelEndDate' => $endDate ? $endDate->format('Y-m-d') : null,
+			'overtimeTrackingFrom' => $this->userOvertimeSettingsService->getTrackingFrom($userId)?->format('Y-m-d'),
+		];
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function buildAdminUserApiPayload(\OCP\IUser $user): array
+	{
+		$userId = (string)$user->getUID();
+		$currentYear = (int)date('Y');
+		$policy = $this->userVacationPolicyAssignmentMapper->findCurrentByUser($userId);
+		$entitlementPreview = $this->vacationEntitlementEngine->computeForDate($userId, new \DateTimeImmutable('today'));
+		$entitlementFullDays = round((float)$entitlementPreview['days'], 2);
+		$entitlementProration = $this->vacationProrationService->prorateForYear($userId, $currentYear, $entitlementFullDays);
+
+		$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
+		$workingTimeModel = null;
+		if ($currentModel) {
+			try {
+				$workingTimeModel = $this->workingTimeModelMapper->find($currentModel->getWorkingTimeModelId());
+			} catch (\Throwable $e) {
+				// Model might have been deleted
+			}
+		}
+
+		$today = new \DateTime();
+		$today->setTime(0, 0, 0);
+		$hasTimeEntriesToday = $this->timeEntryMapper->hasEntriesOnDate($userId, $today);
+
+		return [
+			'userId' => $userId,
+			'displayName' => (string)$user->getDisplayName(),
+			'email' => $user->getEMailAddress(),
+			'enabled' => $user->isEnabled(),
+			'workingTimeModel' => $workingTimeModel ? [
+				'id' => $workingTimeModel->getId(),
+				'name' => $workingTimeModel->getName(),
+				'type' => $workingTimeModel->getType(),
+				'weeklyHours' => $workingTimeModel->getWeeklyHours(),
+				'dailyHours' => $workingTimeModel->getDailyHours(),
+				'workDaysPerWeek' => $workingTimeModel->getWorkDaysPerWeek(),
+			] : null,
+			'vacationDaysPerYear' => $currentModel
+				? $this->presentAdminVacationDays((float)$currentModel->getVacationDaysPerYear())
+				: null,
+			'workingTimeModelStartDate' => $currentModel && ($startDate = $currentModel->getStartDate()) ? $startDate->format('Y-m-d') : null,
+			'workingTimeModelEndDate' => $currentModel && ($endDate = $currentModel->getEndDate()) ? $endDate->format('Y-m-d') : null,
+			'hasTimeEntriesToday' => $hasTimeEntriesToday,
+			'vacationCarryoverDays' => $this->presentAdminVacationDays(
+				(float)$this->vacationYearBalanceMapper->getCarryoverDays($userId, $currentYear)
+			),
+			'vacationCarryoverYear' => $currentYear,
+			'vacationPolicy' => $policy ? [
+				'id' => $policy->getId(),
+				'vacationMode' => $policy->getVacationMode(),
+				'manualDays' => $this->presentAdminVacationDays(
+					$policy->getManualDays() !== null ? (float)$policy->getManualDays() : null
+				),
+				'tariffRuleSetId' => $policy->getTariffRuleSetId(),
+				'overrideReason' => $policy->getOverrideReason(),
+				'effectiveFrom' => $policy->getEffectiveFrom()?->format('Y-m-d'),
+				'effectiveTo' => $policy->getEffectiveTo()?->format('Y-m-d'),
+				'inheritLowerLayers' => $policy->isInherit(),
+			] : null,
+			'entitlementPreview' => [
+				'days' => (float)$entitlementProration['days'],
+				'fullYearDays' => $entitlementFullDays,
+				'prorated' => (bool)$entitlementProration['prorated'],
+				'prorationMethod' => $entitlementProration['method'],
+				'monthsCovered' => $entitlementProration['months_covered'],
+				'source' => $entitlementPreview['source'],
+				'ruleSetId' => $entitlementPreview['ruleSetId'],
+			],
+			'overtimeTrackingFrom' => $this->userOvertimeSettingsService->getTrackingFrom($userId)?->format('Y-m-d'),
+			'employmentStart' => $this->userEmploymentSettingsService->getEmploymentStart($userId)?->format('Y-m-d'),
+			'employmentEnd' => $this->userEmploymentSettingsService->getEmploymentEnd($userId)?->format('Y-m-d'),
+		];
 	}
 
 	/**
@@ -3174,11 +3274,35 @@ class AdminController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('migrateVacationUnit failed: ' . $e->getMessage(), ['exception' => $e]);
+			if ($this->isVacationUnitSchemaOutdatedError($e)) {
+				return new JSONResponse([
+					'success' => false,
+					'error' => $this->l10n->t('The database schema is outdated. Run Nextcloud upgrade (occ upgrade) or update ArbeitszeitCheck, then try again.'),
+					'code' => Constants::VAC_UNIT_SCHEMA_OUTDATED,
+				], Http::STATUS_CONFLICT);
+			}
 			return new JSONResponse([
 				'success' => false,
 				'error' => $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.')
 			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	private function isVacationUnitSchemaOutdatedError(\Throwable $e): bool
+	{
+		if ($e instanceof \RuntimeException && $e->getMessage() === Constants::VAC_UNIT_SCHEMA_OUTDATED) {
+			return true;
+		}
+		$prev = $e->getPrevious();
+		if ($prev instanceof \Throwable && $this->isVacationUnitSchemaOutdatedError($prev)) {
+			return true;
+		}
+		$haystack = strtolower($e->getMessage());
+		if (!str_contains($haystack, 'unknown column') && !str_contains($haystack, 'no such column')) {
+			return false;
+		}
+
+		return str_contains($haystack, 'duration_hours') || str_contains($haystack, 'carryover_hours');
 	}
 
 	/**
@@ -3921,112 +4045,21 @@ class AdminController extends Controller
 				$searchTerm = mb_substr($searchTerm, 0, self::DASHBOARD_EMPLOYEES_MAX_SEARCH_LENGTH);
 			}
 
-			// Get all users from Nextcloud. A non-empty search must match by
-			// user id OR display name (issue #14); empty search keeps the
-			// directory-ordered, offset-paginated browse used for counting.
-			$searchResultTruncated = null;
-			if ($searchTerm !== '') {
-				$searchResult = UserDirectorySearch::searchByIdOrName(
-					$this->userManager,
-					$searchTerm,
-					$normalizedLimit,
-					$normalizedOffset,
-					false,
-				);
-				$users = $searchResult['users'];
-				$searchResultTruncated = $searchResult['truncated'];
-			} else {
-				$users = $this->userManager->search($searchTerm, $normalizedLimit, $normalizedOffset);
-			}
+			$filterParam = $this->request->getParam('filter');
+			$filterRaw = is_string($filterParam) && trim($filterParam) !== '' ? trim($filterParam) : null;
+
+			$listResult = $this->adminEmployeeDirectoryService->listUsers(
+				$filterRaw,
+				$searchTerm,
+				$normalizedLimit,
+				$normalizedOffset,
+				$activeTodayOnly,
+			);
 
 			$usersData = [];
-			$currentYear = (int)date('Y');
-			$todayFilter = new \DateTime();
-			$todayFilter->setTime(0, 0, 0);
-			$activeTodayLookup = null;
-			if ($activeTodayOnly) {
-				$activeTodayLookup = array_fill_keys(
-					$this->timeEntryMapper->findDistinctUserIdsByDate($todayFilter),
-					true
-				);
-			}
-			foreach ($users as $user) {
+			foreach ($listResult['users'] as $user) {
 				try {
-					$userId = (string)$user->getUID();
-					if ($activeTodayLookup !== null && !isset($activeTodayLookup[$userId])) {
-						continue;
-					}
-					$policy = $this->userVacationPolicyAssignmentMapper->findCurrentByUser($userId);
-					$entitlementPreview = $this->vacationEntitlementEngine->computeForDate($userId, new \DateTimeImmutable('today'));
-					$entitlementFullDays = round((float)$entitlementPreview['days'], 2);
-					$entitlementProration = $this->vacationProrationService->prorateForYear($userId, $currentYear, $entitlementFullDays);
-
-					// Get current working time model assignment
-					$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
-
-					// Get working time model details if assigned
-					$workingTimeModel = null;
-					if ($currentModel) {
-						try {
-							$workingTimeModel = $this->workingTimeModelMapper->find($currentModel->getWorkingTimeModelId());
-						} catch (\Throwable $e) {
-							// Model might have been deleted
-						}
-					}
-
-					// Get user statistics (per-user: does this user have entries today?)
-					$today = new \DateTime();
-					$today->setTime(0, 0, 0);
-					$hasTimeEntriesToday = $this->timeEntryMapper->hasEntriesOnDate($userId, $today);
-
-					$usersData[] = [
-						'userId' => $userId,
-						'displayName' => (string)$user->getDisplayName(),
-						'email' => $user->getEMailAddress(),
-						'enabled' => $user->isEnabled(),
-						'workingTimeModel' => $workingTimeModel ? [
-							'id' => $workingTimeModel->getId(),
-							'name' => $workingTimeModel->getName(),
-							'type' => $workingTimeModel->getType(),
-							'weeklyHours' => $workingTimeModel->getWeeklyHours(),
-							'dailyHours' => $workingTimeModel->getDailyHours(),
-							'workDaysPerWeek' => $workingTimeModel->getWorkDaysPerWeek(),
-						] : null,
-						'vacationDaysPerYear' => $currentModel
-							? $this->presentAdminVacationDays((float)$currentModel->getVacationDaysPerYear())
-							: null,
-						'workingTimeModelStartDate' => $currentModel && ($startDate = $currentModel->getStartDate()) ? $startDate->format('Y-m-d') : null,
-						'workingTimeModelEndDate' => $currentModel && ($endDate = $currentModel->getEndDate()) ? $endDate->format('Y-m-d') : null,
-						'hasTimeEntriesToday' => $hasTimeEntriesToday,
-						'vacationCarryoverDays' => $this->presentAdminVacationDays(
-							(float)$this->vacationYearBalanceMapper->getCarryoverDays($userId, $currentYear)
-						),
-						'vacationCarryoverYear' => $currentYear,
-						'vacationPolicy' => $policy ? [
-							'id' => $policy->getId(),
-							'vacationMode' => $policy->getVacationMode(),
-							'manualDays' => $this->presentAdminVacationDays(
-								$policy->getManualDays() !== null ? (float)$policy->getManualDays() : null
-							),
-							'tariffRuleSetId' => $policy->getTariffRuleSetId(),
-							'overrideReason' => $policy->getOverrideReason(),
-							'effectiveFrom' => $policy->getEffectiveFrom()?->format('Y-m-d'),
-							'effectiveTo' => $policy->getEffectiveTo()?->format('Y-m-d'),
-							'inheritLowerLayers' => $policy->isInherit(),
-						] : null,
-						'entitlementPreview' => [
-							'days' => (float)$entitlementProration['days'],
-							'fullYearDays' => $entitlementFullDays,
-							'prorated' => (bool)$entitlementProration['prorated'],
-							'prorationMethod' => $entitlementProration['method'],
-							'monthsCovered' => $entitlementProration['months_covered'],
-							'source' => $entitlementPreview['source'],
-							'ruleSetId' => $entitlementPreview['ruleSetId'],
-						],
-						'overtimeTrackingFrom' => $this->userOvertimeSettingsService->getTrackingFrom($userId)?->format('Y-m-d'),
-						'employmentStart' => $this->userEmploymentSettingsService->getEmploymentStart($userId)?->format('Y-m-d'),
-						'employmentEnd' => $this->userEmploymentSettingsService->getEmploymentEnd($userId)?->format('Y-m-d'),
-					];
+					$usersData[] = $this->buildAdminUserApiPayload($user);
 				} catch (\Throwable $e) {
 					\OCP\Log\logger('arbeitszeitcheck')->error('Error building admin user payload: ' . $e->getMessage(), [
 						'exception' => $e,
@@ -4034,29 +4067,31 @@ class AdminController extends Controller
 				}
 			}
 
-			// Total for pagination: full directory uses countUsersTotal; search uses page size only.
-			$searchTruncated = false;
-			if ($searchTerm !== '') {
-				$totalCount = count($usersData);
-				$searchTruncated = $searchResultTruncated ?? (count($users) >= $normalizedLimit);
-			} elseif ($activeTodayOnly) {
-				$totalCount = count($this->timeEntryMapper->findDistinctUserIdsByDate($todayFilter));
-			} else {
-				$totalCount = $this->userManager->countUsersTotal(0, false);
-				if ($totalCount === false) {
-					$totalCount = count($usersData);
-				}
-			}
-
-			return new JSONResponse([
+			$response = [
 				'success' => true,
 				'users' => $usersData,
-				'total' => $totalCount,
-				'limit' => $normalizedLimit,
-				'offset' => $normalizedOffset,
-				'truncated' => $searchTruncated,
-				'filter' => $activeTodayOnly ? 'active_today' : 'all',
-			]);
+				'total' => $listResult['total'],
+				'limit' => $listResult['limit'],
+				'offset' => $listResult['offset'],
+				'truncated' => $listResult['truncated'],
+				'filter' => $listResult['filter'],
+				'defaultFilter' => $listResult['defaultFilter'],
+				'activeToday' => $listResult['activeToday'],
+			];
+			if ($listResult['directoryTotal'] !== null) {
+				$response['directoryTotal'] = $listResult['directoryTotal'];
+			}
+			if ($listResult['hiddenCount'] !== null) {
+				$response['hiddenCount'] = $listResult['hiddenCount'];
+			}
+
+			return new JSONResponse($response);
+		} catch (InvalidEmployeeListFilterException $e) {
+			return new JSONResponse([
+				'success' => false,
+				'code' => InvalidEmployeeListFilterException::CODE,
+				'error' => $e->getMessage(),
+			], Http::STATUS_BAD_REQUEST);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AdminController::getUsers: ' . $e->getMessage(), [
 				'exception' => $e,
@@ -5865,23 +5900,27 @@ class AdminController extends Controller
 	 * Export users data
 	 *
 	 * @param string $format Format: csv, json
-	 * @return DataDownloadResponse
+	 * @return DataDownloadResponse|JSONResponse
 	 */
 	#[NoCSRFRequired]
-	public function exportUsers(string $format = 'csv'): DataDownloadResponse
+	public function exportUsers(string $format = 'csv'): DataDownloadResponse|JSONResponse
 	{
 		try {
-			// Get all users from Nextcloud
-			$users = $this->userManager->search('', null, 0);
+			$filterParam = $this->request->getParam('filter');
+			$filterRaw = is_string($filterParam) && trim($filterParam) !== '' ? trim($filterParam) : null;
+
+			$listResult = $this->adminEmployeeDirectoryService->listUsers(
+				$filterRaw,
+				'',
+				Constants::ADMIN_EMPLOYEE_FILTER_MAX_SCAN,
+				0,
+				false,
+			);
 
 			$data = [];
-			foreach ($users as $user) {
+			foreach ($listResult['users'] as $user) {
 				$userId = $user->getUID();
-
-				// Get current working time model assignment
 				$currentModel = $this->userWorkingTimeModelMapper->findCurrentByUser($userId);
-
-				// Get working time model details if assigned
 				$workingTimeModelName = null;
 				if ($currentModel) {
 					try {
@@ -5900,17 +5939,28 @@ class AdminController extends Controller
 					'working_time_model' => $workingTimeModelName ?? '',
 					'vacation_days_per_year' => $currentModel ? $currentModel->getVacationDaysPerYear() : '',
 					'working_time_model_start_date' => $currentModel && ($startDate = $currentModel->getStartDate()) ? $startDate->format('Y-m-d') : '',
-					'working_time_model_end_date' => $currentModel && ($endDate = $currentModel->getEndDate()) ? $endDate->format('Y-m-d') : ''
+					'working_time_model_end_date' => $currentModel && ($endDate = $currentModel->getEndDate()) ? $endDate->format('Y-m-d') : '',
 				];
 			}
 
-			$filename = 'users-export-' . date('Y-m-d') . '.' . $format;
+			$filterSuffix = $listResult['filter'] === AdminEmployeeDirectoryService::FILTER_APP_ACCESS ? 'app-access' : 'all';
+			// AS-05 / NFR: surface scan-cap truncation in the download name so HR
+			// never mistakes a capped export for a complete directory dump.
+			$truncSuffix = !empty($listResult['truncated']) ? '-truncated' : '';
+			$filename = 'users-export-' . $filterSuffix . $truncSuffix . '-' . date('Y-m-d') . '.' . $format;
 
 			return match ($format) {
 				'csv' => $this->exportAsCsv($data, $filename),
 				'json' => $this->exportAsJson($data, $filename),
 				default => $this->exportAsCsv($data, $filename)
 			};
+		} catch (InvalidEmployeeListFilterException $e) {
+			// Same stable contract as getUsers — never dump a download or opaque 500 for a bad filter.
+			return new JSONResponse([
+				'success' => false,
+				'code' => InvalidEmployeeListFilterException::CODE,
+				'error' => $e->getMessage(),
+			], Http::STATUS_BAD_REQUEST);
 		} catch (\Throwable $e) {
 			throw new \Exception($this->l10n->t('Failed to export users.'));
 		}

@@ -100,9 +100,21 @@ class DashboardWidgetController extends Controller {
 		try {
 			$userId = $this->getUserId();
 			$entry = $action($userId);
+			try {
+				$summary = $entry->getSummary();
+			} catch (\Throwable $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->error('Dashboard widget getSummary failed: ' . $e->getMessage(), [
+					'exception' => $e,
+				]);
+				$summary = [
+					'id' => $entry->getId(),
+					'userId' => $userId,
+					'status' => $entry->getStatus(),
+				];
+			}
 			return new JSONResponse([
 				'success' => true,
-				'timeEntry' => $entry->getSummary(),
+				'timeEntry' => $summary,
 				'status' => $this->timeTrackingService->getStatus($userId),
 			]);
 		} catch (MonthFinalizedException $e) {
@@ -140,14 +152,23 @@ class DashboardWidgetController extends Controller {
 				'error_code' => BusinessRuleCode::LOCKED,
 			], Http::STATUS_LOCKED);
 		} catch (\Throwable $e) {
+			if (strpos($e->getMessage(), 'User not authenticated') !== false) {
+				$message = $this->l10n->t('User not authenticated');
+				return new JSONResponse([
+					'success' => false,
+					'error' => $message,
+					'message' => $message,
+				], Http::STATUS_UNAUTHORIZED);
+			}
 			\OCP\Log\logger('arbeitszeitcheck')->warning('Dashboard widget action failed', [
 				'exception' => $e,
 			]);
+			$message = $this->l10n->t('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
 			return new JSONResponse([
 				'success' => false,
-				'error' => $this->l10n->t('Action failed'),
-				'message' => $this->l10n->t('Action failed'),
-			], Http::STATUS_BAD_REQUEST);
+				'error' => $message,
+				'message' => $message,
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 

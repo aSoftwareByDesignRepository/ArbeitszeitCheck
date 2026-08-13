@@ -159,6 +159,14 @@ class AdminVacationYearAckBehaviorTest extends TestCase
 		$locking->method('acquireLock');
 		$locking->method('releaseLock');
 
+		$adminEmployeeDirectoryService = new \OCA\ArbeitszeitCheck\Service\AdminEmployeeDirectoryService(
+			$this->userManager,
+			$this->permissionService,
+			$this->createMock(TimeEntryMapper::class),
+			$l10n,
+			$this->createMock(\Psr\Log\LoggerInterface::class),
+		);
+
 		$this->controller = new AdminController(
 			'arbeitszeitcheck',
 			$this->request,
@@ -194,6 +202,7 @@ class AdminVacationYearAckBehaviorTest extends TestCase
 			$proration,
 			$timeCapture,
 			$adminProfile,
+			$adminEmployeeDirectoryService,
 			$auditPresenter,
 			$this->permissionService,
 			$localeFormat,

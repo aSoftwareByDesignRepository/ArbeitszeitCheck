@@ -6,6 +6,203 @@
  * @license AGPL-3.0-or-later
  */
 
+/* ===== EMPLOYEE LIST FILTER PANEL ===== */
+
+.admin-users-filter-panel .azc-filter-grid--search {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-4, 1rem);
+  align-items: start;
+}
+
+.admin-users-filter-panel .admin-users-toolbar__search,
+.admin-users-filter-panel .admin-users-access-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 0.5rem);
+  min-width: 0;
+  grid-row: auto;
+}
+
+.admin-users-filter-panel .admin-users-access-filter {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-users-access-filter__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 0.5rem);
+}
+
+.admin-users-access-filter__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2, 0.5rem);
+  flex: 1 1 11rem;
+  min-height: 3rem;
+  padding: 0.55rem 1rem;
+  border: 2px solid var(--color-border, var(--arbeitszeitcheck-color-border));
+  border-radius: var(--border-radius-large, 10px);
+  background: var(--color-main-background);
+  color: var(--color-main-text);
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-users-access-filter__option:has(input:checked) {
+  border-color: var(--color-primary-element);
+  background: color-mix(in srgb, var(--color-main-background) 88%, var(--color-primary-element) 12%);
+  color: var(--color-main-text);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--color-primary-element);
+}
+
+.admin-users-access-filter__option:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary-element);
+  outline-offset: 2px;
+}
+
+.admin-users-access-filter__option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.admin-users-search-input {
+  min-height: 3rem;
+  font-size: 1.05rem;
+}
+
+.admin-users-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 0.5rem);
+  justify-content: center;
+  align-items: center;
+}
+
+.admin-users-empty-actions .azc-btn {
+  min-height: 2.75rem;
+}
+
+.admin-users-loading-cell {
+  padding: var(--space-6, 1.5rem) var(--space-4, 1rem);
+}
+
+.admin-users-loading-label {
+  display: inline-block;
+  font-weight: 600;
+  color: var(--color-main-text);
+}
+
+.admin-users-hidden-banner,
+.admin-users-truncated-banner {
+  margin: 0;
+  padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+  border-radius: var(--border-radius-large, 10px);
+  border: 1px solid var(--color-border, var(--arbeitszeitcheck-color-border));
+  background: color-mix(in srgb, var(--color-main-background) 92%, var(--color-primary-element) 8%);
+}
+
+.admin-users-hidden-banner[hidden],
+.admin-users-truncated-banner[hidden] {
+  display: none;
+}
+
+.admin-users-hidden-banner__text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 0.5rem);
+  margin: 0;
+  line-height: 1.45;
+  color: var(--color-main-text);
+}
+
+.admin-users-truncated-banner p {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--color-main-text);
+}
+
+.admin-users-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 0.5rem);
+  align-items: center;
+}
+
+.admin-users-empty-cell {
+  padding: var(--space-6, 1.5rem) var(--space-4, 1rem);
+}
+
+.admin-users-empty-message {
+  margin: 0 0 var(--space-3, 0.75rem);
+  max-width: 42ch;
+  margin-inline: auto;
+  line-height: 1.5;
+  color: var(--color-main-text);
+}
+
+@media (max-width: 480px) {
+  #app-content.azc-app--admin-users .azc-page-stack,
+  #app-content.azc-app--admin-users #azc-main-content {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  #app-content.azc-app--admin-users .admin-users-filter-panel,
+  #app-content.azc-app--admin-users .admin-users-card,
+  #app-content.azc-app--admin-users .table-container {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-users-filter-panel .azc-filter-grid--search {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-users-access-filter__options {
+    flex-direction: column;
+  }
+
+  .admin-users-access-filter__option {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .admin-users-header-actions {
+    width: 100%;
+  }
+
+  .admin-users-header-actions .azc-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+@media (forced-colors: active) {
+  .admin-users-access-filter__option:has(input:checked) {
+    border-color: Highlight;
+  }
+}
+
 /* ===== EMPLOYEE LIST TOOLBAR & PAGINATION =====
    Refresh action lives in the card header (.azc-card__header-actions);
    the toolbar only holds the search field. */

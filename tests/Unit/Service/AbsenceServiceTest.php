@@ -403,6 +403,7 @@ class AbsenceServiceTest extends TestCase
 		$year = (int)$futureSat->format('Y');
 		$this->holidayCalendarService->method('computeWorkingDaysPerYearForUser')
 			->willReturn([$year => 0.0]);
+		$this->holidayCalendarService->method('computeWorkingDaysForUser')->willReturn(0.0);
 
 		$this->expectException(\Exception::class);
 		$this->expectExceptionMessage('Vacation must include at least one working day');

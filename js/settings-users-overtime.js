@@ -53,6 +53,9 @@
 
 	function getRequestToken() {
 		const head = document.head || document.getElementsByTagName('head')[0];
+		if (typeof OC !== 'undefined' && OC.requestToken) {
+			return OC.requestToken;
+		}
 		const fromHead = head && head.getAttribute('data-requesttoken');
 		if (fromHead) {
 			return fromHead;

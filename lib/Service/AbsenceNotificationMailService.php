@@ -14,6 +14,7 @@ namespace OCA\ArbeitszeitCheck\Service;
 
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\Absence;
+use OCA\ArbeitszeitCheck\Util\AbsenceTypeLabel;
 use OCP\IConfig;
 use OCP\IL10N;
 use OCP\Mail\IMailer;
@@ -61,7 +62,7 @@ class AbsenceNotificationMailService
 		$eventLabel = $this->getHrEventLabel($eventKey);
 		$startStr = $absence->getStartDate()?->format('Y-m-d') ?? '?';
 		$endStr = $absence->getEndDate()?->format('Y-m-d') ?? '?';
-		$days = (int)($absence->getDays() ?? 0);
+		$daysLabel = AbsenceTypeLabel::formatWorkingDays($this->l10n, (float)($absence->getDays() ?? 0));
 		$employeeLink = $this->urlGenerator->linkToRouteAbsolute('arbeitszeitcheck.page.absences');
 		$managerLink = $this->urlGenerator->linkToRouteAbsolute('arbeitszeitcheck.manager.dashboard');
 
@@ -84,8 +85,8 @@ class AbsenceNotificationMailService
 			'Period: %1$s to %2$s',
 			[$startStr, $endStr]
 		) . "\n" . $this->l10n->t(
-			'Days: %1$d',
-			[$days]
+			'Days: %1$s',
+			[$daysLabel]
 		);
 
 		if ($actorName !== null) {
@@ -139,7 +140,7 @@ class AbsenceNotificationMailService
 		$end = $absence->getEndDate();
 		$startStr = $start ? $start->format('Y-m-d') : '?';
 		$endStr = $end ? $end->format('Y-m-d') : '?';
-		$days = (int)($absence->getDays() ?? 0);
+		$daysLabel = AbsenceTypeLabel::formatWorkingDays($this->l10n, (float)($absence->getDays() ?? 0));
 		$link = $this->urlGenerator->linkToRouteAbsolute('arbeitszeitcheck.substitute.index');
 
 		$subject = $this->l10n->t('Substitution request: %1$s asks you to cover from %2$s to %3$s', [
@@ -148,8 +149,8 @@ class AbsenceNotificationMailService
 			$endStr
 		]);
 		$plainBody = $this->l10n->t(
-			'%1$s has requested you as their substitute for %2$s from %3$s to %4$s (%5$d day(s)). Please approve or decline this request.',
-			[$employeeName, $typeLabel, $startStr, $endStr, $days]
+			'%1$s has requested you as their substitute for %2$s from %3$s to %4$s (%5$s). Please approve or decline this request.',
+			[$employeeName, $typeLabel, $startStr, $endStr, $daysLabel]
 		) . "\n\n" . $this->l10n->t('Go to substitution requests: %s', [$link]);
 
 		$this->sendMail(

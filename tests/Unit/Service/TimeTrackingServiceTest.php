@@ -355,6 +355,79 @@ class TimeTrackingServiceTest extends TestCase {
 		$this->assertNotNull($result->getBreaks());
 	}
 
+	/**
+	 * Multi-project same day: clocking in with a *different* ProjectCheck project
+	 * while a paused session exists must complete the paused row (keeping its
+	 * original project attribution) and create a fresh entry — never overwrite.
+	 */
+	public function testClockInWithDifferentProjectCompletesPausedThenCreatesNew(): void
+	{
+		$userId = 'testuser';
+
+		$this->timeEntryMapper->method('findActiveByUser')->willReturn(null);
+		$this->timeEntryMapper->method('findOnBreakByUser')->willReturn(null);
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(0.0);
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
+
+		$start = (new \DateTime())->setTime(9, 0, 0);
+		$pausedAt = (new \DateTime())->setTime(12, 0, 0);
+
+		$pausedEntry = new TimeEntry();
+		$pausedEntry->setId(123);
+		$pausedEntry->setUserId($userId);
+		$pausedEntry->setStatus(TimeEntry::STATUS_PAUSED);
+		$pausedEntry->setStartTime($start);
+		$pausedEntry->setUpdatedAt($pausedAt);
+		$pausedEntry->setProjectCheckProjectId('11');
+		$pausedEntry->setBreaks('');
+		$pausedEntry->setIsManualEntry(false);
+		$pausedEntry->setCreatedAt(new \DateTime());
+
+		$this->timeEntryMapper->method('findPausedOrUnfinishedTodayByUser')->willReturn($pausedEntry);
+
+		$this->projectCheckService->expects($this->once())
+			->method('userMayAttachProjectCheckProjectToOwnTime')
+			->with($userId, '22')
+			->willReturn(true);
+
+		$completedIds = [];
+		$inserted = null;
+		$this->timeEntryMapper->expects($this->once())
+			->method('update')
+			->willReturnCallback(static function (TimeEntry $entry) use (&$completedIds): TimeEntry {
+				$completedIds[] = $entry->getId();
+				return $entry;
+			});
+		$this->timeEntryMapper->expects($this->once())
+			->method('insert')
+			->willReturnCallback(static function (TimeEntry $entry) use (&$inserted): TimeEntry {
+				$entry->setId(456);
+				$inserted = $entry;
+				return $entry;
+			});
+
+		$actions = [];
+		$auditLog = new \OCA\ArbeitszeitCheck\Db\AuditLog();
+		$this->auditLogMapper->expects($this->exactly(2))
+			->method('logAction')
+			->willReturnCallback(static function (...$args) use (&$actions, $auditLog) {
+				$actions[] = $args[1];
+				return $auditLog;
+			});
+
+		$result = $this->service->clockIn($userId, '22');
+
+		$this->assertSame([123], $completedIds);
+		$this->assertSame(TimeEntry::STATUS_COMPLETED, $pausedEntry->getStatus());
+		$this->assertSame('11', $pausedEntry->getProjectCheckProjectId());
+		$this->assertEquals($pausedAt->format('c'), $pausedEntry->getEndTime()->format('c'));
+		$this->assertSame(456, $result->getId());
+		$this->assertSame(TimeEntry::STATUS_ACTIVE, $result->getStatus());
+		$this->assertNotNull($inserted);
+		$this->assertSame('22', $inserted->getProjectCheckProjectId());
+		$this->assertSame(['clock_out', 'clock_in'], $actions);
+	}
+
 	public function testClockInDoesNotResumePausedEntryWhenStampingDisabled(): void
 	{
 		$userId = 'testuser';

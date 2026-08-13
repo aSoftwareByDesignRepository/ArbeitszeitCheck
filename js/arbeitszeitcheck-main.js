@@ -1063,13 +1063,16 @@
             const shortenError = params.get('shorten_error');
             if (created === '1' || updated === '1') {
                 const msg = created === '1'
-                    ? mainT('Absence request submitted successfully')
+                    ? (params.get('half') === '1'
+                        ? mainT('Half-day vacation request submitted successfully')
+                        : mainT('Absence request submitted successfully'))
                     : mainT('Absence request updated');
                 if (window.OC && window.OC.Notification && window.OC.Notification.showTemporary) {
                     window.OC.Notification.showTemporary(msg, { type: 'success' });
                 }
                 params.delete('created');
                 params.delete('updated');
+                params.delete('half');
             }
             if (shortened === '1') {
                 const msg = mainT('Absence shortened successfully. Your actual last day of absence has been updated.');
@@ -1622,6 +1625,7 @@
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'requesttoken': requestToken
                 }
             };
@@ -1643,6 +1647,22 @@
             // Show loading state
             this.setLoadingState(true);
 
+            const resolveTransportError = (status, rawText) => {
+                if (window.AzcApi && typeof window.AzcApi.mapApiError === 'function') {
+                    return window.AzcApi.mapApiError(
+                        rawText && String(rawText).trim() !== '' ? rawText : null,
+                        status,
+                    );
+                }
+                const code = Number.isFinite(status) && status > 0 ? String(status) : '';
+                if (code !== '') {
+                    return mainT(
+                        'The server rejected this request (HTTP %s). Reload the page and try again. If it continues, contact your administrator.',
+                    ).replace('%s', code);
+                }
+                return mainT('An unexpected error occurred. Please try again. If the problem continues, contact your administrator.');
+            };
+
             // Make the API call
             return fetch(url, options)
                 .then(async response => {
@@ -1658,27 +1678,47 @@
                             result = JSON.parse(text);
                         } catch (e) {
                             const trimmed = (text || '').trim();
-                            if (response.ok && trimmed.charAt(0) === '<') {
+                            const unsafe = window.AzcApi
+                                && typeof window.AzcApi.isUnsafeApiErrorText === 'function'
+                                ? window.AzcApi.isUnsafeApiErrorText(trimmed)
+                                : (trimmed === '' || trimmed.charAt(0) === '<' || /^\d{3}$/.test(trimmed));
+                            if (!response.ok || unsafe) {
                                 result = {
                                     success: false,
-                                    error: mainT('The server returned an unexpected page instead of data. Try reloading the page. If the problem persists, sign in again.'),
+                                    error: resolveTransportError(response.status, trimmed),
                                 };
                             } else {
-                                result = { success: response.ok, error: text || 'Unknown error' };
+                                result = { success: response.ok, error: trimmed || 'Unknown error' };
                             }
                         }
                     }
 
                     // Check if HTTP response indicates error
                     if (!response.ok) {
-                        // HTTP error status (400, 500, etc.)
-                        if (!result.success && result.error) {
-                            // Error message already in result
-                        } else if (!result.error) {
-                            // No error message, create one from status
-                            result.error = result.message || `HTTP ${response.status}: ${response.statusText}`;
+                        if (result && typeof result === 'object') {
+                            const rawErr = typeof result.error === 'string' ? result.error
+                                : (typeof result.message === 'string' ? result.message : '');
+                            const unsafe = window.AzcApi
+                                && typeof window.AzcApi.isUnsafeApiErrorText === 'function'
+                                && window.AzcApi.isUnsafeApiErrorText(rawErr);
+                            if (!rawErr || unsafe) {
+                                result.error = resolveTransportError(response.status, rawErr);
+                                if (typeof result.message === 'string'
+                                    && window.AzcApi
+                                    && typeof window.AzcApi.isUnsafeApiErrorText === 'function'
+                                    && window.AzcApi.isUnsafeApiErrorText(result.message)) {
+                                    result.message = result.error;
+                                }
+                            } else if (!result.error) {
+                                result.error = result.message || resolveTransportError(response.status, '');
+                            }
+                            result.success = false;
+                        } else {
+                            result = {
+                                success: false,
+                                error: resolveTransportError(response.status, ''),
+                            };
                         }
-                        result.success = false;
                     }
 
                     // Attach response to result for error handling

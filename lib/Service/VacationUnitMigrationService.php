@@ -199,6 +199,42 @@ final class VacationUnitMigrationService
 		return true;
 	}
 
+	/**
+	 * Hours-mode migration needs additive columns from migration 1037.
+	 * Fail fast with a stable code instead of a generic SQL error mid-transaction.
+	 */
+	private function assertHoursMigrationSchemaReady(string $targetUnit): void
+	{
+		if ($targetUnit !== Constants::VACATION_UNIT_HOURS) {
+			return;
+		}
+		foreach (['at_absences' => 'duration_hours', 'at_vacation_year_balance' => 'carryover_hours'] as $table => $column) {
+			try {
+				$qb = $this->db->getQueryBuilder();
+				$qb->select($column)
+					->from($table)
+					->setMaxResults(1);
+				$result = $qb->executeQuery();
+				$result->closeCursor();
+			} catch (\Throwable $e) {
+				if ($this->isUnknownColumnSchemaError($e, $column)) {
+					throw new \RuntimeException(Constants::VAC_UNIT_SCHEMA_OUTDATED, 0, $e);
+				}
+				throw $e;
+			}
+		}
+	}
+
+	private function isUnknownColumnSchemaError(\Throwable $e, string $column): bool
+	{
+		$haystack = strtolower($e->getMessage());
+		if (!str_contains($haystack, 'unknown column') && !str_contains($haystack, 'no such column')) {
+			return false;
+		}
+
+		return str_contains($haystack, strtolower($column));
+	}
+
 	private function readConfiguredUnit(): string
 	{
 		$raw = strtolower(trim((string)$this->config->getAppValue(
@@ -225,6 +261,8 @@ final class VacationUnitMigrationService
 		$targetUnit = $targetUnit === Constants::VACATION_UNIT_HOURS
 			? Constants::VACATION_UNIT_HOURS
 			: Constants::VACATION_UNIT_DAYS;
+
+		$this->assertHoursMigrationSchemaReady($targetUnit);
 
 		if ($hoursPerDay < 0.25 || $hoursPerDay > 24.0 || !is_finite($hoursPerDay)) {
 			throw new \InvalidArgumentException('Invalid hours_per_day');

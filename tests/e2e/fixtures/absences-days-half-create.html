@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Absences days half create</title>
+	<style>
+		body { font-family: "Segoe UI", sans-serif; margin: 0; background: #f4f6f4; color: #1a1a1a; }
+		main { max-width: 36rem; margin: 1.5rem auto; padding: 1.25rem; background: #fff; border: 1px solid #c8c8c8; border-radius: 8px; }
+		.absence-day-fraction__fieldset { border: 0; margin: 0; padding: 0; }
+		.absence-day-fraction__segments { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+		.absence-day-fraction__segment { position: relative; display: flex; flex: 1 1 10rem; min-width: 8rem; min-height: 3rem; margin: 0; cursor: pointer; }
+		.absence-day-fraction__input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+		.absence-day-fraction__face {
+			display: flex; align-items: center; justify-content: center; width: 100%; min-height: 3rem;
+			padding: 0.75rem 1.1rem; border: 2px solid #666; border-radius: 0.5rem; font-size: 1.125rem; font-weight: 700;
+		}
+		.absence-day-fraction__input:checked + .absence-day-fraction__face {
+			border-color: #0b6e4f; background: #e6f4ef; box-shadow: inset 0 0 0 2px #0b6e4f;
+		}
+		.absence-day-fraction__input:focus-visible + .absence-day-fraction__face { outline: 3px solid #005fcc; outline-offset: 2px; }
+		:focus-visible { outline: 3px solid #005fcc; outline-offset: 2px; }
+		.form-help { color: #444; }
+		.absence-multi-day-half-tip {
+			margin: 0.35rem 0 0; padding: 0.5rem 0.65rem;
+			border-left: 3px solid #0b6e4f; background: #eef7f3;
+		}
+		.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+		.list-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+		.azc-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; padding: 0.5rem 1rem; border: 2px solid #0b6e4f; border-radius: 0.4rem; background: #fff; color: #0b6e4f; font-weight: 600; text-decoration: none; }
+		.azc-btn--primary { background: #0b6e4f; color: #fff; }
+	</style>
+</head>
+<body>
+<main id="absences-days-half-create" aria-labelledby="create-title">
+	<div class="list-actions" aria-label="Quick actions">
+		<a id="btn-half-day-today" class="azc-btn" href="#half-prefill">Half day today</a>
+		<button type="button" class="azc-btn azc-btn--primary" id="btn-request-absence">Request Time Off</button>
+	</div>
+	<h1 id="create-title">Request time off</h1>
+	<form id="absence-form">
+		<label for="absence-type">Type</label>
+		<select id="absence-type" name="type">
+			<option value="vacation" selected>Vacation</option>
+			<option value="sick_leave">Sick leave</option>
+		</select>
+		<label for="absence-start-date">Start</label>
+		<input id="absence-start-date" name="start_date" value="12.08.2026">
+		<label for="absence-end-date">End</label>
+		<input id="absence-end-date" name="end_date" value="12.08.2026">
+		<p id="absence-multi-day-half-tip" class="form-help absence-multi-day-half-tip" hidden data-days-mode="1">
+			Need a half day plus full days? Submit the half day as its own request, then the remaining days.
+		</p>
+		<div id="absence-day-fraction-group" class="form-group absence-day-fraction" data-days-mode="1">
+			<fieldset class="absence-day-fraction__fieldset">
+				<legend id="absence-day-fraction-legend">Day length</legend>
+				<div class="absence-day-fraction__segments" role="radiogroup" aria-labelledby="absence-day-fraction-legend" aria-describedby="absence-day-fraction-help absence-day-fraction-preview">
+					<label class="absence-day-fraction__segment">
+						<input type="radio" name="day_fraction" id="absence-day-fraction-full" value="1" checked class="absence-day-fraction__input">
+						<span class="absence-day-fraction__face">Full day</span>
+					</label>
+					<label class="absence-day-fraction__segment">
+						<input type="radio" name="day_fraction" id="absence-day-fraction-half" value="0.5" class="absence-day-fraction__input">
+						<span class="absence-day-fraction__face">Half day</span>
+					</label>
+				</div>
+			</fieldset>
+			<p id="absence-day-fraction-help" class="form-help">Full day or half day for this date. Morning or afternoon is not tracked.</p>
+			<p id="absence-day-fraction-preview" role="status" aria-live="polite">This request uses 1 vacation day.</p>
+			<p id="absence-day-fraction-live" class="sr-only" aria-live="polite"></p>
+		</div>
+		<button type="submit">Submit</button>
+	</form>
+</main>
+<script>
+(function () {
+	const group = document.getElementById('absence-day-fraction-group');
+	const full = document.getElementById('absence-day-fraction-full');
+	const half = document.getElementById('absence-day-fraction-half');
+	const preview = document.getElementById('absence-day-fraction-preview');
+	const live = document.getElementById('absence-day-fraction-live');
+	const multiTip = document.getElementById('absence-multi-day-half-tip');
+	const typeEl = document.getElementById('absence-type');
+	const startEl = document.getElementById('absence-start-date');
+	const endEl = document.getElementById('absence-end-date');
+	const halfToday = document.getElementById('btn-half-day-today');
+
+	function sync() {
+		const single = startEl.value === endEl.value;
+		const multi = startEl.value && endEl.value && startEl.value !== endEl.value;
+		const show = typeEl.value === 'vacation' && single;
+		const was = !group.hidden;
+		group.hidden = !show;
+		if (multiTip) multiTip.hidden = !(typeEl.value === 'vacation' && multi);
+		if (!show) {
+			full.checked = true;
+			half.checked = false;
+			if (was) live.textContent = 'Half day is only for a single day. This request will use full working days.';
+		} else {
+			live.textContent = '';
+		}
+		preview.textContent = half.checked
+			? 'This request uses 0.5 vacation day.'
+			: 'This request uses 1 vacation day.';
+	}
+
+	if (halfToday) {
+		halfToday.addEventListener('click', function (e) {
+			e.preventDefault();
+			typeEl.value = 'vacation';
+			half.checked = true;
+			full.checked = false;
+			startEl.value = '12.08.2026';
+			endEl.value = '12.08.2026';
+			sync();
+			half.focus();
+		});
+	}
+
+	[full, half, typeEl, startEl, endEl].forEach((el) => el.addEventListener('change', sync));
+	startEl.addEventListener('input', sync);
+	endEl.addEventListener('input', sync);
+	sync();
+})();
+</script>
+</body>
+</html>

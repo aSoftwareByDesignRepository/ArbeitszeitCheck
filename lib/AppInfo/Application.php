@@ -52,6 +52,7 @@ use OCA\ArbeitszeitCheck\Service\ReportingService;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\TeamResolverService;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
+use OCA\ArbeitszeitCheck\Service\AdminEmployeeDirectoryService;
 use OCA\ArbeitszeitCheck\Service\OvertimeTrafficLightService;
 use OCA\ArbeitszeitCheck\Service\OvertimeNotificationMailService;
 use OCA\ArbeitszeitCheck\Service\OvertimePayoutMailService;
@@ -922,6 +923,16 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IUserManager::class),
 				$c->query(TeamResolverService::class),
 				$c->query(\Psr\Log\LoggerInterface::class)
+			);
+		});
+
+		$context->registerService(AdminEmployeeDirectoryService::class, function ($c) {
+			return new AdminEmployeeDirectoryService(
+				$c->query(\OCP\IUserManager::class),
+				$c->query(PermissionService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TimeEntryMapper::class),
+				$c->query(\OCP\IL10N::class),
+				$c->query(\Psr\Log\LoggerInterface::class),
 			);
 		});
 

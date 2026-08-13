@@ -677,10 +677,23 @@
 		const hoursField = document.getElementById('manager-absence-record-hours-field');
 		const hoursInput = document.getElementById('manager-absence-record-hours');
 		const hoursPreview = document.getElementById('manager-absence-record-hours-preview');
+		const dayFractionField = document.getElementById('manager-absence-record-day-fraction-field');
+		const dayFractionFull = document.getElementById('manager-absence-day-fraction-full');
+		const dayFractionHalf = document.getElementById('manager-absence-day-fraction-half');
+		const dayFractionPreview = document.getElementById('manager-absence-day-fraction-preview');
+		const dayFractionLive = document.getElementById('manager-absence-day-fraction-live');
 		const typeSel = document.getElementById('manager-absence-record-type');
 		const startEl = document.getElementById('manager-absence-record-start');
 		const endEl = document.getElementById('manager-absence-record-end');
 		const hoursMode = ((window.ArbeitszeitCheck && window.ArbeitszeitCheck.vacationUnit) || 'days') === 'hours';
+		const daysMode = !hoursMode;
+		const previewHalfMsg = t('This request uses 0.5 vacation day.', 'This request uses 0.5 vacation day.');
+		const previewFullMsg = t('This request uses 1 vacation day.', 'This request uses 1 vacation day.');
+		const rangeAnnounceMsg = t(
+			'Half day is only for a single day. This request will use full working days.',
+			'Half day is only for a single day. This request will use full working days.'
+		);
+		let lastDayFractionAnnounce = '';
 		const orgHoursPerDay = Number((window.ArbeitszeitCheck && window.ArbeitszeitCheck.vacationHoursPerDay) || 8) || 8;
 		let oneDayHours = orgHoursPerDay;
 		let averageDaily = orgHoursPerDay;
@@ -849,6 +862,43 @@
 			}, 200);
 		}
 
+		function syncDayFractionField() {
+			if (!dayFractionField || !typeSel) {
+				return;
+			}
+			const start = parseDDMMYYYY(startEl && startEl.value);
+			const end = parseDDMMYYYY(endEl && endEl.value);
+			const singleDay = !!(start && end && toYmd(start) === toYmd(end));
+			const show = daysMode && typeSel.value === 'vacation' && singleDay;
+			const wasVisible = !dayFractionField.hidden;
+			dayFractionField.hidden = !show;
+			if (!show) {
+				if (dayFractionFull) {
+					dayFractionFull.checked = true;
+				}
+				if (dayFractionHalf) {
+					dayFractionHalf.checked = false;
+				}
+				if (wasVisible && dayFractionLive && lastDayFractionAnnounce !== rangeAnnounceMsg) {
+					dayFractionLive.textContent = rangeAnnounceMsg;
+					lastDayFractionAnnounce = rangeAnnounceMsg;
+				}
+				if (dayFractionPreview) {
+					dayFractionPreview.textContent = '';
+				}
+			} else {
+				lastDayFractionAnnounce = '';
+				if (dayFractionLive) {
+					dayFractionLive.textContent = '';
+				}
+				if (dayFractionPreview) {
+					dayFractionPreview.textContent = (dayFractionHalf && dayFractionHalf.checked)
+						? previewHalfMsg
+						: previewFullMsg;
+				}
+			}
+		}
+
 		function syncHoursField() {
 			if (!hoursField || !hoursInput || !typeSel) {
 				return;
@@ -868,11 +918,24 @@
 			} else {
 				applyAutoRangeIfNeeded();
 			}
+			syncDayFractionField();
 		}
 
 		if (typeSel) {
 			typeSel.addEventListener('change', syncHoursField);
 		}
+		[dayFractionFull, dayFractionHalf].forEach((el) => {
+			if (!el) {
+				return;
+			}
+			el.addEventListener('change', () => {
+				if (dayFractionPreview) {
+					dayFractionPreview.textContent = (dayFractionHalf && dayFractionHalf.checked)
+						? previewHalfMsg
+						: previewFullMsg;
+				}
+			});
+		});
 		if (hoursInput) {
 			hoursInput.addEventListener('input', () => {
 				hoursTouched = true;
@@ -883,8 +946,14 @@
 			if (!el) {
 				return;
 			}
-			el.addEventListener('change', applyAutoRangeIfNeeded);
-			el.addEventListener('input', applyAutoRangeIfNeeded);
+			el.addEventListener('change', () => {
+				applyAutoRangeIfNeeded();
+				syncDayFractionField();
+			});
+			el.addEventListener('input', () => {
+				applyAutoRangeIfNeeded();
+				syncDayFractionField();
+			});
 		});
 		document.querySelectorAll('.manager-absence-hours-preset').forEach((btn) => {
 			btn.addEventListener('click', (e) => {
@@ -916,6 +985,7 @@
 			});
 		});
 		syncHoursField();
+		syncDayFractionField();
 
 		form.addEventListener('submit', (event) => {
 			event.preventDefault();
@@ -967,6 +1037,9 @@
 				payload.durationHours = durationHours;
 				payload.requireDurationHours = true;
 				payload.serverMayFillHours = true;
+			}
+			if (daysMode && type === 'vacation' && dayFractionField && !dayFractionField.hidden) {
+				payload.dayFraction = (dayFractionHalf && dayFractionHalf.checked) ? '0.5' : '1';
 			}
 			Utils.ajax('/apps/arbeitszeitcheck/api/manager/employee-absences', {
 				method: 'POST',

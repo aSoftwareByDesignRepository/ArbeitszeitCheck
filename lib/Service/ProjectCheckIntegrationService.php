@@ -259,6 +259,9 @@ class ProjectCheckIntegrationService
 
 	/**
 	 * Whether the user may attach this ProjectCheck project ID to their own time entry (clock-in or manual).
+	 *
+	 * Uses ProjectCheck's {@see \OCA\ProjectCheck\Service\ProjectService::canUserAddTimeEntryForProject}
+	 * when available so the attach gate matches the picker ({@see getAvailableProjects}).
 	 */
 	public function userMayAttachProjectCheckProjectToOwnTime(string $userId, string $projectIdStr): bool
 	{
@@ -273,13 +276,21 @@ class ProjectCheckIntegrationService
 			return false;
 		}
 		$svc = $this->projectService();
-		if ($svc === null || !is_callable([$svc, 'getProject'])) {
+		if ($svc === null) {
 			// Fail closed: without ProjectCheck's ProjectService we cannot verify
 			// team membership, pricing mode, or project status — never trust a raw id.
 			$this->logger->warning('ProjectCheck attach rejected: ProjectService unavailable to ArbeitszeitCheck.');
 			return false;
 		}
 		try {
+			// Prefer the same gate the ProjectCheck create-form / picker uses.
+			if (is_callable([$svc, 'canUserAddTimeEntryForProject'])) {
+				return (bool)$svc->canUserAddTimeEntryForProject($userId, $pid);
+			}
+			if (!is_callable([$svc, 'getProject'])) {
+				$this->logger->warning('ProjectCheck attach rejected: ProjectService has no getProject.');
+				return false;
+			}
 			$project = $svc->getProject($pid);
 			if ($project === null || !is_callable([$project, 'allowsTimeTracking']) || !$project->allowsTimeTracking()) {
 				return false;

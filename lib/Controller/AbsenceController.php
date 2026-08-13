@@ -439,12 +439,18 @@ class AbsenceController extends Controller
 	{
 		$params = $this->request->getParams();
 		$sub = $params['substitute_user_id'] ?? null;
+		$dayFraction = array_key_exists('day_fraction', $params) ? $params['day_fraction'] : null;
+		$durationHours = array_key_exists('duration_hours', $params) ? $params['duration_hours'] : null;
 		return $this->update(
 			$id,
-			$params['start_date'] ?? null,
-			$params['end_date'] ?? null,
-			$params['reason'] ?? null,
-			$sub !== null ? (string)$sub : null
+			isset($params['start_date']) ? (is_array($params['start_date']) ? (string)reset($params['start_date']) : (string)$params['start_date']) : null,
+			isset($params['end_date']) ? (is_array($params['end_date']) ? (string)reset($params['end_date']) : (string)$params['end_date']) : null,
+			array_key_exists('reason', $params)
+				? (is_array($params['reason']) ? (string)reset($params['reason']) : (string)$params['reason'])
+				: null,
+			$sub !== null ? (string)$sub : null,
+			$dayFraction !== null ? (is_array($dayFraction) ? (string)reset($dayFraction) : (string)$dayFraction) : null,
+			$durationHours !== null ? (is_array($durationHours) ? (string)reset($durationHours) : (string)$durationHours) : null
 		);
 	}
 
@@ -780,8 +786,11 @@ class AbsenceController extends Controller
 
 		$prefillStart = null;
 		$prefillEnd = null;
+		$prefillHalf = false;
 		$qStart = trim((string)$this->request->getParam('start', ''));
 		$qEnd = trim((string)$this->request->getParam('end', ''));
+		$qHalf = strtolower(trim((string)$this->request->getParam('half', '')));
+		$prefillHalf = in_array($qHalf, ['1', 'true', 'yes', '0.5'], true);
 		$ymdOk = static function (string $s): bool {
 			return (bool)preg_match('/^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/', $s);
 		};
@@ -799,6 +808,10 @@ class AbsenceController extends Controller
 		}
 		if ($prefillStart !== null && $prefillEnd === null) {
 			$prefillEnd = $prefillStart;
+		}
+		// Half-day shortcut only makes sense for a single calendar day.
+		if ($prefillHalf && $prefillStart !== null && $prefillEnd !== null && $prefillStart !== $prefillEnd) {
+			$prefillHalf = false;
 		}
 
 		// Surface server-side errors that came from a no-JS form POST so the user
@@ -825,6 +838,7 @@ class AbsenceController extends Controller
 				'useAppTeams' => $this->teamResolver->useAppTeams(),
 				'prefillStart' => $prefillStart,
 				'prefillEnd' => $prefillEnd,
+				'prefillHalf' => $prefillHalf,
 				'error' => $displayError,
 			])
 		);
@@ -1016,6 +1030,11 @@ class AbsenceController extends Controller
 			if (!empty($params['server_may_fill_hours'])) {
 				$data['server_may_fill_hours'] = true;
 			}
+			// day_fraction only (SEC-02): never copy request `days` / `working_days`.
+			if (array_key_exists('day_fraction', $params)) {
+				$df = $params['day_fraction'];
+				$data['day_fraction'] = is_array($df) ? (string)reset($df) : (string)$df;
+			}
 
 			if (empty($data['type']) || empty($data['start_date']) || empty($data['end_date'])) {
 				$msg = $this->l10n->t('Please choose a type and fill in start and end date.');
@@ -1068,6 +1087,10 @@ class AbsenceController extends Controller
 
 			if (!$this->wantsJson()) {
 				$url = $this->urlGenerator->linkToRoute('arbeitszeitcheck.page.absences') . '?created=1';
+				$days = $absence->getDays();
+				if ($days !== null && abs((float)$days - 0.5) < 0.011) {
+					$url .= '&half=1';
+				}
 				return new RedirectResponse($url, Http::STATUS_SEE_OTHER);
 			}
 			return new JSONResponse([
@@ -1108,8 +1131,18 @@ class AbsenceController extends Controller
 		$end_date = $params['end_date'] ?? null;
 		$reason = $params['reason'] ?? null;
 		$substitute_user_id = isset($params['substitute_user_id']) ? (string)$params['substitute_user_id'] : null;
+		$day_fraction = array_key_exists('day_fraction', $params) ? $params['day_fraction'] : null;
+		$duration_hours = array_key_exists('duration_hours', $params) ? $params['duration_hours'] : null;
 
-		return $this->update($id, $start_date, $end_date, $reason, $substitute_user_id);
+		return $this->update(
+			$id,
+			is_array($start_date) ? (string)reset($start_date) : ($start_date !== null ? (string)$start_date : null),
+			is_array($end_date) ? (string)reset($end_date) : ($end_date !== null ? (string)$end_date : null),
+			is_array($reason) ? (string)reset($reason) : ($reason !== null ? (string)$reason : null),
+			$substitute_user_id,
+			is_array($day_fraction) ? (string)reset($day_fraction) : ($day_fraction !== null ? (string)$day_fraction : null),
+			is_array($duration_hours) ? (string)reset($duration_hours) : ($duration_hours !== null ? (string)$duration_hours : null)
+		);
 	}
 
 	/**
@@ -1122,10 +1155,20 @@ class AbsenceController extends Controller
 	 * @param string|null $end_date New end date
 	 * @param string|null $reason New reason
 	 * @param string|null $substitute_user_id New substitute user ID (empty to clear)
+	 * @param string|null $day_fraction Days-mode length: 1 or 0.5 (never bind client days)
+	 * @param string|null $duration_hours Hours-mode debit
 	 * @return JSONResponse|RedirectResponse
 	 */
 	#[NoAdminRequired]
-	public function update(int $id, ?string $start_date = null, ?string $end_date = null, ?string $reason = null, ?string $substitute_user_id = null): JSONResponse|RedirectResponse
+	public function update(
+		int $id,
+		?string $start_date = null,
+		?string $end_date = null,
+		?string $reason = null,
+		?string $substitute_user_id = null,
+		?string $day_fraction = null,
+		?string $duration_hours = null,
+	): JSONResponse|RedirectResponse
 	{
 		try {
 			$userId = $this->getUserId();
@@ -1142,6 +1185,12 @@ class AbsenceController extends Controller
 			}
 			if ($substitute_user_id !== null) {
 				$data['substitute_user_id'] = $substitute_user_id === '' ? null : $substitute_user_id;
+			}
+			if ($day_fraction !== null && $day_fraction !== '') {
+				$data['day_fraction'] = $day_fraction;
+			}
+			if ($duration_hours !== null && $duration_hours !== '') {
+				$data['duration_hours'] = $duration_hours;
 			}
 
 			try {
@@ -1197,10 +1246,16 @@ class AbsenceController extends Controller
 			]);
 		} catch (\Throwable $e) {
 			\OCP\Log\logger('arbeitszeitcheck')->error('Error in AbsenceController::update: ' . $e->getMessage(), ['exception' => $e]);
-			return new JSONResponse([
+			$payload = [
 				'success' => false,
-				'error' => $this->getSafeErrorMessage($e)
-			], Http::STATUS_BAD_REQUEST);
+				'error' => $this->getSafeErrorMessage($e),
+			];
+			$code = $this->getErrorCode($e);
+			if ($code !== null) {
+				$payload['code'] = $code;
+				$payload['error_code'] = $code;
+			}
+			return new JSONResponse($payload, Http::STATUS_BAD_REQUEST);
 		}
 	}
 

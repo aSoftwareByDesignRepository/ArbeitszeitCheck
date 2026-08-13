@@ -18,6 +18,7 @@ use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
 use OCA\ArbeitszeitCheck\Service\DbLockKeys;
 use OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService;
 use OCA\ArbeitszeitCheck\Service\VacationUnitService;
+use OCA\ArbeitszeitCheck\Tests\Unit\Support\SchemaReadyDbMock;
 use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\Lock\ILockingProvider;
@@ -26,6 +27,7 @@ use PHPUnit\Framework\TestCase;
 
 class VacationUnitMigrationLockTest extends TestCase
 {
+	use SchemaReadyDbMock;
 	public function testLockedMigrationThrowsInProgress(): void
 	{
 		$config = $this->createMock(IConfig::class);
@@ -37,7 +39,7 @@ class VacationUnitMigrationLockTest extends TestCase
 				return $default;
 			}
 		);
-		$db = $this->createMock(IDBConnection::class);
+		$db = $this->createSchemaReadyDbMock();
 		$db->expects($this->never())->method('beginTransaction');
 
 		$locking = $this->createMock(ILockingProvider::class);

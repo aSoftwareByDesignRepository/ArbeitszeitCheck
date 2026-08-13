@@ -31,6 +31,11 @@
 			if (window.OC?.requestToken) {
 				return window.OC.requestToken;
 			}
+			const head = document.querySelector('head');
+			const fromHead = head ? head.getAttribute('data-requesttoken') : '';
+			if (fromHead) {
+				return fromHead;
+			}
 			const meta = document.querySelector('head meta[name="requesttoken"]');
 			return meta ? meta.getAttribute('content') : '';
 		},
@@ -158,15 +163,67 @@
 			return translate(msgid);
 		},
 
+		/**
+		 * True when a string looks like HTML, a bare HTTP status, or other
+		 * non-user-facing proxy/gateway noise that must never be shown as-is.
+		 *
+		 * @param {unknown} value
+		 * @returns {boolean}
+		 */
+		isUnsafeApiErrorText(value) {
+			if (typeof value !== 'string') {
+				return true;
+			}
+			const t = value.trim();
+			if (t === '') {
+				return true;
+			}
+			if (t.charAt(0) === '<' || /^<!DOCTYPE/i.test(t)) {
+				return true;
+			}
+			if (/^\d{3}$/.test(t) || /^HTTP\s*\d{3}\b/i.test(t)) {
+				return true;
+			}
+			if (/empty-content|guest-box|body-login|<\/?(html|body|head|script|style)\b/i.test(t)) {
+				return true;
+			}
+			// Cap absurd payloads (full HTML error documents).
+			if (t.length > 500) {
+				return true;
+			}
+			return false;
+		},
+
+		/**
+		 * Localized fallback when the transport failed without a usable JSON message.
+		 *
+		 * @param {number} [status]
+		 * @returns {string}
+		 */
+		httpTransportFallbackMessage(status) {
+			const code = Number.isFinite(status) && status > 0 ? String(status) : '';
+			if (code !== '') {
+				return translate(
+					'The server rejected this request (HTTP %s). Reload the page and try again. If it continues, contact your administrator.',
+				).replace('%s', code);
+			}
+			return translate(
+				'An unexpected error occurred. Please try again. If the problem continues, contact your administrator.',
+			);
+		},
+
 		mapApiError(data, status) {
 			if (data && typeof data === 'object') {
-				if (typeof data.error === 'string' && data.error !== '' && !this.isMachineErrorCode(data.error)) {
+				if (typeof data.error === 'string' && data.error !== '' && !this.isMachineErrorCode(data.error)
+					&& !this.isUnsafeApiErrorText(data.error)) {
 					return data.error;
 				}
-				if (data.error && typeof data.error.message === 'string') {
+				if (data.error && typeof data.error.message === 'string'
+					&& !this.isUnsafeApiErrorText(data.error.message)) {
 					return data.error.message;
 				}
-				if (typeof data.message === 'string' && data.message !== '' && !this.isMachineErrorCode(data.message)) {
+				if (typeof data.message === 'string' && data.message !== '' && !this.isMachineErrorCode(data.message)
+					&& !this.isUnsafeApiErrorText(data.message)) {
 					return data.message;
 				}
 				const code = (typeof data.code === 'string' && data.code)
@@ -190,8 +247,14 @@
 					return translate('Terminal token invalid or revoked.');
 				}
 			}
+			if (typeof data === 'string' && !this.isUnsafeApiErrorText(data) && !this.isMachineErrorCode(data)) {
+				return data;
+			}
 			if (status === 403 || status === 404) {
 				return translate('Not found or no access.');
+			}
+			if (status >= 400 && status < 600) {
+				return this.httpTransportFallbackMessage(status);
 			}
 			return translate(
 				'An unexpected error occurred. Please try again. If the problem continues, contact your administrator.',

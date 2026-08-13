@@ -148,7 +148,7 @@ final class SupportUsSectionContractTest extends TestCase {
 			'/a\.azc-support-us__cta\.azc-btn--primary\s*\{[^}]*background-color:[^;]*!important/s',
 			$css
 		);
-		self::assertStringContainsString('background-color: #ffffff !important', $css);
+		self::assertStringContainsString('background-color: var(--color-primary-element) !important', $css);
 	}
 
 	public function testSupportUsLivesOnDedicatedAdminPageNotSettingsEmbed(): void {
@@ -160,8 +160,12 @@ final class SupportUsSectionContractTest extends TestCase {
 
 		self::assertStringNotContainsString('support-us-section.php', $settings);
 		self::assertStringNotContainsString('#azc-support-us-title', $settings);
-		self::assertStringContainsString('supportUsUrl', $settings);
-		self::assertStringContainsString('Open Support & us', $settings);
+
+		$adminSettingsPhp = (string)file_get_contents($root . '/lib/Settings/AdminSettings.php');
+		self::assertStringContainsString('supportUsUrl', $adminSettingsPhp);
+
+		self::assertStringContainsString('arbeitszeitcheck.admin.supportUs', $nav);
+		self::assertStringContainsString('Open Support and us', $nav);
 
 		self::assertStringContainsString('support-us-section.php', $page);
 		self::assertStringContainsString("supportUsPresentation = 'page'", $page);

@@ -155,15 +155,14 @@ class ComplianceServiceTest extends TestCase
 	}
 
 	/**
-	 * Test that checkComplianceBeforeClockIn detects insufficient rest period
+	 * Stamp path: elapsed Ruhezeit only (no calendar-day shortcut).
 	 */
 	public function testCheckComplianceBeforeClockInInsufficientRest(): void
 	{
 		$userId = 'testuser';
 
-		// Previous entry ended less than 11 hours ago.
 		$endTime = new \DateTime('now', new \DateTimeZone('Europe/Berlin'));
-		$endTime->modify('-10 hours'); // Only 10 hours ago
+		$endTime->modify('-10 hours');
 		$lastEntry = new TimeEntry();
 		$lastEntry->setId(1);
 		$lastEntry->setUserId($userId);
@@ -190,6 +189,100 @@ class ComplianceServiceTest extends TestCase
 		$this->assertEquals(ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD, $issues[0]['type']);
 		$this->assertEquals(ComplianceViolation::SEVERITY_ERROR, $issues[0]['severity']);
 		$this->assertStringContainsString('ended on', $issues[0]['message']);
+	}
+
+	/**
+	 * After overnight/Wachdienst end, morning Kommen within 11h must raise Ruhezeit
+	 * (calendar day of the end must not clear the stamp-path rest gate).
+	 */
+	public function testCheckComplianceBeforeClockInEnforcesRestAfterOvernightEnd(): void
+	{
+		$userId = 'wachdienst';
+		$now = $this->timeZoneService->nowInStorage();
+		$endTime = (clone $now)->modify('-4 hours');
+		$startTime = (clone $endTime)->modify('-8 hours');
+		if ($startTime->format('Y-m-d') === $endTime->format('Y-m-d')) {
+			$startTime = (clone $endTime)->setTime(0, 0, 0)->modify('-2 hours');
+		}
+
+		$lastEntry = new TimeEntry();
+		$lastEntry->setId(99);
+		$lastEntry->setUserId($userId);
+		$lastEntry->setStartTime($startTime);
+		$lastEntry->setEndTime($endTime);
+		$lastEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$lastEntry->setIsManualEntry(false);
+		$lastEntry->setCreatedAt(clone $endTime);
+		$lastEntry->setUpdatedAt(clone $endTime);
+
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
+			->with($userId, $this->isInstanceOf(\DateTime::class))
+			->willReturn($lastEntry);
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(240.0);
+
+		$issues = $this->service->checkComplianceBeforeClockIn($userId);
+		$restIssues = array_values(array_filter(
+			$issues,
+			static fn (array $i): bool => ($i['type'] ?? '') === ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD
+		));
+		$this->assertNotEmpty(
+			$restIssues,
+			'After overnight end, Kommen within 11h must raise Ruhezeit (no calendar-day skip)'
+		);
+	}
+
+	/**
+	 * Manual geteilte Arbeitszeit (09–12 then 13–17 same day) stays allowed.
+	 */
+	public function testCheckRestPeriodForStartTimeAllowsIntradaySplitSameDay(): void
+	{
+		$userId = 'dayworker';
+		$tz = new \DateTimeZone('Europe/Berlin');
+		$morningEnd = new \DateTime('2026-03-15 12:00:00', $tz);
+		$afternoonStart = new \DateTime('2026-03-15 13:00:00', $tz);
+
+		$lastEntry = new TimeEntry();
+		$lastEntry->setId(3);
+		$lastEntry->setUserId($userId);
+		$lastEntry->setStartTime(new \DateTime('2026-03-15 09:00:00', $tz));
+		$lastEntry->setEndTime($morningEnd);
+		$lastEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
+			->with($userId, $afternoonStart, null)
+			->willReturn($lastEntry);
+
+		$result = $this->service->checkRestPeriodForStartTime($userId, $afternoonStart);
+		$this->assertTrue($result['valid']);
+		$this->assertNull($result['message']);
+	}
+
+	/**
+	 * Manual entry after overnight end on the same morning must still require Ruhezeit.
+	 */
+	public function testCheckRestPeriodForStartTimeBlocksAfterOvernightOnSameMorning(): void
+	{
+		$userId = 'wachdienst';
+		$tz = new \DateTimeZone('Europe/Berlin');
+		$nightEnd = new \DateTime('2026-03-15 06:00:00', $tz);
+		$morningStart = new \DateTime('2026-03-15 10:00:00', $tz);
+
+		$lastEntry = new TimeEntry();
+		$lastEntry->setId(4);
+		$lastEntry->setUserId($userId);
+		$lastEntry->setStartTime(new \DateTime('2026-03-14 22:00:00', $tz));
+		$lastEntry->setEndTime($nightEnd);
+		$lastEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
+			->with($userId, $morningStart, null)
+			->willReturn($lastEntry);
+
+		$result = $this->service->checkRestPeriodForStartTime($userId, $morningStart);
+		$this->assertFalse($result['valid']);
+		$this->assertNotNull($result['message']);
+		$this->assertStringContainsString('rest period', strtolower($result['message']));
 	}
 
 	/**

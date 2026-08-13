@@ -187,6 +187,42 @@ window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
         TemplateL10n::translate($l, 'Type at least 2 characters to search.'),
         TemplateL10n::JSON_ENCODE_FLAGS
     ); ?>;
+    window.ArbeitszeitCheck.l10n.hiddenAccountsBanner = <?php echo json_encode(
+        TemplateL10n::translate($l, '{count} Nextcloud accounts without app access are hidden.'),
+        TemplateL10n::JSON_ENCODE_FLAGS
+    ); ?>;
+    window.ArbeitszeitCheck.l10n.noAppAccessEmployees = <?php echo json_encode(
+        $l->t('No one with app access yet. Add people under Access control, or show all Nextcloud accounts.'),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?>;
+    window.ArbeitszeitCheck.l10n.openAccessControl = <?php echo json_encode(
+        $l->t('Open access control'),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?>;
+    window.ArbeitszeitCheck.l10n.showAllAccounts = <?php echo json_encode(
+        $l->t('Show all accounts'),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?>;
+    window.ArbeitszeitCheck.l10n.clearSearch = <?php echo json_encode(
+        $l->t('Clear search'),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?>;
+    window.ArbeitszeitCheck.l10n.tryAgainReset = <?php echo json_encode(
+        $l->t('Reset and try again'),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?>;
+    window.ArbeitszeitCheck.l10n.exportStarted = <?php echo json_encode(
+        $l->t('Export started — your download should begin shortly.'),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?>;
+    window.ArbeitszeitCheck.l10n.paginationAppAccessOnly = <?php echo json_encode(
+        $l->t('(with app access only)'),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?>;
+    window.ArbeitszeitCheck.l10n.paginationAllAccounts = <?php echo json_encode(
+        $l->t('(all Nextcloud accounts)'),
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?>;
     window.ArbeitszeitCheck.l10n.notSet = <?php echo json_encode($l->t('Not set'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
     window.ArbeitszeitCheck.l10n.backToEmployees = <?php echo json_encode($l->t('Back to employees'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

@@ -15,7 +15,7 @@ class AdminSettingsDatevLayoutContractTest extends TestCase
 {
 	public function testExportsSectionIncludesDatevOrgFields(): void
 	{
-		$src = file_get_contents(dirname(__DIR__, 2) . '/../templates/admin-settings.php');
+		$src = file_get_contents(dirname(__DIR__, 2) . '/../templates/partials/admin-settings/exports.php');
 		$this->assertNotFalse($src);
 		$this->assertStringContainsString('id="datevBeraternummer"', $src);
 		$this->assertStringContainsString('id="datevMandantennummer"', $src);

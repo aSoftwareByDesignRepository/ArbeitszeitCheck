@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use OCA\ArbeitszeitCheck\Service\IconCatalog;
 use OCA\ArbeitszeitCheck\Support\BadgeVariant;
+use OCA\ArbeitszeitCheck\Util\HalfDayVacationShortcut;
 use OCA\ArbeitszeitCheck\Util\TemplateL10n;
 
 /**
@@ -32,6 +33,7 @@ $employeeHasAssignableManager = $_['employeeHasAssignableManager'] ?? true;
 $useAppTeams = $_['useAppTeams'] ?? false;
 $prefillStart = $_['prefillStart'] ?? null;
 $prefillEnd = $_['prefillEnd'] ?? null;
+$prefillHalf = !empty($_['prefillHalf']);
 $today = new \DateTimeImmutable('today');
 $entitlementTraceUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.absence.entitlementTrace');
 if (preg_match('#^https?://[^/]+(/.*)$#', $entitlementTraceUrl, $entitlementTraceMatch)) {
@@ -45,6 +47,44 @@ $absenceFormEndDisplay = ($mode === 'create')
 	: (($absence && $absence->getEndDate()) ? $absence->getEndDate()->format('d.m.Y') : '');
 $vacationUnit = (string)($stats['vacation_unit'] ?? 'days');
 $isVacationHours = $vacationUnit === 'hours';
+// Days-mode create: default both dates to today so Length / Half day appear immediately (Bachus).
+if ($mode === 'create' && !$isVacationHours && $absenceFormStartDisplay === '' && $absenceFormEndDisplay === '') {
+	$todayDisplay = $today->format('d.m.Y');
+	$absenceFormStartDisplay = $todayDisplay;
+	$absenceFormEndDisplay = $todayDisplay;
+}
+$halfDayTodayUrl = '';
+$halfDayShortcutLabel = $l->t('Half day today');
+$halfDayShortcutAria = $l->t('Request a half day of vacation for today');
+if ($mode === 'list' && !$isVacationHours) {
+	$halfAnchor = HalfDayVacationShortcut::anchorDate($today);
+	$halfDayTodayUrl = $urlGenerator->linkToRoute('arbeitszeitcheck.absence.create', [
+		'start' => $halfAnchor->format('Y-m-d'),
+		'end' => $halfAnchor->format('Y-m-d'),
+		'half' => '1',
+	]);
+	if (!HalfDayVacationShortcut::isSameCalendarDay($halfAnchor, $today)) {
+		$halfDayShortcutLabel = $l->t('Half day (next workday)');
+		$halfDayShortcutAria = $l->t('Request a half day of vacation for the next workday');
+	}
+}
+// Half-day deep link and create form default to Vacation (one less decision).
+$typeIsVacation = ($absence && $absence->getType() === 'vacation')
+	|| ($mode === 'create' && !$absence);
+$editIsHalf = $absence
+	&& $absence->getType() === 'vacation'
+	&& !$isVacationHours
+	&& $absence->getDays() !== null
+	&& abs((float)$absence->getDays() - 0.5) < 0.011
+	&& $absence->getStartDate()
+	&& $absence->getEndDate()
+	&& $absence->getStartDate()->format('Y-m-d') === $absence->getEndDate()->format('Y-m-d');
+$halfSelected = $editIsHalf || ($mode === 'create' && $prefillHalf && !$isVacationHours);
+$showDayFractionInitially = !$isVacationHours
+	&& in_array($mode, ['create', 'edit'], true)
+	&& $typeIsVacation
+	&& $absenceFormStartDisplay !== ''
+	&& $absenceFormStartDisplay === $absenceFormEndDisplay;
 $unitWord = $isVacationHours ? $l->t('hours') : $l->t('days');
 $unitSublabel = $isVacationHours ? $l->t('vacation hours') : $l->t('vacation days');
 $hoursPerDay = (float)($stats['vacation_hours_per_day'] ?? 8);
@@ -89,6 +129,14 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                     aria-label="<?php p($l->t('Request time off for vacation or sick leave')); ?>">
                 <?php p($l->t('Request Time Off')); ?>
             </button>
+            <?php if ($halfDayTodayUrl !== ''): ?>
+            <a id="btn-half-day-today"
+               class="azc-btn azc-btn--secondary"
+               href="<?php p($halfDayTodayUrl); ?>"
+               aria-label="<?php p($halfDayShortcutAria); ?>">
+                <?php p($halfDayShortcutLabel); ?>
+            </a>
+            <?php endif; ?>
             <button id="btn-filter"
                     class="azc-btn azc-btn--secondary"
                     type="button"
@@ -226,8 +274,10 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                             <?php p($l->t('Type')); ?> <span class="form-required" aria-hidden="true">*</span>
                         </label>
                         <select id="absence-type" name="type" class="form-select" required aria-describedby="absence-type-help">
+                            <?php if ($mode === 'edit'): ?>
                             <option value=""><?php p($l->t('Choose absence type…')); ?></option>
-                            <option value="vacation" <?php echo ($absence && $absence->getType() === 'vacation') ? 'selected' : ''; ?>>
+                            <?php endif; ?>
+                            <option value="vacation" <?php echo $typeIsVacation ? 'selected' : ''; ?>>
                                 <?php p($l->t('Vacation')); ?>
                             </option>
                             <option value="sick_leave" <?php echo ($absence && $absence->getType() === 'sick_leave') ? 'selected' : ''; ?>>
@@ -303,6 +353,50 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                                 <p id="absence-end-date-help" class="form-help"><?php p($l->t('Last day away (can match start for one day)')); ?></p>
                             </div>
                         </div>
+                        <p id="absence-multi-day-half-tip"
+                           class="form-help absence-multi-day-half-tip"
+                           hidden
+                           role="status"
+                           aria-live="polite"
+                           data-days-mode="<?php echo $isVacationHours ? '0' : '1'; ?>">
+                            <?php p($l->t('Need a half day plus full days? Submit the half day as its own request, then the remaining days.')); ?>
+                        </p>
+                    </div>
+
+                    <div id="absence-day-fraction-group"
+                         class="form-group absence-day-fraction"
+                         data-days-mode="<?php echo $isVacationHours ? '0' : '1'; ?>"
+                         <?php echo $showDayFractionInitially ? '' : 'hidden'; ?>>
+                        <fieldset class="absence-day-fraction__fieldset">
+                            <legend id="absence-day-fraction-legend" class="form-label absence-day-fraction__legend"><?php p($l->t('Day length')); ?></legend>
+                            <div class="absence-day-fraction__segments"
+                                 role="radiogroup"
+                                 aria-labelledby="absence-day-fraction-legend"
+                                 aria-describedby="absence-day-fraction-help absence-day-fraction-preview absence-day-fraction-error">
+                                <label class="absence-day-fraction__segment">
+                                    <input type="radio"
+                                           name="day_fraction"
+                                           id="absence-day-fraction-full"
+                                           value="1"
+                                           <?php echo $halfSelected ? '' : 'checked'; ?>
+                                           class="absence-day-fraction__input">
+                                    <span class="absence-day-fraction__face"><?php p($l->t('Full day')); ?></span>
+                                </label>
+                                <label class="absence-day-fraction__segment">
+                                    <input type="radio"
+                                           name="day_fraction"
+                                           id="absence-day-fraction-half"
+                                           value="0.5"
+                                           <?php echo $halfSelected ? 'checked' : ''; ?>
+                                           class="absence-day-fraction__input">
+                                    <span class="absence-day-fraction__face"><?php p($l->t('Half day')); ?></span>
+                                </label>
+                            </div>
+                        </fieldset>
+                        <p id="absence-day-fraction-help" class="form-help"><?php p($l->t('Full day or half day for this date. Morning or afternoon is not tracked.')); ?></p>
+                        <p id="absence-day-fraction-preview" class="azc-callout azc-callout--info absence-day-fraction__preview" role="status" aria-live="polite"></p>
+                        <p id="absence-day-fraction-live" class="sr-only" aria-live="polite"></p>
+                        <p id="absence-day-fraction-error" class="form-error" role="alert" hidden></p>
                     </div>
 
                     <div id="absence-duration-hours-group"
@@ -486,6 +580,14 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                         </span>
                         <?php if ($isPastAbsence): ?>
                             <span class="badge badge--past-record"><?php p($l->t('Past record')); ?></span>
+                        <?php endif; ?>
+                        <?php
+                        $detailIsHalf = $absence->getType() === 'vacation'
+                            && !$isVacationHours
+                            && $days !== null
+                            && abs((float)$days - 0.5) < 0.011;
+                        if ($detailIsHalf): ?>
+                            <span class="badge badge--info absence-half-day-badge"><?php p($l->t('Half day')); ?></span>
                         <?php endif; ?>
                     </div>
                     <p class="absence-detail-period" aria-label="<?php p($l->t('Period and duration')); ?>">
@@ -848,7 +950,17 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                                             } else {
                                                 $d = $absence->getDays();
                                                 $displayD = $d !== null ? (float)$d : (float)(($_['computedWorkingDays'] ?? [])[$absence->getId()] ?? $absence->calculateWorkingDays());
-                                                p((string)round($displayD, 1));
+                                                $listIsHalf = $absence->getType() === 'vacation'
+                                                    && !$isVacationHours
+                                                    && abs($displayD - 0.5) < 0.011;
+                                                if ($listIsHalf) {
+                                                    echo '<span class="absence-days-cell absence-days-cell--half">';
+                                                    p($l->t('Half day'));
+                                                    echo ' <span class="absence-days-cell__qty" aria-hidden="true">(0.5)</span>';
+                                                    echo '</span>';
+                                                } else {
+                                                    p((string)round($displayD, 1));
+                                                }
                                             }
                                         ?></td>
                                         <td class="reason-cell" data-label="<?php p($l->t('Reason')); ?>">
@@ -921,12 +1033,22 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                                             <p class="empty-state__description">
                                                 <?php p($l->t('You have not requested any absences yet. Use the button below to request vacation, sick leave, or other time off.')); ?>
                                             </p>
+                                            <div class="absence-empty-actions">
                                             <button id="btn-request-first-absence"
                                                 class="btn btn--primary"
                                                 type="button"
                                                 aria-label="<?php p($l->t('Request your first absence')); ?>">
                                                 <?php p($l->t('Request Time Off')); ?>
                                             </button>
+                                            <?php if ($halfDayTodayUrl !== ''): ?>
+                                            <a id="btn-half-day-today-empty"
+                                               class="azc-btn azc-btn--secondary"
+                                               href="<?php p($halfDayTodayUrl); ?>"
+                                               aria-label="<?php p($halfDayShortcutAria); ?>">
+                                                <?php p($halfDayShortcutLabel); ?>
+                                            </a>
+                                            <?php endif; ?>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -1197,6 +1319,120 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
             typeSelect.addEventListener('change', updateSubstituteRequiredState);
             updateSubstituteRequiredState();
         }
+
+        (function initDayFractionField() {
+            const group = document.getElementById('absence-day-fraction-group');
+            if (!group || group.getAttribute('data-days-mode') !== '1') {
+                return;
+            }
+            const fullRadio = document.getElementById('absence-day-fraction-full');
+            const halfRadio = document.getElementById('absence-day-fraction-half');
+            const previewEl = document.getElementById('absence-day-fraction-preview');
+            const liveEl = document.getElementById('absence-day-fraction-live');
+            const errorEl = document.getElementById('absence-day-fraction-error');
+            const multiTip = document.getElementById('absence-multi-day-half-tip');
+            const startEl = document.getElementById('absence-start-date');
+            const endEl = document.getElementById('absence-end-date');
+            const typeEl = document.getElementById('absence-type');
+            const rangeAnnounce = <?php echo json_encode($l->t('Half day is only for a single day. This request will use full working days.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            const previewHalf = <?php echo json_encode($l->t('This request uses 0.5 vacation day.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            const previewFull = <?php echo json_encode($l->t('This request uses 1 vacation day.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+            let lastAnnounced = '';
+
+            function parseDDMMYYYY(s) {
+                if (!s || !/^\d{2}\.\d{2}\.\d{4}$/.test(s)) return null;
+                const p = s.split('.');
+                return p[2] + '-' + p[1] + '-' + p[0];
+            }
+
+            function isSingleDay() {
+                if (!startEl || !endEl) return false;
+                const a = parseDDMMYYYY(String(startEl.value || '').trim());
+                const b = parseDDMMYYYY(String(endEl.value || '').trim());
+                return !!(a && b && a === b);
+            }
+
+            function isMultiDayRange() {
+                if (!startEl || !endEl) return false;
+                const a = parseDDMMYYYY(String(startEl.value || '').trim());
+                const b = parseDDMMYYYY(String(endEl.value || '').trim());
+                return !!(a && b && a !== b);
+            }
+
+            function isVacation() {
+                return typeEl && String(typeEl.value || '') === 'vacation';
+            }
+
+            function selectedFraction() {
+                if (halfRadio && halfRadio.checked) return '0.5';
+                return '1';
+            }
+
+            function updatePreview() {
+                if (!previewEl || group.hidden) {
+                    if (previewEl) previewEl.textContent = '';
+                    return;
+                }
+                previewEl.textContent = selectedFraction() === '0.5' ? previewHalf : previewFull;
+            }
+
+            function syncMultiTip() {
+                if (!multiTip || multiTip.getAttribute('data-days-mode') !== '1') {
+                    return;
+                }
+                multiTip.hidden = !(isVacation() && isMultiDayRange());
+            }
+
+            function syncVisibility() {
+                const show = isVacation() && isSingleDay();
+                const wasVisible = !group.hidden;
+                group.hidden = !show;
+                if (!show) {
+                    if (fullRadio) fullRadio.checked = true;
+                    if (halfRadio) halfRadio.checked = false;
+                    if (wasVisible && liveEl && lastAnnounced !== rangeAnnounce) {
+                        liveEl.textContent = rangeAnnounce;
+                        lastAnnounced = rangeAnnounce;
+                    }
+                    if (errorEl) {
+                        errorEl.hidden = true;
+                        errorEl.textContent = '';
+                    }
+                    group.removeAttribute('aria-invalid');
+                } else {
+                    lastAnnounced = '';
+                    if (liveEl) liveEl.textContent = '';
+                }
+                updatePreview();
+                syncMultiTip();
+            }
+
+            if (fullRadio) fullRadio.addEventListener('change', updatePreview);
+            if (halfRadio) halfRadio.addEventListener('change', updatePreview);
+            if (typeEl) typeEl.addEventListener('change', syncVisibility);
+            if (startEl) {
+                startEl.addEventListener('change', syncVisibility);
+                startEl.addEventListener('input', syncVisibility);
+            }
+            if (endEl) {
+                endEl.addEventListener('change', syncVisibility);
+                endEl.addEventListener('input', syncVisibility);
+            }
+            syncVisibility();
+
+            window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
+            window.ArbeitszeitCheck.getAbsenceDayFraction = function () {
+                if (group.hidden) return null;
+                return selectedFraction();
+            };
+            window.ArbeitszeitCheck.showDayFractionError = function (msg) {
+                if (!errorEl) return;
+                errorEl.textContent = msg || '';
+                errorEl.hidden = !msg;
+                group.setAttribute('aria-invalid', msg ? 'true' : 'false');
+                if (msg && fullRadio) fullRadio.focus();
+            };
+        })();
 
         (function initVacationHoursField() {
             const hoursGroup = document.getElementById('absence-duration-hours-group');
@@ -1702,6 +1938,13 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                     // Web may fill from working days if the hours field is empty (backup path).
                     body.set('server_may_fill_hours', '1');
                 }
+                if (window.ArbeitszeitCheck && typeof window.ArbeitszeitCheck.getAbsenceDayFraction === 'function') {
+                    const dayFraction = window.ArbeitszeitCheck.getAbsenceDayFraction();
+                    if (dayFraction === '0.5' || dayFraction === '1') {
+                        body.set('day_fraction', dayFraction);
+                    }
+                }
+                const submittedDayFraction = body.get('day_fraction');
                 const requestToken = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.getRequestToken && window.ArbeitszeitCheck.getRequestToken()) || (typeof OC !== 'undefined' && OC.requestToken) || '';
                 if (requestToken) body.set('requesttoken', requestToken);
 
@@ -1716,7 +1959,9 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText; }
                         if (response.redirected || response.ok) {
                             const successMsg = isCreate
-                                ? ((window.t && window.t('arbeitszeitcheck', 'Absence request submitted successfully')) || 'Absence request submitted successfully')
+                                ? (submittedDayFraction === '0.5'
+                                    ? ((window.t && window.t('arbeitszeitcheck', 'Half-day vacation request submitted successfully')) || 'Half-day vacation request submitted successfully')
+                                    : ((window.t && window.t('arbeitszeitcheck', 'Absence request submitted successfully')) || 'Absence request submitted successfully'))
                                 : ((window.t && window.t('arbeitszeitcheck', 'Absence request updated')) || 'Absence request updated');
                             if (window.AzcMessaging && typeof window.AzcMessaging.showSuccess === 'function') {
                                 window.AzcMessaging.showSuccess(successMsg);
@@ -1731,10 +1976,15 @@ if ($absence && method_exists($absence, 'getDurationHours')) {
                         }
                         return response.text().then(function(text) {
                             let errMsg = (window.t && window.t('arbeitszeitcheck', 'Failed to submit absence request')) || 'Failed to submit absence request';
+                            let errCode = '';
                             try {
                                 const j = JSON.parse(text);
                                 if (j && typeof j.error === 'string' && j.error) errMsg = j.error;
+                                if (j && (j.code || j.error_code)) errCode = String(j.code || j.error_code);
                             } catch (e) { /* ignore */ }
+                            if (errCode.indexOf('VAC_HALF_DAY_') === 0 && window.ArbeitszeitCheck && typeof window.ArbeitszeitCheck.showDayFractionError === 'function') {
+                                window.ArbeitszeitCheck.showDayFractionError(errMsg);
+                            }
                             showFormError(errMsg);
                             if (window.AzcMessaging && typeof window.AzcMessaging.showError === 'function') {
                                 window.AzcMessaging.showError(errMsg);

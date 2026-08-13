@@ -121,6 +121,26 @@ class AbsenceService
 	}
 
 	/**
+	 * SEC-02 / Argus NG-02 defense-in-depth: never let client-authored debit fields
+	 * reach resolveVacationDaysDebit or setDays. Controllers already allowlist
+	 * day_fraction only; this strips residual keys if a future caller passes them.
+	 *
+	 * @param array<string, mixed> $data
+	 * @return array<string, mixed>
+	 */
+	private function scrubClientAuthoredDebitFields(array $data): array
+	{
+		unset(
+			$data['days'],
+			$data['working_days'],
+			$data['workingDays'],
+			$data['Days'],
+			$data['WorkingDays']
+		);
+		return $data;
+	}
+
+	/**
 	 * Create a new absence request
 	 *
 	 * @param array $data Absence data
@@ -130,6 +150,7 @@ class AbsenceService
 	 */
 	public function createAbsence(array $data, string $userId): Absence
 	{
+		$data = $this->scrubClientAuthoredDebitFields($data);
 		$lockKey = $this->acquireUserMutationLock($userId);
 		try {
 			if (($data['type'] ?? '') === Absence::TYPE_VACATION) {
@@ -165,10 +186,18 @@ class AbsenceService
 			$absence->setUpdatedAt(new \DateTime());
 
 			// Calculate working days (Mon–Fri minus Feiertage inkl. Firmenfeiertage)
-			$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
-			$absence->setDays($workingDays);
 			if ($data['type'] === Absence::TYPE_VACATION) {
+				$workingDays = $this->resolveVacationDaysDebit(
+					$userId,
+					$absence->getStartDate(),
+					$absence->getEndDate(),
+					$data
+				);
+				$absence->setDays($workingDays);
 				$this->applyVacationDurationHours($absence, $data, $workingDays);
+			} else {
+				$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
+				$absence->setDays($workingDays);
 			}
 
 			// All DB writes are atomic: if the audit log insertion fails, the absence
@@ -268,6 +297,7 @@ class AbsenceService
 	 */
 	public function createApprovedAbsenceForEmployeeByManager(string $managerUserId, string $targetUserId, array $data): Absence
 	{
+		$data = $this->scrubClientAuthoredDebitFields($data);
 		if ($managerUserId === $targetUserId) {
 			throw new \Exception($this->l10n->t('You cannot record an absence for yourself with this action.'));
 		}
@@ -296,7 +326,14 @@ class AbsenceService
 			$absence->setCreatedAt($now);
 			$absence->setUpdatedAt($now);
 
-			$workingDays = $this->computeWorkingDaysForUser($targetUserId, $absence->getStartDate(), $absence->getEndDate());
+			$workingDays = $absence->getType() === Absence::TYPE_VACATION
+				? $this->resolveVacationDaysDebit(
+					$targetUserId,
+					$absence->getStartDate(),
+					$absence->getEndDate(),
+					$data
+				)
+				: $this->computeWorkingDaysForUser($targetUserId, $absence->getStartDate(), $absence->getEndDate());
 			$absence->setDays($workingDays);
 			if ($absence->getType() === Absence::TYPE_VACATION) {
 				$this->applyVacationDurationHours($absence, $data, $workingDays);
@@ -321,7 +358,8 @@ class AbsenceService
 							$ed,
 							null,
 							$absence->getCreatedAt(),
-							$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null
+							$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null,
+							$absence->getDays() !== null ? (float)$absence->getDays() : null
 						);
 					}
 				}
@@ -399,6 +437,7 @@ class AbsenceService
 	 */
 	public function updateAbsence(int $id, array $data, string $userId): Absence
 	{
+		$data = $this->scrubClientAuthoredDebitFields($data);
 		$lockKey = $this->acquireUserMutationLock($userId);
 		try {
 			$absence = $this->getAbsence($id, $userId);
@@ -454,13 +493,43 @@ class AbsenceService
 		} elseif ($absence->getDurationHours() !== null) {
 			$validateData['duration_hours'] = $absence->getDurationHours();
 		}
+		if (array_key_exists('day_fraction', $data)) {
+			$validateData['day_fraction'] = $data['day_fraction'];
+		} elseif (
+			$absence->getType() === Absence::TYPE_VACATION
+			&& $this->vacationUnitService?->isHoursMode() !== true
+			&& $absence->getDays() !== null
+		) {
+			// Preserve trusted half-day when clients omit day_fraction (reason/substitute-only
+			// patches, older mobile APIs). Without this, normalizeDayFraction(null) → 1.0 and
+			// silently inflates a 0.5 debit to a full working day (Zeus MF-01).
+			$storedDays = (float)$absence->getDays();
+			$calendarForNewDates = $this->computeWorkingDaysForUser(
+				$userId,
+				$absence->getStartDate(),
+				$absence->getEndDate()
+			);
+			$probe = new Absence();
+			$probe->setStartDate(clone $absence->getStartDate());
+			$probe->setEndDate(clone $absence->getEndDate());
+			$probe->setDays($storedDays);
+			if (
+				VacationAllocationService::isTrustedStoredVacationDays($probe, $storedDays, $calendarForNewDates)
+				&& abs($storedDays - 0.5) <= 0.011
+			) {
+				$validateData['day_fraction'] = '0.5';
+			}
+		}
 		$this->validateAbsenceData($validateData, $userId, $id, $absence->getCreatedAt(), []);
 
 		// Recalculate working days (Mon–Fri minus Feiertage inkl. Firmenfeiertage)
-		$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
-		$absence->setDays($workingDays);
 		if ($absence->getType() === Absence::TYPE_VACATION) {
+			$workingDays = $this->resolveVacationDaysDebit($userId, $absence->getStartDate(), $absence->getEndDate(), $validateData);
+			$absence->setDays($workingDays);
 			$this->applyVacationDurationHours($absence, $validateData, $workingDays);
+		} else {
+			$workingDays = $this->computeWorkingDaysForUser($userId, $absence->getStartDate(), $absence->getEndDate());
+			$absence->setDays($workingDays);
 		}
 		$absence->setUpdatedAt(new \DateTime());
 
@@ -833,7 +902,8 @@ class AbsenceService
 						$ed,
 						null,
 						$absence->getCreatedAt(),
-						$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null
+						$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null,
+						$absence->getDays() !== null ? (float)$absence->getDays() : null
 					);
 				}
 			}
@@ -1492,6 +1562,7 @@ class AbsenceService
 		?int $excludeAbsenceId = null,
 		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
 		?float $prospectiveDurationHours = null,
+		?float $prospectiveDays = null,
 	): void {
 		$today = \DateTime::createFromImmutable($this->todayDateInStorage());
 		$hoursMode = $this->vacationUnitService?->isHoursMode() === true;
@@ -1514,7 +1585,8 @@ class AbsenceService
 					$today,
 					$prospectiveRequestCreatedAt,
 					false,
-					$prospectiveDurationHours
+					$prospectiveDurationHours,
+					$prospectiveDays
 				);
 				if ($alloc['allocation_valid']) {
 					continue;
@@ -1528,6 +1600,7 @@ class AbsenceService
 					$today,
 					null,
 					false,
+					null,
 					null
 				);
 				$remaining = (float)$before['total_remaining_for_new_requests'];
@@ -1561,7 +1634,8 @@ class AbsenceService
 				$today,
 				$prospectiveRequestCreatedAt,
 				false,
-				$prospectiveDurationHours
+				$prospectiveDurationHours,
+				$prospectiveDays
 			);
 			if ($alloc['allocation_valid']) {
 				continue;
@@ -1575,11 +1649,12 @@ class AbsenceService
 				$today,
 				null,
 				false,
+				null,
 				null
 			);
 			$requestedDisplay = $hoursMode && $prospectiveDurationHours !== null
 				? (float)$prospectiveDurationHours
-				: (float)$requestedDays;
+				: ($prospectiveDays !== null ? (float)$prospectiveDays : (float)$requestedDays);
 			$msg = $this->l10n->t(
 				'Not enough vacation remaining. You have %1$s %2$s left for %3$s but requested %4$s %2$s.',
 				[
@@ -1849,6 +1924,7 @@ class AbsenceService
 			$totalRequested = array_sum($requestedWorkingDaysPerYear);
 			$hoursMode = $this->vacationUnitService?->isHoursMode() === true;
 			$durationHours = null;
+			$prospectiveDays = null;
 			if ($hoursMode) {
 				// Must use the same schedule-/holiday-aware debit as applyVacationDurationHours
 				// so entitlement checks match the amount that will be stored.
@@ -1859,13 +1935,16 @@ class AbsenceService
 					$startDate,
 					$endDate
 				);
+			} else {
+				// Days mode: resolve half/full debit before allocation gate (ADR-05).
+				$prospectiveDays = $this->resolveVacationDaysDebit($userId, $startDate, $endDate, $data);
 			}
 			// Hours mode: schedule-/holiday-aware debit is authoritative (Sat work models
 			// can have net hours while Mon–Fri “working days” is 0).
 			if ($hoursMode && ($durationHours === null || $durationHours < 0.01)) {
 				throw new \Exception($this->l10n->t('Vacation must include at least one working day. The selected period contains only weekends or public holidays.'));
 			}
-			if (!$hoursMode && $totalRequested < 0.01) {
+			if (!$hoursMode && ($totalRequested < 0.01 || $prospectiveDays === null || $prospectiveDays < 0.01)) {
 				throw new \Exception($this->l10n->t('Vacation must include at least one working day. The selected period contains only weekends or public holidays.'));
 			}
 			$this->assertVacationAllocationForRequest(
@@ -1874,7 +1953,8 @@ class AbsenceService
 				$endDate,
 				$excludeAbsenceId,
 				$vacationRequestCreatedAt,
-				$durationHours
+				$durationHours,
+				$prospectiveDays
 			);
 		}
 
@@ -1995,7 +2075,8 @@ class AbsenceService
 					$ed,
 					null,
 					$absence->getCreatedAt(),
-					$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null
+					$absence->getDurationHours() !== null ? (float)$absence->getDurationHours() : null,
+					$absence->getDays() !== null ? (float)$absence->getDays() : null
 				);
 			}
 		}
@@ -2137,6 +2218,116 @@ class AbsenceService
 		$endDateInclusive = clone $endDate;
 		$endDateInclusive->setTime(23, 59, 59);
 		$this->monthClosureService->assertDateRangeMutable($absence->getUserId(), $startDate, $endDateInclusive);
+	}
+
+	/**
+	 * Normalize request day_fraction to 1.0 or 0.5 (SEC-02 / Argus TH-04).
+	 *
+	 * @param mixed $raw
+	 * @throws BusinessRuleException
+	 */
+	private function normalizeDayFraction(mixed $raw): float
+	{
+		if ($raw === null || $raw === '' || (is_array($raw) && $raw === [])) {
+			return 1.0;
+		}
+		if (is_array($raw)) {
+			$raw = reset($raw);
+		}
+		if (is_bool($raw) || is_object($raw)) {
+			throw new BusinessRuleException(
+				$this->l10n->t('Invalid day fraction. Use full day or half day.'),
+				Constants::VAC_HALF_DAY_INVALID
+			);
+		}
+		$s = trim((string)$raw);
+		if ($s === '') {
+			return 1.0;
+		}
+		$s = str_replace(',', '.', $s);
+		if (!preg_match('/^\d+(\.\d+)?$/', $s)) {
+			throw new BusinessRuleException(
+				$this->l10n->t('Invalid day fraction. Use full day or half day.'),
+				Constants::VAC_HALF_DAY_INVALID
+			);
+		}
+		$v = (float)$s;
+		if (!is_finite($v)) {
+			throw new BusinessRuleException(
+				$this->l10n->t('Invalid day fraction. Use full day or half day.'),
+				Constants::VAC_HALF_DAY_INVALID
+			);
+		}
+		// Strict membership on the parsed float (rejects 0.5000001 / 0.25).
+		if (abs($v - 1.0) < 1e-9) {
+			return 1.0;
+		}
+		if (abs($v - 0.5) < 1e-9) {
+			return 0.5;
+		}
+		throw new BusinessRuleException(
+			$this->l10n->t('Invalid day fraction. Use full day or half day.'),
+			Constants::VAC_HALF_DAY_INVALID
+		);
+	}
+
+	/**
+	 * Single write-path authority for vacation days debit (ADR-06).
+	 * Hours mode ignores day_fraction and returns calendar working-day weight.
+	 * Never trusts client `days` / `working_days` (SEC-02).
+	 *
+	 * @param array<string, mixed> $data
+	 * @throws BusinessRuleException|\Exception
+	 */
+	private function resolveVacationDaysDebit(
+		string $userId,
+		\DateTime $start,
+		\DateTime $end,
+		array $data,
+	): float {
+		$w = $this->computeWorkingDaysForUser($userId, $start, $end);
+
+		// Hours path remains authoritative for duration_hours; days column stays calendar weight.
+		if ($this->vacationUnitService?->isHoursMode() === true) {
+			return $w;
+		}
+
+		$fraction = $this->normalizeDayFraction($data['day_fraction'] ?? null);
+
+		if (abs($fraction - 0.5) < 1e-9) {
+			if ($start->format('Y-m-d') !== $end->format('Y-m-d')) {
+				throw new BusinessRuleException(
+					$this->l10n->t('Half-day vacation is only allowed when start and end are the same day. For mixed half and full days, submit separate requests.'),
+					Constants::VAC_HALF_DAY_RANGE_FORBIDDEN
+				);
+			}
+			if ($w < 0.999) {
+				throw new BusinessRuleException(
+					$this->l10n->t('This day is not a full working day; half-day vacation cannot be booked.'),
+					Constants::VAC_HALF_DAY_NON_WORKING
+				);
+			}
+			$debit = 0.5;
+		} else {
+			if ($w < 0.01) {
+				throw new \Exception($this->l10n->t('Vacation must include at least one working day. The selected period contains only weekends or public holidays.'));
+			}
+			$debit = $w;
+		}
+
+		// Defensive write-path integrity (should always hold when only this helper sets days).
+		$probe = new Absence();
+		$probe->setStartDate(clone $start);
+		$probe->setEndDate(clone $end);
+		$probe->setDays($debit);
+		if (!VacationAllocationService::isTrustedStoredVacationDays($probe, $debit, $w)) {
+			throw new BusinessRuleException(
+				$this->l10n->t('Vacation day amount is inconsistent with the selected dates.'),
+				Constants::VAC_HALF_DAY_INTEGRITY
+			);
+		}
+
+		return $debit;
 	}
 
 	/**

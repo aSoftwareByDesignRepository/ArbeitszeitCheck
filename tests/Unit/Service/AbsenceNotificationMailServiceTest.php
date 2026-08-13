@@ -80,6 +80,71 @@ class AbsenceNotificationMailServiceTest extends TestCase
 		$service->sendHrOfficeNotification($absence, 'request_created', 'manager1');
 	}
 
+	public function testSendHrOfficeNotificationFormatsHalfDayWithoutIntCast(): void
+	{
+		$mailer = $this->createMock(IMailer::class);
+		$config = $this->createMock(IConfig::class);
+		$l10n = $this->createMock(IL10N::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$message = $this->createMock(IMessage::class);
+
+		$l10n->method('t')->willReturnCallback(static fn (string $text, array $params = []): string => $params === [] ? $text : vsprintf($text, $params));
+		$l10n->method('n')->willReturnCallback(static function (string $singular, string $plural, int $count, array $params = []): string {
+			return str_replace('%n', (string)$count, $count === 1 ? $singular : $plural);
+		});
+		$urlGenerator->method('linkToRouteAbsolute')->willReturn('https://example.local/link');
+		$mailer->method('validateMailAddress')->willReturn(true);
+		$mailer->method('createMessage')->willReturn($message);
+
+		$captured = [];
+		$message->method('setPlainBody')->willReturnCallback(static function (string $body) use (&$captured, $message) {
+			$captured[] = $body;
+			return $message;
+		});
+		$mailer->expects($this->once())->method('send');
+
+		$config->method('getAppValue')
+			->willReturnCallback(function (string $app, string $key, string $default = ''): string {
+				if ($key === Constants::CONFIG_HR_NOTIFICATIONS_ENABLED) {
+					return '1';
+				}
+				if ($key === Constants::CONFIG_HR_NOTIFICATION_RECIPIENTS) {
+					return 'hr@example.com';
+				}
+				if ($key === Constants::CONFIG_HR_NOTIFICATION_MATRIX_V1) {
+					return '{"vacation":{"request_created":true}}';
+				}
+				return $default;
+			});
+
+		$employee = $this->createMock(IUser::class);
+		$employee->method('getDisplayName')->willReturn('Max Mustermann');
+		$userManager->method('get')->willReturn($employee);
+
+		$absence = new Absence();
+		$absence->setUserId('employee1');
+		$absence->setType('vacation');
+		$absence->setStartDate(new \DateTime('2026-08-12'));
+		$absence->setEndDate(new \DateTime('2026-08-12'));
+		$absence->setDays(0.5);
+
+		$service = new AbsenceNotificationMailService(
+			$mailer,
+			$config,
+			$l10n,
+			$userManager,
+			$urlGenerator,
+			$teamResolver
+		);
+
+		$service->sendHrOfficeNotification($absence, 'request_created', 'manager1');
+		$this->assertNotEmpty($captured);
+		$this->assertStringContainsString('0.5', $captured[0]);
+		$this->assertStringNotContainsString("Days: 0\n", $captured[0]);
+	}
+
 	public function testSendHrOfficeNotificationSkipsWhenMatrixDisabled(): void
 	{
 		$mailer = $this->createMock(IMailer::class);

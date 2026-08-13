@@ -97,6 +97,7 @@ final class LegacyAzcClockIsolationIntegrationTest extends TestCase
 			'start_date' => $from,
 			'end_date' => $from,
 			'reason' => 'LEGACY isolation ' . $suffix,
+			'server_may_fill_hours' => true,
 		], $this->uid);
 		$this->assertGreaterThan(0, (int)$row->getId());
 	}

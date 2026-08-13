@@ -41,7 +41,7 @@ final class DedicatedAppAdminContractTest extends TestCase
 
 	public function testSettingsTemplateAllowsDelegatedAppAdmins(): void
 	{
-		$html = (string)file_get_contents($this->root . '/templates/admin-settings.php');
+		$html = (string)file_get_contents($this->root . '/templates/partials/admin-settings/access.php');
 		$this->assertStringContainsString('without making them a Nextcloud admin', $html);
 		$this->assertStringContainsString('appAdminUsersAddSearch', $html);
 		$this->assertStringNotContainsString('Only users in the Nextcloud admin group are listed', $html);

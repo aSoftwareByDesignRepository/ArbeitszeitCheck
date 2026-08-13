@@ -1121,4 +1121,35 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$this->assertFalse($service->managerMayAttachProjectCheckProjectForEmployee('mgr1', 'emp1', '6'));
 		$this->assertSame([], $service->getAssignableProjectsForManagerOnBehalfOfEmployee('mgr1', 'emp1'));
 	}
+
+	/**
+	 * Attach gate must prefer ProjectCheck's canUserAddTimeEntryForProject so the
+	 * picker and clock-in cannot drift (picker uses getProjectsForUserTimeEntry).
+	 */
+	public function testUserMayAttachDelegatesToCanUserAddTimeEntryForProject(): void
+	{
+		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->configureAppConfigIntegration('1');
+
+		$projectService = $this->getMockBuilder(\stdClass::class)
+			->addMethods(['canUserAddTimeEntryForProject', 'getProject'])
+			->getMock();
+		$projectService->expects($this->once())
+			->method('canUserAddTimeEntryForProject')
+			->with('user1', 42)
+			->willReturn(true);
+		$projectService->expects($this->never())->method('getProject');
+
+		$service = new ProjectCheckIntegrationService(
+			$this->appManager,
+			$this->appConfig,
+			$this->db,
+			$this->l10n,
+			$this->logger,
+			$projectService,
+			null,
+		);
+
+		$this->assertTrue($service->userMayAttachProjectCheckProjectToOwnTime('user1', '42'));
+	}
 }

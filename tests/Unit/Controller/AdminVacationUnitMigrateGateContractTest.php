@@ -23,6 +23,7 @@ class AdminVacationUnitMigrateGateContractTest extends TestCase
 		$this->assertStringContainsString('VAC_UNIT_CLIENT_GATE', $src);
 		$this->assertStringContainsString('Http::STATUS_CONFLICT', $src);
 		$this->assertStringContainsString('VAC_UNIT_MIGRATE_IN_PROGRESS', $src);
+		$this->assertStringContainsString('VAC_UNIT_SCHEMA_OUTDATED', $src);
 		$this->assertStringContainsString('Confirm that Employee apps are updated', $src);
 	}
 }

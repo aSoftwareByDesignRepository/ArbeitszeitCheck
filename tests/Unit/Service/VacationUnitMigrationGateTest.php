@@ -17,12 +17,14 @@ use OCA\ArbeitszeitCheck\Db\AuditLogMapper;
 use OCA\ArbeitszeitCheck\Db\VacationYearBalanceMapper;
 use OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService;
 use OCA\ArbeitszeitCheck\Service\VacationUnitService;
+use OCA\ArbeitszeitCheck\Tests\Unit\Support\SchemaReadyDbMock;
 use OCP\IConfig;
 use OCP\IDBConnection;
 use PHPUnit\Framework\TestCase;
 
 class VacationUnitMigrationGateTest extends TestCase
 {
+	use SchemaReadyDbMock;
 	public function testHoursWithoutClientConfirmationThrowsGate(): void
 	{
 		$config = $this->createMock(IConfig::class);
@@ -34,7 +36,7 @@ class VacationUnitMigrationGateTest extends TestCase
 				return $default;
 			}
 		);
-		$db = $this->createMock(IDBConnection::class);
+		$db = $this->createSchemaReadyDbMock();
 		$db->expects($this->never())->method('beginTransaction');
 
 		$svc = new VacationUnitMigrationService(

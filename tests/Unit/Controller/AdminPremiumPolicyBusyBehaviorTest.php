@@ -138,6 +138,15 @@ class AdminPremiumPolicyBusyBehaviorTest extends TestCase
 			->willThrowException(new \OCP\Lock\LockedException(DbLockKeys::premiumPolicy()));
 		$lockingMock->expects($this->never())->method('releaseLock');
 
+		$permissionService = $this->createMock(PermissionService::class);
+		$adminEmployeeDirectoryService = new \OCA\ArbeitszeitCheck\Service\AdminEmployeeDirectoryService(
+			$userManager,
+			$permissionService,
+			$this->createMock(TimeEntryMapper::class),
+			$l10n,
+			$this->createMock(\Psr\Log\LoggerInterface::class),
+		);
+
 		$controller = new AdminController(
 			'arbeitszeitcheck',
 			$request,
@@ -173,8 +182,9 @@ class AdminPremiumPolicyBusyBehaviorTest extends TestCase
 			$proration,
 			$timeCapture,
 			$adminProfile,
+			$adminEmployeeDirectoryService,
 			$auditPresenter,
-			$this->createMock(PermissionService::class),
+			$permissionService,
 			$localeFormat,
 			$db,
 			null,

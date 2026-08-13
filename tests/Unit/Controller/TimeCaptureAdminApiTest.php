@@ -117,6 +117,14 @@ class TimeCaptureAdminApiTest extends TestCase
 		$dateTimeFormatter = $this->createMock(\OCP\IDateTimeFormatter::class);
 		$auditLogPresenter = new \OCA\ArbeitszeitCheck\Service\AuditLogPresenter($l10n, $dateTimeFormatter);
 
+		$adminEmployeeDirectoryService = new \OCA\ArbeitszeitCheck\Service\AdminEmployeeDirectoryService(
+			$userManager,
+			$permissionService,
+			$this->createMock(TimeEntryMapper::class),
+			$l10n,
+			$this->createMock(\Psr\Log\LoggerInterface::class),
+		);
+
 		$this->controller = new AdminController(
 			'arbeitszeitcheck',
 			$request,
@@ -152,6 +160,7 @@ class TimeCaptureAdminApiTest extends TestCase
 			$this->createMock(\OCA\ArbeitszeitCheck\Service\VacationProrationService::class),
 			$timeCaptureMethodService,
 			$adminUserProfileUpdateService,
+			$adminEmployeeDirectoryService,
 			$auditLogPresenter,
 			$permissionService,
 			$localeFormat,

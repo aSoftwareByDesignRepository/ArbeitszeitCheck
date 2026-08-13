@@ -314,6 +314,8 @@
 
     let searchTimeout = null;
     const USERS_TABLE_COLS = 8;
+    const FILTER_APP_ACCESS = 'app_access';
+    const FILTER_ALL = 'all';
     const cfg = window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminUsersConfig
         ? window.ArbeitszeitCheck.adminUsersConfig
         : {};
@@ -322,7 +324,12 @@
     let listOffset = Number(cfg.initialOffset) >= 0 ? Number(cfg.initialOffset) : 0;
     let listSearch = '';
     let listTotal = Number(cfg.initialTotal) >= 0 ? Number(cfg.initialTotal) : 0;
-    let listTruncated = false;
+    let lastShownCount = Number(cfg.initialShown) >= 0 ? Number(cfg.initialShown) : 0;
+    let listAccessFilter = String(cfg.accessFilter || FILTER_ALL);
+    let hiddenCount = Number(cfg.hiddenCount) >= 0 ? Number(cfg.hiddenCount) : 0;
+    let isAccessRestricted = !!cfg.isAccessRestricted;
+    let listTruncated = !!cfg.truncated;
+    const accessSettingsUrl = String(cfg.accessSettingsUrl || '/apps/arbeitszeitcheck/admin/settings/access');
 
     function buildApiUrl(path) {
         if (Utils && typeof Utils.resolveUrl === 'function') {
@@ -355,6 +362,9 @@
         const initialShown = Number(cfg.initialShown) >= 0 ? Number(cfg.initialShown) : 0;
         const initialTotal = Number(cfg.initialTotal) >= 0 ? Number(cfg.initialTotal) : initialShown;
         listTotal = initialTotal;
+        lastShownCount = initialShown;
+        updateExportLink();
+        updateBanners();
         updateUsersPagination(initialShown, initialTotal, {});
     }
 
@@ -370,13 +380,7 @@
         const refreshBtn = Utils.$('#refresh-users');
         if (refreshBtn) {
             Utils.on(refreshBtn, 'click', function() {
-                const searchInput = Utils.$('#user-search');
-                if (searchInput) {
-                    searchInput.value = '';
-                }
-                listSearch = '';
-                listOffset = 0;
-                loadUsers();
+                clearSearchAndReload();
             });
         }
 
@@ -401,7 +405,125 @@
             });
         }
 
+        document.querySelectorAll('input[name="employee-list-access-filter"]').forEach(function(radio) {
+            Utils.on(radio, 'change', handleAccessFilterChange);
+        });
+
+        const showAllBtn = Utils.$('#employee-list-show-all');
+        if (showAllBtn) {
+            Utils.on(showAllBtn, 'click', handleShowAllAccounts);
+        }
+
+        const tbody = Utils.$('#users-tbody');
+        if (tbody) {
+            Utils.on(tbody, 'click', function(ev) {
+                const target = ev.target && ev.target.closest
+                    ? ev.target.closest('[data-action="show-all-accounts"], [data-action="clear-employee-search"]')
+                    : null;
+                if (!target) {
+                    return;
+                }
+                ev.preventDefault();
+                if (target.getAttribute('data-action') === 'show-all-accounts') {
+                    handleShowAllAccounts();
+                    return;
+                }
+                if (target.getAttribute('data-action') === 'clear-employee-search') {
+                    clearSearchAndReload();
+                }
+            });
+        }
+
+        const exportLink = Utils.$('#export-users-csv');
+        if (exportLink) {
+            Utils.on(exportLink, 'click', function() {
+                const status = Utils.$('#export-status');
+                if (status) {
+                    status.textContent = auMsg('exportStarted', 'Export started — your download should begin shortly.');
+                }
+            });
+        }
+
         // Edit / History are plain links to the employee detail page (progressive enhancement).
+    }
+
+    function clearSearchAndReload() {
+        const searchInput = Utils.$('#user-search');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+        listSearch = '';
+        listOffset = 0;
+        loadUsers();
+    }
+
+    function handleAccessFilterChange(e) {
+        if (!e.target || !e.target.checked) {
+            return;
+        }
+        listAccessFilter = String(e.target.value || FILTER_ALL);
+        listOffset = 0;
+        loadUsers();
+    }
+
+    function handleShowAllAccounts() {
+        const allRadio = Utils.$('#employee-list-filter-all');
+        if (allRadio) {
+            allRadio.checked = true;
+            listAccessFilter = FILTER_ALL;
+            listOffset = 0;
+            loadUsers();
+        }
+    }
+
+    function updateExportLink() {
+        const link = Utils.$('#export-users-csv');
+        if (!link) {
+            return;
+        }
+        const base = link.getAttribute('data-export-base') || link.getAttribute('href') || '';
+        if (!base) {
+            return;
+        }
+        try {
+            const url = new URL(base, window.location.origin);
+            url.searchParams.set('filter', listAccessFilter);
+            link.setAttribute('href', url.pathname + url.search);
+        } catch (err) {
+            const sep = base.indexOf('?') >= 0 ? '&' : '?';
+            link.setAttribute('href', base + sep + 'filter=' + encodeURIComponent(listAccessFilter));
+        }
+    }
+
+    function updateBanners() {
+        const hiddenBanner = Utils.$('#employee-list-hidden-banner');
+        const hiddenText = hiddenBanner && hiddenBanner.querySelector('.admin-users-hidden-banner__text');
+        const truncatedBanner = Utils.$('#employee-list-truncated-banner');
+
+        if (hiddenBanner) {
+            const showHidden = hiddenCount > 0 && listAccessFilter === FILTER_APP_ACCESS;
+            hiddenBanner.hidden = !showHidden;
+            if (showHidden && hiddenText) {
+                const template = auMsg(
+                    'hiddenAccountsBanner',
+                    '{count} Nextcloud accounts without app access are hidden.'
+                );
+                const countNode = hiddenText.querySelector('.admin-users-hidden-banner__count');
+                if (countNode) {
+                    countNode.textContent = String(hiddenCount);
+                } else {
+                    const prefix = hiddenText.querySelector('.admin-users-hidden-banner__prefix');
+                    if (prefix) {
+                        prefix.textContent = template.replace('{count}', String(hiddenCount));
+                    }
+                }
+            }
+        }
+
+        if (truncatedBanner) {
+            truncatedBanner.hidden = !listTruncated;
+        }
     }
 
     /**
@@ -413,6 +535,10 @@
         listOffset = 0;
 
         clearTimeout(searchTimeout);
+        if (query.length > 0 && query.length < USERS_MIN_SEARCH) {
+            updateUsersPagination(lastShownCount, listTotal, { searchPending: true });
+            return;
+        }
         searchTimeout = setTimeout(function() {
             loadUsers();
         }, 300);
@@ -421,6 +547,23 @@
     /**
      * Load users from API (paginated browse or search).
      */
+    function setTableBusy(busy) {
+        const region = document.getElementById('users-table-region');
+        const card = document.getElementById('admin-users-list-card');
+        const status = document.getElementById('users-list-status');
+        if (region) {
+            region.setAttribute('aria-busy', busy ? 'true' : 'false');
+        }
+        if (card) {
+            card.setAttribute('aria-busy', busy ? 'true' : 'false');
+        }
+        if (status) {
+            status.textContent = busy
+                ? auMsg('loadingEllipsis', 'Loading…')
+                : '';
+        }
+    }
+
     function loadUsers() {
         const tbody = Utils.$('#users-tbody');
         if (!tbody) {
@@ -429,14 +572,19 @@
 
         const search = listSearch.trim();
         if (search.length > 0 && search.length < USERS_MIN_SEARCH) {
-            tbody.innerHTML = '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center">' + Utils.escapeHtml(auMsg('searchMinLength', 'Type at least 2 characters to search.')) + '</td></tr>';
-            updateUsersPagination(0, 0, { searchPending: true });
+            updateUsersPagination(lastShownCount, listTotal, { searchPending: true });
             return;
         }
 
-        tbody.innerHTML = '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center">' + auMsg('loadingEllipsis', 'Loading…') + '</td></tr>';
+        setTableBusy(true);
+        tbody.innerHTML = '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center admin-users-loading-cell">'
+            + '<span class="admin-users-loading-label">' + Utils.escapeHtml(auMsg('loadingEllipsis', 'Loading…')) + '</span>'
+            + '</td></tr>';
 
-        const params = new URLSearchParams({ limit: String(USERS_PAGE_SIZE) });
+        const params = new URLSearchParams({
+            limit: String(USERS_PAGE_SIZE),
+            filter: listAccessFilter,
+        });
         if (search !== '') {
             params.set('search', search);
         } else {
@@ -447,20 +595,41 @@
         Utils.ajax(url, {
             method: 'GET',
             onSuccess: function(data) {
+                setTableBusy(false);
                 if (data.success && data.users) {
                     listTotal = Number.isFinite(data.total) ? Number(data.total) : data.users.length;
                     listTruncated = !!data.truncated;
+                    if (typeof data.hiddenCount === 'number') {
+                        hiddenCount = data.hiddenCount;
+                    }
+                    if (typeof data.filter === 'string' && data.filter) {
+                        listAccessFilter = data.filter;
+                        document.querySelectorAll('input[name="employee-list-access-filter"]').forEach(function(radio) {
+                            radio.checked = radio.value === listAccessFilter;
+                        });
+                    }
                     if (typeof data.offset === 'number' && search === '') {
                         listOffset = data.offset;
                     }
+                    updateExportLink();
+                    updateBanners();
                     renderUsers(data.users, listTotal);
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center">' + auMsg('errorLoadingUsers', 'Error loading users') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center admin-users-empty-cell">'
+                        + '<p class="admin-users-empty-message">' + Utils.escapeHtml(auMsg('errorLoadingUsers', 'Error loading users')) + '</p>'
+                        + '<button type="button" class="azc-btn azc-btn--secondary" data-action="clear-employee-search">'
+                        + Utils.escapeHtml(auMsg('tryAgainReset', 'Reset and try again'))
+                        + '</button></td></tr>';
                     updateUsersPagination(0, 0, {});
                 }
             },
             onError: function() {
-                tbody.innerHTML = '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center">' + auMsg('errorLoadingUsers', 'Error loading users') + '</td></tr>';
+                setTableBusy(false);
+                tbody.innerHTML = '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center admin-users-empty-cell">'
+                    + '<p class="admin-users-empty-message">' + Utils.escapeHtml(auMsg('errorLoadingUsers', 'Error loading users')) + '</p>'
+                    + '<button type="button" class="azc-btn azc-btn--secondary" data-action="clear-employee-search">'
+                    + Utils.escapeHtml(auMsg('tryAgainReset', 'Reset and try again'))
+                    + '</button></td></tr>';
                 if (Messaging && Messaging.showError) {
                     Messaging.showError(auMsg('failedToLoadUsersRetry', 'Failed to load users. Please try again.'));
                 }
@@ -490,10 +659,16 @@
         }
         const from = listOffset + 1;
         const to = listOffset + count;
-        return auMsg('showingEmployeesRange', 'Showing employees {from}–{to} of {total}')
+        let text = auMsg('showingEmployeesRange', 'Showing employees {from}–{to} of {total}')
             .replace('{from}', String(from))
             .replace('{to}', String(to))
             .replace('{total}', String(totalCount));
+        if (listAccessFilter === FILTER_APP_ACCESS && isAccessRestricted) {
+            text += ' ' + auMsg('paginationAppAccessOnly', '(with app access only)');
+        } else if (listAccessFilter === FILTER_ALL && isAccessRestricted) {
+            text += ' ' + auMsg('paginationAllAccounts', '(all Nextcloud accounts)');
+        }
+        return text;
     }
 
     function updateUsersPagination(shown, total, options) {
@@ -525,15 +700,45 @@
     /**
      * Render users table
      */
+    function buildEmptyStateHtml() {
+        if (isAccessRestricted && listAccessFilter === FILTER_APP_ACCESS) {
+            const message = auMsg(
+                'noAppAccessEmployees',
+                'No one with app access yet. Add people under Access control, or show all Nextcloud accounts.'
+            );
+            const cta = auMsg('openAccessControl', 'Open access control');
+            const showAll = auMsg('showAllAccounts', 'Show all accounts');
+            const settingsUrl = Utils.escapeHtml(accessSettingsUrl);
+            return '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center admin-users-empty-cell">'
+                + '<p class="admin-users-empty-message">' + Utils.escapeHtml(message) + '</p>'
+                + '<div class="admin-users-empty-actions">'
+                + '<a class="azc-btn azc-btn--primary" href="' + settingsUrl + '">' + Utils.escapeHtml(cta) + '</a>'
+                + '<button type="button" class="azc-btn azc-btn--secondary" data-action="show-all-accounts">'
+                + Utils.escapeHtml(showAll) + '</button>'
+                + '</div></td></tr>';
+        }
+        if (listSearch.trim() !== '') {
+            return '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center admin-users-empty-cell">'
+                + '<p class="admin-users-empty-message">' + Utils.escapeHtml(auMsg('noUsersFound', 'No users found')) + '</p>'
+                + '<button type="button" class="azc-btn azc-btn--primary" data-action="clear-employee-search">'
+                + Utils.escapeHtml(auMsg('clearSearch', 'Clear search'))
+                + '</button></td></tr>';
+        }
+        return '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center admin-users-empty-cell">'
+            + '<p class="admin-users-empty-message">' + Utils.escapeHtml(auMsg('noUsersFound', 'No users found')) + '</p>'
+            + '</td></tr>';
+    }
+
     function renderUsers(users, total) {
         const tbody = Utils.$('#users-tbody');
         if (!tbody) return;
 
         const totalCount = Number.isFinite(total) ? total : users.length;
+        lastShownCount = users.length;
         updateUsersPagination(users.length, totalCount, {});
 
         if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="' + USERS_TABLE_COLS + '" class="text-center">' + auMsg('noUsersFound', 'No users found') + '</td></tr>';
+            tbody.innerHTML = buildEmptyStateHtml();
             return;
         }
 
@@ -575,14 +780,14 @@
                     const detailUrl = userDetailUrl(user.userId);
                     const name = user.displayName || user.userId;
                     return `<div class="user-actions azc-table-actions" role="group" aria-label="${Utils.escapeHtml(auMsg('actions', 'Actions') + ': ' + name)}">
-                        <a class="btn btn--sm btn--tertiary"
+                        <a class="azc-btn azc-btn--sm azc-btn--ghost"
                             href="${Utils.escapeHtml(detailUrl)}#assignment-history"
                             data-action="history-user"
                             data-user-id="${Utils.escapeHtml(user.userId)}"
                             aria-label="${Utils.escapeHtml(auMsg('viewHistory', 'View history') + ': ' + name)}">
                             ${Utils.escapeHtml(auMsg('history', 'History'))}
                         </a>
-                        <a class="btn btn--sm btn--secondary"
+                        <a class="azc-btn azc-btn--sm azc-btn--secondary"
                             href="${Utils.escapeHtml(detailUrl)}"
                             data-action="edit-user"
                             data-user-id="${Utils.escapeHtml(user.userId)}"

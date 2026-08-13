@@ -32,6 +32,11 @@ final class Constants
 	public const MAX_LIST_LIMIT = 500;
 
 	/**
+	 * Maximum NC accounts scanned when resolving admin employee list access filters.
+	 */
+	public const ADMIN_EMPLOYEE_FILTER_MAX_SCAN = 10000;
+
+	/**
 	 * Minimum characters required for admin user-picker search (GET ?picker=1).
 	 * Prevents unbounded directory dumps on large instances.
 	 */
@@ -339,7 +344,22 @@ final class Constants
 	/** Concurrent vacation mutation while days↔hours migration holds the lock / pending flag. */
 	public const VAC_UNIT_MIGRATE_IN_PROGRESS = 'VAC_UNIT_MIGRATE_IN_PROGRESS';
 
+	/** Hours-mode schema columns missing — run occ upgrade / app migrations first. */
+	public const VAC_UNIT_SCHEMA_OUTDATED = 'VAC_UNIT_SCHEMA_OUTDATED';
+
 	public const ABSENCE_HOURS_CLIENT_REQUIRED = 'ABSENCE_HOURS_CLIENT_REQUIRED';
+
+	/**
+	 * Days-mode half-day vacation (AZC-VAC-HALF-DAY-DAYS-MODE).
+	 * day_fraction is request-only; never bind client `days`.
+	 */
+	public const VAC_HALF_DAY_RANGE_FORBIDDEN = 'VAC_HALF_DAY_RANGE_FORBIDDEN';
+
+	public const VAC_HALF_DAY_NON_WORKING = 'VAC_HALF_DAY_NON_WORKING';
+
+	public const VAC_HALF_DAY_INVALID = 'VAC_HALF_DAY_INVALID';
+
+	public const VAC_HALF_DAY_INTEGRITY = 'VAC_HALF_DAY_INTEGRITY';
 
 	/** Calendar→anniversary while users lack employment_start without ack. */
 	public const VAC_YEAR_MISSING_HIRE_ACK_REQUIRED = 'VAC_YEAR_MISSING_HIRE_ACK_REQUIRED';

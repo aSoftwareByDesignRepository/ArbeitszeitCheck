@@ -369,7 +369,7 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                 include __DIR__ . '/common/projectcheck-picker-options.php';
                                 ?>
                             </select>
-                            <p id="dashboard-clock-in-project-help" class="form-help azc-dashboard-project-picker__help"><?php p($l->t('Link these hours to a ProjectCheck customer project. Leave it on “No project” to just track your time. Projects with per-person pricing only appear if you are on the project team.')); ?></p>
+                            <p id="dashboard-clock-in-project-help" class="form-help azc-dashboard-project-picker__help"><?php p($l->t('Optional: link this stamp session to one ProjectCheck customer project for billing. ArbeitszeitCheck tracks attendance (one active session). To split the day across several projects, keep stamping here and log project hours in ProjectCheck — or ask your administrator. Leave “No project” to track time only. Projects with per-person pricing only appear if you are on the project team.')); ?></p>
                         </div>
                         <?php endif; ?>
 

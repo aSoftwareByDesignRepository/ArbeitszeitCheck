@@ -692,13 +692,17 @@ class ComplianceService
     }
 
     /**
-     * Evaluate ArbZG §5 rest for clock-in at "now" in the organisation storage TZ.
+     * Evaluate ArbZG §5 / AZG / ArG rest for clock-in at "now" in the organisation storage TZ.
      *
      * Critical invariants:
      *  - "Now" is always {@see TimeZoneService::nowInStorage()} (never PHP default TZ).
      *  - The rest anchor is the latest completed end_time strictly before now.
      *    Entries with end_time in the future (bad manual rows / planned days) must
      *    never block clock-in — they are not an ended shift yet.
+     *  - Stamp path always enforces elapsed rest against that anchor (no calendar-day
+     *    shortcut). Mid-session interruptions must use Pause, not Gehen→Kommen.
+     *    A calendar "same day" skip would wrongly clear Ruhezeit after night shifts
+     *    that end after midnight (e.g. 22:00→06:00 then Kommen at 10:00).
      *  - User-facing times always include the calendar date so "04:00" cannot be
      *    mistaken for a time that already passed today when it is tomorrow.
      *
@@ -789,6 +793,25 @@ class ComplianceService
     }
 
     /**
+     * True when a completed block and the next start are a same-calendar-day
+     * split (geteilte Arbeitszeit) that did not cross midnight.
+     *
+     * Storage-TZ wall dates: lastStart, lastEnd, and nextStart must share one
+     * Y-m-d. Overnight shifts (start day &lt; end day) never qualify — otherwise
+     * Wachdienst 22:00→06:00 could clear Ruhezeit for a 10:00 start.
+     */
+    private function isIntradayWorkInterruption(
+        \DateTimeInterface $lastStart,
+        \DateTimeInterface $lastEnd,
+        \DateTimeInterface $nextStart
+    ): bool {
+        $startDay = $lastStart->format('Y-m-d');
+        $endDay = $lastEnd->format('Y-m-d');
+        $nextDay = $nextStart->format('Y-m-d');
+        return $startDay === $endDay && $endDay === $nextDay;
+    }
+
+    /**
      * Check if minimum rest period is met for a specific start time (ArbZG §5)
      * 
      * This method is used for validating manual time entries before they are saved.
@@ -811,17 +834,21 @@ class ComplianceService
         }
 
         $lastEndTime = $lastCompletedEntry->getEndTime();
-        
-        // Check if it's the same day
-        $lastEndDate = $lastEndTime->format('Y-m-d');
-        $startDate = $startTime->format('Y-m-d');
-        
-        if ($lastEndDate === $startDate) {
-            // Same day: No rest period check required (it's a work interruption, not a new shift)
+        $lastStartTime = $lastCompletedEntry->getStartTime();
+
+        // Intraday geteilte Arbeitszeit (two blocks same calendar day) may skip the
+        // cross-shift rest gate — but ONLY when the previous block itself did not
+        // cross midnight. Overnight Wachdienst ending after 00:00 must still enforce
+        // elapsed Ruhezeit before the next start on that morning (ArbZG §5).
+        if ($lastStartTime instanceof \DateTimeInterface
+            && $this->isIntradayWorkInterruption($lastStartTime, $lastEndTime, $startTime)
+        ) {
             return ['valid' => true, 'message' => null];
         }
         
         // Check days difference: start date - last end date
+        $lastEndDate = $lastEndTime->format('Y-m-d');
+        $startDate = $startTime->format('Y-m-d');
         $lastEndDateObj = new \DateTime($lastEndDate);
         $lastEndDateObj->setTime(0, 0, 0);
         $startDateObj = new \DateTime($startDate);

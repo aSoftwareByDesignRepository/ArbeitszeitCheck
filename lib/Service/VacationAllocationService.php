@@ -382,6 +382,7 @@ class VacationAllocationService
 		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
 		bool $persistEntitlementSnapshot = true,
 		?float $prospectiveDurationHours = null,
+		?float $prospectiveDays = null,
 	): array {
 		$asOf = $asOf ?? new \DateTime('today');
 		$window = $this->resolveWindowForAllocation($userId, $year, $asOf);
@@ -395,6 +396,7 @@ class VacationAllocationService
 			$prospectiveRequestCreatedAt,
 			$persistEntitlementSnapshot,
 			$prospectiveDurationHours,
+			$prospectiveDays,
 		);
 	}
 
@@ -411,6 +413,7 @@ class VacationAllocationService
 		?\DateTimeInterface $prospectiveRequestCreatedAt = null,
 		bool $persistEntitlementSnapshot = true,
 		?float $prospectiveDurationHours = null,
+		?float $prospectiveDays = null,
 	): array {
 		$asOf = $asOf ?? new \DateTime('today');
 		$year = $window->balanceYearKey;
@@ -483,6 +486,9 @@ class VacationAllocationService
 			$p->setEndDate(clone $prospectiveEnd);
 			if ($prospectiveDurationHours !== null) {
 				$p->setDurationHours($prospectiveDurationHours);
+			}
+			if ($prospectiveDays !== null && is_finite($prospectiveDays) && $prospectiveDays > 0) {
+				$p->setDays($prospectiveDays);
 			}
 			$merged[] = $p;
 		}
@@ -629,6 +635,37 @@ class VacationAllocationService
 	}
 
 	/**
+	 * Integrity gate for preferring stored `days` in days-mode allocation (ADR-01 + SEC-01).
+	 * Prevents under-debit from forged/tiny/multi-day mismatch values.
+	 */
+	public static function isTrustedStoredVacationDays(
+		Absence $absence,
+		float $stored,
+		float $calendarTotal,
+	): bool {
+		if (!is_finite($stored) || $stored <= 0 || !is_finite($calendarTotal)) {
+			return false;
+		}
+		$eps = 0.011;
+		$start = $absence->getStartDate();
+		$end = $absence->getEndDate();
+		if ($start === null || $end === null) {
+			return false;
+		}
+		$startKey = $start->format('Y-m-d');
+		$endKey = $end->format('Y-m-d');
+		if ($startKey !== $endKey) {
+			// Multi-day: stored must match calendar (segment or full) — never prefer a forged 0.5.
+			return abs($stored - $calendarTotal) <= $eps;
+		}
+		if (abs($stored - $calendarTotal) <= $eps) {
+			return true;
+		}
+		// Single-day half: only when calendar is a full working day.
+		return abs($stored - 0.5) <= $eps && $calendarTotal >= 0.999;
+	}
+
+	/**
 	 * Split absence consumption into before/after carryover expiry amounts
 	 * (days or hours depending on org unit).
 	 *
@@ -653,6 +690,23 @@ class VacationAllocationService
 			$expiryDate
 		);
 		if (!$hoursMode || $this->vacationUnitService === null) {
+			// Days mode (ADR-01): prefer trusted stored days, scaled by calendar weight ratio.
+			$calendarTotal = $daySplit['before'] + $daySplit['after'];
+			$rawStored = $absence->getDays();
+			if ($rawStored !== null
+				&& is_finite((float)$rawStored)
+				&& (float)$rawStored > 0
+				&& $calendarTotal > 0.0001
+				&& self::isTrustedStoredVacationDays($absence, (float)$rawStored, $calendarTotal)
+			) {
+				$stored = (float)$rawStored;
+				$ratioBefore = $daySplit['before'] / $calendarTotal;
+				return [
+					'before' => round($stored * $ratioBefore, 2, PHP_ROUND_HALF_UP),
+					'after' => round($stored * (1.0 - $ratioBefore), 2, PHP_ROUND_HALF_UP),
+				];
+			}
+			// Untrusted / legacy / missing → calendar split (never under-debit vs calendar).
 			return $daySplit;
 		}
 

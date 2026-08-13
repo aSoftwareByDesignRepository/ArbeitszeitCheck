@@ -135,6 +135,46 @@ class AppAdminMiddlewareTest extends TestCase
 		$this->assertSame('admin_required', $data['error']['code']);
 	}
 
+	/**
+	 * AC-014: employee list API and export are admin-gated for every filter value.
+	 *
+	 * @dataProvider employeeListAdminApiMethodsProvider
+	 */
+	public function testAfterExceptionReturnsJson403ForEmployeeListApi(string $method, string $path): void
+	{
+		$userSession = $this->createMock(IUserSession::class);
+		$permissionService = $this->createMock(PermissionService::class);
+		$l10n = $this->createMock(IL10N::class);
+		$middleware = new AppAdminMiddleware(
+			$userSession,
+			$permissionService,
+			$l10n,
+			$this->makeRequest($path, 'GET')
+		);
+		$exception = new NotAppAdminException('Access denied');
+
+		$response = $middleware->afterException(new \stdClass(), $method, $exception);
+
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['ok']);
+		$this->assertSame('admin_required', $data['error']['code']);
+	}
+
+	/**
+	 * @return array<string, array{0: string, 1: string}>
+	 */
+	public static function employeeListAdminApiMethodsProvider(): array
+	{
+		return [
+			'getUsers app_access' => ['getUsers', '/apps/arbeitszeitcheck/api/admin/users?filter=app_access'],
+			'getUsers all' => ['getUsers', '/apps/arbeitszeitcheck/api/admin/users?filter=all'],
+			'exportUsers default' => ['exportUsers', '/apps/arbeitszeitcheck/api/admin/users/export?format=csv'],
+			'exportUsers all' => ['exportUsers', '/apps/arbeitszeitcheck/api/admin/users/export?format=csv&filter=all'],
+		];
+	}
+
 	public function testAfterExceptionReturnsJsonForXmlHttpRequest(): void
 	{
 		$userSession = $this->createMock(IUserSession::class);
@@ -152,6 +192,9 @@ class AppAdminMiddlewareTest extends TestCase
 
 		$this->assertInstanceOf(JSONResponse::class, $response);
 		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['ok']);
+		$this->assertSame('admin_required', $data['error']['code']);
 	}
 
 	public function testAfterExceptionRethrowsUnknownException(): void

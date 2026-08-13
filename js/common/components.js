@@ -449,13 +449,18 @@ const ArbeitszeitCheckComponents = {
     
     const toastVariant = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info';
     const toastWellClass = type === 'error' ? 'danger' : toastVariant;
+    // Escape title/message/closeLabel — never render raw API/proxy HTML (e.g. NC guest
+    // error pages with a giant "400") inside the toast. Icon markup is trusted app SVG.
+    const safeTitle = title != null && String(title) !== '' ? this._escapeHtml(String(title)) : '';
+    const safeMessage = this._escapeHtml(String(message ?? ''));
+    const safeCloseLabel = this._escapeHtml(String(closeLabel));
     toast.innerHTML = `
       <div class="toast-icon azc-notif-icon-well azc-notif-icon-well--${toastWellClass}" aria-hidden="true">${icon}</div>
       <div class="toast-content">
-        ${title ? `<div class="toast-title">${title}</div>` : ''}
-        <div class="toast-message">${message}</div>
+        ${safeTitle ? `<div class="toast-title">${safeTitle}</div>` : ''}
+        <div class="toast-message">${safeMessage}</div>
       </div>
-      <button type="button" class="toast-close" aria-label="${closeLabel}">&times;</button>
+      <button type="button" class="toast-close" aria-label="${safeCloseLabel}">&times;</button>
     `;
 
     container.appendChild(toast);

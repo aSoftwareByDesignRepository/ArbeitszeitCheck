@@ -245,6 +245,27 @@ $maxManagerListDateRangeDays = (int)($_['maxManagerListDateRangeDays'] ?? Consta
 								<input id="manager-absence-record-end" name="record_end_date" type="text" class="form-input datepicker-input" placeholder="<?php p($l->t('dd.mm.yyyy')); ?>" pattern="\d{2}\.\d{2}\.\d{4}" maxlength="10" readonly required autocomplete="off" aria-label="<?php p($l->t('To')); ?>" />
 							</div>
 						</div>
+						<div class="azc-filter-field" id="manager-absence-record-day-fraction-field" hidden>
+							<fieldset class="absence-day-fraction__fieldset">
+								<legend id="manager-absence-day-fraction-legend" class="azc-filter-field__label"><?php p($l->t('Day length')); ?></legend>
+								<div class="absence-day-fraction__segments"
+									 role="radiogroup"
+									 aria-labelledby="manager-absence-day-fraction-legend"
+									 aria-describedby="manager-absence-day-fraction-help manager-absence-day-fraction-preview">
+									<label class="absence-day-fraction__segment">
+										<input type="radio" name="record_day_fraction" id="manager-absence-day-fraction-full" value="1" checked class="absence-day-fraction__input">
+										<span class="absence-day-fraction__face"><?php p($l->t('Full day')); ?></span>
+									</label>
+									<label class="absence-day-fraction__segment">
+										<input type="radio" name="record_day_fraction" id="manager-absence-day-fraction-half" value="0.5" class="absence-day-fraction__input">
+										<span class="absence-day-fraction__face"><?php p($l->t('Half day')); ?></span>
+									</label>
+								</div>
+							</fieldset>
+							<p id="manager-absence-day-fraction-help" class="form-help"><?php p($l->t('Full day or half day for this date. Morning or afternoon is not tracked.')); ?></p>
+							<p id="manager-absence-day-fraction-preview" class="azc-callout azc-callout--info" role="status" aria-live="polite"></p>
+							<p id="manager-absence-day-fraction-live" class="sr-only" aria-live="polite"></p>
+						</div>
 						<div class="azc-filter-field" id="manager-absence-record-hours-field" hidden>
 							<label for="manager-absence-record-hours" class="azc-filter-field__label"><?php p($l->t('Hours')); ?></label>
 							<div class="azc-filter-field__control">

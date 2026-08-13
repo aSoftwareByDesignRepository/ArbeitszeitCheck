@@ -366,9 +366,20 @@ class TimeTrackingService
 				$pausedTodayEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId, $today, $tomorrow);
 				if ($pausedTodayEntry !== null && $pausedTodayEntry->getStatus() === TimeEntry::STATUS_PAUSED) {
 					$this->timeCaptureMethodService->assertClockStampingAllowed($userId);
-					$resumed = $this->resumePausedEntry($userId, $pausedTodayEntry, $projectCheckProjectId, $description);
-					$this->db->commit();
-					return $resumed;
+					$existingProject = $pausedTodayEntry->getProjectCheckProjectId();
+					$existingNorm = $existingProject !== null ? trim((string)$existingProject) : '';
+					$requestedNorm = $projectCheckProjectId !== null ? trim((string)$projectCheckProjectId) : '';
+					// Switching ProjectCheck projects mid-day must create a new session.
+					// Never overwrite the paused row's project — that would re-bill earlier
+					// hours onto the newly selected customer project.
+					if ($requestedNorm !== '' && $requestedNorm !== $existingNorm) {
+						$this->completePausedEntryBeforeProjectSwitch($userId, $pausedTodayEntry);
+						// Fall through to create a fresh clock-in with the new project.
+					} else {
+						$resumed = $this->resumePausedEntry($userId, $pausedTodayEntry, $projectCheckProjectId, $description);
+						$this->db->commit();
+						return $resumed;
+					}
 				}
 
 				$this->timeCaptureMethodService->assertClockStampingAllowed($userId);
@@ -528,11 +539,69 @@ class TimeTrackingService
 	}
 
 	/**
+	 * Complete a same-day paused entry at its pause instant so a new clock-in
+	 * can start on a different ProjectCheck project without rewriting history.
+	 *
+	 * End time is the pause moment ({@see TimeEntry::getUpdatedAt()}), not "now",
+	 * so idle time after pause is not billed as work.
+	 */
+	private function completePausedEntryBeforeProjectSwitch(string $userId, TimeEntry $pausedEntry): void
+	{
+		$this->monthClosureGuard->assertTimeEntryMutable($pausedEntry);
+
+		$now = $this->nowForAtEntries();
+		$pausedAt = $pausedEntry->getUpdatedAt() ?? $now;
+		$oldSummary = $this->safeGetSummary($pausedEntry, $userId);
+
+		$pausedEntry->setEndTime($pausedAt);
+		$pausedEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$pausedEntry->setEndedReason(TimeEntry::ENDED_REASON_MANUAL_CLOCK_OUT);
+		$pausedEntry->setPolicyApplied('project_switch');
+		$pausedEntry->setUpdatedAt($now);
+
+		try {
+			$this->calculateAndSetAutomaticBreak($pausedEntry);
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'calculateAndSetAutomaticBreak failed while completing paused entry for project switch: ' . $e->getMessage(),
+				[
+					'exception' => $e,
+					'user_id' => $userId,
+					'entry_id' => $pausedEntry->getId(),
+				]
+			);
+		}
+
+		$updated = $this->timeEntryMapper->update($pausedEntry);
+		$this->auditLogMapper->logAction(
+			$userId,
+			'clock_out',
+			'time_entry',
+			$updated->getId(),
+			$oldSummary,
+			$this->safeGetSummary($updated, $userId)
+		);
+
+		if ($this->projectCheckLaborSync !== null) {
+			try {
+				$this->projectCheckLaborSync->syncFromTimeEntry($updated, $userId);
+			} catch (\Throwable $e) {
+				\OCP\Log\logger('arbeitszeitcheck')->warning(
+					'ProjectCheck billing sync after paused project-switch complete failed: ' . $e->getMessage(),
+					['exception' => $e]
+				);
+			}
+		}
+	}
+
+	/**
 	 * Resume a same-day paused entry instead of creating a new one.
 	 *
 	 * The gap between the moment the entry was paused (updated_at) and now is
 	 * archived as a break interval so that working-time calculations stay correct.
-	 * Project and description are updated when the caller supplies new values.
+	 * Project and description are updated when the caller supplies new values
+	 * that do not change the ProjectCheck project id (project switches are handled
+	 * by {@see completePausedEntryBeforeProjectSwitch()} before a fresh clock-in).
 	 *
 	 * @throws \Exception When the month is already closed or the daily maximum is reached.
 	 */
@@ -571,7 +640,7 @@ class TimeTrackingService
 			$this->archiveBreakToJson($pausedEntry, $pausedAt, $now);
 		}
 
-		// Update optional fields if the caller supplied new values.
+		// Same project (or no project change requested): keep billing attribution.
 		if ($projectCheckProjectId !== null) {
 			$pausedEntry->setProjectCheckProjectId($projectCheckProjectId);
 		}
