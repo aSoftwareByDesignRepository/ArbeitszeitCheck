@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Behavioral: concurrent premium policy save returns PREMIUM_POLICY_BUSY.
+ * Behavioral: concurrent vacation year-mode flip returns VAC_YEAR_MODE_BUSY
+ * with zero sibling IConfig writes (atomic preflight).
  *
  * @copyright Copyright (c) 2026
  * @license AGPL-3.0-or-later
@@ -42,10 +43,12 @@ use OCA\ArbeitszeitCheck\Service\UserOvertimeSettingsService;
 use OCA\ArbeitszeitCheck\Service\VacationAllocationService;
 use OCA\ArbeitszeitCheck\Service\VacationEntitlementEngine;
 use OCA\ArbeitszeitCheck\Service\VacationProrationService;
-use OCA\ArbeitszeitCheck\Support\PremiumPolicy;
+use OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService;
+use OCA\ArbeitszeitCheck\Service\VacationUnitService;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Services\IAppConfig;
+use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IDateTimeFormatter;
 use OCP\IGroupManager;
@@ -55,16 +58,22 @@ use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\Lock\ILockingProvider;
+use OCP\Lock\LockedException;
 use PHPUnit\Framework\TestCase;
 
-class AdminPremiumPolicyBusyBehaviorTest extends TestCase
+class AdminVacationYearModeBusyBehaviorTest extends TestCase
 {
-	public function testUpdateNotificationSettingsReturns409WhenPremiumPolicyLockHeld(): void
+	public function testUpdateNotificationSettingsReturns409WhenYearModeLockHeldWithZeroWrites(): void
 	{
 		$request = $this->createMock(IRequest::class);
 		$appConfig = $this->createMock(IAppConfig::class);
-		$appConfig->method('getAppValueString')->willReturn('');
-		// Atomic preflight: busy premium lock must not write HR/traffic/bank siblings either.
+		$store = [
+			Constants::CONFIG_VACATION_YEAR_MODE => Constants::VACATION_YEAR_MODE_CALENDAR,
+		];
+		$appConfig->method('getAppValueString')
+			->willReturnCallback(static function (string $key, string $default = '') use (&$store): string {
+				return $store[$key] ?? $default;
+			});
 		$appConfig->expects($this->never())->method('setAppValueString');
 
 		$l10n = $this->createMock(IL10N::class);
@@ -86,12 +95,13 @@ class AdminPremiumPolicyBusyBehaviorTest extends TestCase
 		$db = $this->createMock(IDBConnection::class);
 		$userManager = $this->createMock(IUserManager::class);
 		$audit = $this->createMock(AuditLogMapper::class);
+		$audit->expects($this->never())->method('logAction');
 		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
 		$userWorkingTimeModelMapper = $this->createMock(UserWorkingTimeModelMapper::class);
 		$workingTimeModelMapper = $this->createMock(WorkingTimeModelMapper::class);
 		$vacationYearBalanceMapper = $this->createMock(VacationYearBalanceMapper::class);
 		$vacationAllocation = $this->createMock(VacationAllocationService::class);
-		$vacationAllocation->method('applyCapToOpeningBalance')->willReturnCallback(static fn (float $d) => $d);
+		$vacationAllocation->expects($this->never())->method('refreshOpenAllocationsForUsers');
 		$tariffRuleSetMapper = $this->createMock(TariffRuleSetMapper::class);
 		$userVacationPolicyAssignmentMapper = $this->createMock(UserVacationPolicyAssignmentMapper::class);
 		$userOvertime = $this->createMock(UserOvertimeSettingsService::class);
@@ -127,9 +137,21 @@ class AdminPremiumPolicyBusyBehaviorTest extends TestCase
 		$lockingMock = $this->createMock(ILockingProvider::class);
 		$lockingMock->expects($this->once())
 			->method('acquireLock')
-			->with(DbLockKeys::premiumPolicy(), ILockingProvider::LOCK_EXCLUSIVE, $this->anything())
-			->willThrowException(new \OCP\Lock\LockedException(DbLockKeys::premiumPolicy()));
+			->with(DbLockKeys::vacationYearMode(), ILockingProvider::LOCK_EXCLUSIVE, $this->anything())
+			->willThrowException(new LockedException(DbLockKeys::vacationYearMode()));
 		$lockingMock->expects($this->never())->method('releaseLock');
+
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('');
+		$unit = new VacationUnitService($config);
+		$migration = new VacationUnitMigrationService(
+			$config,
+			$db,
+			$unit,
+			$this->createMock(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
+			$vacationYearBalanceMapper,
+			$audit,
+		);
 
 		$permissionService = $this->createMock(PermissionService::class);
 		$adminEmployeeDirectoryService = new \OCA\ArbeitszeitCheck\Service\AdminEmployeeDirectoryService(
@@ -181,22 +203,25 @@ class AdminPremiumPolicyBusyBehaviorTest extends TestCase
 			$localeFormat,
 			$db,
 			null,
-			null,
+			$config,
 			$lockingMock,
+			$migration,
 		);
 
-		$policy = PremiumPolicy::atStarterPreset();
 		$request->method('getParams')->willReturn([
-			'enabled' => false,
-			'recipients' => [],
-			'matrix' => [],
-			'premiumPolicy' => $policy,
+			'policyScope' => 'vacation',
+			'vacationYearMode' => Constants::VACATION_YEAR_MODE_ANNIVERSARY,
+			'vacationCarryoverExpiryMonth' => 3,
+			'vacationCarryoverExpiryDay' => 31,
+			'vacationCarryoverMaxDays' => '5',
+			'vacationRolloverEnabled' => true,
 		]);
 
 		$response = $controller->updateNotificationSettings();
 		$this->assertSame(Http::STATUS_CONFLICT, $response->getStatus());
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
-		$this->assertSame('PREMIUM_POLICY_BUSY', $data['code']);
+		$this->assertSame('VAC_YEAR_MODE_BUSY', $data['code']);
+		$this->assertStringContainsString('try again', strtolower((string)$data['error']));
 	}
 }

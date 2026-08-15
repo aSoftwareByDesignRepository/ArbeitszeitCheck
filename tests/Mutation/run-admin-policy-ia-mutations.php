@@ -96,10 +96,34 @@ assertTrue(
 );
 assertTrue(str_contains((string)$css, "[data-settings-disabled='true']"), 'disabled lock scoped');
 
+// Atomic lock preflight: busy 409 must precede sibling commits (VAC_YEAR_MODE_BUSY / PREMIUM_POLICY_BUSY).
+$updStart = strpos((string)$controller, 'public function updateNotificationSettings');
+$updEnd = strpos((string)$controller, 'public function migrateVacationUnit', $updStart !== false ? $updStart : 0);
+assertTrue($updStart !== false && $updEnd !== false && $updEnd > $updStart, 'updateNotificationSettings bounds');
+$upd = substr((string)$controller, (int)$updStart, (int)$updEnd - (int)$updStart);
+$policyLockPos = strpos($upd, 'acquireLock($policyLock');
+$yearLockPos = strpos($upd, 'acquireLock($yearLock');
+$siblingCommitPos = strpos($upd, '// ── Commit phase (sibling settings)');
+assertTrue($policyLockPos !== false, 'premium preflight lock present');
+assertTrue($yearLockPos !== false, 'year-mode preflight lock present');
+assertTrue($siblingCommitPos !== false, 'sibling commit marker present');
+assertTrue($policyLockPos < $siblingCommitPos, 'premium lock before sibling commit');
+assertTrue($yearLockPos < $siblingCommitPos, 'year lock before sibling commit');
+assertTrue(str_contains($upd, 'VAC_YEAR_MODE_BUSY'), 'year busy code present');
+assertTrue(str_contains($upd, 'PREMIUM_POLICY_BUSY'), 'premium busy code present');
+assertTrue(str_contains((string)$js, 'VAC_YEAR_MODE_BUSY'), 'JS retries year busy');
+assertTrue(str_contains((string)$js, 'settingsBusyRetrying'), 'JS busy retry live message');
+assertTrue(str_contains((string)$vacationRules, 'settingsBusyRetrying'), 'vacation rules exposes busy retry l10n');
+
 // Mutate: remove bank gate → must be detectable as regression.
 $mutated = str_replace('$hasBankSection = array_key_exists(\'overtimeBankEnabled\', $params);', '', (string)$controller);
 assertTrue(!str_contains($mutated, '$hasBankSection = array_key_exists'), 'mutation removed bank gate');
 assertTrue(str_contains((string)$controller, '$hasBankSection = array_key_exists'), 'original still has bank gate');
+
+// Mutate: drop year-mode busy preflight → detectable.
+$mutBusy = str_replace("'code' => 'VAC_YEAR_MODE_BUSY'", "'code' => 'VAC_YEAR_MODE_BUSY_REMOVED'", $upd);
+assertTrue(!str_contains($mutBusy, "'code' => 'VAC_YEAR_MODE_BUSY'"), 'mutation removed VAC_YEAR_MODE_BUSY');
+assertTrue(str_contains($upd, "'code' => 'VAC_YEAR_MODE_BUSY'"), 'original still has VAC_YEAR_MODE_BUSY');
 
 // Mutate: drop LEGACY_ANCHORS map → detectable.
 $mutCatalog = str_replace('public const LEGACY_ANCHORS = [', 'public const LEGACY_ANCHORS_REMOVED = [', (string)$catalog);

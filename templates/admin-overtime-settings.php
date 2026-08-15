@@ -65,6 +65,7 @@ window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
 window.ArbeitszeitCheck.l10n.notificationsSaved = <?php echo json_encode($l->t('Saved'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.invalidBankFillOrder = <?php echo json_encode($l->t('Bank fill yellow percent must be less than or equal to red percent.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.failedToSaveNotifications = <?php echo json_encode($l->t('Could not save — try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.settingsBusyRetrying = <?php echo json_encode($l->t('Still busy — trying again…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 
 </div><!-- /.azc-page-stack -->

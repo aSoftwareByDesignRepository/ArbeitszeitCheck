@@ -88,8 +88,14 @@
 .timeline-filters__checkbox {
 	width: 1.25rem;
 	height: 1.25rem;
+	min-width: 1.25rem;
+	min-height: 1.25rem;
+	max-width: 1.25rem;
+	max-height: 1.25rem;
 	flex-shrink: 0;
 	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
 	cursor: pointer;
 	accent-color: var(--arbeitszeitcheck-color-primary, var(--color-primary));
 }

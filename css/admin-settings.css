@@ -316,13 +316,13 @@
   color: var(--azc-text, var(--color-main-text));
 }
 
-/* ===== CHECKBOXES — WCAG 2.1 AA: min 44×44px touch target ===== */
+/* ===== CHECKBOXES — WCAG 2.1 AA: min 44×44px touch target on the row ===== */
 #admin-settings-form .form-checkbox,
 #admin-notifications-form .form-checkbox,
 #admin-settings-form .checkbox,
 #admin-notifications-form .checkbox{
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3, 0.75rem);
   min-height: 2.75rem; /* ~44px touch target */
   padding: var(--space-1, 0.25rem) 0;
@@ -334,6 +334,7 @@
 #admin-notifications-form .checkbox input[type="checkbox"]{
   flex-shrink: 0;
   margin: 0;
+  margin-block-start: 0.2rem;
   padding: 0;
   width: 1.25rem;
   height: 1.25rem;
@@ -472,8 +473,15 @@
 
 #admin-settings-form .access-mode-option input[type="radio"] {
   margin-top: 0.25rem;
+  width: 1.125rem;
+  height: 1.125rem;
   min-width: 1.125rem;
   min-height: 1.125rem;
+  max-width: 1.125rem;
+  max-height: 1.125rem;
+  padding: 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 #admin-settings-form .access-groups-list,
@@ -515,6 +523,15 @@
 #admin-notifications-form .access-groups-item input[type="checkbox"]{
   grid-area: checkbox;
   margin-top: 0.15rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
+  max-width: 1.25rem;
+  max-height: 1.25rem;
+  padding: 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 #admin-settings-form .access-groups-item__label,
@@ -722,8 +739,14 @@
 .admin-time-capture__checkbox {
   width: 1.25rem;
   height: 1.25rem;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
+  max-width: 1.25rem;
+  max-height: 1.25rem;
   margin-top: 0.15rem;
+  padding: 0;
   flex-shrink: 0;
+  box-sizing: border-box;
   accent-color: var(--color-primary-element);
 }
 

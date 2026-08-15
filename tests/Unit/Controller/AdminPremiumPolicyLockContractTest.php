@@ -20,11 +20,26 @@ class AdminPremiumPolicyLockContractTest extends TestCase
 	{
 		$src = file_get_contents(dirname(__DIR__, 2) . '/../lib/Controller/AdminController.php');
 		$this->assertNotFalse($src);
-		$this->assertStringContainsString('DbLockKeys::premiumPolicy()', $src);
-		$this->assertStringContainsString('PREMIUM_POLICY_BUSY', $src);
-		$this->assertStringContainsString('Premium policy save', $src);
-		$this->assertStringContainsString('LOCK_EXCLUSIVE', $src);
-		$this->assertStringContainsString('lockingProvider ?? \\OCP\\Server::get', $src);
+		$start = strpos($src, 'public function updateNotificationSettings');
+		$end = strpos($src, 'public function migrateVacationUnit', $start !== false ? $start : 0);
+		$this->assertNotFalse($start);
+		$this->assertNotFalse($end);
+		$method = substr($src, $start, $end - $start);
+		$this->assertStringContainsString('DbLockKeys::premiumPolicy()', $method);
+		$this->assertStringContainsString('PREMIUM_POLICY_BUSY', $method);
+		$this->assertStringContainsString('Premium policy save', $method);
+		$this->assertStringContainsString('LOCK_EXCLUSIVE', $method);
+		$this->assertStringContainsString('lockingProvider ?? \\OCP\\Server::get', $method);
+		// Busy paths must acquire before sibling IConfig writes (atomic preflight).
+		$premiumPos = strpos($method, 'acquireLock($policyLock');
+		$yearPos = strpos($method, 'acquireLock($yearLock');
+		$commitPos = strpos($method, '// ── Commit phase (sibling settings)');
+		$this->assertNotFalse($premiumPos);
+		$this->assertNotFalse($yearPos);
+		$this->assertNotFalse($commitPos);
+		$this->assertLessThan($commitPos, $premiumPos, 'Premium lock must be acquired before sibling commits');
+		$this->assertLessThan($commitPos, $yearPos, 'Year-mode lock must be acquired before sibling commits');
+		$this->assertStringContainsString('VAC_YEAR_MODE_BUSY', $method);
 	}
 
 	public function testClosureSealUsesExclusivePremiumPolicyLockAndOverride(): void

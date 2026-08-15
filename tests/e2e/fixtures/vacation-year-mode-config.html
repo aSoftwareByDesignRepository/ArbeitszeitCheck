@@ -9,12 +9,16 @@
 		.wrap { max-width: 40rem; margin: 1.5rem auto; padding: 1rem; background: #fff; }
 		.azc-choice-cards { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
 		@media (min-width: 520px) { .azc-choice-cards { grid-template-columns: 1fr 1fr; } }
-		.azc-choice-card {
-			display: flex; gap: 0.75rem; align-items: flex-start;
-			min-height: 3.25rem; padding: 1rem; border: 2px solid #c4c4c4; border-radius: 0.5rem;
+		label.azc-choice-card {
+			display: flex; gap: 0.75rem; align-items: flex-start; width: 100%; box-sizing: border-box;
+			min-height: 3.25rem; padding: 1rem; border: 2px solid #c4c4c4; border-radius: 0.5rem; cursor: pointer;
 		}
-		.azc-choice-card:has(input:checked) { border-color: #005ebb; background: #eef6fc; }
-		.azc-choice-card__title { display: block; font-size: 1.125rem; font-weight: 700; }
+		.azc-choice-card:has(> input:checked) { border-color: #005ebb; background: #eef6fc; }
+		.azc-choice-card > input[type='radio'] {
+			flex: 0 0 1.25rem; width: 1.25rem; height: 1.25rem; margin: calc((1.125rem * 1.3 - 1.25rem) / 2) 0 0;
+		}
+		.azc-choice-card__copy { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+		.azc-choice-card__title { display: block; font-size: 1.125rem; font-weight: 700; line-height: 1.3; }
 		.azc-choice-card__hint { display: block; font-size: 0.875rem; color: #555; font-weight: 400; }
 		.help { line-height: 1.45; margin: 0.5rem 0 0; }
 		.form-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem; }
@@ -33,20 +37,20 @@
 		<fieldset class="wtm-vacation-year-mode" aria-describedby="vacation-year-mode-intro vacation-year-mode-help vacation-year-mode-rollover-note vacation-year-mode-recompute-note">
 			<legend>Vacation year mode</legend>
 			<div class="azc-choice-cards">
-				<div class="form-radio azc-choice-card">
+				<label class="form-radio azc-choice-card" for="vacationYearMode-calendar">
 					<input type="radio" id="vacationYearMode-calendar" name="vacationYearMode" value="calendar" checked>
-					<label for="vacationYearMode-calendar">
+					<span class="azc-choice-card__copy">
 						<span class="azc-choice-card__title">Calendar year</span>
 						<span class="azc-choice-card__hint">1 Jan – 31 Dec (default)</span>
-					</label>
-				</div>
-				<div class="form-radio azc-choice-card">
+					</span>
+				</label>
+				<label class="form-radio azc-choice-card" for="vacationYearMode-anniversary">
 					<input type="radio" id="vacationYearMode-anniversary" name="vacationYearMode" value="anniversary">
-					<label for="vacationYearMode-anniversary">
+					<span class="azc-choice-card__copy">
 						<span class="azc-choice-card__title">Hire anniversary</span>
 						<span class="azc-choice-card__hint">From employment start</span>
-					</label>
-				</div>
+					</span>
+				</label>
 			</div>
 		</fieldset>
 		<details class="azc-settings-more" id="vacation-year-mode-more">
@@ -59,10 +63,12 @@
 			3 people are missing a hire date and will get no vacation until it is set.
 			<a href="#employees">Open Employees</a>
 		</p>
-		<div id="vacation-year-missing-hire-ack-wrap" class="form-checkbox">
-			<input type="checkbox" id="vacationYearMissingHireAcknowledged" name="vacationYearMissingHireAcknowledged" value="1"
-				aria-describedby="vacation-year-missing-hire vacation-year-missing-hire-ack-help">
-			<label for="vacationYearMissingHireAcknowledged">I understand people without a hire date get no vacation until a start date is set</label>
+		<div id="vacation-year-missing-hire-ack-wrap">
+			<div class="form-checkbox">
+				<input type="checkbox" id="vacationYearMissingHireAcknowledged" name="vacationYearMissingHireAcknowledged" value="1"
+					aria-describedby="vacation-year-missing-hire vacation-year-missing-hire-ack-help">
+				<label for="vacationYearMissingHireAcknowledged">I understand people without a hire date get no vacation until a start date is set</label>
+			</div>
 			<p class="help" id="vacation-year-missing-hire-ack-help">Required when switching to anniversary mode while hire dates are missing.</p>
 		</div>
 		<div class="azc-settings-subsection" data-vacation-year-mode="calendar" role="group" aria-labelledby="carryover-heading">

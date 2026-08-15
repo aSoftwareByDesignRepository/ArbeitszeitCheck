@@ -33,22 +33,22 @@ declare(strict_types=1);
 						<fieldset class="wtm-vacation-year-mode" aria-describedby="vacation-year-mode-intro vacation-year-mode-help vacation-year-mode-rollover-note vacation-year-mode-recompute-note">
 							<legend class="form-label"><?php p($l->t('Vacation year mode')); ?></legend>
 							<div class="azc-choice-cards">
-							<div class="form-radio azc-choice-card">
-								<input type="radio" id="vacationYearMode-calendar" name="vacationYearMode" value="calendar"
-									<?php echo $vacationYearMode === 'anniversary' ? '' : 'checked'; ?>>
-								<label for="vacationYearMode-calendar">
-									<span class="azc-choice-card__title"><?php p($l->t('Calendar year')); ?></span>
-									<span class="azc-choice-card__hint"><?php p($l->t('1 Jan – 31 Dec (default)')); ?></span>
+								<label class="form-radio azc-choice-card" for="vacationYearMode-calendar">
+									<input type="radio" id="vacationYearMode-calendar" name="vacationYearMode" value="calendar"
+										<?php echo $vacationYearMode === 'anniversary' ? '' : 'checked'; ?>>
+									<span class="azc-choice-card__copy">
+										<span class="azc-choice-card__title"><?php p($l->t('Calendar year')); ?></span>
+										<span class="azc-choice-card__hint"><?php p($l->t('1 Jan – 31 Dec (default)')); ?></span>
+									</span>
 								</label>
-							</div>
-							<div class="form-radio azc-choice-card">
-								<input type="radio" id="vacationYearMode-anniversary" name="vacationYearMode" value="anniversary"
-									<?php echo $vacationYearMode === 'anniversary' ? 'checked' : ''; ?>>
-								<label for="vacationYearMode-anniversary">
-									<span class="azc-choice-card__title"><?php p($l->t('Hire anniversary')); ?></span>
-									<span class="azc-choice-card__hint"><?php p($l->t('From employment start')); ?></span>
+								<label class="form-radio azc-choice-card" for="vacationYearMode-anniversary">
+									<input type="radio" id="vacationYearMode-anniversary" name="vacationYearMode" value="anniversary"
+										<?php echo $vacationYearMode === 'anniversary' ? 'checked' : ''; ?>>
+									<span class="azc-choice-card__copy">
+										<span class="azc-choice-card__title"><?php p($l->t('Hire anniversary')); ?></span>
+										<span class="azc-choice-card__hint"><?php p($l->t('From employment start')); ?></span>
+									</span>
 								</label>
-							</div>
 							</div>
 						</fieldset>
 						<details class="azc-settings-more" id="vacation-year-mode-more">
@@ -77,13 +77,15 @@ declare(strict_types=1);
 								<a href="<?php p($employeesAdminUrl); ?>"><?php p($l->t('Open Employees')); ?></a>
 							<?php } ?>
 						</p>
-						<div id="vacation-year-missing-hire-ack-wrap" class="form-checkbox"
+						<div id="vacation-year-missing-hire-ack-wrap"
 							<?php echo ($missingHireCount > 0) ? '' : 'hidden'; ?>>
-							<input type="checkbox" id="vacationYearMissingHireAcknowledged" name="vacationYearMissingHireAcknowledged" value="1"
-								aria-describedby="vacation-year-missing-hire vacation-year-missing-hire-ack-help">
-							<label for="vacationYearMissingHireAcknowledged" class="form-label">
-								<?php p($l->t('I understand people without a hire date get no vacation until a start date is set')); ?>
-							</label>
+							<div class="form-checkbox">
+								<input type="checkbox" id="vacationYearMissingHireAcknowledged" name="vacationYearMissingHireAcknowledged" value="1"
+									aria-describedby="vacation-year-missing-hire vacation-year-missing-hire-ack-help">
+								<label for="vacationYearMissingHireAcknowledged" class="form-label">
+									<?php p($l->t('I understand people without a hire date get no vacation until a start date is set')); ?>
+								</label>
+							</div>
 							<p id="vacation-year-missing-hire-ack-help" class="form-help">
 								<?php p($l->t('Required when switching to anniversary mode while hire dates are missing. Prefer setting employment start dates first.')); ?>
 							</p>

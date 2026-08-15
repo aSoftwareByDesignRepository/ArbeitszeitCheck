@@ -2902,7 +2902,122 @@ class AdminController extends Controller
 				}
 			}
 
-			// ── Commit phase ──
+			// Precompute year-mode flip before any IConfig writes (fail closed on lock busy).
+			$yearModeFlip = null;
+			if (isset($params['vacationYearMode'])) {
+				$previousYearMode = VacationYearWindowResolver::normalizeMode(
+					$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_YEAR_MODE, Constants::DEFAULT_VACATION_YEAR_MODE)
+				);
+				$nextYearMode = VacationYearWindowResolver::normalizeMode((string)$params['vacationYearMode']);
+				if ($nextYearMode !== $previousYearMode) {
+					$missingHireForFlip = 0;
+					if ($nextYearMode === Constants::VACATION_YEAR_MODE_ANNIVERSARY) {
+						$missingHireForFlip = $this->countUsersMissingEmploymentStart();
+					}
+					$yearModeFlip = [
+						'previous' => $previousYearMode,
+						'next' => $nextYearMode,
+						'missing_hire_count' => $missingHireForFlip,
+						'missing_hire_acknowledged' => $missingHireForFlip > 0,
+					];
+				}
+			}
+
+			$locking = $this->lockingProvider ?? \OCP\Server::get(\OCP\Lock\ILockingProvider::class);
+			$policyLock = \OCA\ArbeitszeitCheck\Service\DbLockKeys::premiumPolicy();
+			$yearLock = \OCA\ArbeitszeitCheck\Service\DbLockKeys::vacationYearMode();
+			$heldPremiumExclusive = false;
+			$heldYearExclusive = false;
+
+			try {
+				// Acquire contested locks BEFORE any writes — otherwise a 409 leaves half-saved siblings.
+				if ($premiumWrite !== null) {
+					try {
+						$locking->acquireLock($policyLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE, 'Premium policy save');
+						$heldPremiumExclusive = true;
+					} catch (\OCP\Lock\LockedException $e) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Premium policy is being updated or sealed. Please try again.'),
+							'code' => 'PREMIUM_POLICY_BUSY',
+						], Http::STATUS_CONFLICT);
+					}
+				}
+				if ($yearModeFlip !== null) {
+					try {
+						$locking->acquireLock($yearLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE, 'Vacation year mode flip');
+						$heldYearExclusive = true;
+					} catch (\OCP\Lock\LockedException $e) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('Vacation year mode cannot be changed right now. Wait a moment and try again.'),
+							'code' => 'VAC_YEAR_MODE_BUSY',
+						], Http::STATUS_CONFLICT);
+					}
+				}
+
+				$allocationsRefreshed = 0;
+				$allocationsFailed = [];
+
+				// Year-mode flip first (still under exclusive + migrate idle shared) so a migrate
+				// conflict cannot leave carryover/HR/premium half-committed.
+				if ($yearModeFlip !== null) {
+					$migration = $this->vacationUnitMigrationService
+						?? \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService::class);
+					try {
+						$refreshResult = $migration->withIdleShared(function () use ($yearModeFlip) {
+							$this->appConfig->setAppValueString(
+								Constants::CONFIG_VACATION_YEAR_MODE,
+								$yearModeFlip['next']
+							);
+							$userIds = [];
+							$this->userManager->callForAllUsers(function (IUser $user) use (&$userIds): void {
+								if ($user->isEnabled() !== true) {
+									return;
+								}
+								$uid = $user->getUID();
+								if (!$this->permissionService->isUserAllowedByAccessGroups($uid)) {
+									return;
+								}
+								$userIds[] = $uid;
+							});
+							return $this->vacationAllocationService->refreshOpenAllocationsForUsers($userIds);
+						});
+					} catch (\RuntimeException $e) {
+						if ($e->getMessage() === Constants::VAC_UNIT_MIGRATE_IN_PROGRESS) {
+							return new JSONResponse([
+								'success' => false,
+								'error' => $this->l10n->t('Vacation unit migration is in progress. Please try again in a moment.'),
+								'code' => Constants::VAC_UNIT_MIGRATE_IN_PROGRESS,
+							], Http::STATUS_CONFLICT);
+						}
+						throw $e;
+					}
+					$allocationsRefreshed = (int)($refreshResult['refreshed'] ?? 0);
+					$allocationsFailed = array_values(array_filter(
+						(array)($refreshResult['failed'] ?? []),
+						static fn ($id) => is_string($id) && $id !== ''
+					));
+					$performedBy = $this->getPerformedBy();
+					$this->auditLogMapper->logAction(
+						$performedBy,
+						'vacation_year_mode_changed',
+						'app_config',
+						0,
+						['vacation_year_mode' => $yearModeFlip['previous']],
+						[
+							'vacation_year_mode' => $yearModeFlip['next'],
+							'missing_hire_count' => $yearModeFlip['missing_hire_count'],
+							'missing_hire_acknowledged' => $yearModeFlip['missing_hire_acknowledged'],
+							'allocations_refreshed' => $allocationsRefreshed,
+							'allocations_failed_count' => count($allocationsFailed),
+							'allocations_failed' => array_slice($allocationsFailed, 0, 50),
+						],
+						$performedBy
+					);
+				}
+
+			// ── Commit phase (sibling settings) ──
 			if ($hrWrite !== null) {
 				if ($hrWrite['writeEnabled']) {
 					$this->appConfig->setAppValueString(
@@ -2985,32 +3100,14 @@ class AdminController extends Controller
 			];
 
 			// Premium policy JSON is validated separately (not a simple string map).
+			// Exclusive lock already held from preflight when $premiumWrite !== null.
 			if ($premiumWrite !== null) {
-				$locking = $this->lockingProvider ?? \OCP\Server::get(\OCP\Lock\ILockingProvider::class);
-				$policyLock = \OCA\ArbeitszeitCheck\Service\DbLockKeys::premiumPolicy();
-				try {
-					$locking->acquireLock($policyLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE, 'Premium policy save');
-				} catch (\OCP\Lock\LockedException $e) {
-					return new JSONResponse([
-						'success' => false,
-						'error' => $this->l10n->t('Premium policy is being updated or sealed. Please try again.'),
-						'code' => 'PREMIUM_POLICY_BUSY',
-					], Http::STATUS_CONFLICT);
-				}
-				try {
-					$this->appConfig->setAppValueString(
-						Constants::CONFIG_PREMIUM_POLICY_JSON,
-						json_encode($premiumWrite->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)
-					);
-					$ver = (int)$this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, '0');
-					$this->appConfig->setAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, (string)($ver + 1));
-				} finally {
-					try {
-						$locking->releaseLock($policyLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE);
-					} catch (\Throwable) {
-						// best-effort
-					}
-				}
+				$this->appConfig->setAppValueString(
+					Constants::CONFIG_PREMIUM_POLICY_JSON,
+					json_encode($premiumWrite->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)
+				);
+				$ver = (int)$this->appConfig->getAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, '0');
+				$this->appConfig->setAppValueString(Constants::CONFIG_PREMIUM_POLICY_VERSION, (string)($ver + 1));
 			}
 
 			if ($datevMapWrite !== null) {
@@ -3020,7 +3117,6 @@ class AdminController extends Controller
 				);
 			}
 
-			$yearModeFlip = null;
 			foreach ($allowedKeys as $paramKey => $configKey) {
 				if (!isset($params[$paramKey])) {
 					continue;
@@ -3045,24 +3141,11 @@ class AdminController extends Controller
 					// back to the safe default (full-month Zwölftelung).
 					$value = VacationProrationService::normalizeMethod((string)$value);
 				} elseif ($paramKey === 'vacationYearMode') {
-					$previous = VacationYearWindowResolver::normalizeMode(
-						$this->appConfig->getAppValueString(Constants::CONFIG_VACATION_YEAR_MODE, Constants::DEFAULT_VACATION_YEAR_MODE)
-					);
-					$value = VacationYearWindowResolver::normalizeMode((string)$value);
-					if ($value !== $previous) {
-						$missingHire = 0;
-						if ($value === Constants::VACATION_YEAR_MODE_ANNIVERSARY) {
-							$missingHire = $this->countUsersMissingEmploymentStart();
-						}
-						$yearModeFlip = [
-							'previous' => $previous,
-							'next' => $value,
-							'missing_hire_count' => $missingHire,
-							'missing_hire_acknowledged' => $missingHire > 0,
-						];
-						// Defer IConfig write until exclusive year-mode + migrate-idle shared lock (AC-101.4).
+					// Flip already applied under exclusive lock above; unchanged mode is a no-op write.
+					if ($yearModeFlip !== null) {
 						continue;
 					}
+					$value = VacationYearWindowResolver::normalizeMode((string)$value);
 				} elseif ($paramKey === 'vacationCarryoverExpiryMonth') {
 					$value = (string)max(1, min(12, (int)$value));
 				} elseif ($paramKey === 'vacationCarryoverExpiryDay') {
@@ -3090,83 +3173,6 @@ class AdminController extends Controller
 				}
 
 				$this->appConfig->setAppValueString($configKey, $value);
-			}
-
-			$allocationsRefreshed = 0;
-			$allocationsFailed = [];
-			if ($yearModeFlip !== null) {
-				$locking = $this->lockingProvider ?? \OCP\Server::get(\OCP\Lock\ILockingProvider::class);
-				$yearLock = \OCA\ArbeitszeitCheck\Service\DbLockKeys::vacationYearMode();
-				try {
-					$locking->acquireLock($yearLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE, 'Vacation year mode flip');
-				} catch (\OCP\Lock\LockedException $e) {
-					return new JSONResponse([
-						'success' => false,
-						'error' => $this->l10n->t('Vacation year mode is being updated. Please try again.'),
-						'code' => 'VAC_YEAR_MODE_BUSY',
-					], Http::STATUS_CONFLICT);
-				}
-				try {
-					$migration = $this->vacationUnitMigrationService
-						?? \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\VacationUnitMigrationService::class);
-					try {
-						$refreshResult = $migration->withIdleShared(function () use ($yearModeFlip) {
-							$this->appConfig->setAppValueString(
-								Constants::CONFIG_VACATION_YEAR_MODE,
-								$yearModeFlip['next']
-							);
-							$userIds = [];
-							$this->userManager->callForAllUsers(function (IUser $user) use (&$userIds): void {
-								if ($user->isEnabled() !== true) {
-									return;
-								}
-								$uid = $user->getUID();
-								if (!$this->permissionService->isUserAllowedByAccessGroups($uid)) {
-									return;
-								}
-								$userIds[] = $uid;
-							});
-							return $this->vacationAllocationService->refreshOpenAllocationsForUsers($userIds);
-						});
-					} catch (\RuntimeException $e) {
-						if ($e->getMessage() === Constants::VAC_UNIT_MIGRATE_IN_PROGRESS) {
-							return new JSONResponse([
-								'success' => false,
-								'error' => $this->l10n->t('Vacation unit migration is in progress. Please try again in a moment.'),
-								'code' => Constants::VAC_UNIT_MIGRATE_IN_PROGRESS,
-							], Http::STATUS_CONFLICT);
-						}
-						throw $e;
-					}
-					$allocationsRefreshed = (int)($refreshResult['refreshed'] ?? 0);
-					$allocationsFailed = array_values(array_filter(
-						(array)($refreshResult['failed'] ?? []),
-						static fn ($id) => is_string($id) && $id !== ''
-					));
-					$performedBy = $this->getPerformedBy();
-					$this->auditLogMapper->logAction(
-						$performedBy,
-						'vacation_year_mode_changed',
-						'app_config',
-						0,
-						['vacation_year_mode' => $yearModeFlip['previous']],
-						[
-							'vacation_year_mode' => $yearModeFlip['next'],
-							'missing_hire_count' => $yearModeFlip['missing_hire_count'],
-							'missing_hire_acknowledged' => $yearModeFlip['missing_hire_acknowledged'],
-							'allocations_refreshed' => $allocationsRefreshed,
-							'allocations_failed_count' => count($allocationsFailed),
-							'allocations_failed' => array_slice($allocationsFailed, 0, 50),
-						],
-						$performedBy
-					);
-				} finally {
-					try {
-						$locking->releaseLock($yearLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE);
-					} catch (\Throwable) {
-						// best-effort
-					}
-				}
 			}
 
 			$policyScope = (string)($params['policyScope'] ?? '');
@@ -3201,6 +3207,22 @@ class AdminController extends Controller
 					'missingHireCount' => $yearModeFlip['missing_hire_count'],
 				],
 			]);
+			} finally {
+				if ($heldYearExclusive) {
+					try {
+						$locking->releaseLock($yearLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE);
+					} catch (\Throwable) {
+						// best-effort
+					}
+				}
+				if ($heldPremiumExclusive) {
+					try {
+						$locking->releaseLock($policyLock, \OCP\Lock\ILockingProvider::LOCK_EXCLUSIVE);
+					} catch (\Throwable) {
+						// best-effort
+					}
+				}
+			}
 		} catch (\Throwable) {
 			return new JSONResponse([
 				'success' => false,

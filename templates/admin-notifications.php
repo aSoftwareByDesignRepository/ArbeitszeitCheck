@@ -70,6 +70,7 @@ window.ArbeitszeitCheck.l10n.invalidBalanceTrafficLightRecipients = <?php echo j
 window.ArbeitszeitCheck.l10n.invalidThresholdValues = <?php echo json_encode($l->t('Threshold values must be valid numbers.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.invalidThresholdOrder = <?php echo json_encode($l->t('Yellow thresholds must be less than or equal to red thresholds.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.failedToSaveNotifications = <?php echo json_encode($l->t('Could not save — try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.settingsBusyRetrying = <?php echo json_encode($l->t('Still busy — trying again…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 
 </div><!-- /.azc-page-stack -->

@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Half-day vacation in days mode:** employees and managers can book a single calendar day as half vacation (`day_fraction=0.5`) without switching the organisation to hours mode. Server computes the debit (never trusts client `days`); allocation honors trusted stored `0.5`; multi-day half requests are rejected; mail/UI show fractional days; one-click “Half day today” / next-workday shortcut with WCAG 2.1 AA length radios.
 - **Admin employee list access filter:** filter the employees page by “Can open ArbeitszeitCheck” vs “All Nextcloud accounts” (default follows access restriction). Server-enforced via `AdminEmployeeDirectoryService`; picker mode unchanged. Filter panel, hidden-count banner, truncated scan banner, CSV export with filter suffix, WCAG 2.1 AA UI, unit/integration/E2E and mutation coverage.
+- **Brazilian Portuguese (pt_BR):** UI catalog (`l10n/pt_BR.json` / `pt_BR.js`) for store and in-app locale coverage.
+
+### Fixed
+
+- **Admin notifications save under lock contention:** vacation year-mode / policy saves retry briefly when the DB lock is busy (`aria-busy` + live-region “still busy” feedback) instead of failing the first contested click.
+- **Admin policy / vacation year-mode UX:** clearer busy behaviour, focus-safe controls, and design-system CSS contracts on notifications and related admin surfaces.
 
 ## 1.6.7 - 2026-08-12
 

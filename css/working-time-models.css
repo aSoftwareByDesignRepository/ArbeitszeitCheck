@@ -79,6 +79,12 @@
 #app-content.azc-app--admin-working-time-models .wtm-weekday-table input[type='checkbox'] {
 	inline-size: 1.125rem;
 	block-size: 1.125rem;
+	min-inline-size: 1.125rem;
+	min-block-size: 1.125rem;
+	max-inline-size: 1.125rem;
+	max-block-size: 1.125rem;
+	padding: 0;
+	box-sizing: border-box;
 	accent-color: var(--azc-accent, var(--color-primary-element));
 }
 

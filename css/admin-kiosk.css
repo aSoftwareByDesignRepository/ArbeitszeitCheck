@@ -199,6 +199,12 @@
 #app-content.azc-app .azc-kiosk-toggle input[type='checkbox'] {
 	width: 1.25rem;
 	height: 1.25rem;
+	min-width: 1.25rem;
+	min-height: 1.25rem;
+	max-width: 1.25rem;
+	max-height: 1.25rem;
+	padding: 0;
+	box-sizing: border-box;
 	flex-shrink: 0;
 }
 

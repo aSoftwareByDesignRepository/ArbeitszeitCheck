@@ -655,43 +655,76 @@
 			}
 			setLiveMessage(liveRegion, '', null);
 
-			Utils.ajax(apiUrl, {
-				method: 'POST',
-				data: payload,
-				onSuccess: function (response) {
-					saving = false;
-					if (saveButton) {
-						saveButton.disabled = false;
-						saveButton.removeAttribute('aria-busy');
+			const busyRetryCodes = {
+				VAC_YEAR_MODE_BUSY: true,
+				PREMIUM_POLICY_BUSY: true,
+				VAC_UNIT_MIGRATE_IN_PROGRESS: true,
+			};
+			const maxBusyRetries = 2;
+			const busyRetryDelayMs = 700;
+
+			const finishSaving = function () {
+				saving = false;
+				if (saveButton) {
+					saveButton.disabled = false;
+					saveButton.removeAttribute('aria-busy');
+				}
+			};
+
+			const handleSaveSuccess = function (response) {
+				finishSaving();
+				if (response && response.success) {
+					formDirty = false;
+					const msg = response.message || l10n.notificationsSaved || 'Settings updated successfully';
+					Messaging.showSuccess(msg);
+					if (hasHr && recipientsField && Array.isArray(payload.recipients)) {
+						recipientsField.value = payload.recipients.join(', ');
 					}
-					if (response && response.success) {
-						formDirty = false;
-						const msg = response.message || l10n.notificationsSaved || 'Settings updated successfully';
-						Messaging.showSuccess(msg);
-						if (hasHr && recipientsField && Array.isArray(payload.recipients)) {
-							recipientsField.value = payload.recipients.join(', ');
-						}
-						if (hasTraffic && overtimeRecipientsField && Array.isArray(payload.overtimeRecipients)) {
-							overtimeRecipientsField.value = payload.overtimeRecipients.join(', ');
-						}
-						setLiveMessage(liveRegion, msg, 'success');
-						return;
+					if (hasTraffic && overtimeRecipientsField && Array.isArray(payload.overtimeRecipients)) {
+						overtimeRecipientsField.value = payload.overtimeRecipients.join(', ');
 					}
-					const errorMessage = (response && response.error) || l10n.failedToSaveNotifications || 'Failed to save settings';
-					Messaging.showError(errorMessage);
-					setLiveMessage(liveRegion, errorMessage, 'error');
-				},
-				onError: function (error) {
-					saving = false;
-					if (saveButton) {
-						saveButton.disabled = false;
-						saveButton.removeAttribute('aria-busy');
-					}
-					const errorMessage = (error && error.error) || l10n.failedToSaveNotifications || 'Failed to save settings';
-					Messaging.showError(errorMessage);
-					setLiveMessage(liveRegion, errorMessage, 'error');
-				},
-			});
+					setLiveMessage(liveRegion, msg, 'success');
+					return;
+				}
+				const errorMessage = (response && response.error) || l10n.failedToSaveNotifications || 'Failed to save settings';
+				Messaging.showError(errorMessage);
+				setLiveMessage(liveRegion, errorMessage, 'error');
+			};
+
+			const handleSaveError = function (error, attempt) {
+				const code = (error && error.data && error.data.code)
+					|| (error && error.code)
+					|| '';
+				if (busyRetryCodes[code] && attempt < maxBusyRetries) {
+					const retryMsg = l10n.settingsBusyRetrying
+						|| 'Still busy — trying again…';
+					setLiveMessage(liveRegion, retryMsg, null);
+					window.setTimeout(function () {
+						postSave(attempt + 1);
+					}, busyRetryDelayMs * (attempt + 1));
+					return;
+				}
+				finishSaving();
+				const errorMessage = (error && error.error)
+					|| (error && error.data && error.data.error)
+					|| l10n.failedToSaveNotifications
+					|| 'Failed to save settings';
+				Messaging.showError(errorMessage);
+				setLiveMessage(liveRegion, errorMessage, 'error');
+			};
+
+			const postSave = function (attempt) {
+				Utils.ajax(apiUrl, {
+					method: 'POST',
+					data: payload,
+					onSuccess: handleSaveSuccess,
+					onError: function (error) {
+						handleSaveError(error, attempt);
+					},
+				});
+			};
+
+			postSave(0);
 		});
 	}
 

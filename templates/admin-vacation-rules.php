@@ -65,6 +65,7 @@ window.ArbeitszeitCheck.l10n.notificationsSaved = <?php echo json_encode($l->t('
 window.ArbeitszeitCheck.l10n.invalidCarryoverMaxDays = <?php echo json_encode($l->t('Maximum carryover days must be empty (unlimited) or between 0 and 366'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.invalidCarryoverMaxHours = <?php echo json_encode($l->t('Maximum carryover hours must be empty (unlimited) or between 0 and 4000'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.failedToSaveNotifications = <?php echo json_encode($l->t('Could not save — try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.settingsBusyRetrying = <?php echo json_encode($l->t('Still busy — trying again…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.vacationUnitMigrating = <?php echo json_encode($l->t('Converting vacation unit…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.vacationUnitMigrated = <?php echo json_encode($l->t('Vacation unit converted successfully.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.vacationUnitMigrateFailed = <?php echo json_encode($l->t('Could not convert vacation unit.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

@@ -149,6 +149,64 @@ final class DesignSystemCssContractTest extends TestCase
 		);
 	}
 
+	public function testBachusChoiceCardsAlignRadioWithLabelCopy(): void
+	{
+		self::assertStringContainsString('.azc-choice-cards', $this->policyCss);
+		self::assertStringContainsString('.azc-choice-card', $this->policyCss);
+		self::assertMatchesRegularExpression(
+			'/\.azc-choice-card[^{]*\{[^}]*display:\s*flex/s',
+			$this->policyCss,
+		);
+		self::assertMatchesRegularExpression(
+			'/\.azc-choice-card[^{]*\{[^}]*align-items:\s*flex-start/s',
+			$this->policyCss,
+		);
+		self::assertMatchesRegularExpression(
+			'/\.azc-choice-card\s*>\s*input\[type=\'radio\'\]/',
+			$this->policyCss,
+		);
+		self::assertStringContainsString('max-height: 1.25rem', $this->policyCss);
+		self::assertStringContainsString('.azc-choice-card__copy', $this->policyCss);
+		self::assertStringContainsString('.azc-choice-card__title', $this->policyCss);
+		self::assertStringContainsString('.azc-choice-card__hint', $this->policyCss);
+	}
+
+	public function testNativeCheckboxRadioAlignToFirstLabelLine(): void
+	{
+		$components = (string) file_get_contents($this->appRoot . '/css/common/components.css');
+		$appCss = (string) file_get_contents($this->appRoot . '/css/app.css');
+		$adminSettings = (string) file_get_contents($this->appRoot . '/css/admin-settings.css');
+
+		self::assertMatchesRegularExpression(
+			'/\.form-checkbox,\s*\.form-radio\s*\{[^}]*align-items:\s*flex-start/s',
+			$components,
+			'Multi-line labels must not vertically center the control mid-block',
+		);
+		self::assertMatchesRegularExpression(
+			'/\.form-checkbox input\[type="checkbox"\],\s*\.form-radio input\[type="radio"\]\s*\{[^}]*max-height:\s*1\.25rem/s',
+			$components,
+		);
+		self::assertMatchesRegularExpression(
+			'/\.form-checkbox input\[type="checkbox"\],\s*\.form-radio input\[type="radio"\]\s*\{[^}]*margin-block-start:\s*0\.2rem/s',
+			$components,
+		);
+		self::assertStringContainsString(
+			"#app-content.azc-app input[type='checkbox']:not(.azc-switch-field__input)",
+			$appCss,
+		);
+		self::assertStringContainsString('max-height: 1.25rem', $appCss);
+		self::assertStringContainsString(".form-toggle input[type='checkbox']", $appCss);
+		self::assertMatchesRegularExpression(
+			'/#admin-settings-form \.form-checkbox[\s\S]*?align-items:\s*flex-start/s',
+			$adminSettings,
+		);
+		self::assertDoesNotMatchRegularExpression(
+			'/#admin-settings-form \.form-checkbox,\s*#admin-notifications-form \.form-checkbox[\s\S]{0,200}align-items:\s*center/s',
+			$adminSettings,
+			'Admin forms must not reintroduce center alignment for checkbox rows',
+		);
+	}
+
 	public function testPolicyMatricesScrollInsideWrapNotPage(): void
 	{
 		self::assertMatchesRegularExpression(

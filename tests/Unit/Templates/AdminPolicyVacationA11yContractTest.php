@@ -50,4 +50,36 @@ class AdminPolicyVacationA11yContractTest extends TestCase
 			$src
 		);
 	}
+
+	public function testVacationYearModeChoiceCardsWrapInputInLabel(): void
+	{
+		$src = $this->template();
+		$this->assertMatchesRegularExpression(
+			'/<label class="form-radio azc-choice-card" for="vacationYearMode-calendar">[\s\S]*?<input type="radio" id="vacationYearMode-calendar"/',
+			$src
+		);
+		$this->assertMatchesRegularExpression(
+			'/<label class="form-radio azc-choice-card" for="vacationYearMode-anniversary">[\s\S]*?<input type="radio" id="vacationYearMode-anniversary"/',
+			$src
+		);
+		$this->assertStringContainsString('azc-choice-card__copy', $src);
+		$this->assertDoesNotMatchRegularExpression(
+			'/<div class="form-radio azc-choice-card">/',
+			$src,
+			'Year-mode cards must be labels (radio + copy as flex siblings), not div wrappers'
+		);
+	}
+
+	public function testMissingHireAckHelpIsOutsideCheckboxRow(): void
+	{
+		$src = $this->template();
+		$this->assertDoesNotMatchRegularExpression(
+			'/id="vacation-year-missing-hire-ack-wrap"[^>]*class="[^"]*form-checkbox/',
+			$src
+		);
+		$this->assertMatchesRegularExpression(
+			'/id="vacation-year-missing-hire-ack-wrap"[\s\S]*?<div class="form-checkbox">[\s\S]*?<\/div>\s*<p id="vacation-year-missing-hire-ack-help" class="form-help"/',
+			$src
+		);
+	}
 }

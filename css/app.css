@@ -82,6 +82,44 @@
 	text-align: start;
 }
 
+/*
+ * Native checkbox/radio size reset (app-wide).
+ * Nextcloud core sets `input { min-height: var(--default-clickable-area) }` which
+ * inflates bare radios/checkboxes (country cards, timeline, kiosk, WTM, etc.)
+ * so they no longer align with the first line of their labels.
+ * Switch/toggle hit targets are restored below (same or higher specificity).
+ */
+#app-content.azc-app input[type='checkbox']:not(.azc-switch-field__input),
+#app-content.azc-app input[type='radio'] {
+	width: 1.25rem;
+	height: 1.25rem;
+	min-width: 1.25rem;
+	min-height: 1.25rem;
+	max-width: 1.25rem;
+	max-height: 1.25rem;
+	padding: 0;
+	box-sizing: border-box;
+	flex-shrink: 0;
+}
+
+#app-content.azc-app .form-toggle input[type='checkbox'] {
+	width: 52px;
+	height: 32px;
+	min-width: 52px;
+	min-height: 32px;
+	max-width: none;
+	max-height: none;
+}
+
+#app-content.azc-app .azc-switch-field__input {
+	width: 1px;
+	height: 1px;
+	min-width: 0;
+	min-height: 0;
+	max-width: none;
+	max-height: none;
+}
+
 #app-content.azc-app {
 	display: flex;
 	flex-direction: column;
