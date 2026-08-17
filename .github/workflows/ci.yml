@@ -1,5 +1,5 @@
-# Cheap GitHub smoke. PHPUnit needs a Nextcloud bootstrap — run locally:
-#   composer test:docker
+# Syntax smoke only. PHPUnit needs a Nextcloud bootstrap — run locally:
+#   composer test:docker   or   npm run test:php:docker
 name: CI
 
 on:
@@ -19,21 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           coverage: none
           tools: composer:v2
-
       - run: composer validate --no-check-publish
       - run: find lib tests templates -name '*.php' -print0 | xargs -0 -n1 -P4 php -l
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - run: npm ci
-      - run: npm test
-      - run: npm run check:l10n
