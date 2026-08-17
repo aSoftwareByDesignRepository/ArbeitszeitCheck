@@ -276,6 +276,26 @@ class AdminController extends Controller
 	}
 
 	/**
+	 * ProjectCheck enabled on this Nextcloud — not "enabled for the current admin".
+	 */
+	private function isProjectCheckInstalledOnInstance(): bool
+	{
+		return $this->appManager->isInstalled(Constants::APP_ID_PROJECTCHECK) === true;
+	}
+
+	/**
+	 * Nextcloud Apps page so admins can enable ProjectCheck when it is missing.
+	 */
+	private function projectCheckAppsSettingsUrl(): string
+	{
+		try {
+			return $this->urlGenerator->linkToRoute('settings.AppSettings.viewApps');
+		} catch (\Throwable $e) {
+			return '';
+		}
+	}
+
+	/**
 	 * Build a JSON-serializable audit snapshot of a TariffRuleSet so that
 	 * mutations (create/update/activate/retire/delete) leave a deterministic
 	 * trail for compliance reviewers.
@@ -919,11 +939,11 @@ class AdminController extends Controller
 			'accessAllowedGroups' => $this->getAllowedAccessGroupsFromConfig(),
 			'accessAllowedUserIds' => $this->getConfiguredAccessAllowedUserIds(),
 			'appAdminUserIds' => $this->getConfiguredAppAdminUserIds(),
-			'projectCheckIntegrationEnabled' => $this->appManager->isEnabledForUser('projectcheck')
+			'projectCheckIntegrationEnabled' => $this->isProjectCheckInstalledOnInstance()
 				&& $this->appConfig->getAppValueString(Constants::CONFIG_PROJECTCHECK_INTEGRATION_ENABLED, Constants::CONFIG_PROJECTCHECK_INTEGRATION_DEFAULT) === '1',
 		];
 
-		$projectCheckAvailable = $this->appManager->isEnabledForUser('projectcheck');
+		$projectCheckAvailable = $this->isProjectCheckInstalledOnInstance();
 
 		$shell = $this->buildAdminShellParams(
 			'admin-settings',
@@ -957,6 +977,8 @@ class AdminController extends Controller
 				),
 				'supportUsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.supportUs'),
 				'projectCheckAvailable' => $projectCheckAvailable,
+				'projectCheckEnabledForCurrentUser' => $this->appManager->isEnabledForUser(Constants::APP_ID_PROJECTCHECK) === true,
+				'projectCheckAppsUrl' => $this->projectCheckAppsSettingsUrl(),
 				'requesttoken' => Util::callRegister(),
 			],
 		));
@@ -2352,7 +2374,7 @@ class AdminController extends Controller
 						'projectCheckIntegrationEnabled',
 					], true)) {
 						$value = ($value === true || $value === 'true' || $value === '1') ? '1' : '0';
-						if ($paramKey === 'projectCheckIntegrationEnabled' && $value === '1' && !$this->appManager->isEnabledForUser('projectcheck')) {
+						if ($paramKey === 'projectCheckIntegrationEnabled' && $value === '1' && !$this->isProjectCheckInstalledOnInstance()) {
 							return new JSONResponse([
 								'success' => false,
 								'error' => $this->l10n->t('Enable the ProjectCheck app before turning on this connection.'),

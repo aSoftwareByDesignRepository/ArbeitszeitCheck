@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Service;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCP\App\IAppManager;
@@ -35,7 +36,7 @@ class ProjectCheckLaborTimeSyncService
 	 */
 	public function syncFromTimeEntry(TimeEntry $entry, string $actorUserId): array
 	{
-		if (!$this->appManager->isEnabledForUser('projectcheck')) {
+		if ($this->appManager->isInstalled(Constants::APP_ID_PROJECTCHECK) !== true) {
 			return ['success' => true, 'projectCheckTimeEntryId' => null, 'message' => null];
 		}
 		$svc = $this->projectCheckTimeEntryService;
@@ -114,7 +115,7 @@ class ProjectCheckLaborTimeSyncService
 	 */
 	public function onTimeEntryDeleted(array $deletedSummary, string $actorUserId): void
 	{
-		if (!$this->appManager->isEnabledForUser('projectcheck')) {
+		if ($this->appManager->isInstalled(Constants::APP_ID_PROJECTCHECK) !== true) {
 			return;
 		}
 		$svc = $this->projectCheckTimeEntryService;

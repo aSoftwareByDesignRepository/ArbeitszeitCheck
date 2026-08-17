@@ -1,8 +1,10 @@
 /**
  * Accessible switch (checkbox + visual track). Used in admin settings and teams.
+ * Scoped to in-app chrome, Nextcloud Administration, and modal overlays.
  */
 
 #app-content.azc-app .azc-switch-field,
+.azc-nc-admin-settings .azc-switch-field,
 .modal-backdrop .azc-switch-field {
 	display: flex;
 	align-items: flex-start;
@@ -10,10 +12,13 @@
 }
 
 #app-content.azc-app .azc-switch-field__input,
+.azc-nc-admin-settings .azc-switch-field__input,
 .modal-backdrop .azc-switch-field__input {
 	position: absolute;
 	width: 1px;
 	height: 1px;
+	min-width: 0;
+	min-height: 0;
 	padding: 0;
 	margin: -1px;
 	overflow: hidden;
@@ -23,12 +28,14 @@
 }
 
 #app-content.azc-app .azc-switch-field__input:focus-visible + .azc-switch-field__label .azc-switch-field__track,
+.azc-nc-admin-settings .azc-switch-field__input:focus-visible + .azc-switch-field__label .azc-switch-field__track,
 .modal-backdrop .azc-switch-field__input:focus-visible + .azc-switch-field__label .azc-switch-field__track {
 	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
 #app-content.azc-app .azc-switch-field__label,
+.azc-nc-admin-settings .azc-switch-field__label,
 .modal-backdrop .azc-switch-field__label {
 	display: flex;
 	align-items: center;
@@ -41,6 +48,7 @@
 }
 
 #app-content.azc-app .azc-switch-field__track,
+.azc-nc-admin-settings .azc-switch-field__track,
 .modal-backdrop .azc-switch-field__track {
 	position: relative;
 	flex: 0 0 3rem;
@@ -53,6 +61,7 @@
 }
 
 #app-content.azc-app .azc-switch-field__track::after,
+.azc-nc-admin-settings .azc-switch-field__track::after,
 .modal-backdrop .azc-switch-field__track::after {
 	content: '';
 	position: absolute;
@@ -67,23 +76,27 @@
 }
 
 #app-content.azc-app .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track,
+.azc-nc-admin-settings .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track,
 .modal-backdrop .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track {
 	background: var(--color-primary-element);
 	border-color: var(--color-primary-element);
 }
 
 #app-content.azc-app .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track::after,
+.azc-nc-admin-settings .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track::after,
 .modal-backdrop .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track::after {
 	transform: translateX(1.375rem);
 }
 
 #app-content.azc-app .azc-switch-field__input:disabled + .azc-switch-field__label,
+.azc-nc-admin-settings .azc-switch-field__input:disabled + .azc-switch-field__label,
 .modal-backdrop .azc-switch-field__input:disabled + .azc-switch-field__label {
 	cursor: not-allowed;
 	opacity: 0.72;
 }
 
 #app-content.azc-app .azc-switch-field__text,
+.azc-nc-admin-settings .azc-switch-field__text,
 .modal-backdrop .azc-switch-field__text {
 	font-size: var(--azc-fs-md, 1rem);
 	font-weight: 600;
@@ -94,6 +107,8 @@
 @media (prefers-reduced-motion: reduce) {
 	#app-content.azc-app .azc-switch-field__track,
 	#app-content.azc-app .azc-switch-field__track::after,
+	.azc-nc-admin-settings .azc-switch-field__track,
+	.azc-nc-admin-settings .azc-switch-field__track::after,
 	.modal-backdrop .azc-switch-field__track,
 	.modal-backdrop .azc-switch-field__track::after {
 		transition: none;
@@ -102,17 +117,20 @@
 
 @media (forced-colors: active) {
 	#app-content.azc-app .azc-switch-field__track,
+	.azc-nc-admin-settings .azc-switch-field__track,
 	.modal-backdrop .azc-switch-field__track {
 		border: 2px solid CanvasText;
 	}
 
 	#app-content.azc-app .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track,
+	.azc-nc-admin-settings .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track,
 	.modal-backdrop .azc-switch-field__input:checked + .azc-switch-field__label .azc-switch-field__track {
 		background: Highlight;
 		border-color: Highlight;
 	}
 
 	#app-content.azc-app .azc-switch-field__track::after,
+	.azc-nc-admin-settings .azc-switch-field__track::after,
 	.modal-backdrop .azc-switch-field__track::after {
 		background: Canvas;
 	}

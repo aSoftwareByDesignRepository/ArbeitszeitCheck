@@ -40,6 +40,7 @@ class CapabilitiesComplianceTest extends TestCase
 		$appManager = $this->createMock(IAppManager::class);
 		$appManager->method('getAppVersion')->with('arbeitszeitcheck')->willReturn('1.6.0');
 		$appManager->method('isEnabledForUser')->willReturn(false);
+		$appManager->method('isInstalled')->willReturn(false);
 
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn(null);
@@ -132,6 +133,7 @@ class CapabilitiesComplianceTest extends TestCase
 		$appManager = $this->createMock(IAppManager::class);
 		$appManager->method('getAppVersion')->willReturn('1.6.0');
 		$appManager->method('isEnabledForUser')->willReturn(false);
+		$appManager->method('isInstalled')->willReturn(false);
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn(null);
 		$overtimeBank = $this->createMock(OvertimeBankService::class);
@@ -155,5 +157,45 @@ class CapabilitiesComplianceTest extends TestCase
 	{
 		$caps = $this->buildCapabilities(RegionRegistry::COUNTRY_DE)->getCapabilities();
 		$this->assertSame('AA', $caps['arbeitszeitcheck']['accessibility']['wcag-level']);
+	}
+
+	public function testProjectCheckAvailableUsesInstanceInstallNotCurrentUser(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, $default = '') {
+				if ($app === 'arbeitszeitcheck' && $key === 'country') {
+					return RegionRegistry::COUNTRY_DE;
+				}
+				return is_string($default) ? $default : (string)$default;
+			}
+		);
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getAppValueString')->willReturnCallback(
+			static fn (string $key, string $default = '') => $default
+		);
+		$appManager = $this->createMock(IAppManager::class);
+		$appManager->method('getAppVersion')->willReturn('1.6.0');
+		$appManager->method('isInstalled')->with(\OCA\ArbeitszeitCheck\Constants::APP_ID_PROJECTCHECK)->willReturn(true);
+		$appManager->method('isEnabledForUser')->willReturn(false);
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn(null);
+		$overtimeBank = $this->createMock(OvertimeBankService::class);
+		$overtimeBank->method('isEnabled')->willReturn(false);
+		$timeCapture = $this->createMock(TimeCaptureMethodService::class);
+
+		$caps = (new Capabilities(
+			$config,
+			$appConfig,
+			$overtimeBank,
+			$appManager,
+			$userSession,
+			$timeCapture,
+			new LaborLawProfileFactory($config),
+		))->getCapabilities();
+
+		$pc = $caps['arbeitszeitcheck']['mobile']['projectCheck'];
+		$this->assertTrue($pc['available']);
+		$this->assertFalse($pc['linkingEnabled']);
 	}
 }

@@ -82,6 +82,9 @@ class AdminSettingsSectionCatalogContractTest extends TestCase
 		$this->assertStringContainsString('Save this page', $tpl);
 		$this->assertStringContainsString('$urlGenerator', $tpl);
 		$this->assertStringContainsString("\$includeSection = static function (string \$slug) use (", $tpl);
+		$this->assertStringContainsString('$projectCheckAvailable', $tpl);
+		$this->assertStringContainsString('$projectCheckEnabledForCurrentUser', $tpl);
+		$this->assertStringContainsString('$projectCheckAppsUrl', $tpl);
 		$this->assertStringNotContainsString('Jump to settings sections', $tpl);
 		$this->assertStringNotContainsString('Save all settings', $tpl);
 	}
@@ -123,6 +126,10 @@ class AdminSettingsSectionCatalogContractTest extends TestCase
 		$this->assertNotContains('retentionPeriod', $compliance);
 		$retention = $catalog->allowedParamKeys(AdminSettingsSectionCatalog::SECTION_RETENTION);
 		$this->assertSame(['retentionPeriod'], $retention);
+		$this->assertSame(
+			['projectCheckIntegrationEnabled'],
+			$catalog->allowedParamKeys(AdminSettingsSectionCatalog::SECTION_PROJECTCHECK)
+		);
 	}
 
 	public function testControllerGatesSettingsSectionAndLegacyRedirect(): void

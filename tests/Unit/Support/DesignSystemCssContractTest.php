@@ -66,6 +66,24 @@ final class DesignSystemCssContractTest extends TestCase
 		);
 	}
 
+	public function testConnectionSwitchStylesApplyInNextcloudAdminShell(): void
+	{
+		$switchCss = (string) file_get_contents($this->appRoot . '/css/common/switch-field.css');
+		self::assertNotSame('', $switchCss);
+		self::assertDoesNotMatchRegularExpression('/#[0-9a-fA-F]{3,8}\b/', $switchCss, 'Switch CSS must use tokens (no raw hex)');
+		self::assertStringContainsString('.azc-nc-admin-settings .azc-switch-field', $switchCss);
+		self::assertStringContainsString('.azc-nc-admin-settings .azc-switch-field__label', $switchCss);
+		self::assertMatchesRegularExpression(
+			'/\.azc-nc-admin-settings \.azc-switch-field__label[^{]*\{[^}]*min-height:\s*44px/s',
+			$switchCss,
+			'NC Administration connection switch must stay a 44px touch target',
+		);
+		self::assertStringContainsString(
+			'.azc-nc-admin-settings .azc-switch-field__input:focus-visible + .azc-switch-field__label .azc-switch-field__track',
+			$switchCss,
+		);
+	}
+
 	public function testPolicyCssHasNoRawHex(): void
 	{
 		self::assertDoesNotMatchRegularExpression(

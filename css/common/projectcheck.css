@@ -91,7 +91,24 @@
 	margin-bottom: var(--space-3, 0.75rem);
 }
 
+.azc-projectcheck-admin-settings__missing {
+	margin: 0;
+}
+
+.azc-projectcheck-admin-settings__missing .azc-callout__actions .azc-btn {
+	min-height: 44px;
+	min-width: 10rem;
+}
+
+.azc-projectcheck-admin-settings__group-limited {
+	margin: 0 0 var(--azc-space-4, var(--space-4, 1rem));
+}
+
 @media (max-width: 47.9375rem) {
+	.azc-projectcheck-admin-settings__missing .azc-callout__actions .azc-btn {
+		width: 100%;
+	}
+
 	.azc-projectcheck-connection__actions {
 		flex-direction: column;
 	}

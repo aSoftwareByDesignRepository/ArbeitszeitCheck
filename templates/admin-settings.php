@@ -51,6 +51,9 @@ $formScope = $renderAll
 // Single-topic pages use the shell H1/lead — hide duplicate card titles (DS §14 / granny test).
 // NC mega-form keeps all titles for scanability in one scroll.
 $azcSettingsShowCardChrome = $renderAll;
+$projectCheckAvailable = !empty($_['projectCheckAvailable']);
+$projectCheckEnabledForCurrentUser = !empty($_['projectCheckEnabledForCurrentUser']);
+$projectCheckAppsUrl = (string)($_['projectCheckAppsUrl'] ?? '');
 ?>
 
 <?php if (!$isNcAdminShell): ?>
@@ -116,7 +119,10 @@ $azcSettingsShowCardChrome = $renderAll;
 					$_,
 					$urlGenerator,
 					$azcSettingsShowCardChrome,
-					$renderAll
+					$renderAll,
+					$projectCheckAvailable,
+					$projectCheckEnabledForCurrentUser,
+					$projectCheckAppsUrl
 				): void {
 					if ($slug === 'projectcheck') {
 						include __DIR__ . '/partials/projectcheck-admin-settings-section.php';

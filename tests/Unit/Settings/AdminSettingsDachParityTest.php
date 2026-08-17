@@ -48,6 +48,7 @@ class AdminSettingsDachParityTest extends TestCase
 
 		$appManager = $this->createMock(IAppManager::class);
 		$appManager->method('isEnabledForUser')->willReturn(false);
+		$appManager->method('isInstalled')->willReturn(false);
 		$appManager->method('getAppRestriction')->willReturn([]);
 
 		$urlGenerator = $this->createMock(IURLGenerator::class);
@@ -141,5 +142,39 @@ class AdminSettingsDachParityTest extends TestCase
 		$this->assertStringContainsString('vacationDaysSuggestion', $src);
 		$this->assertStringContainsString('breakAutoFallbackEnabled', $src);
 		$this->assertStringContainsString('timeEntryChangesRequireApproval', $src);
+		$this->assertStringContainsString('isInstalled', $src);
+		$this->assertStringContainsString('projectCheckEnabledForCurrentUser', $src);
+	}
+
+	public function testNcAdminFormExposesInstanceLevelProjectCheckAvailability(): void
+	{
+		$appConfig = $this->createMock(IAppConfig::class);
+		$appConfig->method('getAppValueString')->willReturnCallback(
+			static fn (string $key, string $default = '') => $default
+		);
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnCallback(static fn (string $s) => $s);
+		$groupManager = $this->createMock(IGroupManager::class);
+		$groupManager->method('search')->willReturn([]);
+		$appManager = $this->createMock(IAppManager::class);
+		$appManager->method('isInstalled')->with('projectcheck')->willReturn(true);
+		$appManager->method('isEnabledForUser')->willReturn(false);
+		$appManager->method('getAppRestriction')->willReturn([]);
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->method('linkToRoute')->willReturn('/settings/apps');
+
+		$settings = new AdminSettings(
+			$appConfig,
+			$l10n,
+			$groupManager,
+			$appManager,
+			$urlGenerator,
+			$this->createMock(\OCP\IUserManager::class),
+		);
+		$params = $settings->getForm()->getParams();
+		$this->assertTrue($params['projectCheckAvailable']);
+		$this->assertFalse($params['projectCheckEnabledForCurrentUser']);
+		$this->assertFalse($params['settings']['projectCheckIntegrationEnabled']);
+		$this->assertSame('/settings/apps', $params['projectCheckAppsUrl']);
 	}
 }

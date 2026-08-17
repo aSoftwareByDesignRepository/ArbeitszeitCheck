@@ -92,6 +92,21 @@ test.describe('Admin global settings multipage', () => {
 			await expect(page.locator('#admin-settings-form')).toBeVisible()
 			await expect(page.locator(`#admin-settings-form [name="settings_section"]`)).toHaveValue(section.id)
 			await expect(page.locator(section.marker).first()).toBeAttached()
+			if (section.id === 'projectcheck') {
+				const switchOrMissing = page.locator(
+					'#projectCheckIntegrationEnabled, #azc-projectcheck-app-required',
+				)
+				await expect(switchOrMissing.first()).toBeAttached()
+				const sw = page.locator('#projectCheckIntegrationEnabled')
+				if ((await sw.count()) > 0) {
+					await expect(sw).toHaveAttribute('role', 'switch')
+					const box = await sw.evaluate((el) => {
+						const label = el.closest('.azc-switch-field')
+						return label ? label.getBoundingClientRect().height : 0
+					})
+					expect(box).toBeGreaterThanOrEqual(44)
+				}
+			}
 
 			// Active chip matches this section; foreign section markers stay absent when possible.
 			await expect(

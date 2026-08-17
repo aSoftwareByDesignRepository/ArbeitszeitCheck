@@ -24,6 +24,30 @@ if ($nextcloudRoot !== '') {
 	$candidates[] = rtrim($nextcloudRoot, '/\\') . '/lib/base.php';
 }
 
+$vendorAutoload = dirname(__DIR__) . '/vendor/autoload.php';
+if (is_file($vendorAutoload)) {
+	require_once $vendorAutoload;
+} else {
+	// Docker/dev trees often omit composer vendor; keep PSR-4 so unit tests still load.
+	spl_autoload_register(static function (string $class): void {
+		$prefixes = [
+			'OCA\\ArbeitszeitCheck\\Tests\\' => __DIR__ . '/',
+			'OCA\\ArbeitszeitCheck\\' => dirname(__DIR__) . '/lib/',
+		];
+		foreach ($prefixes as $prefix => $baseDir) {
+			if (!str_starts_with($class, $prefix)) {
+				continue;
+			}
+			$relative = str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+			$file = $baseDir . $relative;
+			if (is_file($file)) {
+				require_once $file;
+				return;
+			}
+		}
+	});
+}
+
 // Monorepo / this dev setup: lib/ next to apps/
 $candidates[] = __DIR__ . '/../../lib/base.php';
 

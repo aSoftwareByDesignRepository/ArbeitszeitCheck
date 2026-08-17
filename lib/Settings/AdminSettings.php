@@ -119,11 +119,11 @@ class AdminSettings implements ISettings
 			'accessAllowedGroups' => $this->readAccessAllowedGroups(),
 			'accessAllowedUserIds' => $this->readConfiguredAccessAllowedUserIds(),
 			'appAdminUserIds' => $this->readConfiguredAppAdminUserIds(),
-			'projectCheckIntegrationEnabled' => $this->appManager->isEnabledForUser('projectcheck')
+			'projectCheckIntegrationEnabled' => $this->isProjectCheckInstalledOnInstance()
 				&& $this->appConfig->getAppValueString(Constants::CONFIG_PROJECTCHECK_INTEGRATION_ENABLED, Constants::CONFIG_PROJECTCHECK_INTEGRATION_DEFAULT) === '1',
 		];
 
-		$projectCheckAvailable = $this->appManager->isEnabledForUser('projectcheck');
+		$projectCheckAvailable = $this->isProjectCheckInstalledOnInstance();
 		$catalog = new \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog();
 		$ncPages = $catalog->chipBarPayload($this->l10n, $this->urlGenerator, '');
 		// NC mega-form has no single active section — chips only guide into the app.
@@ -146,8 +146,24 @@ class AdminSettings implements ISettings
 			'settingsPages' => $ncPages,
 			'supportUsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.supportUs'),
 			'projectCheckAvailable' => $projectCheckAvailable,
+			'projectCheckEnabledForCurrentUser' => $this->appManager->isEnabledForUser(Constants::APP_ID_PROJECTCHECK) === true,
+			'projectCheckAppsUrl' => $this->projectCheckAppsSettingsUrl(),
 			'requesttoken' => Util::callRegister(),
 		]);
+	}
+
+	private function isProjectCheckInstalledOnInstance(): bool
+	{
+		return $this->appManager->isInstalled(Constants::APP_ID_PROJECTCHECK) === true;
+	}
+
+	private function projectCheckAppsSettingsUrl(): string
+	{
+		try {
+			return $this->urlGenerator->linkToRoute('settings.AppSettings.viewApps');
+		} catch (\Throwable $e) {
+			return '';
+		}
 	}
 
 	private function readConfiguredCountry(): string

@@ -8,7 +8,9 @@ $azcSettingsShowCardChrome = !empty($azcSettingsShowCardChrome) || !empty($rende
  * Admin global settings: enable/disable ProjectCheck integration for all users.
  *
  * Expects:
- *   - $projectCheckAvailable (bool)
+ *   - $projectCheckAvailable (bool) — ProjectCheck enabled on this Nextcloud
+ *   - $projectCheckEnabledForCurrentUser (bool) — current admin may open ProjectCheck
+ *   - $projectCheckAppsUrl (string) — Nextcloud Apps page
  *   - $settings['projectCheckIntegrationEnabled'] (bool)
  *   - $l
  *
@@ -16,7 +18,9 @@ $azcSettingsShowCardChrome = !empty($azcSettingsShowCardChrome) || !empty($rende
  */
 
 $pcAvailable = !empty($projectCheckAvailable);
+$pcEnabledForMe = !empty($projectCheckEnabledForCurrentUser);
 $pcEnabled = !empty($settings['projectCheckIntegrationEnabled']);
+$pcAppsUrl = isset($projectCheckAppsUrl) ? (string)$projectCheckAppsUrl : '';
 ?>
 <section class="azc-card admin-settings-section azc-projectcheck-admin-settings" aria-labelledby="section-projectcheck-heading">
 	                    <header class="azc-card__header<?php echo empty($azcSettingsShowCardChrome) ? ' azc-card__header--page-title-only' : ''; ?>">
@@ -34,10 +38,19 @@ $pcEnabled = !empty($settings['projectCheckIntegrationEnabled']);
 		<?php
 		$calloutVariant = 'warning';
 		$calloutRole = 'status';
+		$calloutId = 'azc-projectcheck-app-required';
 		$calloutTitle = $l->t('ProjectCheck app required');
 		$calloutText = $l->t('Install and enable the ProjectCheck app on this server before you can connect ArbeitszeitCheck to it.');
+		$calloutHint = $l->t('Find ProjectCheck in Nextcloud Apps and click Enable. Then return here and turn on the connection.');
 		$calloutExtraClass = 'azc-projectcheck-admin-settings__missing';
 		$calloutActions = [];
+		if ($pcAppsUrl !== '') {
+			$calloutActions[] = [
+				'href' => $pcAppsUrl,
+				'label' => $l->t('Open Apps'),
+				'class' => 'azc-btn azc-btn--primary azc-btn--touch',
+			];
+		}
 		$calloutElement = 'div';
 		include __DIR__ . '/../common/alert-callout.php';
 		?>
@@ -45,6 +58,21 @@ $pcEnabled = !empty($settings['projectCheckIntegrationEnabled']);
 		<p class="form-help admin-settings-section__intro">
 			<?php p($l->t('One switch for your whole organisation. When it is on, every employee who uses ArbeitszeitCheck can optionally link their hours to a ProjectCheck project when they clock in or add a time entry. When it is off, no one sees a project picker and new links are blocked. The connection is off by default — turn it on here when you want to link working time to customer projects. Existing installs that already have linked time entries keep the connection on automatically after upgrade.')); ?>
 		</p>
+
+		<?php if (!$pcEnabledForMe): ?>
+		<?php
+		$calloutVariant = 'info';
+		$calloutRole = 'status';
+		$calloutId = 'azc-projectcheck-group-limited';
+		$calloutTitle = $l->t('ProjectCheck is limited to some groups');
+		$calloutText = $l->t('You can still turn this connection on. Only people who are allowed to use ProjectCheck will see a project picker.');
+		$calloutHint = '';
+		$calloutExtraClass = 'azc-projectcheck-admin-settings__group-limited';
+		$calloutActions = [];
+		$calloutElement = 'div';
+		include __DIR__ . '/../common/alert-callout.php';
+		?>
+		<?php endif; ?>
 
 		<div class="azc-projectcheck-connection" data-projectcheck-admin-connection>
 			<div class="azc-projectcheck-connection__status-row">

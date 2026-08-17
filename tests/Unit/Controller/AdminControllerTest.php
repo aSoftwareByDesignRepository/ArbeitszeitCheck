@@ -115,6 +115,7 @@ class AdminControllerTest extends TestCase
 	private $groupManager;
 	/** @var IAppManager|\PHPUnit\Framework\MockObject\MockObject */
 	private $appManager;
+	private bool $projectCheckInstalled = false;
 
 	/** @var HolidayService|\PHPUnit\Framework\MockObject\MockObject */
 	private $holidayCalendarService;
@@ -137,6 +138,9 @@ class AdminControllerTest extends TestCase
 		$this->groupManager = $this->createMock(IGroupManager::class);
 		$this->groupManager->method('search')->willReturn([]);
 		$this->appManager = $this->createMock(IAppManager::class);
+		$this->appManager->method('isInstalled')->willReturnCallback(
+			fn (string $appId): bool => $appId === Constants::APP_ID_PROJECTCHECK && $this->projectCheckInstalled
+		);
 		$teamMapper = $this->createMock(TeamMapper::class);
 		$teamMemberMapper = $this->createMock(TeamMemberMapper::class);
 		$teamManagerMapper = $this->createMock(TeamManagerMapper::class);
@@ -144,6 +148,7 @@ class AdminControllerTest extends TestCase
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn(null);
 		$cspService = $this->createMock(CSPService::class);
+		$cspService->method('applyPolicyWithNonce')->willReturnArgument(0);
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnCallback(fn ($s, $p = []) => empty($p) ? $s : vsprintf($s, $p));
 		$urlGenerator = $this->createMock(IURLGenerator::class);
@@ -1121,7 +1126,7 @@ class AdminControllerTest extends TestCase
 			'country' => 'DE',
 			'german_state' => 'NW',
 		]);
-		$this->appManager->method('isEnabledForUser')->with('projectcheck')->willReturn(true);
+		$this->projectCheckInstalled = true;
 		$this->request->method('getParams')
 			->willReturn([
 				'projectCheckIntegrationEnabled' => false,
@@ -1140,7 +1145,7 @@ class AdminControllerTest extends TestCase
 			'country' => 'DE',
 			'german_state' => 'NW',
 		]);
-		$this->appManager->method('isEnabledForUser')->with('projectcheck')->willReturn(true);
+		$this->projectCheckInstalled = true;
 		$this->request->method('getParams')
 			->willReturn([
 				'projectCheckIntegrationEnabled' => true,
@@ -1151,6 +1156,78 @@ class AdminControllerTest extends TestCase
 
 		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
 		$this->assertSame('1', $data['settings']['projectCheckIntegrationEnabled']);
+	}
+
+	public function testUpdateAdminSettingsEnablesProjectCheckWhenAppIsGroupRestrictedForAdmin(): void
+	{
+		$this->wireAppConfigStore([
+			'country' => 'DE',
+			'german_state' => 'NW',
+		]);
+		$this->projectCheckInstalled = true;
+		$this->appManager->method('isEnabledForUser')->willReturn(false);
+		$this->request->method('getParams')
+			->willReturn([
+				'settings_section' => 'projectcheck',
+				'projectCheckIntegrationEnabled' => true,
+			]);
+
+		$response = $this->controller->updateAdminSettings();
+		$data = $response->getData();
+
+		$this->assertTrue($data['success'], 'Response: ' . json_encode($data));
+		$this->assertSame('1', $data['settings']['projectCheckIntegrationEnabled']);
+	}
+
+	public function testUpdateAdminSettingsRejectsProjectCheckEnableWhenAppNotInstalled(): void
+	{
+		$this->wireAppConfigStore([
+			'country' => 'DE',
+			'german_state' => 'NW',
+		]);
+		$this->projectCheckInstalled = false;
+		$this->request->method('getParams')
+			->willReturn([
+				'settings_section' => 'projectcheck',
+				'projectCheckIntegrationEnabled' => true,
+			]);
+
+		$response = $this->controller->updateAdminSettings();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('Enable the ProjectCheck app before turning on this connection.', $data['error']);
+	}
+
+	public function testSettingsSectionProjectCheckAvailableWhenInstalledEvenIfAdminLacksApp(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(fn (string $key, string $default = '') => $default);
+		$this->projectCheckInstalled = true;
+		$this->appManager->method('isEnabledForUser')->willReturn(false);
+
+		$response = $this->controller->settingsSection('projectcheck');
+		$this->assertInstanceOf(TemplateResponse::class, $response);
+		$params = $response->getParams();
+		$this->assertArrayHasKey('projectCheckAvailable', $params);
+		$this->assertTrue($params['projectCheckAvailable']);
+		$this->assertFalse($params['projectCheckEnabledForCurrentUser']);
+		$this->assertFalse($params['settings']['projectCheckIntegrationEnabled']);
+		$this->assertArrayHasKey('projectCheckAppsUrl', $params);
+	}
+
+	public function testSettingsSectionProjectCheckUnavailableWhenNotInstalled(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(fn (string $key, string $default = '') => $default);
+		$this->projectCheckInstalled = false;
+		$this->appManager->method('isEnabledForUser')->willReturn(true);
+
+		$response = $this->controller->settingsSection('projectcheck');
+		$params = $response->getParams();
+		$this->assertArrayHasKey('projectCheckAvailable', $params);
+		$this->assertFalse($params['projectCheckAvailable']);
+		$this->assertFalse($params['settings']['projectCheckIntegrationEnabled']);
 	}
 
 	public function testUpdateAdminSettingsNormalizesAppAdminUsers(): void

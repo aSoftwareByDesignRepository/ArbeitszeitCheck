@@ -138,12 +138,30 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	}
 
 	/**
+	 * Stand-in for ProjectCheck's ProjectService. Unit tests must not require
+	 * that app's class to be autoloaded (it is a separate install).
+	 *
+	 * @param list<string> $methods
+	 */
+	private function mockProjectCheckProjectService(array $methods = [
+		'getProjectsForUserTimeEntry',
+		'isActiveTeamMember',
+		'getProject',
+		'mayBillArbeitszeitCheckTimeForUser',
+		'canUserAddTimeEntryForProject',
+	]): object {
+		return $this->getMockBuilder(\stdClass::class)
+			->addMethods($methods)
+			->getMock();
+	}
+
+	/**
 	 * Test isProjectCheckAvailable returns true when app is enabled
 	 */
 	public function testIsProjectCheckAvailableWhenEnabled(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -158,7 +176,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testIsProjectCheckAvailableWhenDisabled(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(false);
 
@@ -173,7 +191,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testGetAvailableProjectsWhenNotAvailable(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(false);
 
@@ -194,7 +212,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$userId = 'user1';
 
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -208,7 +226,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$project->method('getCostRateMode')->willReturn('project');
 		$project->method('allowsTimeTracking')->willReturn(true);
 
-		$projectService = $this->createMock(\OCA\ProjectCheck\Service\ProjectService::class);
+		$projectService = $this->mockProjectCheckProjectService();
 		$projectService->expects($this->once())
 			->method('getProjectsForUserTimeEntry')
 			->with($userId, $this->isType('array'))
@@ -242,7 +260,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	{
 		$userId = 'user1';
 
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 
 		$project = new MagicGetterProjectStub([
 			'id' => 6,
@@ -253,7 +271,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 			'allowsTimeTracking' => true,
 		]);
 
-		$projectService = $this->createMock(\OCA\ProjectCheck\Service\ProjectService::class);
+		$projectService = $this->mockProjectCheckProjectService();
 		$projectService->method('getProjectsForUserTimeEntry')->willReturn([$project]);
 
 		$service = new ProjectCheckIntegrationService(
@@ -281,7 +299,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testGetAvailableProjectsFallsBackToDatabaseName(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 
 		$project = new MagicGetterProjectStub([
 			'id' => 6,
@@ -291,7 +309,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 			'allowsTimeTracking' => true,
 		]);
 
-		$projectService = $this->createMock(\OCA\ProjectCheck\Service\ProjectService::class);
+		$projectService = $this->mockProjectCheckProjectService();
 		$projectService->method('getProjectsForUserTimeEntry')->willReturn([$project]);
 
 		$queryResult = $this->createMock(\OCP\DB\IResult::class);
@@ -338,7 +356,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testGetAvailableProjectsSkipsProjectsWithEmptyName(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 
 		$blank = new MagicGetterProjectStub([
 			'id' => 7,
@@ -348,7 +366,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 			'allowsTimeTracking' => true,
 		]);
 
-		$projectService = $this->createMock(\OCA\ProjectCheck\Service\ProjectService::class);
+		$projectService = $this->mockProjectCheckProjectService();
 		$projectService->method('getProjectsForUserTimeEntry')->willReturn([$blank]);
 
 		$service = new ProjectCheckIntegrationService(
@@ -371,7 +389,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	{
 		$userId = 'user1';
 
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 
 		$project = $this->getMockBuilder(\stdClass::class)
 			->addMethods(['getId', 'getName', 'getCustomerName', 'getCustomerId', 'getCostRateMode', 'allowsTimeTracking'])
@@ -383,7 +401,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$project->method('getCostRateMode')->willReturn('project_member');
 		$project->method('allowsTimeTracking')->willReturn(true);
 
-		$projectService = $this->createMock(\OCA\ProjectCheck\Service\ProjectService::class);
+		$projectService = $this->mockProjectCheckProjectService();
 		$projectService->method('getProjectsForUserTimeEntry')->willReturn([$project]);
 		$projectService->method('isActiveTeamMember')->with(2, $userId)->willReturn(false);
 
@@ -406,11 +424,11 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testGetAvailableProjectsHandlesException(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
-		$projectService = $this->createMock(\OCA\ProjectCheck\Service\ProjectService::class);
+		$projectService = $this->mockProjectCheckProjectService();
 		$projectService->expects($this->once())
 			->method('getProjectsForUserTimeEntry')
 			->willThrowException(new \Exception('Service error'));
@@ -437,7 +455,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testGetProjectDetailsWhenNotAvailable(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(false);
 
@@ -454,7 +472,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$projectId = '42';
 
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -530,7 +548,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testGetProjectDetailsReturnsNullWhenNotFound(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -567,7 +585,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testGetProjectCheckTimeEntriesWhenNotAvailable(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(false);
 
@@ -585,7 +603,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$projectId = '42';
 
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -662,7 +680,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testSyncTimeEntriesToProjectCheckWhenNotAvailable(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(false);
 
@@ -681,7 +699,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$userId = 'user1';
 
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -760,7 +778,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testGetProjectBudgetInfoWhenNotAvailable(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(false);
 
@@ -777,7 +795,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$projectId = '42';
 
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -839,7 +857,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$projectId = '42';
 
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -899,7 +917,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testProjectExistsWhenNotAvailable(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(false);
 
@@ -916,7 +934,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 		$projectId = '42';
 
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -977,7 +995,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testProjectExistsReturnsFalse(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -1014,7 +1032,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	public function testProjectExistsHandlesException(): void
 	{
 		$this->appManager->expects($this->once())
-			->method('isEnabledForUser')
+			->method('isInstalled')
 			->with('projectcheck')
 			->willReturn(true);
 
@@ -1032,7 +1050,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testIsLinkingDisabledDefaultsOffWhenAdminConfigUnset(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 		$this->configureAppConfigIntegrationUnset();
 
 		$this->assertFalse($this->service->isLinkingEnabledForUser('user1'));
@@ -1044,7 +1062,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testIsLinkingDisabledWhenAdminConfigIsZero(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 		$this->configureAppConfigIntegration('0');
 
 		$this->assertFalse($this->service->isLinkingEnabledForUser('user1'));
@@ -1055,10 +1073,42 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testIsLinkingDisabledWhenProjectCheckUnavailable(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(false);
+		$this->appManager->method('isInstalled')->willReturn(false);
 		$this->configureAppConfigIntegration('1');
 
 		$this->assertFalse($this->service->isLinkingEnabledForUser('user1'));
+	}
+
+	public function testIsProjectCheckAvailableIgnoresCurrentUserGroupRestriction(): void
+	{
+		$this->appManager->expects($this->once())
+			->method('isInstalled')
+			->with(Constants::APP_ID_PROJECTCHECK)
+			->willReturn(true);
+		$this->appManager->expects($this->never())->method('isEnabledForUser');
+
+		$this->assertTrue($this->service->isProjectCheckAvailable());
+	}
+
+	public function testIsProjectCheckEnabledForUserRequiresInstallAndUserAccess(): void
+	{
+		$this->appManager->method('isInstalled')->with(Constants::APP_ID_PROJECTCHECK)->willReturn(true);
+		$this->appManager->expects($this->once())
+			->method('isEnabledForUser')
+			->with(Constants::APP_ID_PROJECTCHECK, null)
+			->willReturn(false);
+
+		$this->assertFalse($this->service->isProjectCheckEnabledForUser(null));
+	}
+
+	public function testAdminIntegrationEnabledWhenInstalledEvenIfCurrentUserLacksApp(): void
+	{
+		$this->appManager->method('isInstalled')->willReturn(true);
+		$this->appManager->method('isEnabledForUser')->willReturn(false);
+		$this->configureAppConfigIntegration('1');
+
+		$this->assertTrue($this->service->isAdminIntegrationEnabled());
+		$this->assertTrue($this->service->isLinkingEnabledForUser('employee1'));
 	}
 
 	/**
@@ -1066,7 +1116,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testUserMayAttachFailsClosedWhenProjectServiceUnavailable(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 
 		$this->db->expects($this->never())->method('getQueryBuilder');
 
@@ -1078,10 +1128,10 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testUserMayAttachReturnsFalseWhenAdminIntegrationDisabled(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 		$this->configureAppConfigIntegration('0');
 
-		$projectService = $this->createMock(\OCA\ProjectCheck\Service\ProjectService::class);
+		$projectService = $this->mockProjectCheckProjectService();
 		$projectService->expects($this->never())->method('getProject');
 
 		$service = new ProjectCheckIntegrationService(
@@ -1102,10 +1152,10 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testManagerMayAttachReturnsFalseWhenAdminIntegrationDisabled(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 		$this->configureAppConfigIntegration('0');
 
-		$projectService = $this->createMock(\OCA\ProjectCheck\Service\ProjectService::class);
+		$projectService = $this->mockProjectCheckProjectService();
 		$projectService->expects($this->never())->method('mayBillArbeitszeitCheckTimeForUser');
 
 		$service = new ProjectCheckIntegrationService(
@@ -1128,7 +1178,7 @@ class ProjectCheckIntegrationServiceTest extends TestCase
 	 */
 	public function testUserMayAttachDelegatesToCanUserAddTimeEntryForProject(): void
 	{
-		$this->appManager->method('isEnabledForUser')->willReturn(true);
+		$this->appManager->method('isInstalled')->willReturn(true);
 		$this->configureAppConfigIntegration('1');
 
 		$projectService = $this->getMockBuilder(\stdClass::class)

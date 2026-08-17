@@ -408,10 +408,13 @@ final class Constants
 	/** App config: require manager approval for new manual time entries. Default off. */
 	public const CONFIG_MANUAL_TIME_ENTRIES_REQUIRE_APPROVAL = 'manual_time_entries_require_approval';
 
+	/** Sibling Nextcloud app id for ProjectCheck (instance-level install checks). */
+	public const APP_ID_PROJECTCHECK = 'projectcheck';
+
 	/**
 	 * App config: when "1", employees may link ArbeitszeitCheck time to ProjectCheck
 	 * projects (clock-in picker and manual entries). Requires the ProjectCheck app
-	 * to be installed and enabled.
+	 * to be installed and enabled on this Nextcloud (not only for the current admin).
 	 */
 	public const CONFIG_PROJECTCHECK_INTEGRATION_ENABLED = 'projectcheck_integration_enabled';
 

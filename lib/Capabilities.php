@@ -52,7 +52,7 @@ class Capabilities implements ICapability {
 				'manualTimeEntryEnabled' => true,
 			];
 
-		$projectCheckAvailable = $this->appManager->isEnabledForUser('projectcheck');
+		$projectCheckAvailable = $this->appManager->isInstalled(Constants::APP_ID_PROJECTCHECK) === true;
 
 		$user = $this->userSession->getUser();
 		$profile = $this->lawProfileFactory->getProfile($user !== null ? $user->getUID() : null);

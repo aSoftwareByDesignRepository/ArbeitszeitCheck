@@ -45,11 +45,29 @@ class ProjectCheckIntegrationService
 	}
 
 	/**
-	 * Check if ProjectCheck app is installed and enabled
+	 * Whether ProjectCheck is enabled on this Nextcloud instance.
+	 *
+	 * Uses {@see IAppManager::isInstalled()} (enabled on the server), not
+	 * {@see IAppManager::isEnabledForUser()}. Admins who are outside a
+	 * "limit to groups" restriction must still be able to turn the org-wide
+	 * connection on. Background jobs have no current user.
 	 */
 	public function isProjectCheckAvailable(): bool
 	{
-		return $this->appManager->isEnabledForUser('projectcheck');
+		return $this->appManager->isInstalled(Constants::APP_ID_PROJECTCHECK) === true;
+	}
+
+	/**
+	 * Whether ProjectCheck is enabled for this specific person (group limits).
+	 *
+	 * @param \OCP\IUser|null $user Null = currently logged-in user
+	 */
+	public function isProjectCheckEnabledForUser(?\OCP\IUser $user = null): bool
+	{
+		if (!$this->isProjectCheckAvailable()) {
+			return false;
+		}
+		return $this->appManager->isEnabledForUser(Constants::APP_ID_PROJECTCHECK, $user) === true;
 	}
 
 	/**

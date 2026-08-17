@@ -69,6 +69,10 @@ class ShellAccessibilityTest extends TestCase
 		$this->assertStringContainsString('aria-describedby="projectcheck-admin-integration-help"', $content);
 		$this->assertStringContainsString('id="projectcheck-admin-status-text"', $content);
 		$this->assertStringContainsString('role="status"', $content);
+		$this->assertStringContainsString("\$calloutId = 'azc-projectcheck-app-required'", $content);
+		$this->assertStringContainsString("\$calloutId = 'azc-projectcheck-group-limited'", $content);
+		$this->assertStringContainsString('Open Apps', $content);
+		$this->assertStringContainsString('azc-btn--touch', $content);
 	}
 
 	public function testTimeInitSupportsModernInitialStateApi(): void
