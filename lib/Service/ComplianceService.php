@@ -249,6 +249,7 @@ class ComplianceService
                 'type' => ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD,
                 'severity' => ComplianceViolation::SEVERITY_ERROR,
                 'message' => $restEvaluation['message'],
+                'details' => is_array($restEvaluation['details'] ?? null) ? $restEvaluation['details'] : [],
             ];
         }
 
@@ -706,7 +707,7 @@ class ComplianceService
      *  - User-facing times always include the calendar date so "04:00" cannot be
      *    mistaken for a time that already passed today when it is tomorrow.
      *
-     * @return array{valid: bool, message: string|null, lastEndTime: ?\DateTime, earliestClockIn: ?\DateTime}
+     * @return array{valid: bool, message: string|null, lastEndTime: ?\DateTime, earliestClockIn: ?\DateTime, details?: array<string, mixed>}
      */
     private function evaluateRestPeriodForClockIn(string $userId): array
     {
@@ -735,6 +736,11 @@ class ComplianceService
 
         $earliestClockIn = $this->addRestHours($lastEndTime, $minRest);
         $hoursRemaining = ($earliestClockIn->getTimestamp() - $now->getTimestamp()) / 3600.0;
+        $lawLabel = $this->profile($userId)->lawLabel('rest');
+        $lastEndDate = $this->displayDate($lastEndTime, $userId);
+        $lastEndClock = $this->displayClock($lastEndTime, $userId);
+        $earliestDisplay = $this->timeZoneService->formatForDisplay($earliestClockIn, 'd.m.Y H:i', $userId);
+        $hoursRemainingSafe = max(0.0, $hoursRemaining);
 
         return [
             'valid' => false,
@@ -742,15 +748,23 @@ class ComplianceService
                 'Minimum %1$d-hour rest period required between shifts (%2$s). Your last shift ended on %3$s at %4$s. You can clock in after %5$s (in %6$.1f hours).',
                 [
                     (int)$minRest,
-                    $this->profile($userId)->lawLabel('rest'),
-                    $this->displayDate($lastEndTime, $userId),
-                    $this->displayClock($lastEndTime, $userId),
-                    $this->timeZoneService->formatForDisplay($earliestClockIn, 'd.m.Y H:i', $userId),
-                    max(0.0, $hoursRemaining),
+                    $lawLabel,
+                    $lastEndDate,
+                    $lastEndClock,
+                    $earliestDisplay,
+                    $hoursRemainingSafe,
                 ]
             ),
             'lastEndTime' => $lastEndTime,
             'earliestClockIn' => $earliestClockIn,
+            'details' => [
+                'min_rest_hours' => (int)$minRest,
+                'law_label' => $lawLabel,
+                'last_end_date' => $lastEndDate,
+                'last_end_clock' => $lastEndClock,
+                'earliest_clock_in' => $earliestDisplay,
+                'hours_remaining' => round($hoursRemainingSafe, 1),
+            ],
         ];
     }
 

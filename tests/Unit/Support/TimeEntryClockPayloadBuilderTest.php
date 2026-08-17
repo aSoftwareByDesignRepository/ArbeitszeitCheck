@@ -197,13 +197,25 @@ class TimeEntryClockPayloadBuilderTest extends TestCase
 		self::assertCount(1, $merged['breaks']);
 	}
 
-	public function testEmptyBreaksAreNotIncluded(): void
+	public function testEmptyBreaksClearProposal(): void
 	{
 		$proposal = TimeEntryClockPayloadBuilder::buildFromParams([
 			'date' => '15.06.2026',
 			'startTime' => '08:00',
 			'endTime' => '16:00',
 			'breaks' => [],
+		]);
+		self::assertNotNull($proposal);
+		self::assertArrayHasKey('breaks', $proposal);
+		self::assertSame([], $proposal['breaks']);
+	}
+
+	public function testOmittedBreaksLeaveProposalWithoutBreaksKey(): void
+	{
+		$proposal = TimeEntryClockPayloadBuilder::buildFromParams([
+			'date' => '15.06.2026',
+			'startTime' => '08:00',
+			'endTime' => '16:00',
 		]);
 		self::assertNotNull($proposal);
 		self::assertArrayNotHasKey('breaks', $proposal);

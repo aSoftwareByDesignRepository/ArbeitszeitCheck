@@ -1824,7 +1824,8 @@ class TimeEntryController extends Controller
 			if ($currentStatus === TimeEntry::STATUS_PENDING_APPROVAL) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Correction request already pending')
+					'error' => $this->l10n->t('Correction request already pending'),
+					'error_code' => 'correction_pending',
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -1848,14 +1849,16 @@ class TimeEntryController extends Controller
 			if (!is_string($justification)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Justification is required for correction requests')
+					'error' => $this->l10n->t('Justification is required for correction requests'),
+					'error_code' => 'justification_required',
 				], Http::STATUS_BAD_REQUEST);
 			}
 			$justification = trim($justification);
 			if (mb_strlen($justification) < 10) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Please provide a reason of at least 10 characters.')
+					'error' => $this->l10n->t('Please provide a reason of at least 10 characters.'),
+					'error_code' => 'justification_too_short',
 				], Http::STATUS_BAD_REQUEST);
 			}
 			// Bound DB write to prevent abuse / log-blowup.
@@ -1868,7 +1871,8 @@ class TimeEntryController extends Controller
 			if (!$entryStartTime) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('Time entry has no start time')
+					'error' => $this->l10n->t('Time entry has no start time'),
+					'error_code' => 'time_entry_no_start',
 				], Http::STATUS_BAD_REQUEST);
 			}
 
@@ -1950,14 +1954,16 @@ class TimeEntryController extends Controller
 			if ($proposedData === []) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('At least one proposed change is required.')
+					'error' => $this->l10n->t('At least one proposed change is required.'),
+					'error_code' => 'proposed_change_required',
 				], Http::STATUS_BAD_REQUEST);
 			}
 
 			if (!$entry->canRequestCorrection(Constants::EDIT_WINDOW_DAYS)) {
 				return new JSONResponse([
 					'success' => false,
-					'error' => $this->l10n->t('This time entry cannot be corrected.')
+					'error' => $this->l10n->t('This time entry cannot be corrected.'),
+					'error_code' => 'correction_not_allowed',
 				], Http::STATUS_BAD_REQUEST);
 			}
 

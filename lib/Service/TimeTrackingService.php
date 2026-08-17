@@ -1103,7 +1103,11 @@ class TimeTrackingService
 					\OCA\ArbeitszeitCheck\Db\ComplianceViolation::TYPE_DAILY_HOURS_LIMIT_EXCEEDED => BusinessRuleCode::DAILY_HOURS_LIMIT,
 					default => null,
 				};
-				throw new BusinessRuleException((string)$firstIssue['message'], $reasonCode);
+				$details = [];
+				if (isset($firstIssue['details']) && is_array($firstIssue['details'])) {
+					$details = $firstIssue['details'];
+				}
+				throw new BusinessRuleException((string)$firstIssue['message'], $reasonCode, $details);
 			}
 		}
 	}

@@ -639,6 +639,81 @@ class TimeEntryControllerTest extends TestCase
 		$this->assertArrayHasKey('message', $data);
 	}
 
+	public function testRequestCorrectionRejectsJustificationWithoutProposedChange(): void
+	{
+		$userId = 'testuser';
+		$entryId = 1;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->expects($this->once())->method('getParams')->willReturn([
+			'justification' => 'Hab mich um ne halbe Stunde verspätet',
+		]);
+
+		$entry = new TimeEntry();
+		$entry->setId($entryId);
+		$entry->setUserId($userId);
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setIsManualEntry(false);
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+
+		$response = $this->controller->requestCorrection($entryId);
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('proposed_change_required', $data['error_code']);
+		$this->assertStringContainsString('At least one proposed change is required', $data['error']);
+	}
+
+	public function testRequestCorrectionAcceptsDateAndClockFields(): void
+	{
+		$userId = 'testuser';
+		$entryId = 1;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->teamResolver->method('getColleagueIds')->willReturn(['manager1']);
+		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(true);
+		$this->request->expects($this->once())->method('getParams')->willReturn([
+			'justification' => 'Hab mich um ne halbe Stunde verspätet',
+			'date' => '2024-01-15',
+			'startTime' => '09:30',
+			'endTime' => '17:00',
+		]);
+
+		$entry = new TimeEntry();
+		$entry->setId($entryId);
+		$entry->setUserId($userId);
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setDescription('Original');
+		$entry->setIsManualEntry(false);
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+		$this->timeEntryMapper->method('update')->willReturnCallback(static function (TimeEntry $updated) {
+			$payload = json_decode((string)$updated->getJustification(), true);
+			self::assertIsArray($payload);
+			self::assertNotEmpty($payload['proposed'] ?? null);
+			self::assertArrayHasKey('startTime', $payload['proposed']);
+			self::assertSame(TimeEntry::STATUS_PENDING_APPROVAL, $updated->getStatus());
+			return $updated;
+		});
+
+		$response = $this->controller->requestCorrection($entryId);
+		$data = $response->getData();
+		$this->assertTrue($data['success'], 'Unexpected response: ' . json_encode($data));
+	}
+
 	/**
 	 * Test requestCorrection returns error when already pending
 	 */

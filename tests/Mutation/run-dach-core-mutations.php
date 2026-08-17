@@ -123,6 +123,13 @@ $mutations = [
 		'filters' => ['RegionRegistryTest'],
 	],
 	[
+		'name' => 'empty_breaks_omitted_from_clock_payload',
+		'file' => 'lib/Support/TimeEntryClockPayloadBuilder.php',
+		'from' => "if (\$breaks === []) {\n\t\t\t\t\$result['breaks'] = [];\n\t\t\t} else {",
+		'to' => "if (\$breaks === []) {\n\t\t\t\t// mutated: omit empty breaks so clearing is lost\n\t\t\t} else {",
+		'filters' => ['TimeEntryClockPayloadBuilderTest::testEmptyBreaksClearProposal'],
+	],
+	[
 		'name' => 'break_countable_always_fifteen',
 		'file' => 'lib/Support/BreakCountable.php',
 		'from' => "if (\$minBreakMinutes === null || \$minBreakMinutes <= 0) {\n\t\t\treturn self::DEFAULT_MIN_MINUTES;\n\t\t}\n\n\t\treturn \$minBreakMinutes;",

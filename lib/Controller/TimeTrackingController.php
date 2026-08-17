@@ -87,16 +87,7 @@ class TimeTrackingController extends Controller
 		}
 
 		if ($e instanceof BusinessRuleException) {
-			$payload = [
-				'success' => false,
-				'error' => $e->getMessage(),
-				'message' => $e->getMessage(),
-			];
-			$reasonCode = $e->getReasonCode();
-			if ($reasonCode !== null && $reasonCode !== '') {
-				$payload['error_code'] = $reasonCode;
-			}
-			return new JSONResponse($payload, Http::STATUS_BAD_REQUEST);
+			return new JSONResponse($e->toHttpPayload(), Http::STATUS_BAD_REQUEST);
 		}
 
 		if ($e instanceof LockedException) {

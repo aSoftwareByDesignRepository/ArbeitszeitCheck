@@ -133,16 +133,7 @@ class DashboardWidgetController extends Controller {
 				'error_code' => $e->getErrorCode(),
 			], Http::STATUS_FORBIDDEN);
 		} catch (BusinessRuleException $e) {
-			$payload = [
-				'success' => false,
-				'error' => $e->getMessage(),
-				'message' => $e->getMessage(),
-			];
-			$reasonCode = $e->getReasonCode();
-			if ($reasonCode !== null && $reasonCode !== '') {
-				$payload['error_code'] = $reasonCode;
-			}
-			return new JSONResponse($payload, Http::STATUS_BAD_REQUEST);
+			return new JSONResponse($e->toHttpPayload(), Http::STATUS_BAD_REQUEST);
 		} catch (LockedException $e) {
 			$message = $this->l10n->t('Another time-tracking action is in progress on your account. Please wait a moment and try again.');
 			return new JSONResponse([

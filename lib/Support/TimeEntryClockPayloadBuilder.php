@@ -57,10 +57,14 @@ final class TimeEntryClockPayloadBuilder
 		];
 
 		$breaks = isset($params['breaks']) && is_array($params['breaks']) ? $params['breaks'] : null;
-		if ($breaks !== null && $breaks !== []) {
-			$validBreaks = self::normalizeBreaksOnDate($baseDate, $breaks, $minBreakMinutes);
-			if ($validBreaks !== []) {
-				$result['breaks'] = $validBreaks;
+		if ($breaks !== null) {
+			if ($breaks === []) {
+				$result['breaks'] = [];
+			} else {
+				$validBreaks = self::normalizeBreaksOnDate($baseDate, $breaks, $minBreakMinutes);
+				if ($validBreaks !== []) {
+					$result['breaks'] = $validBreaks;
+				}
 			}
 		}
 
