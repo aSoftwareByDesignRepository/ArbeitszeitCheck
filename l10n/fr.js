@@ -3222,7 +3222,7 @@ OC.L10N.register(
 	"Settings topics" : "Thèmes des paramètres",
 	"Settings updated successfully" : "Paramètres mis à jour avec succès",
 	"Settings: Change your personal preferences and working time settings" : "Paramètres : modifier vos préférences personnelles et paramètres de temps de travail",
-	"Setup & training" : "Configuration et formation",
+	"Setup & training" : "Mise en place et formation",
 	"Several fields need attention. Review each highlighted field below." : "Plusieurs champs nécessitent votre attention. Vérifiez chaque champ surligné ci-dessous.",
 	"Severities" : "Gravités",
 	"Severity" : "Gravité",
