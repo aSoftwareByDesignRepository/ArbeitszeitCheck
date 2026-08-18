@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test'
+import { assertNcReady } from './auth-guard.js'
 
 /**
  * Set app config via occ, if provided.
@@ -9,5 +10,6 @@ import { expect } from '@playwright/test'
 export async function assertArbeitszeitcheckLoaded(page) {
   await page.waitForURL(/\/apps\/arbeitszeitcheck(\/|$)/)
   await expect(page.locator('body')).toBeVisible()
+  await assertNcReady(page)
 }
 

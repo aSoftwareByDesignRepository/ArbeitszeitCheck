@@ -181,6 +181,7 @@ trait PageShellTrait
 			'calendar' => $g->linkToRoute('arbeitszeitcheck.page.calendar'),
 			'timeline' => $g->linkToRoute('arbeitszeitcheck.page.timeline'),
 			'settings' => $g->linkToRoute('arbeitszeitcheck.page.settings'),
+			'getTheApp' => $g->linkToRoute('arbeitszeitcheck.page.getTheApp'),
 			'reports' => $g->linkToRoute('arbeitszeitcheck.page.reports'),
 			'complianceDashboard' => $g->linkToRoute('arbeitszeitcheck.compliance.dashboard'),
 			'complianceViolations' => $g->linkToRoute('arbeitszeitcheck.compliance.violations'),

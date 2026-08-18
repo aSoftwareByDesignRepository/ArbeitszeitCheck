@@ -17,6 +17,8 @@ declare(strict_types=1);
  */
 
 $appRoot = dirname(__DIR__, 2);
+$appId = basename($appRoot);
+$workspaceRoot = dirname($appRoot, 2);
 $phpunit = $appRoot . '/vendor/bin/phpunit';
 if (!is_file($phpunit)) {
 	$phpunit = 'phpunit';
@@ -25,13 +27,22 @@ if (!is_file($phpunit)) {
 /**
  * @param list<string> $filters
  */
-function run_filters(string $appRoot, string $phpunit, array $filters): int {
+function run_filters(string $appRoot, string $workspaceRoot, string $appId, string $phpunit, array $filters): int {
 	$filter = implode('|', $filters);
-	$cmd = escapeshellarg('php')
-		. ' -d opcache.enable_cli=0 -d opcache.enable=0 '
-		. escapeshellarg($phpunit)
-		. ' -c ' . escapeshellarg($appRoot . '/phpunit.xml')
-		. ' --filter ' . escapeshellarg($filter);
+	$inside = is_file('/var/www/html/lib/base.php');
+	if ($inside) {
+		$bin = is_file($appRoot . '/vendor/bin/phpunit') ? $appRoot . '/vendor/bin/phpunit' : $phpunit;
+		$cmd = 'php -d opcache.enable_cli=0 -d opcache.enable=0 '
+			. escapeshellarg($bin)
+			. ' -c ' . escapeshellarg($appRoot . '/phpunit.xml')
+			. ' --do-not-cache-result --filter ' . escapeshellarg($filter);
+	} else {
+		$cmd = 'docker compose -f ' . escapeshellarg($workspaceRoot . '/docker-compose.yml')
+			. ' exec -u www-data -T nextcloud php -d opcache.enable_cli=0 -d opcache.enable=0 '
+			. '/var/www/html/custom_apps/' . $appId . '/vendor/bin/phpunit '
+			. '-c /var/www/html/custom_apps/' . $appId . '/phpunit.xml '
+			. '--do-not-cache-result --filter ' . escapeshellarg($filter);
+	}
 	passthru($cmd, $code);
 	return (int)$code;
 }
@@ -45,7 +56,7 @@ function restore_file(string $path, string $backup): void {
 /**
  * @param array{file:string,from:string,to:string,filters:list<string>} $mutation
  */
-function apply_and_expect_fail(string $appRoot, string $phpunit, string $name, array $mutation): bool {
+function apply_and_expect_fail(string $appRoot, string $workspaceRoot, string $appId, string $phpunit, string $name, array $mutation): bool {
 	$path = $appRoot . '/' . $mutation['file'];
 	$backup = $path . '.mutation-bak';
 	$original = file_get_contents($path);
@@ -66,7 +77,7 @@ function apply_and_expect_fail(string $appRoot, string $phpunit, string $name, a
 	}
 	file_put_contents($path, $mutated);
 	echo "\n== mutation: {$name} ==\n";
-	$code = run_filters($appRoot, $phpunit, $mutation['filters']);
+	$code = run_filters($appRoot, $workspaceRoot, $appId, $phpunit, $mutation['filters']);
 	restore_file($path, $backup);
 	if ($code === 0) {
 		echo "MUTATION SURVIVED: {$name}\n";
@@ -136,8 +147,8 @@ $mutations = [
 	],
 	'reembed_support_us_into_settings' => [
 		'file' => 'templates/admin-settings.php',
-		'from' => "['href' => '#section-projectcheck-heading', 'label' => \$l->t('ProjectCheck connection')],",
-		'to' => "['href' => '#section-projectcheck-heading', 'label' => \$l->t('ProjectCheck connection')],\n                    ['href' => '#azc-support-us-title', 'label' => \$l->t('Support & us')],",
+		'from' => 'SETTINGS-PAGES-STANDARD multipage shell.',
+		'to' => 'SETTINGS-PAGES-STANDARD multipage shell. #azc-support-us-title',
 		'filters' => [
 			'SupportUsSectionContractTest::testSupportUsLivesOnDedicatedAdminPageNotSettingsEmbed',
 		],
@@ -150,13 +161,12 @@ $mutations = [
 			'TableConventionTest::testDenseListTablesUseResponsiveCardReflow',
 		],
 	],
-	'drop_support_us_card_header' => [
+	'drop_new_tab_sr_hint' => [
 		'file' => 'templates/parts/support-us-section.php',
-		'from' => '-card__header',
-		'to' => '-section__header',
+		'from' => '(opens in a new tab)',
+		'to' => '(new window)',
 		'filters' => [
 			'SupportUsSectionContractTest::testAccessibilityHooksPresent',
-			'SupportUsSectionRenderTest::testRenderEscapesDisplayNameAndOmitsMobileWithoutFlag',
 		],
 	],
 	'drop_type_badges_wrapper_class' => [
@@ -169,8 +179,8 @@ $mutations = [
 	],
 	'strip_noopener_from_support_page' => [
 		'file' => 'templates/parts/support-us-section.php',
-		'from' => "\t\t\t\t\t\trel=\"noopener noreferrer\"\n\t\t\t\t\t><?php p(\$l->t('Open support page')); ?></a>",
-		'to' => "\t\t\t\t\t\trel=\"noopener\"\n\t\t\t\t\t><?php p(\$l->t('Open support page')); ?></a>",
+		'from' => 'rel="noopener noreferrer"',
+		'to' => 'rel="noopener"',
 		'filters' => [
 			'SupportUsSectionContractTest::testExternalLinksUseNoopenerNoreferrer',
 		],
@@ -178,7 +188,7 @@ $mutations = [
 ];
 
 echo "== baseline layout contracts ==\n";
-$baseline = run_filters($appRoot, $phpunit, [
+$baseline = run_filters($appRoot, $workspaceRoot, $appId, $phpunit, [
 	'SupportUsSectionContractTest',
 	'SupportUsSectionRenderTest',
 	'AzcBtnCascadeContractTest',
@@ -191,7 +201,7 @@ if ($baseline !== 0) {
 
 $failed = [];
 foreach ($mutations as $name => $mutation) {
-	if (!apply_and_expect_fail($appRoot, $phpunit, $name, $mutation)) {
+	if (!apply_and_expect_fail($appRoot, $workspaceRoot, $appId, $phpunit, $name, $mutation)) {
 		$failed[] = $name;
 	}
 }

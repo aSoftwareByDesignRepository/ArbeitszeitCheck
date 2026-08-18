@@ -5,10 +5,7 @@ declare(strict_types=1);
 /**
  * Lightweight mutation gauntlet for SupportUsLinks (no Infection dependency required).
  *
- * Runs the real unit tests, then applies known-bad source mutations and asserts
- * that SupportUsLinksTest fails — proving the suite catches broken link logic.
- *
- * Usage (from app root, inside Docker when applicable):
+ * Usage (host, from repo nextcloud/):
  *   php tests/Mutation/run-support-us-links-mutations.php
  *
  * @copyright Copyright (c) 2026, Software by Design GbR
@@ -16,28 +13,43 @@ declare(strict_types=1);
  */
 
 $appRoot = dirname(__DIR__, 2);
+$appId = basename($appRoot);
+$workspaceRoot = dirname($appRoot, 2);
 $source = $appRoot . '/lib/Support/SupportUsLinks.php';
 $backup = $source . '.mutation-bak';
-$phpunit = $appRoot . '/vendor/bin/phpunit';
-if (!is_file($phpunit)) {
-	$phpunit = 'phpunit';
-}
+$orig = (string) file_get_contents($source);
 
-function run_unit_tests(string $appRoot, string $phpunit): int {
-	$phpBin = 'php';
-	// Disable CLI opcache so file mutations are visible to the next PHPUnit process.
-	$cmd = escapeshellarg($phpBin)
-		. ' -d opcache.enable_cli=0 -d opcache.enable=0 '
-		. escapeshellarg($phpunit)
-		. ' -c ' . escapeshellarg($appRoot . '/phpunit.xml')
-		. ' --filter SupportUsLinksTest';
+function run_unit_tests(string $appRoot, string $workspaceRoot, string $appId): int
+{
+	$filter = 'SupportUsLinksTest';
+	$inside = is_file('/var/www/html/lib/base.php');
+	if ($inside) {
+		$phpunit = is_file($appRoot . '/vendor/bin/phpunit')
+			? $appRoot . '/vendor/bin/phpunit'
+			: 'phpunit';
+		$cmd = 'php -d opcache.enable_cli=0 -d opcache.enable=0 '
+			. escapeshellarg($phpunit)
+			. ' -c ' . escapeshellarg($appRoot . '/phpunit.xml')
+			. ' --do-not-cache-result'
+			. ' --filter ' . escapeshellarg($filter);
+	} else {
+		$cmd = 'docker compose -f ' . escapeshellarg($workspaceRoot . '/docker-compose.yml')
+			. ' exec -u www-data -T nextcloud php -d opcache.enable_cli=0 -d opcache.enable=0 '
+			. '/var/www/html/custom_apps/' . $appId . '/vendor/bin/phpunit '
+			. '-c /var/www/html/custom_apps/' . $appId . '/phpunit.xml '
+			. '--do-not-cache-result '
+			. '--filter ' . escapeshellarg($filter);
+	}
 	passthru($cmd, $code);
+
 	return (int)$code;
 }
 
-function restore(string $source, string $backup): void {
+function restore(string $source, string $backup): void
+{
 	if (is_file($backup)) {
-		rename($backup, $source);
+		file_put_contents($source, (string) file_get_contents($backup));
+		unlink($backup);
 	}
 }
 
@@ -47,8 +59,8 @@ if (!is_file($source)) {
 }
 
 echo "== baseline SupportUsLinksTest ==\n";
-$baseline = run_unit_tests($appRoot, $phpunit);
-if ($baseline !== 0) {
+$run = static fn (): int => run_unit_tests($appRoot, $workspaceRoot, $appId);
+if ($run() !== 0) {
 	fwrite(STDERR, "Baseline tests must pass before mutation run\n");
 	exit(1);
 }
@@ -107,7 +119,7 @@ foreach ($mutations as $name => $pair) {
 		restore($source, $backup);
 		continue;
 	}
-	$code = run_unit_tests($appRoot, $phpunit);
+	$code = $run();
 	restore($source, $backup);
 	if ($code === 0) {
 		$failedToKill[] = $name;
@@ -118,6 +130,9 @@ foreach ($mutations as $name => $pair) {
 }
 
 restore($source, $backup);
+if ((string) file_get_contents($source) !== $orig) {
+	file_put_contents($source, $orig);
+}
 
 if ($failedToKill !== []) {
 	fwrite(STDERR, "Mutations not killed: " . implode(', ', $failedToKill) . "\n");

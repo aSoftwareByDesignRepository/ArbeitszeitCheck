@@ -1,0 +1,336 @@
+/* ── Get the App (official mobile companion) ─────────────────── */
+.azc-get-app-page {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-6, 32px);
+	width: 100%;
+	max-width: 44rem;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+.azc-get-app__hero {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--azc-space-3, 12px);
+	padding: var(--azc-space-5, 24px);
+	border: 1px solid var(--azc-border, var(--color-border));
+	border-radius: var(--border-radius-large, 12px);
+	background:
+		linear-gradient(
+			165deg,
+			color-mix(in srgb, var(--color-primary-element) 14%, var(--color-main-background)) 0%,
+			var(--color-main-background) 58%
+		);
+	box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-main-background) 55%, transparent);
+}
+
+.azc-get-app__icon-well {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	color: var(--color-primary-element);
+}
+
+.azc-get-app__icon-well svg,
+.azc-get-app__icon-well .azc-icon {
+	display: block;
+	width: 1.35rem;
+	height: 1.35rem;
+}
+
+.azc-get-app__eyebrow {
+	margin: 0;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--color-primary-element);
+}
+
+.azc-get-app__title {
+	margin: 0;
+	font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--color-main-text);
+}
+
+.azc-get-app__lead {
+	margin: 0;
+	max-width: 52ch;
+	font-size: var(--azc-fs-md, 1rem);
+	line-height: 1.5;
+	color: var(--color-text-maxcontrast);
+}
+
+.azc-get-app__cta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--azc-space-3, 12px);
+	width: 100%;
+	margin-top: var(--azc-space-2, 8px);
+}
+
+.azc-get-app__play {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--azc-space-2, 8px);
+	min-height: var(--azc-touch, 44px);
+	min-width: var(--azc-touch, 44px);
+	padding: var(--azc-space-2, 8px) var(--azc-space-5, 24px);
+	border-radius: var(--border-radius-element, 10px);
+	border: 1px solid var(--color-primary-element);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	font-weight: 700;
+	font-size: var(--azc-fs-md, 1rem);
+	line-height: 1.25;
+	text-decoration: none;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	cursor: pointer;
+	box-shadow: 0 1px 2px color-mix(in srgb, var(--color-primary-element) 35%, transparent);
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.azc-get-app__play:hover {
+	background: var(--color-primary-element-hover, var(--color-primary-element));
+	border-color: var(--color-primary-element-hover, var(--color-primary-element));
+	color: var(--color-primary-element-text);
+}
+
+#app-content.azc-app--get-the-app a.azc-get-app__play {
+	background-color: var(--color-primary-element) !important;
+	border-color: var(--color-primary-element) !important;
+	color: var(--color-primary-element-text) !important;
+	text-decoration: none !important;
+}
+
+#app-content.azc-app--get-the-app a.azc-get-app__play:hover {
+	background-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
+	border-color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
+	color: var(--color-primary-element-text) !important;
+}
+
+.azc-get-app__play:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 3px;
+}
+
+.azc-get-app__play:focus:not(:focus-visible),
+.azc-get-app__action:focus:not(:focus-visible) {
+	outline: none;
+}
+
+.azc-get-app__play-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 1.5rem;
+	height: 1.5rem;
+	color: var(--color-primary-element-text);
+	background: transparent;
+}
+
+.azc-get-app__play .azc-icon,
+.azc-get-app__play-icon svg,
+.azc-get-app__play-icon .azc-icon {
+	display: block;
+	width: 1.35rem;
+	height: 1.35rem;
+	color: var(--color-primary-element-text);
+	stroke: currentColor;
+	stroke-width: 2.25;
+}
+
+.azc-get-app__price-hint {
+	flex: 1 1 100%;
+	margin: 0;
+	max-width: 56ch;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	line-height: 1.5;
+	color: var(--color-text-maxcontrast);
+}
+
+.azc-get-app__section-title {
+	margin: 0 0 var(--azc-space-4, 16px);
+	font-size: var(--azc-fs-lg, 1.125rem);
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--color-main-text);
+}
+
+.azc-get-app__features {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	border-top: 1px solid var(--azc-border, var(--color-border));
+}
+
+.azc-get-app__feature {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--azc-space-3, 12px);
+	margin: 0;
+	padding: var(--azc-space-3, 12px) 0;
+	border: 0;
+	border-bottom: 1px solid var(--azc-border, var(--color-border));
+	border-radius: 0;
+	background: transparent;
+	cursor: default;
+	user-select: text;
+}
+
+.azc-get-app__feature-copy {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--azc-space-1, 4px);
+	min-width: 0;
+}
+
+.azc-get-app__feature-title {
+	display: block;
+	font-weight: 650;
+	font-size: var(--azc-fs-md, 1rem);
+	color: var(--color-main-text);
+	line-height: 1.25;
+}
+
+.azc-get-app__feature-hint {
+	display: block;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	font-weight: 400;
+	color: var(--color-text-maxcontrast);
+	max-width: 42ch;
+	line-height: 1.5;
+}
+
+.azc-get-app__icon-well--feature {
+	width: 2.25rem;
+	height: 2.25rem;
+	margin-top: 0.05rem;
+	border-radius: var(--border-radius-element, 8px);
+	color: var(--color-main-text);
+	background: color-mix(in srgb, var(--color-main-text) 10%, var(--color-main-background));
+	border: 1px solid color-mix(in srgb, var(--color-main-text) 18%, var(--azc-border, var(--color-border)));
+}
+
+.azc-get-app__icon-well--feature svg {
+	width: 1.2rem;
+	height: 1.2rem;
+	stroke-width: 2.25;
+}
+
+.azc-get-app__actions {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-3, 12px);
+	width: 100%;
+	max-width: 28rem;
+}
+
+.azc-get-app__action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--azc-space-3, 12px);
+	width: 100%;
+	min-height: var(--azc-touch, 44px);
+	min-width: var(--azc-touch, 44px);
+	padding: var(--azc-space-3, 12px) var(--azc-space-4, 16px);
+	border: 2px solid var(--color-primary-element);
+	border-radius: var(--border-radius-element, 10px);
+	background: transparent;
+	color: var(--color-primary-element);
+	font-weight: 700;
+	font-size: var(--azc-fs-md, 1rem);
+	line-height: 1.25;
+	text-decoration: none;
+	cursor: pointer;
+	transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.azc-get-app__action:hover {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	border-color: var(--color-primary-element);
+}
+
+.azc-get-app__action:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 3px;
+}
+
+.azc-get-app__action-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: start;
+}
+
+.azc-get-app__action-external {
+	flex: 0 0 auto;
+	font-size: 1.1em;
+	line-height: 1;
+	opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.azc-get-app__action,
+	.azc-get-app__play {
+		transition: none;
+	}
+}
+
+@media (max-width: 768px) {
+	.azc-get-app__play {
+		width: 100%;
+	}
+
+	.azc-get-app__hero {
+		padding: var(--azc-space-4, 16px);
+	}
+
+	.azc-get-app__action {
+		max-width: none;
+	}
+}
+
+@media (prefers-contrast: more) {
+	.azc-get-app__hero {
+		background: var(--color-main-background);
+		border-color: var(--color-main-text);
+		border-width: 2px;
+		box-shadow: none;
+	}
+
+	.azc-get-app__play:focus-visible,
+	.azc-get-app__action:focus-visible {
+		outline-width: 3px;
+		outline-color: var(--color-main-text);
+	}
+}
+
+@media (forced-colors: active) {
+	.azc-get-app__play,
+	.azc-get-app__action {
+		border: 2px solid ButtonText;
+		background: ButtonFace;
+		color: ButtonText;
+		forced-color-adjust: none;
+	}
+
+	.azc-get-app__play:focus-visible,
+	.azc-get-app__action:focus-visible {
+		outline: 3px solid Highlight;
+	}
+}

@@ -32,6 +32,7 @@ use OCA\ArbeitszeitCheck\Service\OvertimePayoutService;
 use OCA\ArbeitszeitCheck\Service\EmployeeSettingsSectionCatalog;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfile;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
+use OCA\ArbeitszeitCheck\Support\MobileAppLinks;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
@@ -870,6 +871,34 @@ class PageController extends Controller
 			]);
 			return $this->configureCSP($response);
 		}
+	}
+
+	/**
+	 * Official Android companions (phone + foyer terminal) on Google Play.
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function getTheApp(): TemplateResponse
+	{
+		$this->registerFrontEndAssets('', 'get-the-app');
+		$navFlags = $this->getNavigationFlagsForSession();
+		$links = new MobileAppLinks();
+		$lang = method_exists($this->l10n, 'getLanguageCode') ? (string)$this->l10n->getLanguageCode() : 'en';
+		$params = $this->buildShellParams(
+			'get-the-app',
+			$this->l10n->t('Get the App'),
+			$this->l10n->t('Official Android apps for phone and foyer terminal.'),
+			$navFlags,
+		);
+		$params['urls'] = array_merge($params['urls'] ?? [], [
+			'playStore' => $links->playStoreUrl(),
+			'kioskPlayStore' => $links->kioskPlayStoreUrl(),
+			'mobileProductPage' => $links->productPageUrl($lang),
+			'mobilePrivacyPage' => $links->privacyPageUrl($lang),
+			'kioskPrivacyPage' => $links->kioskPrivacyPageUrl($lang),
+		]);
+
+		return $this->configureCSP(new TemplateResponse('arbeitszeitcheck', 'get-the-app', $params));
 	}
 
 	/**

@@ -171,6 +171,12 @@ test.describe('Admin Support & Us page', () => {
 
 		await expect(page.locator('#azc-support-us')).toHaveCount(0)
 		await expect(page.locator('.azc-admin-settings__support-link')).toHaveCount(0)
+
+		const toggle = page.locator('button[aria-controls="admin-subnav"]')
+		await expect(toggle).toBeVisible()
+		if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+			await toggle.click()
+		}
 		const supportNav = page.locator('#admin-subnav a[href*="/admin/support-us"]')
 		await expect(supportNav).toBeVisible()
 		await supportNav.click()

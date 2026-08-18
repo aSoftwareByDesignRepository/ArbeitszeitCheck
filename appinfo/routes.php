@@ -23,6 +23,7 @@ return [
 		['name' => 'page#calendar', 'url' => '/calendar', 'verb' => 'GET'],
 		['name' => 'page#timeline', 'url' => '/timeline', 'verb' => 'GET'],
 		['name' => 'page#settings', 'url' => '/settings', 'verb' => 'GET'],
+		['name' => 'page#getTheApp', 'url' => '/get-the-app', 'verb' => 'GET'],
 		['name' => 'page#settingsSection', 'url' => '/settings/{section}', 'verb' => 'GET', 'requirements' => ['section' => EmployeeSettingsSectionCatalog::routeRequirement()]],
 
 		// Time tracking routes

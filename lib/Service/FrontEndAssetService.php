@@ -32,6 +32,7 @@ final class FrontEndAssetService
 		Util::addScript(Application::APP_ID, 'common/time');
 		Util::addScript(Application::APP_ID, 'common/components');
 		Util::addScript(Application::APP_ID, 'common/messaging');
+		Util::addScript(Application::APP_ID, 'common/app-feedback');
 		Util::addScript(Application::APP_ID, 'common/navigation');
 		Util::addScript(Application::APP_ID, 'common/navigation-icons');
 	}

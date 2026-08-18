@@ -21,6 +21,15 @@ export function skipIfMissingCreds(role) {
 export async function login(page, { username, password }) {
 	await page.goto('/login')
 
+	const upgradeHeading = page.getByRole('heading', {
+		name: /app update required|update needed|aktualisierung (erforderlich|benötigt)/i,
+	})
+	if (await upgradeHeading.isVisible({ timeout: 1500 }).catch(() => false)) {
+		throw new Error(
+			'Nextcloud shows Update needed on /login. From nextcloud/: docker compose exec -u www-data nextcloud php occ upgrade',
+		)
+	}
+
 	const userInput = page
 		.getByRole('textbox', { name: /account name|email|benutzername|e-mail/i })
 		.or(page.locator('#user'))
@@ -32,6 +41,7 @@ export async function login(page, { username, password }) {
 		.or(page.locator('input[name="password"]'))
 		.first()
 
+	await userInput.waitFor({ state: 'visible', timeout: 20_000 })
 	await userInput.fill(username)
 	await passInput.fill(password)
 

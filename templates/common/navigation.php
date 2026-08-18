@@ -56,6 +56,8 @@ $isSettings = $pageId === 'settings'
 	|| ($pageId === ''
 		&& strpos($currentPage, '/admin/settings') === false
 		&& preg_match('#/apps/arbeitszeitcheck/settings(?:/|\?|$)#', $currentPage) === 1);
+$isGetTheApp = $pageId === 'get-the-app'
+	|| ($pageId === '' && strpos($currentPage, '/get-the-app') !== false);
 $isManagerDashboard = $pageId === 'manager-dashboard';
 $isManagerTimeEntries = $pageId === 'manager-time-entries';
 $isManagerAbsences = $pageId === 'manager-absences';
@@ -220,6 +222,14 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                     aria-label="<?php p($l->t('Go to my settings to change personal options')); ?>">
                     <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('settings')); ?></span>
                     <span><?php p($l->t('My settings')); ?></span>
+                </a>
+            </li>
+            <li class="<?php p($isGetTheApp ? 'active' : ''); ?>" <?php p($isGetTheApp ? 'aria-current="page"' : ''); ?>>
+                <a href="<?php p($urlGenerator->linkToRoute('arbeitszeitcheck.page.getTheApp')); ?>"
+                    title="<?php p($l->t('Official Android apps on Google Play')); ?>"
+                    aria-label="<?php p($l->t('Get the App')); ?>">
+                    <span class="azc-nav__icon" aria-hidden="true"><?php print_unescaped($azcNavIcon('smartphone')); ?></span>
+                    <span><?php p($l->t('Get the App')); ?></span>
                 </a>
             </li>
             <?php if ($showAdminNav): ?>
@@ -424,6 +434,7 @@ $monthClosureEnabledNav = array_key_exists('monthClosureEnabled', $_)
                 </li>
             <?php endif; ?>
         </ul>
+		<?php include __DIR__ . '/../parts/feedback-nav-footer.php'; ?>
     </div>
 
     <!-- Icon rendering now handled by bundled JS: js/common/navigation-icons.js -->

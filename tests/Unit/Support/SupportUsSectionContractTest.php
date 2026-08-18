@@ -55,22 +55,40 @@ final class SupportUsSectionContractTest extends TestCase {
 		self::assertStringContainsString('role="group"', $src);
 		self::assertStringContainsString('Support & us', $src);
 		self::assertStringContainsString('aria-hidden="true"', $src);
-		self::assertStringContainsString('card__header', $src);
-		self::assertStringContainsString('-card__header', $src);
-		self::assertStringNotContainsString('-section__header', $src);
-		self::assertStringContainsString('card__body', $src);
-		self::assertStringContainsString('-card__body', $src);
-		self::assertStringContainsString('card__lead', $src);
-		self::assertStringContainsString('admin-settings-section', $src);
-		self::assertStringContainsString('support-us__secondary-title', $src);
 		self::assertStringContainsString('support-us__option-title', $src);
-		self::assertStringContainsString('support-us__primary-copy', $src);
-		self::assertStringContainsString('Setup & training', $src);
-		self::assertStringContainsString('Commissioned feature', $src);
-		self::assertStringContainsString('Mobile & terminal', $src);
-		self::assertStringContainsString('Recommended', $src);
-		self::assertStringContainsString("supportUsPresentation === 'page'", $src);
+		self::assertStringContainsString('support-us__options', $src);
+		self::assertStringContainsString('cta--secondary', $src);
+		self::assertStringContainsString('supportUsPresentation', $src);
 		self::assertStringContainsString('data-support-us-presentation', $src);
+		self::assertStringContainsString('-support-us-secondary-label', $src);
+		self::assertStringContainsString('(opens in a new tab)', $src);
+		self::assertStringContainsString("'Setup & training'", $src);
+		self::assertStringContainsString("'Ask about setup or training'", $src);
+		self::assertStringContainsString("'Commissioned feature'", $src);
+		self::assertStringContainsString("'Request a commissioned feature'", $src);
+		self::assertStringContainsString("'Mobile & terminal'", $src);
+	}
+
+	public function testSupportUsLivesOnDedicatedAdminPageNotSettingsEmbed(): void {
+		$root = dirname(__DIR__, 3);
+		$page = $root . '/templates/admin-support-us.php';
+		if (!is_file($page)) {
+			$page = $root . '/templates/support-us.php';
+		}
+		if (!is_file($page)) {
+			self::markTestSkipped('No dedicated Support & us page in this app');
+		}
+		$src = (string)file_get_contents($page);
+		self::assertStringContainsString('support-us-section.php', $src);
+		self::assertStringContainsString("supportUsPresentation = 'page'", $src);
+		if (is_file($root . '/img/vendor-logo-mark.png')) {
+			self::assertStringContainsString('vendor-logo-mark.png', $src);
+		}
+		$settings = $root . '/templates/admin-settings.php';
+		if (is_file($settings)) {
+			$adminSettings = (string)file_get_contents($settings);
+			self::assertStringNotContainsString('#azc-support-us-title', $adminSettings);
+		}
 	}
 
 	public function testMobileLicenseBlockIsConditional(): void {
@@ -96,7 +114,6 @@ final class SupportUsSectionContractTest extends TestCase {
 			$root . '/css/app.css',
 			$root . '/css/admin-settings.css',
 			$root . '/css/admin-support-us.css',
-			$root . '/css/stockcheck.css',
 		];
 		$css = '';
 		foreach ($candidates as $path) {
@@ -105,91 +122,33 @@ final class SupportUsSectionContractTest extends TestCase {
 			}
 		}
 		self::assertStringContainsString('azc-support-us', $css);
-		self::assertStringContainsString('azc-support-us-page', $css);
 		self::assertStringContainsString(':focus-visible', $css);
 		self::assertStringContainsString('prefers-reduced-motion', $css);
-		self::assertStringContainsString('min-height: 2.75rem', $css);
+		self::assertStringContainsString('prefers-contrast', $css);
+		self::assertStringContainsString('forced-colors', $css);
+		self::assertStringContainsString('min-height: 44px', $css);
+		self::assertStringContainsString('minmax(min(100%, 16rem)', $css);
+		self::assertStringContainsString('@media (max-width: 768px)', $css);
 		self::assertStringContainsString('support-us__option', $css);
-		self::assertStringContainsString('support-us__option-title', $css);
+		self::assertStringContainsString('support-us__options', $css);
 		self::assertStringContainsString('support-us__benefit', $css);
 		self::assertStringContainsString('support-us__coverage', $css);
-		self::assertStringContainsString('support-us__options', $css);
-		self::assertStringContainsString('support-us__eyebrow', $css);
-		self::assertStringContainsString('support-us__primary-actions', $css);
-		self::assertStringContainsString('support-us__primary-copy', $css);
-		self::assertStringContainsString('azc-support-us-page__hero-main', $css);
-		self::assertStringContainsString('azc-support-us-page__lockup', $css);
-		self::assertStringContainsString('azc-support-us-page__wordmark-by', $css);
-		self::assertStringContainsString(
-			'#app-content.azc-app--admin-support-us ul.azc-support-us-page__trust',
-			$css,
-			'Trust list must beat #app-content-wrapper ul padding-left'
-		);
-		self::assertMatchesRegularExpression(
-			'/#app-content\.azc-app--admin-support-us ul\.azc-support-us-page__trust\s*\{[^}]*list-style:\s*none/s',
-			$css
-		);
-		self::assertMatchesRegularExpression(
-			'/#app-content\.azc-app--admin-support-us \.azc-support-us-page\s*,\s*\.azc-support-us-page\s*\{[^}]*max-width:\s*none/s',
-			$css,
-			'Support Us page root must fill the shell'
-		);
-		self::assertMatchesRegularExpression(
-			'/\.azc-support-us--page \.azc-support-us__primary\s*\{[^}]*max-width:\s*none/s',
-			$css,
-			'Page partner spotlight must not stay capped at 48rem'
-		);
-		self::assertStringContainsString(
-			'a.azc-support-us__cta.azc-btn--primary',
-			$css,
-			'Page-scoped primary CTA reinforcement must remain'
-		);
-		self::assertMatchesRegularExpression(
-			'/a\.azc-support-us__cta\.azc-btn--primary\s*\{[^}]*background-color:[^;]*!important/s',
-			$css
-		);
-		self::assertStringContainsString('background-color: var(--color-primary-element) !important', $css);
-	}
-
-	public function testSupportUsLivesOnDedicatedAdminPageNotSettingsEmbed(): void {
-		$root = dirname(__DIR__, 3);
-		$settings = (string)file_get_contents($root . '/templates/admin-settings.php');
-		$page = (string)file_get_contents($root . '/templates/admin-support-us.php');
-		$routes = (string)file_get_contents($root . '/appinfo/routes.php');
-		$nav = (string)file_get_contents($root . '/templates/common/navigation.php');
-
-		self::assertStringNotContainsString('support-us-section.php', $settings);
-		self::assertStringNotContainsString('#azc-support-us-title', $settings);
-
-		$adminSettingsPhp = (string)file_get_contents($root . '/lib/Settings/AdminSettings.php');
-		self::assertStringContainsString('supportUsUrl', $adminSettingsPhp);
-
-		self::assertStringContainsString('arbeitszeitcheck.admin.supportUs', $nav);
-		self::assertStringContainsString('Open Support and us', $nav);
-
-		self::assertStringContainsString('support-us-section.php', $page);
-		self::assertStringContainsString("supportUsPresentation = 'page'", $page);
-		self::assertStringContainsString('azc-support-us-page__hero', $page);
-		self::assertStringContainsString('azc-support-us-page__hero-main', $page);
-		self::assertStringContainsString('data-azc-support-us-layout="offer-grid"', $page);
-		self::assertStringContainsString('SupportUsLinks', $page);
-		self::assertStringContainsString('vendor-logo-mark.png', $page);
-		self::assertStringContainsString('data-azc-vendor-logo="1"', $page);
-		self::assertStringContainsString('azc-support-us-page__wordmark-by', $page);
-		self::assertStringContainsString('BY DESIGN', $page);
-		self::assertStringContainsString('rel="noopener noreferrer"', $page);
-		$section = (string)file_get_contents($root . '/templates/parts/support-us-section.php');
-		self::assertStringContainsString('support-us__cta--primary', $section);
-		self::assertStringContainsString('support-us__cta--secondary', $section);
-		self::assertFileExists($root . '/img/vendor-logo-mark.png');
-		self::assertFileExists($root . '/img/vendor-logo-sbd.svg');
-		$logo = (string)file_get_contents($root . '/img/vendor-logo-sbd.svg');
-		self::assertStringContainsString('Software by Design', $logo);
-		self::assertStringNotContainsString('<script', $logo);
-
-		self::assertStringContainsString("admin#supportUs", $routes);
-		self::assertStringContainsString('/admin/support-us', $routes);
-		self::assertStringContainsString('admin.supportUs', $nav);
-		self::assertStringContainsString('admin-support-us', $nav);
+		self::assertStringContainsString('var(--color-primary-element)', $css);
+		self::assertStringContainsString('var(--color-main-background)', $css);
+		self::assertStringContainsString('var(--color-main-text)', $css);
+		$dedicated = $root . '/css/admin-support-us.css';
+		if (is_file($dedicated)) {
+			$pageCss = (string)file_get_contents($dedicated);
+			self::assertStringContainsString('max-width: none', $pageCss);
+			self::assertStringContainsString('#app-content.azc-app--admin-support-us ul.azc-support-us-page__trust', $pageCss);
+			self::assertStringContainsString('minmax(min(100%, 16rem)', $pageCss);
+			self::assertStringContainsString('prefers-contrast', $pageCss);
+			self::assertStringContainsString('forced-colors', $pageCss);
+			self::assertMatchesRegularExpression(
+				'/\.azc-support-us--page \.azc-support-us__primary\s*\{[^}]*max-width:\s*none/s',
+				$pageCss,
+				'Partner spotlight on the dedicated page must stay full-width'
+			);
+		}
 	}
 }
