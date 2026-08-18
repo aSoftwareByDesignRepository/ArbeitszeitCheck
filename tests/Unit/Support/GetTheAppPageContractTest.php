@@ -119,4 +119,60 @@ final class GetTheAppPageContractTest extends TestCase
 		self::assertSame(MobileAppLinks::PLAY_STORE_PACKAGE_ID, 'de.softwarebydesign.arbeitszeitcheck');
 		self::assertTrue(MobileAppLinks::PLAY_LISTED);
 	}
+
+	public function testGetTheAppCopyIsTranslatedInFooterLocales(): void
+	{
+		$allowIdentity = [];
+		$locales = ['de', 'fr', 'es', 'da', 'nl', 'it', 'pl', 'sv', 'nb', 'pt_BR'];
+		$keys = $this->getTheAppSourceKeys();
+		self::assertNotEmpty($keys);
+		foreach ($locales as $locale) {
+			$jsonPath = $this->root . '/l10n/' . $locale . '.json';
+			$jsPath = $this->root . '/l10n/' . $locale . '.js';
+			self::assertFileExists($jsonPath, $locale . ' catalog missing');
+			self::assertFileExists($jsPath, $locale . ' JS catalog missing');
+			$decoded = json_decode((string) file_get_contents($jsonPath), true, 512, JSON_THROW_ON_ERROR);
+			self::assertIsArray($decoded);
+			$translations = $decoded['translations'] ?? null;
+			self::assertIsArray($translations);
+			$js = (string) file_get_contents($jsPath);
+			foreach ($keys as $key) {
+				self::assertArrayHasKey($key, $translations, $locale . ' missing Get the App key: ' . $key);
+				$value = $translations[$key];
+				self::assertIsString($value);
+				if (!in_array($key, $allowIdentity, true)) {
+					self::assertNotSame($key, $value, $locale . ' left Get the App copy in English: ' . $key);
+				}
+				$encodedKey = json_encode($key, JSON_UNESCAPED_UNICODE);
+				self::assertIsString($encodedKey);
+				self::assertStringContainsString($encodedKey, $js, $locale . ' JS missing key: ' . $key);
+				$encodedVal = json_encode($value, JSON_UNESCAPED_UNICODE);
+				self::assertIsString($encodedVal);
+				self::assertStringContainsString($encodedVal, $js, $locale . ' JS missing translation for: ' . $key);
+			}
+		}
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function getTheAppSourceKeys(): array
+	{
+		$keys = [];
+		$tpl = (string) file_get_contents($this->root . '/templates/get-the-app.php');
+		if (preg_match_all("/\\\$l->t\\('((?:\\\\'|[^'])*)'\\)/", $tpl, $matches) === false) {
+			self::fail('Failed to parse get-the-app.php l10n keys');
+		}
+		foreach ($matches[1] as $raw) {
+			$keys[] = str_replace("\\'", "'", $raw);
+		}
+		$controller = (string) file_get_contents($this->root . '/lib/Controller/PageController.php');
+		if (preg_match('/function getTheApp\b[\s\S]{0,2500}/', $controller, $block) === 1
+			&& preg_match_all("/->(?:l10n|l)->t\\('((?:\\\\'|[^'])*)'\\)/", $block[0], $ctrlMatches) !== false) {
+			foreach ($ctrlMatches[1] as $raw) {
+				$keys[] = str_replace("\\'", "'", $raw);
+			}
+		}
+		return array_values(array_unique($keys));
+	}
 }
