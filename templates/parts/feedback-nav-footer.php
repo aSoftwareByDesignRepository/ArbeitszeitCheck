@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Nav footer: Report a problem / Suggest an improvement / Open GitHub Issues.
+ * Nav footer: single "Help & Feedback" button that opens a dropdown with
+ * Report a problem / Suggest an improvement / GitHub Issues.
  *
  * Expected variables (set by the including template):
  * @var \OCP\IL10N $l
@@ -17,6 +18,7 @@ declare(strict_types=1);
  */
 
 use OCA\ArbeitszeitCheck\Support\AppFeedbackLinks;
+use OCA\ArbeitszeitCheck\Service\IconCatalog;
 
 $l = $l ?? (\OCP\Util::getL10N('arbeitszeitcheck'));
 $prefix = isset($appFeedbackCssPrefix) && is_string($appFeedbackCssPrefix) && $appFeedbackCssPrefix !== ''
@@ -50,51 +52,82 @@ $ctx = [
 $links = $appFeedbackLinks->forLocale($lang, $ctx);
 $github = (string)($links['githubIssuesUrl'] ?? '');
 $footerId = $prefix . '-nav-footer';
-$titleId = $prefix . '-nav-footer-title';
+$menuId = $prefix . '-feedback-menu';
 $newTab = $l->t('(opens in a new tab)');
 ?>
-<nav
+<div
 	class="<?php p($prefix); ?>-nav-footer"
 	id="<?php p($footerId); ?>"
 	data-app-feedback="1"
 	data-app-feedback-app="<?php p((string)$links['appId']); ?>"
-	aria-labelledby="<?php p($titleId); ?>"
 >
-	<p class="<?php p($prefix); ?>-nav-footer__title" id="<?php p($titleId); ?>">
-		<?php p($l->t('Help')); ?>
-	</p>
-	<ul class="<?php p($prefix); ?>-nav-footer__list">
-		<li>
-			<a
-				class="<?php p($prefix); ?>-nav-footer__link"
-				id="<?php p($prefix); ?>-feedback-problem"
-				href="<?php p((string)$links['problemMailto']); ?>"
-				data-app-feedback-kind="problem"
-			><?php p($l->t('Report a problem')); ?></a>
-		</li>
-		<li>
-			<a
-				class="<?php p($prefix); ?>-nav-footer__link"
-				id="<?php p($prefix); ?>-feedback-idea"
-				href="<?php p((string)$links['ideaMailto']); ?>"
-				data-app-feedback-kind="idea"
-			><?php p($l->t('Suggest an improvement')); ?></a>
-		</li>
-		<?php if ($github !== ''): ?>
-		<li>
-			<a
-				class="<?php p($prefix); ?>-nav-footer__link"
-				id="<?php p($prefix); ?>-feedback-github"
-				href="<?php p($github); ?>"
-				target="_blank"
-				rel="noopener noreferrer"
-			><?php p($l->t('Open GitHub Issues')); ?><span class="<?php p($prefix); ?>-nav-footer__new-tab"><?php p($newTab); ?></span></a>
-		</li>
-		<?php endif; ?>
-	</ul>
-	<p class="<?php p($prefix); ?>-nav-footer__hint">
-		<?php p($l->t('Email is best-effort — no reply SLA. Need booked help? Use Support & us.')); ?>
-	</p>
+	<div class="<?php p($prefix); ?>-nav-footer__popover">
+		<button
+			type="button"
+			class="<?php p($prefix); ?>-nav-footer__trigger"
+			aria-expanded="false"
+			aria-controls="<?php p($menuId); ?>"
+			aria-haspopup="true"
+		>
+			<span class="azc-nav-footer__trigger-icon" aria-hidden="true"><?php
+				print_unescaped(IconCatalog::render('info'));
+			?></span>
+			<span class="azc-nav-footer__trigger-label"><?php p($l->t('Help & Feedback')); ?></span>
+		</button>
+		<ul
+			class="<?php p($prefix); ?>-nav-footer__menu"
+			id="<?php p($menuId); ?>"
+			role="menu"
+			hidden
+		>
+			<li role="none">
+				<a
+					class="<?php p($prefix); ?>-nav-footer__menu-item"
+					role="menuitem"
+					id="<?php p($prefix); ?>-feedback-problem"
+					href="<?php p((string)$links['problemMailto']); ?>"
+					data-app-feedback-kind="problem"
+				>
+					<span class="azc-nav-footer__menu-icon" aria-hidden="true"><?php
+						print_unescaped(IconCatalog::render('circle-alert'));
+					?></span>
+					<?php p($l->t('Report a problem')); ?>
+				</a>
+			</li>
+			<li role="none">
+				<a
+					class="<?php p($prefix); ?>-nav-footer__menu-item"
+					role="menuitem"
+					id="<?php p($prefix); ?>-feedback-idea"
+					href="<?php p((string)$links['ideaMailto']); ?>"
+					data-app-feedback-kind="idea"
+				>
+					<span class="azc-nav-footer__menu-icon" aria-hidden="true"><?php
+						print_unescaped(IconCatalog::render('edit'));
+					?></span>
+					<?php p($l->t('Suggest an improvement')); ?>
+				</a>
+			</li>
+			<?php if ($github !== ''): ?>
+			<li role="none">
+				<a
+					class="<?php p($prefix); ?>-nav-footer__menu-item"
+					role="menuitem"
+					id="<?php p($prefix); ?>-feedback-github"
+					href="<?php p($github); ?>"
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					<span class="azc-nav-footer__menu-icon" aria-hidden="true"><?php
+						print_unescaped(IconCatalog::render('file-text'));
+					?></span>
+					<?php p($l->t('GitHub Issues')); ?>
+					<span class="<?php p($prefix); ?>-nav-footer__new-tab"><?php p($newTab); ?></span>
+				</a>
+			</li>
+			<?php endif; ?>
+		</ul>
+	</div>
 	<script type="application/json" id="<?php p($prefix); ?>-app-feedback-config"><?php
 		print_unescaped(json_encode([
 			'appId' => $links['appId'],
@@ -107,4 +140,4 @@ $newTab = $l->t('(opens in a new tab)');
 			'cssPrefix' => $prefix,
 		], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP));
 	?></script>
-</nav>
+</div>

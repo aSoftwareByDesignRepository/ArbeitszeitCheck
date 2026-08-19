@@ -197,11 +197,65 @@
 		}
 	}
 
+	function installPopover() {
+		var trigger = document.querySelector('.' + PREFIX + '-nav-footer__trigger');
+		if (!trigger) {
+			return;
+		}
+		var menuId = trigger.getAttribute('aria-controls');
+		var menu = menuId ? document.getElementById(menuId) : null;
+		if (!menu) {
+			return;
+		}
+
+		function open() {
+			menu.hidden = false;
+			trigger.setAttribute('aria-expanded', 'true');
+			var first = menu.querySelector('a, button');
+			if (first) {
+				first.focus();
+			}
+		}
+
+		function close(returnFocus) {
+			menu.hidden = true;
+			trigger.setAttribute('aria-expanded', 'false');
+			if (returnFocus) {
+				trigger.focus();
+			}
+		}
+
+		trigger.addEventListener('click', function () {
+			var expanded = trigger.getAttribute('aria-expanded') === 'true';
+			if (expanded) {
+				close(true);
+			} else {
+				open();
+			}
+		});
+
+		document.addEventListener('keydown', function (e) {
+			if (e.key === 'Escape' && !menu.hidden) {
+				close(true);
+			}
+		});
+
+		document.addEventListener('click', function (e) {
+			if (menu.hidden) {
+				return;
+			}
+			if (!trigger.contains(e.target) && !menu.contains(e.target)) {
+				close(false);
+			}
+		});
+	}
+
 	var api = {
 		sanitizePageUrl: sanitizePageUrl,
 		buildMailto: buildMailto,
 		install: function () {
 			refreshNavHrefs();
+			installPopover();
 			installToastHooks();
 		},
 	};

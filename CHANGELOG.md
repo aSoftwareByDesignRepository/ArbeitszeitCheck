@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.9 - 2026-08-19
+
+### Fixed
+
+- **Clock-in / correction API error codes:** return stable, documented error codes on clock-in and correction endpoints so companions and integrations can distinguish transient from permanent failures.
+
+### Changed
+
+- **l10n glossary alignment:** corrected wrong translations (including French "Setup & training") and standardised button labels across all shipped locales to match the cross-app glossary.
+- **Help, Support & Us / Get the App:** WCAG 2.1 AA hardening and translated footer copy for all website footer locales.
+- **CI:** collapsed GitHub Actions to a single PHP syntax-only smoke job; full test suites stay local.
+- **Nextcloud:** `max-version` remains **34** (current stable **34.0.3**).
+
 ## 1.6.8 - 2026-08-12
 
 ### Added

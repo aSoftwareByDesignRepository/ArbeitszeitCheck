@@ -1182,71 +1182,118 @@ dialog.entitlement-explain-dialog::backdrop {
 	min-width: 0;
 	width: 100%;
 	box-sizing: border-box;
-	padding: var(--azc-space-4, 1rem)
-		var(--azc-space-3, 0.75rem)
-		max(var(--azc-space-5, 1.5rem), env(safe-area-inset-bottom, 0px));
+	padding: var(--azc-space-2, 0.5rem) var(--azc-space-3, 0.75rem)
+		max(var(--azc-space-3, 0.75rem), env(safe-area-inset-bottom, 0px));
 	border-top: 1px solid var(--azc-border, color-mix(in srgb, var(--color-main-text) 12%, var(--color-main-background)));
-	background: var(--color-main-background);
+	background: transparent;
 	z-index: 1;
 }
 
-.azc-nav-footer__title {
-	margin: 0 0 var(--azc-space-2, 0.5rem);
-	font-size: var(--azc-fs-xs, 0.75rem);
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	color: var(--color-text-maxcontrast);
+.azc-nav-footer__popover {
+	position: relative;
+	display: flex;
+	justify-content: center;
 }
 
-.azc-nav-footer__list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--azc-space-1, 0.25rem);
-}
-
-.azc-nav-footer__link {
-	display: flex;
-	align-items: center;
-	width: 100%;
-	/* WCAG 2.5.5: px, not rem — Nextcloud root font is 15px (2.75rem = 41.25px). */
+.azc-nav-footer__trigger {
+	display: inline-flex;
+	gap: var(--azc-space-3, 0.75rem);
 	min-height: 44px;
-	min-width: 44px;
-	padding: var(--azc-space-2, 0.5rem);
+	padding: var(--azc-space-2, 0.5rem) var(--azc-space-3, 0.75rem);
 	border-radius: var(--azc-radius-sm, 6px);
 	box-sizing: border-box;
-	color: var(--color-text-maxcontrast);
-	text-decoration: none;
-	font-size: var(--azc-fs-sm, 0.875rem);
-	line-height: var(--azc-line-base, 1.45);
-	white-space: normal;
-	overflow-wrap: anywhere;
-}
-
-.azc-nav-footer__link:hover {
-	background: var(--color-background-hover);
+	border: none;
+	background: none;
 	color: var(--color-main-text);
+	font: inherit;
+	cursor: pointer;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
 }
 
-.azc-nav-footer__link:focus-visible {
-	outline: 2px solid var(--color-primary-element);
+.azc-nav-footer__trigger:hover {
+	background: color-mix(in srgb, var(--color-primary-element) 8%, var(--color-main-background));
+}
+
+.azc-nav-footer__trigger:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 60%, transparent);
 	outline-offset: 2px;
 }
 
-.azc-nav-footer__link:focus:not(:focus-visible),
-.azc-nav-footer__toast-link:focus:not(:focus-visible) {
+.azc-nav-footer__trigger:focus:not(:focus-visible) {
 	outline: none;
 }
 
-.azc-nav-footer__hint {
-	margin: var(--azc-space-2, 0.5rem) 0 0;
-	font-size: var(--azc-fs-xs, 0.75rem);
-	line-height: 1.45;
-	color: var(--color-text-maxcontrast);
-	overflow-wrap: anywhere;
+.azc-nav-footer__trigger-icon .azc-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.azc-nav-footer__menu {
+	position: absolute;
+	bottom: calc(100% + var(--azc-space-2, 0.5rem));
+	left: 50%;
+	transform: translateX(-50%);
+	min-width: max-content;
+	max-width: calc(100vw - 2rem);
+	list-style: none;
+	margin: 0;
+	padding: var(--azc-space-2, 0.5rem);
+	background: var(--color-main-background);
+	border: 1px solid var(--azc-border, var(--color-border));
+	border-radius: var(--azc-radius-md, 12px);
+	box-shadow:
+		0 2px 6px color-mix(in srgb, var(--color-main-text) 6%, transparent),
+		0 8px 24px color-mix(in srgb, var(--color-main-text) 10%, transparent);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	z-index: 100;
+}
+
+.azc-nav-footer__menu[hidden] {
+	display: none;
+}
+
+.azc-nav-footer__menu-item {
+	display: flex;
+	align-items: center;
+	gap: var(--azc-space-3, 0.75rem);
+	min-height: 44px;
+	padding: var(--azc-space-2, 0.5rem) var(--azc-space-3, 0.75rem);
+	border-radius: var(--azc-radius-sm, 6px);
+	color: var(--color-main-text);
+	text-decoration: none;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	white-space: nowrap;
+}
+
+.azc-nav-footer__menu-item:hover {
+	background: color-mix(in srgb, var(--color-primary-element) 8%, var(--color-main-background));
+}
+
+.azc-nav-footer__menu-item:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--color-primary-element) 60%, transparent);
+	outline-offset: -2px;
+}
+
+.azc-nav-footer__menu-item:focus:not(:focus-visible) {
+	outline: none;
+}
+
+.azc-nav-footer__menu-icon .azc-icon {
+	width: 18px;
+	height: 18px;
+}
+
+@media (width < 480px) {
+	.azc-nav-footer__menu {
+		left: var(--azc-space-2, 0.5rem);
+		right: var(--azc-space-2, 0.5rem);
+		transform: none;
+		min-width: 0;
+	}
 }
 
 .azc-nav-footer__new-tab {
@@ -1282,6 +1329,10 @@ dialog.entitlement-explain-dialog::backdrop {
 	outline-offset: 2px;
 }
 
+.azc-nav-footer__toast-link:focus:not(:focus-visible) {
+	outline: none;
+}
+
 @media (prefers-contrast: more) {
 	#app-navigation .azc-nav-footer,
 	.azc-nav .azc-nav-footer,
@@ -1290,27 +1341,34 @@ dialog.entitlement-explain-dialog::backdrop {
 		border-top-color: var(--color-main-text);
 	}
 
-	.azc-nav-footer__link:focus-visible,
+	.azc-nav-footer__menu {
+		border-width: 2px;
+	}
+
+	.azc-nav-footer__trigger:focus-visible,
+	.azc-nav-footer__menu-item:focus-visible,
 	.azc-nav-footer__toast-link:focus-visible {
 		outline-width: 3px;
 	}
 }
 
 @media (forced-colors: active) {
-	.azc-nav-footer__link,
+	.azc-nav-footer__menu-item,
 	.azc-nav-footer__toast-link {
 		forced-color-adjust: none;
 		color: LinkText;
 	}
 
-	.azc-nav-footer__link:focus-visible,
+	.azc-nav-footer__trigger:focus-visible,
+	.azc-nav-footer__menu-item:focus-visible,
 	.azc-nav-footer__toast-link:focus-visible {
 		outline: 3px solid Highlight;
 	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.azc-nav-footer__link,
+	.azc-nav-footer__trigger,
+	.azc-nav-footer__menu-item,
 	.azc-nav-footer__toast-link {
 		transition: none;
 	}

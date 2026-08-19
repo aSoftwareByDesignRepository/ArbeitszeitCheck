@@ -37,6 +37,7 @@ $pageIcons = [
 	'compliance-violations' => 'alert-triangle',
 	'compliance-reports' => 'file-analytics',
 	'settings' => 'settings',
+	'get-the-app' => 'smartphone',
 	'reports' => 'file-text',
 	'substitution-requests' => 'user-check',
 	'manager-dashboard' => 'users',
