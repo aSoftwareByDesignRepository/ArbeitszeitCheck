@@ -3,25 +3,29 @@
  * WCAG: visible :focus-visible on options; list contrast via theme tokens.
  */
 
-#app-content-wrapper .user-picker {
+#app-content-wrapper .user-picker,
+#app-content.azc-app .user-picker {
 	position: relative;
 	max-width: 100%;
 }
 
-#app-content-wrapper .user-picker__control {
+#app-content-wrapper .user-picker__control,
+#app-content.azc-app .user-picker__control {
 	display: flex;
 	align-items: stretch;
 	gap: var(--space-2, 0.5rem);
 }
 
-#app-content-wrapper .user-picker__search {
+#app-content-wrapper .user-picker__search,
+#app-content.azc-app .user-picker__search {
 	flex: 1 1 auto;
 	min-width: 0;
 	width: 100%;
 	max-width: 100%;
 }
 
-#app-content-wrapper .user-picker__clear {
+#app-content-wrapper .user-picker__clear,
+#app-content.azc-app .user-picker__clear {
 	flex: 0 0 auto;
 	align-self: center;
 	min-width: 2.25rem;
@@ -30,12 +34,16 @@
 	border-radius: var(--border-radius, 6px);
 }
 
-#app-content-wrapper .user-picker__clear:focus-visible {
+#app-content-wrapper .user-picker__clear:focus-visible,
+#app-content.azc-app .user-picker__clear:focus-visible {
 	outline: 2px solid var(--arbeitszeitcheck-color-primary, var(--color-primary));
 	outline-offset: 2px;
 }
 
-#app-content-wrapper .user-picker__list {
+#app-content-wrapper .user-picker__list,
+#app-content.azc-app .user-picker__list {
+	/* Beat NC/theme [role="listbox"] flex-row chip layouts — options stack vertically. */
+	display: block;
 	position: absolute;
 	z-index: 50;
 	left: 0;
@@ -43,6 +51,7 @@
 	margin: var(--space-1, 0.25rem) 0 0;
 	padding: var(--space-1, 0.25rem) 0;
 	max-height: min(14rem, 40vh);
+	overflow-x: hidden;
 	overflow-y: auto;
 	list-style: none;
 	background: var(--arbeitszeitcheck-color-main-background, var(--color-main-background));
@@ -51,69 +60,104 @@
 	box-shadow: var(--azc-shadow-md);
 }
 
-#app-content-wrapper .user-picker--in-modal .user-picker__list {
+#app-content-wrapper .user-picker--in-modal .user-picker__list,
+#app-content.azc-app .user-picker--in-modal .user-picker__list {
 	z-index: 10050;
 }
 
-#app-content-wrapper .user-picker__item {
+#app-content-wrapper .user-picker__item,
+#app-content.azc-app .user-picker__item {
 	padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
 	cursor: pointer;
 	line-height: 1.35;
 }
 
-#app-content-wrapper .user-picker__item:hover {
+#app-content-wrapper .user-picker__list button.user-picker__item,
+#app-content.azc-app .user-picker__list button.user-picker__item {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 0.125rem;
+	width: 100%;
+	min-height: 2.75rem;
+	margin: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	appearance: none;
+	-webkit-appearance: none;
+}
+
+#app-content-wrapper .user-picker__item:hover,
+#app-content.azc-app .user-picker__item:hover {
 	background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover));
 }
 
-#app-content-wrapper .user-picker__item:focus {
+#app-content-wrapper .user-picker__item:focus,
+#app-content.azc-app .user-picker__item:focus {
 	outline: none;
 }
 
 #app-content-wrapper .user-picker__item:focus-visible,
-#app-content-wrapper .user-picker__item[aria-selected='true'] {
+#app-content-wrapper .user-picker__item[aria-selected='true'],
+#app-content.azc-app .user-picker__item:focus-visible,
+#app-content.azc-app .user-picker__item[aria-selected='true'] {
 	background: var(--arbeitszeitcheck-color-background-hover, var(--color-background-hover));
 	outline: 2px solid var(--arbeitszeitcheck-color-primary, var(--color-primary));
 	outline-offset: -2px;
 }
 
-#app-content-wrapper .user-picker__item--muted {
+#app-content-wrapper .user-picker__item--muted,
+#app-content.azc-app .user-picker__item--muted {
 	cursor: default;
 	color: var(--arbeitszeitcheck-color-text-lighter, var(--color-text-lighter));
 	font-size: 0.875rem;
 }
 
 #app-content-wrapper .user-picker__item--muted:hover,
-#app-content-wrapper .user-picker__item--muted:focus-visible {
+#app-content-wrapper .user-picker__item--muted:focus-visible,
+#app-content.azc-app .user-picker__item--muted:hover,
+#app-content.azc-app .user-picker__item--muted:focus-visible {
 	background: transparent;
 	outline: none;
 }
 
 /* "Showing the first N matches…" footnote: separated from selectable options. */
-#app-content-wrapper .user-picker__hint {
+#app-content-wrapper .user-picker__hint,
+#app-content.azc-app .user-picker__hint {
 	margin-top: var(--space-1, 0.25rem);
 	border-top: 1px solid var(--arbeitszeitcheck-color-border, var(--color-border));
 	font-style: italic;
 }
 
-#app-content-wrapper .user-picker__name {
+#app-content-wrapper .user-picker__name,
+#app-content.azc-app .user-picker__name {
 	display: block;
 	font-weight: 500;
 	color: var(--arbeitszeitcheck-color-main-text, var(--color-main-text));
 }
 
-#app-content-wrapper .user-picker__meta {
+#app-content-wrapper .user-picker__meta,
+#app-content.azc-app .user-picker__meta {
 	display: block;
 	font-size: 0.8125rem;
 	color: var(--arbeitszeitcheck-color-text-lighter, var(--color-text-lighter));
 	margin-top: 0.125rem;
 }
 
-#app-content-wrapper .user-picker__picker-status {
+#app-content-wrapper .user-picker__picker-status,
+#app-content.azc-app .user-picker__picker-status {
 	margin: var(--space-1, 0.25rem) 0 0;
 }
 
 @media (max-width: 640px) {
-	#app-content-wrapper .user-picker__list {
+	#app-content-wrapper .user-picker__list,
+	#app-content.azc-app .user-picker__list {
 		max-height: min(12rem, 35vh);
 	}
 }

@@ -9,6 +9,7 @@ export default defineConfig({
       'tests/js/admin-policy-legacy-redirect.test.mjs',
       'tests/js/admin-settings-legacy-redirect.test.mjs',
       'tests/js/admin-settings-month-reopen-picker.test.mjs',
+      'tests/js/admin-outlook-ical-subscription.test.mjs',
       'tests/js/employee-settings-legacy-redirect.test.mjs',
     ],
     setupFiles: ['tests/js/vitest.setup.js'],

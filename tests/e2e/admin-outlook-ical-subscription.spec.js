@@ -120,7 +120,7 @@ test.describe('Admin calendar subscription UI', () => {
 		await expect(page.locator('.toast-message')).toHaveCount(0)
 	})
 
-	test('generate, copy, and rotate tokenized subscription link', async ({ page }) => {
+	test('create, copy, and rotate tokenized subscription link', async ({ page }) => {
 		await page.addInitScript(() => {
 			Object.defineProperty(navigator, 'clipboard', {
 				value: { writeText: async () => {} },
@@ -131,22 +131,70 @@ test.describe('Admin calendar subscription UI', () => {
 		await login(page, credsFromEnv('ADMIN'))
 		await wireOutlookMocks(page)
 
+		let createCalls = 0
 		let rotateCalls = 0
-		await page.route('**/api/admin/outlook-ical/rotate', async (route) => {
-			rotateCalls++
+		let activeSubscriptions = []
+
+		await page.route('**/api/admin/outlook-ical/active-subscriptions', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ success: true, subscriptions: activeSubscriptions }),
+			})
+		})
+
+		await page.route('**/api/admin/outlook-ical/create', async (route) => {
+			createCalls++
 			const body = route.request().postDataJSON()
 			expect(body.teamId).toBe(17)
 			expect(body.languageCode).toBe('de')
 			expect(body.managerUserId).toBeUndefined()
-			expect(body.start).toBeUndefined()
-			expect(body.end).toBeUndefined()
+			const subscription = {
+				id: 101,
+				teamId: 17,
+				scopeLabel: 'Support',
+				scopePath: 'HQ / Support',
+				feedLanguageCode: 'de',
+				urlAvailable: true,
+				eventCount: 4,
+				windowStart: '2026-05-19',
+				windowEnd: '2027-08-19',
+				feedUrl: `http://localhost:8081/apps/arbeitszeitcheck/api/outlook-ical/tokenized?token=test-create-${createCalls}&teamId=17`,
+				feedWebcalUrl: `webcal://localhost:8081/apps/arbeitszeitcheck/api/outlook-ical/tokenized?token=test-create-${createCalls}&teamId=17`,
+			}
+			activeSubscriptions = [subscription]
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
 					success: true,
 					eventCount: 4,
-					feedUrl: `http://localhost:8081/apps/arbeitszeitcheck/api/outlook-ical/tokenized?token=test-${rotateCalls}&teamId=17`,
+					subscriptionId: 101,
+					feedUrl: subscription.feedUrl,
+					feedWebcalUrl: subscription.feedWebcalUrl,
+				}),
+			})
+		})
+
+		await page.route('**/api/admin/outlook-ical/rotate', async (route) => {
+			rotateCalls++
+			const body = route.request().postDataJSON()
+			expect(body.teamId).toBe(17)
+			expect(body.languageCode).toBe('de')
+			activeSubscriptions = [{
+				...activeSubscriptions[0],
+				feedUrl: `http://localhost:8081/apps/arbeitszeitcheck/api/outlook-ical/tokenized?token=test-rotate-${rotateCalls}&teamId=17`,
+				feedWebcalUrl: `webcal://localhost:8081/apps/arbeitszeitcheck/api/outlook-ical/tokenized?token=test-rotate-${rotateCalls}&teamId=17`,
+			}]
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					success: true,
+					eventCount: 4,
+					subscriptionId: 101,
+					feedUrl: activeSubscriptions[0].feedUrl,
+					feedWebcalUrl: activeSubscriptions[0].feedWebcalUrl,
 				}),
 			})
 		})
@@ -162,17 +210,17 @@ test.describe('Admin calendar subscription UI', () => {
 		await page.locator('#outlookIcalTeamListbox .user-picker__item').filter({ hasText: 'HQ / Support' }).click()
 
 		await page.locator('#outlookIcalFeedLanguage').selectOption('de')
-		await page.locator('#outlookIcalGenerateBtn').click()
+		await page.locator('#outlookIcalCreateBtn').click()
 
-		await expect(page.locator('#outlookIcalResultCard')).toBeVisible()
-		await expect(page.locator('#outlookIcalFeedUrl')).toHaveValue(/token=test-1/)
-		await expect(page.locator('#outlookIcalEventCount')).toContainText('4')
+		await expect(page.locator('#outlookIcalSubscriptionsLoading')).toBeHidden({ timeout: 15000 })
+		await expect(page.locator('#outlookIcalSubscriptionTable tbody tr')).toBeVisible()
+		await expect(page.locator('#outlookIcalFeedUrl-101')).toHaveValue(/token=test-create-1/)
+		expect(createCalls).toBe(1)
 
-		await page.locator('#outlookIcalCopyBtn').click()
+		await page.locator('.outlook-ical-subscription-table__copy').click()
 		await expect(page.locator('#outlookIcalLive')).toContainText(/copied/i)
 
-		// Feed fetch smoke: valid VCALENDAR + VEVENT.
-		const feedUrl1 = await page.locator('#outlookIcalFeedUrl').inputValue()
+		const feedUrl1 = await page.locator('#outlookIcalFeedUrl-101').inputValue()
 		const feedText1 = await page.evaluate(async (url) => {
 			const res = await fetch(url)
 			return await res.text()
@@ -181,11 +229,11 @@ test.describe('Admin calendar subscription UI', () => {
 		expect(feedText1).toContain('BEGIN:VEVENT')
 
 		page.once('dialog', (dialog) => dialog.accept())
-		await page.locator('#outlookIcalRotateBtn').click()
-		await expect(page.locator('#outlookIcalFeedUrl')).toHaveValue(/token=test-2/)
-		expect(rotateCalls).toBe(2)
+		await page.locator('.outlook-ical-subscription-table__rotate').click()
+		await expect(page.locator('#outlookIcalFeedUrl-101')).toHaveValue(/token=test-rotate-1/)
+		expect(rotateCalls).toBe(1)
 
-		const feedUrl2 = await page.locator('#outlookIcalFeedUrl').inputValue()
+		const feedUrl2 = await page.locator('#outlookIcalFeedUrl-101').inputValue()
 		const feedText2 = await page.evaluate(async (url) => {
 			const res = await fetch(url)
 			return await res.text()
@@ -227,8 +275,8 @@ test.describe('Admin calendar subscription UI', () => {
 
 			const layout = await page.locator('#outlook-ical-subscription').evaluate((section) => {
 				const row = section.querySelector('.form-row--2')
-				const actions = section.querySelector('.card-actions--inline')
-				const generate = section.querySelector('#outlookIcalGenerateBtn')
+				const actions = section.querySelector('.outlook-ical-create__buttons')
+				const generate = section.querySelector('#outlookIcalCreateBtn')
 				const input = section.querySelector('#outlookIcalTeamSearch')
 				const rowColumns = row ? getComputedStyle(row).gridTemplateColumns.split(' ').length : 0
 				return {

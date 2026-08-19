@@ -59,6 +59,10 @@ final class L10nCatalogGauntletContractTest extends TestCase
 			'Open Support & us',
 			'Settings topics',
 			'Choose a topic',
+			'Loading subscription links…',
+			'Could not load subscription links. Please try again.',
+			'Your subscription links',
+			'Create subscription link',
 		];
 		foreach ($critical as $msgid) {
 			self::assertArrayHasKey($msgid, $enT, "en missing {$msgid}");

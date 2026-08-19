@@ -952,6 +952,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IConfig::class),
 				$c->query(IDBConnection::class),
 				$c->query(\OCP\L10N\IFactory::class),
+				$c->query(\OCP\Security\ICrypto::class),
 			);
 		});
 

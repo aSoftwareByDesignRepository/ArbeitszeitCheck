@@ -10,13 +10,14 @@ use OCA\ArbeitszeitCheck\Db\Team;
 use OCA\ArbeitszeitCheck\Db\TeamManagerMapper;
 use OCA\ArbeitszeitCheck\Db\TeamMapper;
 use OCA\ArbeitszeitCheck\Exception\OutlookIcalSubscriptionAuthException;
+use OCA\ArbeitszeitCheck\Exception\OutlookIcalSubscriptionBadRequestException;
 use OCA\ArbeitszeitCheck\Service\OutlookIcalSubscriptionService;
 use OCP\IConfig;
 use OCP\IUserManager;
 use Test\TestCase;
 
 /**
- * Live DB lifecycle for Outlook iCal token rotation (regression for migration 1039).
+ * Live DB lifecycle for Outlook iCal token create/rotate (scope + language).
  *
  * @group integration
  */
@@ -76,9 +77,6 @@ final class OutlookIcalSubscriptionIntegrationTest extends TestCase
 				if ($tenantId !== '') {
 					$db = \OC::$server->get(\OCP\IDBConnection::class);
 					foreach ([$this->teamId, Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID] as $scopeTeamId) {
-						if ($scopeTeamId === null) {
-							continue;
-						}
 						$qb = $db->getQueryBuilder();
 						$qb->delete('azc_outlook_ical_tokens')
 							->where($qb->expr()->eq('tenant_id', $qb->createNamedParameter($tenantId)))
@@ -124,7 +122,7 @@ final class OutlookIcalSubscriptionIntegrationTest extends TestCase
 		self::assertInstanceOf(\OCA\ArbeitszeitCheck\Controller\OutlookIcalSubscriptionController::class, $controller);
 	}
 
-	public function testRepeatedRotationReplacesTokenInSingleScopeRow(): void
+	public function testCreateAllowsOneRowPerScopeAndLanguage(): void
 	{
 		self::assertNotNull($this->teamId);
 
@@ -133,17 +131,46 @@ final class OutlookIcalSubscriptionIntegrationTest extends TestCase
 		$tenantId = (string)\OC::$server->get(IConfig::class)->getSystemValue('instanceid', '');
 		self::assertNotSame('', $tenantId);
 
-		$first = $service->rotateToken($this->managerUid, $this->teamId, 'en');
+		$english = $service->createToken($this->managerUid, $this->teamId, 'en');
+		$german = $service->createToken($this->managerUid, $this->teamId, 'de');
+
+		self::assertNotSame($english['token'], $german['token']);
+
+		$englishRow = $tokenMapper->findForScopeLanguage($tenantId, $this->teamId, 'en');
+		$germanRow = $tokenMapper->findForScopeLanguage($tenantId, $this->teamId, 'de');
+		self::assertNotNull($englishRow);
+		self::assertNotNull($germanRow);
+		self::assertNotSame($englishRow->getId(), $germanRow->getId());
+		self::assertNotSame('', (string)$englishRow->getTokenEncrypted());
+		self::assertNotSame('', (string)$germanRow->getTokenEncrypted());
+
+		$duplicateRejected = false;
+		try {
+			$service->createToken($this->managerUid, $this->teamId, 'en');
+		} catch (OutlookIcalSubscriptionBadRequestException) {
+			$duplicateRejected = true;
+		}
+		self::assertTrue($duplicateRejected);
+	}
+
+	public function testRotateReplacesTokenInPlaceForScopeLanguage(): void
+	{
+		self::assertNotNull($this->teamId);
+
+		$service = \OC::$server->get(OutlookIcalSubscriptionService::class);
+		$tokenMapper = \OC::$server->get(OutlookIcalSubscriptionTokenMapper::class);
+		$tenantId = (string)\OC::$server->get(IConfig::class)->getSystemValue('instanceid', '');
+		self::assertNotSame('', $tenantId);
+
+		$first = $service->createToken($this->managerUid, $this->teamId, 'de');
 		$second = $service->rotateToken($this->managerUid, $this->teamId, 'de');
-		$third = $service->rotateToken($this->managerUid, $this->teamId, 'de');
 
 		self::assertNotSame($first['token'], $second['token']);
-		self::assertNotSame($second['token'], $third['token']);
 
-		$scopeRow = $tokenMapper->findForTeamScope($tenantId, $this->teamId);
+		$scopeRow = $tokenMapper->findForScopeLanguage($tenantId, $this->teamId, 'de');
 		self::assertNotNull($scopeRow);
 		self::assertSame(1, $scopeRow->getIsActive());
-		self::assertSame(hash('sha256', $third['token']), $scopeRow->getTokenHash());
+		self::assertSame(hash('sha256', $second['token']), $scopeRow->getTokenHash());
 
 		$domain = 'integration.test';
 
@@ -153,28 +180,29 @@ final class OutlookIcalSubscriptionIntegrationTest extends TestCase
 		} catch (OutlookIcalSubscriptionAuthException) {
 			$oldTokenRejected = true;
 		}
-		self::assertTrue($oldTokenRejected, 'First rotated token must stop working after second rotation');
+		self::assertTrue($oldTokenRejected, 'First token must stop working after rotation');
 
-		$feed = $service->buildTokenizedFeed($third['token'], $this->teamId, $domain);
+		$feed = $service->buildTokenizedFeed($second['token'], $this->teamId, $domain);
 		self::assertStringContainsString('BEGIN:VCALENDAR', $feed);
 	}
 
-	public function testOrgWideRotationInsertsTeamIdZeroRow(): void
+	public function testOrgWideCreateInsertsTeamIdZeroRow(): void
 	{
 		$service = \OC::$server->get(OutlookIcalSubscriptionService::class);
 		$tokenMapper = \OC::$server->get(OutlookIcalSubscriptionTokenMapper::class);
 		$tenantId = (string)\OC::$server->get(IConfig::class)->getSystemValue('instanceid', '');
 		self::assertNotSame('', $tenantId);
 
-		$result = $service->rotateToken($this->managerUid, Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID, 'de');
+		$result = $service->createToken($this->managerUid, Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID, 'de');
 
 		self::assertNotSame('', $result['token']);
 		self::assertSame('de', $result['feedLanguageCode']);
 
-		$scopeRow = $tokenMapper->findForTeamScope($tenantId, Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID);
+		$scopeRow = $tokenMapper->findForScopeLanguage($tenantId, Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID, 'de');
 		self::assertNotNull($scopeRow);
 		self::assertSame(Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID, $scopeRow->getTeamId());
 		self::assertSame(hash('sha256', $result['token']), $scopeRow->getTokenHash());
+		self::assertNotSame('', (string)$scopeRow->getTokenEncrypted());
 
 		$feed = $service->buildTokenizedFeed($result['token'], Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID, 'integration.test');
 		self::assertStringContainsString('BEGIN:VCALENDAR', $feed);
@@ -186,7 +214,7 @@ final class OutlookIcalSubscriptionIntegrationTest extends TestCase
 		self::assertNotNull($this->teamId);
 
 		$service = \OC::$server->get(OutlookIcalSubscriptionService::class);
-		$result = $service->rotateToken($this->managerUid, $this->teamId, 'de');
+		$result = $service->createToken($this->managerUid, $this->teamId, 'de');
 		$feed = $service->buildTokenizedFeed($result['token'], $this->teamId, 'integration.test');
 
 		self::assertStringContainsString('BEGIN:VCALENDAR', $feed);

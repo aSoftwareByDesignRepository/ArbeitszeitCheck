@@ -881,33 +881,284 @@
 	}
 }
 
-/* Outlook iCal subscription section: mobile base keeps every control full-width and avoids overflow on narrow screens. */
-#outlook-ical-subscription,
+/*
+ * Outlook iCal subscription (#outlook-ical-subscription)
+ * ---------------------------------------------------------------------------
+ * Breakpoint map (mobile-first min-width, aligned with responsive.css / NC):
+ *   Base     — <768px  : single-column grid, stacked actions, 44px touch targets
+ *   768px    — tablet  : two-column scope/language row, inline action buttons, URL+copy row
+ *   1024px   — desktop : compact team-picker clear control, taller feed textarea (legacy)
+ *
+ * Desktop (≥1024px) interactive sizing matches pre-redesign outlook block; layout
+ * chrome (subsections, stat strip, quickstart) is new but does not alter NC shell nav.
+ */
+
+/* Base (<768px): full-width controls, no horizontal overflow, touch-friendly targets. */
+#outlook-ical-subscription {
+	min-width: 0;
+	width: 100%;
+	box-sizing: border-box;
+	overflow-x: clip;
+}
+
 #outlook-ical-subscription .azc-card__body,
-#outlook-ical-subscription .form-fieldset,
 #outlook-ical-subscription .form-group,
+#outlook-ical-subscription .azc-settings-subsection,
 #outlook-ical-subscription .user-picker,
 #outlook-ical-subscription .user-picker__control,
 #outlook-ical-subscription .user-picker__list,
 #outlook-ical-subscription .card-actions--inline,
-#outlook-ical-subscription #outlookIcalResultCard {
+#outlook-ical-subscription #outlookIcalResultCard,
+#outlook-ical-subscription .outlook-ical-url-row,
+#outlook-ical-subscription .azc-stat-strip {
 	min-width: 0;
 	width: 100%;
 	box-sizing: border-box;
 }
 
-#outlook-ical-subscription .form-fieldset {
+#outlook-ical-subscription .azc-card__body {
 	display: flex;
 	flex-direction: column;
-	gap: var(--azc-space-4, 1rem);
+	gap: var(--azc-space-5, 1.5rem);
+}
+
+#outlook-ical-subscription .azc-settings-subsection {
+	margin: 0;
 }
 
 #outlook-ical-subscription .form-group {
 	margin-bottom: 0;
 }
 
+#outlook-ical-subscription .outlook-ical-quickstart__steps {
+	margin: var(--azc-space-3, 0.75rem) 0 0;
+	padding-inline-start: var(--azc-space-5, 1.5rem);
+	display: grid;
+	gap: var(--azc-space-2, 0.5rem);
+	max-width: 65ch;
+	color: var(--azc-text, var(--color-main-text));
+	font-size: var(--azc-fs-md, 1rem);
+	line-height: var(--azc-line-base, 1.45);
+}
+
+#outlook-ical-subscription .outlook-ical-quickstart__note {
+	margin: var(--azc-space-3, 0.75rem) 0 0;
+	max-width: 65ch;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table-section {
+	margin-top: var(--azc-space-5, 1.5rem);
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__intro,
+#outlook-ical-subscription .outlook-ical-subscription-table__empty {
+	margin: var(--azc-space-2, 0.5rem) 0 0;
+	max-width: 65ch;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__loading {
+	margin: var(--azc-space-4, 1rem) 0 0;
+	justify-content: flex-start;
+	padding: var(--azc-space-3, 0.75rem) 0;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__wrap {
+	margin: var(--azc-space-3, 0.75rem) 0 0;
+	min-width: 0;
+	overflow-x: visible;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table {
+	min-width: 0;
+	width: 100%;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table tbody td {
+	vertical-align: top;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table th.azc-table-actions-col,
+#outlook-ical-subscription .outlook-ical-subscription-table td.actions-cell {
+	vertical-align: top;
+	white-space: nowrap;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__url-cell {
+	min-width: 0;
+	max-width: 22rem;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	white-space: normal;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__legacy {
+	display: block;
+	max-width: 22rem;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	color: var(--azc-muted, var(--color-text-maxcontrast));
+	line-height: var(--azc-line-base, 1.45);
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__actions {
+	justify-content: flex-end;
+	flex-wrap: wrap;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__row--highlight td {
+	background: var(
+		--azc-tint-info,
+		color-mix(in srgb, var(--color-primary-element, var(--color-primary)) 14%, var(--color-main-background))
+	);
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__url-input {
+	font-family: var(--font-face-monospace, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+	font-size: var(--azc-fs-sm, 0.875rem);
+	min-width: 0;
+	width: 100%;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__window {
+	font-variant-numeric: tabular-nums;
+	white-space: normal;
+}
+
+#outlook-ical-subscription .outlook-ical-subscription-table__absences {
+	font-variant-numeric: tabular-nums;
+	text-align: end;
+}
+
+#app-content.azc-app--admin-settings #outlook-ical-subscription .outlook-ical-subscription-table.azc-table--responsive tbody td.outlook-ical-subscription-table__url-cell {
+	flex-direction: column;
+	align-items: stretch;
+	text-align: left;
+	gap: var(--azc-space-2, 0.5rem);
+	max-width: none;
+}
+
+#app-content.azc-app--admin-settings #outlook-ical-subscription .outlook-ical-subscription-table.azc-table--responsive tbody td.outlook-ical-subscription-table__url-cell::before {
+	flex: 0 0 auto;
+}
+
+#app-content.azc-app--admin-settings #outlook-ical-subscription .outlook-ical-subscription-table.azc-table--responsive tbody td.outlook-ical-subscription-table__url-cell .outlook-ical-subscription-table__legacy {
+	max-width: none;
+}
+
+@media (min-width: 768px) {
+	#outlook-ical-subscription .outlook-ical-subscription-table thead th:nth-child(3),
+	#outlook-ical-subscription .outlook-ical-subscription-table tbody td.outlook-ical-subscription-table__absences {
+		text-align: end;
+	}
+}
+
+#outlook-ical-subscription .outlook-ical-create__buttons {
+	margin-top: var(--azc-space-4, 1rem);
+}
+
+#outlook-ical-subscription .outlook-ical-create-exists {
+	margin-top: var(--azc-space-4, 1rem);
+}
+
+#outlook-ical-subscription .outlook-ical-callout {
+	margin: 0;
+}
+
+#outlook-ical-subscription .outlook-ical-callout .azc-callout__actions {
+	margin-block-start: var(--azc-space-3, 0.75rem);
+}
+
+#outlook-ical-subscription .outlook-ical-callout .azc-callout__actions .azc-btn {
+	width: 100%;
+	justify-content: center;
+}
+
+#outlook-ical-subscription .outlook-ical-client-help__list {
+	margin: var(--azc-space-3, 0.75rem) 0 0;
+	padding-inline-start: var(--azc-space-5, 1.5rem);
+	display: grid;
+	gap: var(--azc-space-3, 0.75rem);
+	max-width: 65ch;
+	font-size: var(--azc-fs-md, 1rem);
+	line-height: var(--azc-line-base, 1.45);
+}
+
+#app-content.azc-app--admin-settings #outlook-ical-subscription .azc-settings-subsection.outlook-ical-result {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-6, 2rem);
+	margin: 0;
+}
+
+#app-content.azc-app--admin-settings #outlook-ical-subscription .outlook-ical-result > .admin-settings-subsection__title {
+	margin: 0;
+}
+
+#outlook-ical-subscription .outlook-ical-result__stats {
+	margin: 0;
+	gap: var(--azc-space-4, 1rem);
+}
+
+#outlook-ical-subscription .outlook-ical-result__url {
+	margin: 0;
+	padding-block-start: var(--azc-space-5, 1.5rem);
+	border-block-start: 1px solid var(--azc-border, var(--color-border));
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-3, 0.75rem);
+}
+
+#outlook-ical-subscription .outlook-ical-result__url .form-label {
+	margin: 0;
+}
+
+#outlook-ical-subscription .outlook-ical-result__url .form-help {
+	margin: 0;
+}
+
+#outlook-ical-subscription .outlook-ical-result .azc-stat-tile {
+	gap: var(--azc-space-3, 0.75rem);
+	min-height: 100%;
+}
+
+#outlook-ical-subscription .outlook-ical-result .azc-stat-tile__label,
+#outlook-ical-subscription .outlook-ical-result .azc-stat-tile__value,
+#outlook-ical-subscription .outlook-ical-result .azc-stat-tile__meta {
+	display: block;
+	width: 100%;
+}
+
+#outlook-ical-subscription .outlook-ical-result .azc-stat-tile__meta {
+	margin-block-start: auto;
+	padding-block-start: var(--azc-space-2, 0.5rem);
+	max-width: 36ch;
+}
+
+#outlook-ical-subscription .outlook-ical-result__window-value {
+	font-size: clamp(1rem, 1.6vw, 1.25rem);
+	font-weight: 600;
+	line-height: var(--azc-line-base, 1.45);
+	letter-spacing: normal;
+	text-transform: none;
+	font-variant-numeric: tabular-nums;
+}
+
+#outlook-ical-subscription .outlook-ical-result__language-value {
+	font-size: clamp(1.125rem, 2vw, 1.35rem);
+	text-transform: none;
+	letter-spacing: normal;
+	font-weight: 600;
+}
+
+/* Scope + language: single column on phones (overrides admin-settings .form-row--2). */
 #outlook-ical-subscription .form-row--2 {
+	display: grid;
 	grid-template-columns: 1fr;
+	gap: var(--azc-space-4, 1rem);
+	margin-block: var(--azc-space-3, 0.75rem) 0;
 }
 
 #outlook-ical-subscription .form-input,
@@ -917,6 +1168,7 @@
 	width: 100%;
 	max-width: 100%;
 	box-sizing: border-box;
+	font-size: var(--azc-fs-md, 1rem);
 }
 
 #outlook-ical-subscription .user-picker__clear {
@@ -934,16 +1186,45 @@
 
 #outlook-ical-subscription .card-actions--inline .azc-btn {
 	width: 100%;
+	min-height: 2.75rem;
+	justify-content: center;
+}
+
+#outlook-ical-subscription .outlook-ical-url-row {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--azc-space-3, 0.75rem);
+}
+
+#outlook-ical-subscription .outlook-ical-url-row__input {
+	flex: 1 1 auto;
+	min-block-size: 4.5rem;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+	font-size: var(--azc-fs-sm, 0.875rem);
+	word-break: break-all;
+	overflow-wrap: anywhere;
+}
+
+#outlook-ical-subscription .outlook-ical-url-row__copy {
+	flex-shrink: 0;
+	width: 100%;
+	min-height: 2.75rem;
 	justify-content: center;
 }
 
 #outlook-ical-subscription #outlookIcalFeedUrl {
 	inline-size: 100%;
-	min-block-size: 7rem;
+	min-block-size: 4.5rem;
 	resize: vertical;
 }
 
-/* Tablet breakpoint: from 768px upward the date pair can sit side-by-side again while keeping wrapped actions. */
+#outlook-ical-subscription #outlookIcalLive:not(:empty) {
+	margin-block-start: calc(-1 * var(--azc-space-2, 0.5rem));
+	font-size: var(--azc-fs-md, 1rem);
+}
+
+/* 768px — tablet: two-column setup row, horizontal action + URL rows (NC tablet band). */
 @media (min-width: 768px) {
 	#outlook-ical-subscription .form-row--2 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -958,14 +1239,34 @@
 	#outlook-ical-subscription .card-actions--inline .azc-btn {
 		width: auto;
 	}
+
+	#outlook-ical-subscription .outlook-ical-callout .azc-callout__actions .azc-btn {
+		width: auto;
+	}
+
+	#outlook-ical-subscription .outlook-ical-url-row {
+		flex-direction: row;
+		align-items: flex-start;
+	}
+
+	#outlook-ical-subscription .outlook-ical-url-row__copy {
+		width: auto;
+		min-width: 8rem;
+		align-self: stretch;
+	}
 }
 
-/* Desktop breakpoint: from 1024px upward restore existing compact clear-button sizing so desktop remains unchanged. */
+/* 1024px — desktop: restore compact clear control + legacy feed textarea height. */
 @media (min-width: 1024px) {
 	#outlook-ical-subscription .user-picker__clear {
 		min-width: 2.25rem;
 		min-height: 2.25rem;
 		align-self: center;
+	}
+
+	#outlook-ical-subscription #outlookIcalFeedUrl,
+	#outlook-ical-subscription .outlook-ical-url-row__input {
+		min-block-size: 7rem;
 	}
 }
 

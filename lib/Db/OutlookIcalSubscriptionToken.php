@@ -10,7 +10,8 @@ use OCP\AppFramework\Db\Entity;
  * Token backing store for per-team Outlook iCalendar subscriptions.
  *
  * Security properties:
- * - Only hashed tokens are stored (never plaintext).
+ * - Only hashed tokens are stored for feed lookup (never plaintext in token_hash).
+ * - Plaintext tokens are stored encrypted (ICrypto) for admin URL display.
  * - Tokens are tenant-scoped via `tenantId` (Nextcloud `instanceid`).
  * - Authorization is re-checked on every feed request; active tokens cannot outlive permissions.
  */
@@ -30,6 +31,9 @@ class OutlookIcalSubscriptionToken extends Entity
 
 	/** @var string */
 	protected $tokenHash = '';
+
+	/** @var string|null */
+	protected $tokenEncrypted = null;
 
 	/** @var string|null */
 	protected $feedLanguageCode;
@@ -54,6 +58,8 @@ class OutlookIcalSubscriptionToken extends Entity
 	 * @method void setTeamId(int $teamId)
 	 * @method string getTokenHash()
 	 * @method void setTokenHash(string $tokenHash)
+	 * @method string|null getTokenEncrypted()
+	 * @method void setTokenEncrypted(?string $tokenEncrypted)
 	 * @method string|null getFeedLanguageCode()
 	 * @method void setFeedLanguageCode(string $feedLanguageCode)
 	 * @method int getIsActive()
@@ -70,6 +76,7 @@ class OutlookIcalSubscriptionToken extends Entity
 		$this->addType('managerUserId', 'string');
 		$this->addType('teamId', 'integer');
 		$this->addType('tokenHash', 'string');
+		$this->addType('tokenEncrypted', 'string');
 		$this->addType('feedLanguageCode', 'string');
 		$this->addType('isActive', 'smallint');
 		$this->addType('revokedAt', 'datetime');

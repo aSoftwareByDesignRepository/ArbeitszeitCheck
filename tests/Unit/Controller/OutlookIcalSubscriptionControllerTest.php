@@ -31,6 +31,7 @@ use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\L10N\IFactory;
+use OCP\Security\ICrypto;
 use PHPUnit\Framework\TestCase;
 
 final class OutlookIcalSubscriptionControllerTest extends TestCase
@@ -113,6 +114,7 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 		?IConfig $config = null,
 		?IDBConnection $db = null,
 		?IFactory $l10nFactory = null,
+		?ICrypto $crypto = null,
 	): OutlookIcalSubscriptionService {
 		$l10n = $this->createMock(IL10N::class);
 		$l10n->method('t')->willReturnArgument(0);
@@ -120,6 +122,13 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 			$l10nFactory = $this->createMock(IFactory::class);
 			$l10nFactory->method('findLanguage')->willReturn('en');
 			$l10nFactory->method('get')->willReturn($l10n);
+		}
+		if ($crypto === null) {
+			$crypto = $this->createMock(ICrypto::class);
+			$crypto->method('encrypt')->willReturnCallback(static fn (string $value): string => 'enc:' . $value);
+			$crypto->method('decrypt')->willReturnCallback(static function (string $value): string {
+				return str_starts_with($value, 'enc:') ? substr($value, 4) : $value;
+			});
 		}
 
 		return new OutlookIcalSubscriptionService(
@@ -135,6 +144,7 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 			$config ?? $this->createMock(IConfig::class),
 			$db ?? $this->createMock(IDBConnection::class),
 			$l10nFactory,
+			$crypto,
 		);
 	}
 
@@ -304,6 +314,44 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 		self::assertSame(9, $data['teams'][0]['id']);
 	}
 
+	public function testAdminTeamsStripsDemoMarkerFromDisplayLabels(): void
+	{
+		$permissionService = $this->createMock(PermissionService::class);
+		$permissionService->method('isAdmin')->with('admin')->willReturn(true);
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$teamResolver->method('useAppTeams')->willReturn(true);
+
+		$team = new Team();
+		$team->setId(12);
+		$team->setName('Demo-Team (###AZC_DEMO###)');
+		$team->setParentId(null);
+
+		$teamMapper = $this->createMock(TeamMapper::class);
+		$teamMapper->method('findAll')->willReturn([$team]);
+
+		$controller = $this->makeController(
+			userSession: $this->sessionUser('admin'),
+			permissionService: $permissionService,
+			teamResolver: $teamResolver,
+			teamMapper: $teamMapper,
+		);
+		$response = $controller->adminTeams('', 10);
+
+		$data = $response->getData();
+		self::assertTrue($data['success']);
+		$demoTeam = null;
+		foreach ($data['teams'] as $entry) {
+			if ((int)$entry['id'] === 12) {
+				$demoTeam = $entry;
+				break;
+			}
+		}
+		self::assertNotNull($demoTeam);
+		self::assertSame('Demo-Team', $demoTeam['name']);
+		self::assertSame('Demo-Team', $demoTeam['path']);
+		self::assertStringNotContainsString('AZC_DEMO', $demoTeam['name']);
+	}
+
 	public function testAdminTeamsEmptySearchIncludesOrgWideAndConfiguredTeams(): void
 	{
 		$permissionService = $this->createMock(PermissionService::class);
@@ -335,7 +383,7 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 		self::assertSame(9, $data['teams'][1]['id']);
 	}
 
-	public function testAdminRotateTokenReturnsAbsoluteFeedUrlAndEventCount(): void
+	public function testAdminCreateTokenReturnsAbsoluteFeedUrlAndEventCount(): void
 	{
 		$permissionService = $this->createMock(PermissionService::class);
 		$permissionService->method('isAdmin')->with('admin')->willReturn(true);
@@ -370,7 +418,7 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 		$config->method('getSystemValue')->with('instanceid', '')->willReturn('tenant123');
 		$db->expects($this->once())->method('beginTransaction');
 		$db->expects($this->once())->method('commit');
-		$tokenMapper->expects($this->once())->method('findForTeamScope')->with('tenant123', 12)->willReturn(null);
+		$tokenMapper->expects($this->once())->method('findForScopeLanguage')->with('tenant123', 12, 'de')->willReturn(null);
 		$tokenMapper->expects($this->once())->method('insert');
 		$service = $this->makeService(
 			$tokenMapper,
@@ -398,7 +446,7 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 			permissionService: $permissionService,
 			urlGenerator: $urlGenerator,
 		);
-		$response = $controller->adminRotateToken(12, null, 'de');
+		$response = $controller->adminCreateToken(12, null, 'de');
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
@@ -415,7 +463,7 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 		self::assertNotSame('', $data['windowEnd']);
 	}
 
-	public function testAdminRotateTokenOrgWideScopeUsesTeamIdZero(): void
+	public function testAdminCreateTokenOrgWideScopeUsesTeamIdZero(): void
 	{
 		$tokenMapper = $this->createMock(OutlookIcalSubscriptionTokenMapper::class);
 		$absenceMapper = $this->createMock(AbsenceMapper::class);
@@ -438,8 +486,8 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 		$db->expects($this->once())->method('beginTransaction');
 		$db->expects($this->once())->method('commit');
 		$tokenMapper->expects($this->once())
-			->method('findForTeamScope')
-			->with('tenant123', Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID)
+			->method('findForScopeLanguage')
+			->with('tenant123', Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID, 'de')
 			->willReturn(null);
 		$tokenMapper->expects($this->once())->method('insert');
 		$service = $this->makeService(
@@ -464,13 +512,93 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 			permissionService: $permissionService,
 			urlGenerator: $urlGenerator,
 		);
-		$response = $controller->adminRotateToken(Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID, null, 'de');
+		$response = $controller->adminCreateToken(Constants::OUTLOOK_ICAL_ORG_WIDE_TEAM_ID, null, 'de');
 
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		self::assertTrue($data['success']);
 		self::assertSame(5, $data['eventCount']);
 		self::assertStringContainsString('teamId=0', $data['feedUrl']);
+	}
+
+	public function testAdminActiveSubscriptionsReturnsScopeMetadata(): void
+	{
+		$permissionService = $this->createMock(PermissionService::class);
+		$permissionService->method('isAdmin')->with('admin')->willReturn(true);
+		$teamResolver = $this->createMock(TeamResolverService::class);
+		$teamResolver->method('useAppTeams')->willReturn(true);
+
+		$team = new Team();
+		$team->setId(9);
+		$team->setName('Support');
+		$team->setParentId(null);
+		$teamMapper = $this->createMock(TeamMapper::class);
+		$teamMapper->method('findAll')->willReturn([$team]);
+
+		$token = new \OCA\ArbeitszeitCheck\Db\OutlookIcalSubscriptionToken();
+		$token->setId(42);
+		$token->setTeamId(9);
+		$token->setFeedLanguageCode('en');
+		$token->setTokenEncrypted('enc:stored-secret-token');
+		$token->setCreatedAt(new \DateTime('2026-08-19 11:00:00', new \DateTimeZone('UTC')));
+
+		$tokenMapper = $this->createMock(OutlookIcalSubscriptionTokenMapper::class);
+		$tokenMapper->method('findAllActiveForTenant')->with('tenant123')->willReturn([$token]);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getSystemValue')->with('instanceid', '')->willReturn('tenant123');
+		$absenceMapper = $this->createMock(AbsenceMapper::class);
+		$absenceMapper->method('countByUsersAndDateRange')->willReturn(3);
+		$teamMapper->method('find')->with(9)->willReturn($team);
+		$teamMapper->method('getIdsWithDescendants')->with(9)->willReturn([9]);
+		$teamMemberMapper = $this->createMock(\OCA\ArbeitszeitCheck\Db\TeamMemberMapper::class);
+		$teamMemberMapper->method('getMemberUserIdsByTeamIds')->with([9])->willReturn([]);
+		$teamManagerMapper = $this->createMock(TeamManagerMapper::class);
+		$teamManagerMapper->method('getTeamIdsForManager')->with('admin')->willReturn([9]);
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->willReturnCallback(function (string $uid) {
+			$user = $this->createMock(IUser::class);
+			$user->method('isEnabled')->willReturn(true);
+			return $user;
+		});
+
+		$service = $this->makeService(
+			tokenMapper: $tokenMapper,
+			absenceMapper: $absenceMapper,
+			teamMapper: $teamMapper,
+			teamMemberMapper: $teamMemberMapper,
+			teamManagerMapper: $teamManagerMapper,
+			permissionService: $permissionService,
+			userManager: $userManager,
+			config: $config,
+		);
+
+		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->method('linkToRoute')
+			->with('arbeitszeitcheck.outlook_ical_subscription.tokenizedFeed')
+			->willReturn('/apps/arbeitszeitcheck/api/outlook-ical/feed.ics');
+		$urlGenerator->method('getAbsoluteURL')
+			->willReturnCallback(static fn (string $path): string => 'https://cloud.example.test' . $path);
+
+		$controller = $this->makeController(
+			userSession: $this->sessionUser('admin'),
+			service: $service,
+			permissionService: $permissionService,
+			teamResolver: $teamResolver,
+			teamMapper: $teamMapper,
+			urlGenerator: $urlGenerator,
+		);
+		$response = $controller->adminActiveSubscriptions();
+
+		self::assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertTrue($data['success']);
+		self::assertCount(1, $data['subscriptions']);
+		self::assertSame(9, $data['subscriptions'][0]['teamId']);
+		self::assertSame('Support', $data['subscriptions'][0]['scopeLabel']);
+		self::assertSame('en', $data['subscriptions'][0]['feedLanguageCode']);
+		self::assertTrue($data['subscriptions'][0]['urlAvailable']);
+		self::assertStringContainsString('token=', $data['subscriptions'][0]['feedUrl']);
+		self::assertStringStartsWith('webcal://', $data['subscriptions'][0]['feedWebcalUrl']);
 	}
 
 	public function testAdminWebcalLocalAccessReportsEnabledForSystemAdmin(): void

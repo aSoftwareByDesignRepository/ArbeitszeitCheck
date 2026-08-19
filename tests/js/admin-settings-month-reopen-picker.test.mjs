@@ -26,8 +26,9 @@ describe('admin-settings month reopen picker guard', () => {
 		expect(outlookJs).not.toMatch(/l10n\.searchError \|\| 'Failed to load teams\.'/)
 	})
 
-	it('requires scope and calendar language before generating a link', () => {
+	it('requires scope and calendar language before creating a link', () => {
 		expect(outlookJs).toMatch(/#outlookIcalFeedLanguage/)
+		expect(outlookJs).toMatch(/#outlookIcalCreateBtn/)
 		expect(outlookJs).toMatch(/languageCode/)
 		expect(outlookJs).toMatch(/hasFeedLanguageSelected/)
 		expect(outlookJs).toMatch(/effectiveSearchTerm/)

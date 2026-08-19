@@ -223,8 +223,8 @@ final class OutlookIcalSubscriptionController extends Controller
 
 				$entries[] = [
 					'id' => $team->getId(),
-					'name' => $team->getName(),
-					'path' => $path,
+					'name' => $this->sanitizeTeamDisplayLabel($team->getName()),
+					'path' => $this->sanitizeTeamDisplayLabel($path),
 					'orgWide' => false,
 				];
 			}
@@ -238,6 +238,112 @@ final class OutlookIcalSubscriptionController extends Controller
 		]);
 	}
 
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function adminActiveSubscriptions(): JSONResponse
+	{
+		if (($response = $this->requireAppAdmin()) !== null) {
+			return $response;
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return $this->adminBadRequest(
+				OutlookIcalSubscriptionBadRequestException::ERROR_MISSING_PARAMETERS,
+				'Authentication required.'
+			);
+		}
+
+		$records = $this->service->listActiveSubscriptionsForAdmin($user->getUID());
+		$orgWideLabel = $this->l10n->t('All employees');
+		$teamsById = [];
+		if ($this->teamResolver->useAppTeams()) {
+			foreach ($this->teamMapper->findAll() as $team) {
+				$teamsById[$team->getId()] = $team;
+			}
+		}
+
+		$subscriptions = [];
+		foreach ($records as $record) {
+			$teamId = (int)$record['teamId'];
+			if ($record['orgWide']) {
+				$scopeLabel = $orgWideLabel;
+				$scopePath = $orgWideLabel;
+			} elseif (isset($teamsById[$teamId])) {
+				$team = $teamsById[$teamId];
+				$scopeLabel = $this->sanitizeTeamDisplayLabel($team->getName());
+				$scopePath = $this->sanitizeTeamDisplayLabel($this->teamPathLabel($team, $teamsById));
+			} else {
+				$scopeLabel = $this->l10n->t('Team #%d', [$teamId]);
+				$scopePath = $scopeLabel;
+			}
+
+			$entry = [
+				'id' => (int)$record['id'],
+				'teamId' => $teamId,
+				'scopeLabel' => $scopeLabel,
+				'scopePath' => $scopePath,
+				'feedLanguageCode' => $record['feedLanguageCode'],
+				'createdAt' => $record['createdAt'],
+				'orgWide' => $record['orgWide'],
+				'urlAvailable' => $record['urlAvailable'],
+				'eventCount' => (int)$record['eventCount'],
+				'windowStart' => $record['windowStart'],
+				'windowEnd' => $record['windowEnd'],
+			];
+
+			if ($record['urlAvailable'] && is_string($record['token']) && $record['token'] !== '') {
+				$feedUrl = $this->buildTokenizedFeedUrl($record['token'], $teamId);
+				$entry['feedUrl'] = $feedUrl;
+				$entry['feedWebcalUrl'] = $this->buildWebcalFeedUrl($feedUrl);
+			}
+
+			$subscriptions[] = $entry;
+		}
+
+		usort($subscriptions, static function (array $a, array $b): int {
+			if ($a['orgWide'] !== $b['orgWide']) {
+				return $a['orgWide'] ? -1 : 1;
+			}
+
+			$scopeCompare = strcasecmp((string)$a['scopeLabel'], (string)$b['scopeLabel']);
+			if ($scopeCompare !== 0) {
+				return $scopeCompare;
+			}
+
+			return strcasecmp((string)$a['feedLanguageCode'], (string)$b['feedLanguageCode']);
+		});
+
+		return new JSONResponse([
+			'success' => true,
+			'subscriptions' => $subscriptions,
+		]);
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function adminCreateToken(
+		?int $teamId = null,
+		?string $managerUserId = null,
+		?string $languageCode = null,
+	): JSONResponse {
+		[$teamId, $languageCode] = $this->resolveAdminTokenIssueParams($teamId, $languageCode);
+
+		return $this->adminIssueToken(false, $teamId, $languageCode);
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function adminCreateSubscriptionLink(
+		?int $teamId = null,
+		?string $managerUserId = null,
+		?string $languageCode = null,
+	): JSONResponse {
+		return $this->adminCreateToken($teamId, $managerUserId, $languageCode);
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function adminRotateToken(
 		?int $teamId = null,
 		?string $managerUserId = null,
@@ -245,6 +351,31 @@ final class OutlookIcalSubscriptionController extends Controller
 		?string $start = null,
 		?string $end = null,
 	): JSONResponse {
+		[$teamId, $languageCode] = $this->resolveAdminTokenIssueParams($teamId, $languageCode);
+
+		return $this->adminIssueToken(true, $teamId, $languageCode);
+	}
+
+	/**
+	 * Read JSON/form params explicitly so teamId=0 (org-wide) and POST bodies bind reliably.
+	 *
+	 * @return array{0:int|null,1:string|null}
+	 */
+	private function resolveAdminTokenIssueParams(?int $teamId, ?string $languageCode): array
+	{
+		$params = $this->request->getParams();
+		if ($teamId === null && array_key_exists('teamId', $params)) {
+			$teamId = (int)$params['teamId'];
+		}
+		if (($languageCode === null || trim($languageCode) === '') && array_key_exists('languageCode', $params)) {
+			$languageCode = (string)$params['languageCode'];
+		}
+
+		return [$teamId, $languageCode];
+	}
+
+	private function adminIssueToken(bool $rotate, ?int $teamId, ?string $languageCode): JSONResponse
+	{
 		if (($response = $this->requireAppAdmin()) !== null) {
 			return $response;
 		}
@@ -274,12 +405,15 @@ final class OutlookIcalSubscriptionController extends Controller
 		$authorizerUserId = $user->getUID();
 
 		try {
-			$result = $this->service->rotateToken($authorizerUserId, $teamId, $languageCode);
+			$result = $rotate
+				? $this->service->rotateToken($authorizerUserId, $teamId, $languageCode)
+				: $this->service->createToken($authorizerUserId, $teamId, $languageCode);
 
 			$feedUrl = $this->buildTokenizedFeedUrl($result['token'], $teamId);
 
 			return new JSONResponse([
 				'success' => true,
+				'subscriptionId' => $result['subscriptionId'],
 				'eventCount' => $result['eventCount'],
 				'windowStart' => $result['windowStart'],
 				'windowEnd' => $result['windowEnd'],
@@ -290,12 +424,19 @@ final class OutlookIcalSubscriptionController extends Controller
 		} catch (OutlookIcalSubscriptionFeedLimitException $e) {
 			return $this->adminBadRequest($e->errorCode, 'This feed would include too many events for the rolling window.');
 		} catch (OutlookIcalSubscriptionBadRequestException $e) {
+			if ($e->errorCode === OutlookIcalSubscriptionBadRequestException::ERROR_SUBSCRIPTION_ALREADY_EXISTS) {
+				return $this->adminConflict($e->errorCode, $this->badRequestMessage($e->errorCode));
+			}
+			if ($e->errorCode === OutlookIcalSubscriptionBadRequestException::ERROR_SUBSCRIPTION_NOT_FOUND) {
+				return $this->adminNotFound($e->errorCode, $this->badRequestMessage($e->errorCode));
+			}
+
 			return $this->adminBadRequest($e->errorCode, $this->badRequestMessage($e->errorCode));
 		} catch (OutlookIcalSubscriptionAuthException $e) {
 			return $this->adminBadRequest($e->errorCode, 'The selected manager is not allowed to access this team scope.');
 		} catch (\Throwable $e) {
 			\OCP\Server::get(\Psr\Log\LoggerInterface::class)->error(
-				'Outlook iCal subscription token rotation failed',
+				'Outlook iCal subscription token issuance failed',
 				['exception' => $e],
 			);
 
@@ -421,7 +562,19 @@ final class OutlookIcalSubscriptionController extends Controller
 			$depth++;
 		}
 
-		return implode(' / ', $parts);
+		return implode(' / ', array_map(
+			fn (string $part): string => $this->sanitizeTeamDisplayLabel($part),
+			$parts,
+		));
+	}
+
+	private function sanitizeTeamDisplayLabel(string $label): string
+	{
+		$clean = preg_replace('/\s*\(###AZC_DEMO###\)/', '', $label) ?? $label;
+		$clean = preg_replace('/\s*###AZC_DEMO###\s*/', ' ', $clean) ?? $clean;
+		$clean = trim(preg_replace('/\s{2,}/', ' ', $clean) ?? $clean);
+
+		return $clean !== '' ? $clean : $label;
 	}
 
 	private function adminBadRequest(string $code, string $message): JSONResponse
@@ -433,6 +586,24 @@ final class OutlookIcalSubscriptionController extends Controller
 		], Http::STATUS_BAD_REQUEST);
 	}
 
+	private function adminConflict(string $code, string $message): JSONResponse
+	{
+		return new JSONResponse([
+			'success' => false,
+			'code' => $code,
+			'error' => $message,
+		], Http::STATUS_CONFLICT);
+	}
+
+	private function adminNotFound(string $code, string $message): JSONResponse
+	{
+		return new JSONResponse([
+			'success' => false,
+			'code' => $code,
+			'error' => $message,
+		], Http::STATUS_NOT_FOUND);
+	}
+
 	private function badRequestMessage(string $code): string
 	{
 		return match ($code) {
@@ -441,6 +612,8 @@ final class OutlookIcalSubscriptionController extends Controller
 			OutlookIcalSubscriptionBadRequestException::ERROR_INVALID_TEAM_SCOPE => 'Choose a valid team.',
 			OutlookIcalSubscriptionBadRequestException::ERROR_MANAGER_UNAVAILABLE => 'Choose an enabled manager account.',
 			OutlookIcalSubscriptionBadRequestException::ERROR_INVALID_FEED_LANGUAGE => 'Choose a supported calendar language.',
+			OutlookIcalSubscriptionBadRequestException::ERROR_SUBSCRIPTION_ALREADY_EXISTS => 'A subscription link already exists for this scope and calendar language. Rotate the existing link instead.',
+			OutlookIcalSubscriptionBadRequestException::ERROR_SUBSCRIPTION_NOT_FOUND => 'No subscription link exists yet for this scope and calendar language. Create one first.',
 			default => 'Please review the subscription settings and try again.',
 		};
 	}

@@ -34,6 +34,11 @@ const adminRoutes = [
 	{ id: 'settings-access', path: '/apps/arbeitszeitcheck/admin/settings/access', ready: '#admin-settings-form' },
 	{ id: 'admin-users', path: '/apps/arbeitszeitcheck/admin/users', ready: '#employee-list-filter-title' },
 	{ id: 'working-time-models', path: '/apps/arbeitszeitcheck/admin/working-time-models', ready: '#create-model' },
+	{
+		id: 'outlook-subscription',
+		path: '/apps/arbeitszeitcheck/admin/settings/outlook-subscription',
+		ready: '#outlook-ical-subscription',
+	},
 ]
 
 const employeeRoutes = [
@@ -151,6 +156,10 @@ async function assertPolicyChromeTouchTargets(page) {
 					'#users-table .azc-btn',
 					'.btn-delete-entry',
 					'#btn-gdpr-delete',
+					'#outlookIcalCreateBtn',
+					'#outlookIcalTeamSearch',
+					'#outlookIcalFeedLanguage',
+					'#outlookIcalEnableWebcalLocalBtn',
 				].join(', '),
 			),
 		]
@@ -296,6 +305,12 @@ test.describe('ArbeitszeitCheck custom accent colour', () => {
 			expect(after.tintInfo, 'tint-info must still resolve after accent change').not.toEqual('')
 			expect(/,\s*transparent\s*\)\s*$/i.test(after.tintInfo)).toBeFalsy()
 			await runAxe(page, 'custom-accent/notifications@1280px')
+			await gotoReady(
+				page,
+				'/apps/arbeitszeitcheck/admin/settings/outlook-subscription',
+				'#outlook-ical-subscription',
+			)
+			await runAxe(page, 'custom-accent/outlook-subscription@1280px')
 		} finally {
 			resetAccentColor()
 		}

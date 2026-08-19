@@ -19,7 +19,25 @@ class OutlookIcalSubscriptionTokenMapper extends QBMapper
 	}
 
 	/**
-	 * Find the token row for a tenant/team scope (at most one row after migration 1040).
+	 * Find the token row for a tenant/team/language scope (at most one row after migration 1042).
+	 */
+	public function findForScopeLanguage(string $tenantId, int $teamId, string $feedLanguageCode): ?OutlookIcalSubscriptionToken
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('tenant_id', $qb->createNamedParameter($tenantId)))
+			->andWhere($qb->expr()->eq('team_id', $qb->createNamedParameter($teamId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('feed_language_code', $qb->createNamedParameter($feedLanguageCode)));
+
+		$entities = $this->findEntities($qb);
+		return $entities[0] ?? null;
+	}
+
+	/**
+	 * Find the token row for a tenant/team scope (legacy — returns first match only).
+	 *
+	 * @deprecated Prefer {@see findForScopeLanguage}.
 	 */
 	public function findForTeamScope(string $tenantId, int $teamId): ?OutlookIcalSubscriptionToken
 	{
@@ -92,6 +110,21 @@ class OutlookIcalSubscriptionTokenMapper extends QBMapper
 
 		$entities = $this->findEntities($qb);
 		return $entities[0] ?? null;
+	}
+
+	/**
+	 * @return OutlookIcalSubscriptionToken[]
+	 */
+	public function findAllActiveForTenant(string $tenantId): array
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('tenant_id', $qb->createNamedParameter($tenantId)))
+			->andWhere($qb->expr()->eq('is_active', $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT)))
+			->orderBy('team_id', 'ASC');
+
+		return $this->findEntities($qb);
 	}
 
 	/**

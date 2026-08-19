@@ -10,6 +10,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\Absence;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
+use OCA\ArbeitszeitCheck\Db\OutlookIcalSubscriptionToken;
 use OCA\ArbeitszeitCheck\Db\OutlookIcalSubscriptionTokenMapper;
 use OCA\ArbeitszeitCheck\Db\TeamMapper;
 use OCA\ArbeitszeitCheck\Db\TeamMemberMapper;
@@ -23,6 +24,7 @@ use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IUserManager;
 use OCP\L10N\IFactory;
+use OCP\Security\ICrypto;
 
 /**
  * Backend business logic for Outlook RFC 5545 subscription feeds.
@@ -44,6 +46,7 @@ final class OutlookIcalSubscriptionService
 		private readonly IConfig $config,
 		private readonly IDBConnection $db,
 		private readonly IFactory $l10nFactory,
+		private readonly ICrypto $crypto,
 	) {
 	}
 
@@ -100,17 +103,81 @@ final class OutlookIcalSubscriptionService
 	}
 
 	/**
-	 * Rotate the active token for a team/manager scope and return the new plaintext token.
+	 * Create a new subscription token for a scope + calendar language.
 	 *
-	 * The plaintext token is returned exactly once to the caller and never stored.
+	 * @return array{token:string, eventCount:int, windowStart:string, windowEnd:string, feedLanguageCode:string, subscriptionId:int}
 	 *
-	 * @return array{token:string, eventCount:int, windowStart:string, windowEnd:string, feedLanguageCode:string}
+	 * @throws OutlookIcalSubscriptionAuthException|OutlookIcalSubscriptionBadRequestException|OutlookIcalSubscriptionFeedLimitException
+	 */
+	public function createToken(string $managerUserId, int $teamId, string $feedLanguageCode, ?DateTimeImmutable $anchor = null): array
+	{
+		$feedLanguageCode = OutlookIcalSubscriptionLanguageCatalog::assertSupported($feedLanguageCode);
+		$tenantId = $this->tenantId();
+		if ($tenantId === '') {
+			throw new OutlookIcalSubscriptionAuthException(OutlookIcalSubscriptionAuthException::ERROR_FORBIDDEN, 403);
+		}
+
+		if ($this->tokenMapper->findForScopeLanguage($tenantId, $teamId, $feedLanguageCode) !== null) {
+			throw new OutlookIcalSubscriptionBadRequestException(
+				OutlookIcalSubscriptionBadRequestException::ERROR_SUBSCRIPTION_ALREADY_EXISTS
+			);
+		}
+
+		return $this->issueToken($managerUserId, $teamId, $feedLanguageCode, null, $anchor);
+	}
+
+	/**
+	 * Replace the token for an existing scope + calendar language subscription.
+	 *
+	 * @return array{token:string, eventCount:int, windowStart:string, windowEnd:string, feedLanguageCode:string, subscriptionId:int}
 	 *
 	 * @throws OutlookIcalSubscriptionAuthException|OutlookIcalSubscriptionBadRequestException|OutlookIcalSubscriptionFeedLimitException
 	 */
 	public function rotateToken(string $managerUserId, int $teamId, string $feedLanguageCode, ?DateTimeImmutable $anchor = null): array
 	{
 		$feedLanguageCode = OutlookIcalSubscriptionLanguageCatalog::assertSupported($feedLanguageCode);
+		$tenantId = $this->tenantId();
+		if ($tenantId === '') {
+			throw new OutlookIcalSubscriptionAuthException(OutlookIcalSubscriptionAuthException::ERROR_FORBIDDEN, 403);
+		}
+
+		$existing = $this->tokenMapper->findForScopeLanguage($tenantId, $teamId, $feedLanguageCode);
+		if ($existing === null) {
+			throw new OutlookIcalSubscriptionBadRequestException(
+				OutlookIcalSubscriptionBadRequestException::ERROR_SUBSCRIPTION_NOT_FOUND
+			);
+		}
+
+		return $this->issueToken($managerUserId, $teamId, $feedLanguageCode, $existing, $anchor);
+	}
+
+	/**
+	 * Decrypt a stored subscription token for admin display (app admins only at call site).
+	 */
+	public function decryptStoredToken(OutlookIcalSubscriptionToken $tokenRecord): ?string
+	{
+		$encrypted = $tokenRecord->getTokenEncrypted();
+		if ($encrypted === null || $encrypted === '') {
+			return null;
+		}
+
+		try {
+			return $this->crypto->decrypt($encrypted);
+		} catch (\Throwable) {
+			return null;
+		}
+	}
+
+	/**
+	 * @return array{token:string, eventCount:int, windowStart:string, windowEnd:string, feedLanguageCode:string, subscriptionId:int}
+	 */
+	private function issueToken(
+		string $managerUserId,
+		int $teamId,
+		string $feedLanguageCode,
+		?OutlookIcalSubscriptionToken $existing,
+		?DateTimeImmutable $anchor,
+	): array {
 		$preview = $this->previewApprovedAbsenceCount($managerUserId, $teamId, $anchor);
 		$tenantId = $this->tenantId();
 		if ($tenantId === '') {
@@ -122,31 +189,35 @@ final class OutlookIcalSubscriptionService
 			$attemptsRemaining--;
 			$token = KioskCrypto::generateToken(32);
 			$tokenHash = hash('sha256', $token);
+			$tokenEncrypted = $this->crypto->encrypt($token);
 			$now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
 			$createdAt = new \DateTime($now->format('Y-m-d H:i:s'), new \DateTimeZone('UTC'));
 
 			$this->db->beginTransaction();
 			try {
-				$existing = $this->tokenMapper->findForTeamScope($tenantId, $teamId);
 				if ($existing !== null) {
 					$existing->setManagerUserId($managerUserId);
 					$existing->setFeedLanguageCode($feedLanguageCode);
 					$existing->setTokenHash($tokenHash);
+					$existing->setTokenEncrypted($tokenEncrypted);
 					$existing->setIsActive(1);
 					$existing->setRevokedAt(null);
 					$existing->setCreatedAt($createdAt);
 					$this->tokenMapper->update($existing);
+					$subscriptionId = (int)$existing->getId();
 				} else {
-					$entity = new \OCA\ArbeitszeitCheck\Db\OutlookIcalSubscriptionToken();
+					$entity = new OutlookIcalSubscriptionToken();
 					$entity->setTenantId($tenantId);
 					$entity->setManagerUserId($managerUserId);
 					$entity->setTeamId($teamId);
 					$entity->setFeedLanguageCode($feedLanguageCode);
 					$entity->setTokenHash($tokenHash);
+					$entity->setTokenEncrypted($tokenEncrypted);
 					$entity->setIsActive(1);
 					$entity->setRevokedAt(null);
 					$entity->setCreatedAt($createdAt);
 					$this->tokenMapper->insert($entity);
+					$subscriptionId = (int)$entity->getId();
 				}
 
 				$this->db->commit();
@@ -157,17 +228,26 @@ final class OutlookIcalSubscriptionService
 					'windowStart' => $preview['windowStart'],
 					'windowEnd' => $preview['windowEnd'],
 					'feedLanguageCode' => $feedLanguageCode,
+					'subscriptionId' => $subscriptionId,
 				];
 			} catch (\Throwable $e) {
 				$this->db->rollBack();
 				if ($attemptsRemaining > 0 && $this->isUniqueConstraintViolation($e)) {
+					if ($existing === null) {
+						$existing = $this->tokenMapper->findForScopeLanguage($tenantId, $teamId, $feedLanguageCode);
+						if ($existing !== null) {
+							throw new OutlookIcalSubscriptionBadRequestException(
+								OutlookIcalSubscriptionBadRequestException::ERROR_SUBSCRIPTION_ALREADY_EXISTS
+							);
+						}
+					}
 					continue;
 				}
 				throw $e;
 			}
 		}
 
-		throw new \RuntimeException('Outlook iCal token rotation exhausted retries unexpectedly.');
+		throw new \RuntimeException('Outlook iCal token issuance exhausted retries unexpectedly.');
 	}
 
 	/**
@@ -480,6 +560,84 @@ final class OutlookIcalSubscriptionService
 		return OutlookIcalSubscriptionLanguageCatalog::resolveDefault(
 			(string)$this->l10nFactory->findLanguage('arbeitszeitcheck')
 		);
+	}
+
+	/**
+	 * Active subscription metadata for admin UI (no secret URLs — only hashes are stored).
+	 *
+	 * @return list<array{id:int, teamId:int, feedLanguageCode:string, createdAt:string, orgWide:bool, urlAvailable:bool}>
+	 */
+	public function listActiveSubscriptionRecords(): array
+	{
+		$tenantId = $this->tenantId();
+		if ($tenantId === '') {
+			return [];
+		}
+
+		$records = [];
+		foreach ($this->tokenMapper->findAllActiveForTenant($tenantId) as $token) {
+			$teamId = (int)$token->getTeamId();
+			$createdAt = $token->getCreatedAt();
+			$records[] = [
+				'id' => (int)$token->getId(),
+				'teamId' => $teamId,
+				'feedLanguageCode' => (string)($token->getFeedLanguageCode() ?? ''),
+				'createdAt' => $createdAt !== null ? $createdAt->format(\DateTimeInterface::ATOM) : '',
+				'orgWide' => self::isOrgWideScope($teamId),
+				'urlAvailable' => $this->decryptStoredToken($token) !== null,
+			];
+		}
+
+		return $records;
+	}
+
+	/**
+	 * Admin-only metadata including decrypted token when stored (for URL display).
+	 *
+	 * @return list<array{id:int, teamId:int, feedLanguageCode:string, createdAt:string, orgWide:bool, urlAvailable:bool, token:?string, eventCount:int, windowStart:string, windowEnd:string}>
+	 */
+	public function listActiveSubscriptionsForAdmin(string $managerUserId): array
+	{
+		$tenantId = $this->tenantId();
+		if ($tenantId === '') {
+			return [];
+		}
+
+		$records = [];
+		/** @var array<int, array{eventCount:int, windowStart:string, windowEnd:string}> $previewByTeamId */
+		$previewByTeamId = [];
+		foreach ($this->tokenMapper->findAllActiveForTenant($tenantId) as $token) {
+			$teamId = (int)$token->getTeamId();
+			$createdAt = $token->getCreatedAt();
+			$plaintext = $this->decryptStoredToken($token);
+			if (!array_key_exists($teamId, $previewByTeamId)) {
+				try {
+					$previewByTeamId[$teamId] = $this->previewApprovedAbsenceCount($managerUserId, $teamId);
+				} catch (\Throwable) {
+					$previewByTeamId[$teamId] = [
+						'eventCount' => 0,
+						'windowStart' => '',
+						'windowEnd' => '',
+					];
+				}
+			}
+			$preview = $previewByTeamId[$teamId];
+
+			$records[] = [
+				'id' => (int)$token->getId(),
+				'teamId' => $teamId,
+				'feedLanguageCode' => (string)($token->getFeedLanguageCode() ?? ''),
+				'createdAt' => $createdAt !== null ? $createdAt->format(\DateTimeInterface::ATOM) : '',
+				'orgWide' => self::isOrgWideScope($teamId),
+				'urlAvailable' => $plaintext !== null,
+				'token' => $plaintext,
+				'eventCount' => (int)$preview['eventCount'],
+				'windowStart' => (string)$preview['windowStart'],
+				'windowEnd' => (string)$preview['windowEnd'],
+			];
+		}
+
+		return $records;
 	}
 
 	private function tenantId(): string
