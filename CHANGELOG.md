@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.12 - 2026-08-20
+
+### Added
+
+- **Outlook iCal subscriptions (admin):** privacy-safe team absence feeds for Outlook and other calendar clients. One subscription link per **scope + calendar language** (team or org-wide); separate **Create** and **Rotate** actions; encrypted token storage with recoverable admin URLs; responsive design-system table with copy/rotate per row, loading state, and stale-request guards.
+
+### Changed
+
+- **Outlook iCal admin UX:** card grid replaced with an accessible table (scope, language, approved absences, rolling window, subscription URL, actions); legacy pre-migration tokens show a rotate notice until renewed once.
+- **l10n:** Outlook subscription strings translated across all shipped locales (en, de, fr, es, da, nl, it, pl, sv, nb, pt_BR).
+- **Nextcloud:** `max-version` remains **34** (current stable **34.0.3**).
+
+### Fixed
+
+- **Outlook iCal create API:** admin UI now calls the canonical create route (`/api/admin/outlook-ical/create`) so new links are created reliably (no spurious 404).
+
+### Security
+
+- **Outlook iCal tokens:** subscription secrets encrypted at rest (`token_encrypted`); public feed auth remains hash-only; unique constraint on `(tenant_id, team_id, feed_language_code)` prevents duplicate active links per scope/language.
+
 ## 1.6.9 - 2026-08-19
 
 ### Fixed
