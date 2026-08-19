@@ -4357,9 +4357,9 @@ OC.L10N.register(
 	"Zeiteinträge von Mitarbeitenden öffnen" : "Open employee time entries",
 	"Zug" : "Zug",
 	"Zurich" : "Zurich",
-	"_{count} day ago_::_{count} days ago_" : ["{count} day ago","{count} days ago"],
-	"_{count} hour ago_::_{count} hours ago_" : ["{count} hour ago","{count} hours ago"],
-	"_{count} minute ago_::_{count} minutes ago_" : ["{count} minute ago","{count} minutes ago"],
+	"_{count} day ago_::_{count} days ago_" : ["{count} day ago", "{count} days ago"],
+	"_{count} hour ago_::_{count} hours ago_" : ["{count} hour ago", "{count} hours ago"],
+	"_{count} minute ago_::_{count} minutes ago_" : ["{count} minute ago", "{count} minutes ago"],
 	"absence" : "Absence",
 	"absence_approved" : "Absence approved",
 	"absence_auto_approved" : "Absence auto-approved",
@@ -4803,7 +4803,6 @@ OC.L10N.register(
 	"Privacy policy for the mobile app" : "Privacy policy for the mobile app",
 	"Privacy policy for the terminal app" : "Privacy policy for the terminal app",
 	"More information" : "More information",
-	"Official Android apps for phone and foyer terminal." : "Official Android apps for phone and foyer terminal."
-	},
-	"nplurals=2; plural=(n != 1);"
-);
+	"Official Android apps for phone and foyer terminal." : "Official Android apps for phone and foyer terminal.",
+},
+"nplurals=2; plural=(n != 1);");

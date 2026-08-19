@@ -4357,9 +4357,9 @@ OC.L10N.register(
 	"Zeiteinträge von Mitarbeitenden öffnen" : "Apri registrazioni tempo dipendenti",
 	"Zug" : "Zug",
 	"Zurich" : "Zurigo",
-	"_{count} day ago_::_{count} days ago_" : ["{count} giorno fa","{count} giorni fa"],
-	"_{count} hour ago_::_{count} hours ago_" : ["{count} ora fa","{count} ore fa"],
-	"_{count} minute ago_::_{count} minutes ago_" : ["{count} minuto fa","{count} minuti fa"],
+	"_{count} day ago_::_{count} days ago_" : ["{count} giorno fa", "{count} giorni fa"],
+	"_{count} hour ago_::_{count} hours ago_" : ["{count} ora fa", "{count} ore fa"],
+	"_{count} minute ago_::_{count} minutes ago_" : ["{count} minuto fa", "{count} minuti fa"],
 	"absence" : "Assenza",
 	"absence_approved" : "Assenza approvata",
 	"absence_auto_approved" : "Assenza approvata automaticamente",
@@ -4803,7 +4803,6 @@ OC.L10N.register(
 	"Privacy policy for the mobile app" : "Informativa sulla privacy dell’app mobile",
 	"Privacy policy for the terminal app" : "Informativa sulla privacy dell’app Terminal",
 	"More information" : "Ulteriori informazioni",
-	"Official Android apps for phone and foyer terminal." : "App Android ufficiali per telefono e terminale di accoglienza."
-	},
-	"nplurals=2; plural=(n != 1);"
-);
+	"Official Android apps for phone and foyer terminal." : "App Android ufficiali per telefono e terminale di accoglienza.",
+},
+"nplurals=2; plural=(n != 1);");

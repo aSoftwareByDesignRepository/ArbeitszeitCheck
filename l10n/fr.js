@@ -4357,9 +4357,9 @@ OC.L10N.register(
 	"Zeiteinträge von Mitarbeitenden öffnen" : "Ouvrir les entrées de temps des employés",
 	"Zug" : "Zug",
 	"Zurich" : "Zurich (canton)",
-	"_{count} day ago_::_{count} days ago_" : ["il y a {count} jour","il y a {count} jours"],
-	"_{count} hour ago_::_{count} hours ago_" : ["il y a {count} heure","il y a {count} heures"],
-	"_{count} minute ago_::_{count} minutes ago_" : ["il y a {count} minute","il y a {count} minutes"],
+	"_{count} day ago_::_{count} days ago_" : ["il y a {count} jour", "il y a {count} jours"],
+	"_{count} hour ago_::_{count} hours ago_" : ["il y a {count} heure", "il y a {count} heures"],
+	"_{count} minute ago_::_{count} minutes ago_" : ["il y a {count} minute", "il y a {count} minutes"],
 	"absence" : "Absence enregistrée",
 	"absence_approved" : "Absence approuvée",
 	"absence_auto_approved" : "Absence approuvée automatiquement",
@@ -4803,7 +4803,6 @@ OC.L10N.register(
 	"Privacy policy for the mobile app" : "Politique de confidentialité de l’app mobile",
 	"Privacy policy for the terminal app" : "Politique de confidentialité de l’app Terminal",
 	"More information" : "Plus d’informations",
-	"Official Android apps for phone and foyer terminal." : "Applications Android officielles pour téléphone et terminal d’accueil."
-	},
-	"nplurals=2; plural=(n > 1);"
-);
+	"Official Android apps for phone and foyer terminal." : "Applications Android officielles pour téléphone et terminal d’accueil.",
+},
+"nplurals=2; plural=(n > 1);");

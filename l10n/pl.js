@@ -1507,7 +1507,7 @@ OC.L10N.register(
 	"File Format" : "Format pliku",
 	"Fill in the type, dates, and optional reason and substitute." : "Wypełnij typ, daty oraz opcjonalnie powód i zastępcę.",
 	"Fill planned hours for the date range" : "Wypełnij zaplanowane godziny dla zakresu dat",
-	"Filter" : "Filter",
+	"Filter" : "Filtruj",
 	"Filter absence requests by date or status" : "Filtruj wnioski o nieobecność według daty lub statusu",
 	"Filter activity log" : "Filtruj dziennik aktywności",
 	"Filter by action type" : "Filtrujen op actietype",
@@ -1773,7 +1773,7 @@ OC.L10N.register(
 	"Immediately" : "Natychmiast",
 	"Impact preview failed" : "Podgląd wpływu nie powiódł się",
 	"Impact preview unavailable." : "Przegląd wpływu niedostępny.",
-	"Import" : "Import",
+	"Import" : "Importuj",
 	"Import file is too large (max 1 MB)" : "Plik importu jest za duży (maks. 1 MB)",
 	"Import file is too large (max 1 MB)." : "Plik importu jest za duży (maks. 1 MB).",
 	"Important: This is best-effort email delivery, not a guaranteed real-time calendar sync. Delivery can be delayed or fail due to mail server\/network issues. Source of truth remains ArbeitszeitCheck." : "Ważne: jest to w najlepszym wypadku dostarczanie wiadomości e-mail i nie gwarantuje się synchronizacji kalendarza w czasie rzeczywistym. Dostawa może być opóźniona lub nieudana z powodu problemów z serwerem pocztowym lub siecią. Źródłem prawdy pozostaje ArbeitszeitCheck.",
@@ -4357,9 +4357,9 @@ OC.L10N.register(
 	"Zeiteinträge von Mitarbeitenden öffnen" : "Otwórz wpisy czasu pracy pracowników",
 	"Zug" : "Zug",
 	"Zurich" : "Zurych",
-	"_{count} day ago_::_{count} days ago_" : ["{count} dzień temu","{count} dni temu","{count} dni temu"],
-	"_{count} hour ago_::_{count} hours ago_" : ["{count} godzinę temu","{count} godziny temu","{count} godzin temu"],
-	"_{count} minute ago_::_{count} minutes ago_" : ["{count} minutę temu","{count} minuty temu","{count} minut temu"],
+	"_{count} day ago_::_{count} days ago_" : ["{count} dzień temu", "{count} dni temu", "{count} dni temu"],
+	"_{count} hour ago_::_{count} hours ago_" : ["{count} godzinę temu", "{count} godziny temu", "{count} godzin temu"],
+	"_{count} minute ago_::_{count} minutes ago_" : ["{count} minutę temu", "{count} minuty temu", "{count} minut temu"],
 	"absence" : "Nieobecność",
 	"absence_approved" : "Nieobecność zatwierdzona",
 	"absence_auto_approved" : "Absence auto-zatwierdzony",
@@ -4803,7 +4803,6 @@ OC.L10N.register(
 	"Privacy policy for the mobile app" : "Polityka prywatności aplikacji mobilnej",
 	"Privacy policy for the terminal app" : "Polityka prywatności aplikacji Terminal",
 	"More information" : "Więcej informacji",
-	"Official Android apps for phone and foyer terminal." : "Oficjalne aplikacje Android na telefon i terminal recepcyjny."
-	},
-	"nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);"
-);
+	"Official Android apps for phone and foyer terminal." : "Oficjalne aplikacje Android na telefon i terminal recepcyjny.",
+},
+"nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);");

@@ -1507,7 +1507,7 @@ OC.L10N.register(
 	"File Format" : "Bestandsformaat",
 	"Fill in the type, dates, and optional reason and substitute." : "Vul het type, datums en optioneel reden en plaatsvervanger in.",
 	"Fill planned hours for the date range" : "Geplande uren voor het datumbereik invullen",
-	"Filter" : "Filter",
+	"Filter" : "Filteren",
 	"Filter absence requests by date or status" : "Afwezigheidsverzoeken filteren op datum of status",
 	"Filter activity log" : "Activiteitenlogboek filteren",
 	"Filter by action type" : "Filteren op actietype",
@@ -4357,9 +4357,9 @@ OC.L10N.register(
 	"Zeiteinträge von Mitarbeitenden öffnen" : "Tijdregistraties van medewerkers openen",
 	"Zug" : "Zug",
 	"Zurich" : "Zürich",
-	"_{count} day ago_::_{count} days ago_" : ["{count} dag geleden","{count} dagen geleden"],
-	"_{count} hour ago_::_{count} hours ago_" : ["{count} uur geleden","{count} uur geleden"],
-	"_{count} minute ago_::_{count} minutes ago_" : ["{count} minuut geleden","{count} minuten geleden"],
+	"_{count} day ago_::_{count} days ago_" : ["{count} dag geleden", "{count} dagen geleden"],
+	"_{count} hour ago_::_{count} hours ago_" : ["{count} uur geleden", "{count} uur geleden"],
+	"_{count} minute ago_::_{count} minutes ago_" : ["{count} minuut geleden", "{count} minuten geleden"],
 	"absence" : "Afwezigheid",
 	"absence_approved" : "Afwezigheid goedgekeurd",
 	"absence_auto_approved" : "Afwezigheid automatisch goedgekeurd",
@@ -4803,7 +4803,6 @@ OC.L10N.register(
 	"Privacy policy for the mobile app" : "Privacybeleid van de mobiele app",
 	"Privacy policy for the terminal app" : "Privacybeleid van de Terminal-app",
 	"More information" : "Meer informatie",
-	"Official Android apps for phone and foyer terminal." : "Officiële Android-apps voor telefoon en ontvangstterminal."
-	},
-	"nplurals=2; plural=(n != 1);"
-);
+	"Official Android apps for phone and foyer terminal." : "Officiële Android-apps voor telefoon en ontvangstterminal.",
+},
+"nplurals=2; plural=(n != 1);");
