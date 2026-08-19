@@ -25,6 +25,7 @@ use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModel;
 use OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModel;
 use OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper;
+use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IGroupManager;
 use OCP\IUserManager;
@@ -39,6 +40,7 @@ class GenerateTestDataCommand extends Command
 	private const DEMO_MARKER = '###AZC_DEMO###';
 
 	public function __construct(
+		private IConfig $config,
 		private IDBConnection $db,
 		private IUserManager $userManager,
 		private IGroupManager $groupManager,
@@ -61,7 +63,8 @@ class GenerateTestDataCommand extends Command
 			->setDescription('Insert demo time entries, absences, and optional compliance data for development (not for production).')
 			->addOption('user', 'u', InputOption::VALUE_REQUIRED, 'Nextcloud user id (UID). If omitted, the first admin user is used.')
 			->addOption('weeks', 'w', InputOption::VALUE_REQUIRED, 'How many weeks of weekday entries to generate (default: 8).', '8')
-			->addOption('with-team', null, InputOption::VALUE_NONE, 'Create a demo app team and add the user as member + manager (if not already present).')
+			->addOption('with-team', null, InputOption::VALUE_NONE, 'Enable app-owned teams, create a demo app team, and add the user as manager (and member unless --team-member is set).')
+			->addOption('team-member', null, InputOption::VALUE_REQUIRED, 'Additional Nextcloud user id to add as demo team member (recommended so the calendar feed shows absences for more than one person).')
 			->addOption('with-violations', null, InputOption::VALUE_NONE, 'Insert a few demo compliance violations.')
 			->addOption('with-overnight', null, InputOption::VALUE_NONE, 'Add one completed time entry crossing midnight (22:00 → next day 06:00) for export/split testing.')
 			->addOption('clear-demo', null, InputOption::VALUE_NONE, 'Remove rows previously created by this command for the target user (matched by demo marker), then continue unless --clear-only.')
@@ -124,8 +127,18 @@ class GenerateTestDataCommand extends Command
 			$insertedViolations = $this->seedViolations($userId);
 		}
 
+		$teamMemberId = null;
 		if ((bool)$input->getOption('with-team')) {
-			$this->ensureDemoTeam($io, $userId);
+			$teamMemberRaw = $input->getOption('team-member');
+			if ($teamMemberRaw !== null && $teamMemberRaw !== '') {
+				$teamMemberId = (string)$teamMemberRaw;
+				if (!$this->userManager->userExists($teamMemberId)) {
+					$io->error('Team member user does not exist: ' . $teamMemberId);
+					return Command::FAILURE;
+				}
+			}
+			$this->enableAppTeams($io);
+			$this->ensureDemoTeam($io, $userId, $teamMemberId);
 		}
 
 		$io->success(sprintf(
@@ -134,7 +147,7 @@ class GenerateTestDataCommand extends Command
 			$insertedEntries,
 			$insertedAbsences,
 			$insertedViolations,
-			$input->getOption('with-team') ? 'yes' : 'skipped'
+			$input->getOption('with-team') ? 'yes' . ($teamMemberId !== null ? ' (member: ' . $teamMemberId . ')' : '') : 'skipped'
 		));
 
 		return Command::SUCCESS;
@@ -498,12 +511,30 @@ class GenerateTestDataCommand extends Command
 		return $n;
 	}
 
-	private function ensureDemoTeam(SymfonyStyle $io, string $userId): void
+	private function enableAppTeams(SymfonyStyle $io): void
+	{
+		$current = $this->config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0');
+		if ($current === '1') {
+			$io->note('App-owned teams already enabled.');
+			return;
+		}
+		$this->config->setAppValue('arbeitszeitcheck', 'use_app_teams', '1');
+		$io->note('Enabled app-owned teams (use_app_teams=1).');
+	}
+
+	private function ensureDemoTeam(SymfonyStyle $io, string $managerUserId, ?string $memberUserId): void
 	{
 		$name = 'Demo-Team (' . self::DEMO_MARKER . ')';
 		foreach ($this->teamMapper->findAll() as $team) {
 			if ($team->getName() === $name) {
-				$this->ensureTeamLinks($team->getId(), $userId);
+				$this->ensureTeamManagerLink($team->getId(), $managerUserId);
+				if ($memberUserId !== null) {
+					$this->ensureTeamMemberLink($team->getId(), $memberUserId);
+					$this->ensureUserWorkingTimeModel($memberUserId, $this->ensureWorkingTimeModel($io));
+					$this->seedMemberAbsencesForOutlookFeed($memberUserId);
+				} else {
+					$this->ensureTeamMemberLink($team->getId(), $managerUserId);
+				}
 				$io->note('Demo team already exists (id ' . $team->getId() . ').');
 				return;
 			}
@@ -516,32 +547,101 @@ class GenerateTestDataCommand extends Command
 		$team->setSortOrder(0);
 		$team->setCreatedAt($now);
 		$this->teamMapper->insert($team);
-		$this->ensureTeamLinks($team->getId(), $userId);
+		$this->ensureTeamManagerLink($team->getId(), $managerUserId);
+		if ($memberUserId !== null) {
+			$this->ensureTeamMemberLink($team->getId(), $memberUserId);
+			$this->ensureUserWorkingTimeModel($memberUserId, $this->ensureWorkingTimeModel($io));
+			$this->seedMemberAbsencesForOutlookFeed($memberUserId);
+		} else {
+			$this->ensureTeamMemberLink($team->getId(), $managerUserId);
+		}
 		$io->note('Created demo team id ' . $team->getId());
 	}
 
-	private function ensureTeamLinks(int $teamId, string $userId): void
+	private function ensureTeamMemberLink(int $teamId, string $userId): void
 	{
-		$isMember = false;
 		foreach ($this->teamMemberMapper->findByTeamId($teamId) as $m) {
 			if ($m->getUserId() === $userId) {
-				$isMember = true;
-				break;
+				return;
 			}
 		}
-		if (!$isMember) {
-			$this->teamMemberMapper->addMember($teamId, $userId);
-		}
+		$this->teamMemberMapper->addMember($teamId, $userId);
+	}
 
-		$hasManager = false;
+	private function ensureTeamManagerLink(int $teamId, string $userId): void
+	{
 		foreach ($this->teamManagerMapper->findByTeamId($teamId) as $mgr) {
 			if ($mgr->getUserId() === $userId) {
-				$hasManager = true;
-				break;
+				return;
 			}
 		}
-		if (!$hasManager) {
-			$this->teamManagerMapper->addManager($teamId, $userId);
+		$this->teamManagerMapper->addManager($teamId, $userId);
+	}
+
+	/**
+	 * Approved absences for a team member so Outlook iCal subscription previews show events.
+	 * Manager absences are never exported; the member must differ from the manager.
+	 */
+	private function seedMemberAbsencesForOutlookFeed(string $memberUserId): int
+	{
+		$marker = '%' . $this->db->escapeLikeParameter(self::DEMO_MARKER) . '%';
+		$qb = $this->db->getQueryBuilder();
+		$qb->select($qb->func()->count('*', 'cnt'))
+			->from($this->absenceMapper->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($memberUserId)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_APPROVED)))
+			->andWhere($qb->expr()->like('reason', $qb->createNamedParameter($marker)));
+		$existing = (int)$qb->executeQuery()->fetchOne();
+		if ($existing > 0) {
+			return 0;
 		}
+
+		$now = new \DateTime();
+		$today = new \DateTime('today');
+		$ranges = [
+			[
+				'type' => Absence::TYPE_VACATION,
+				'start' => (clone $today)->modify('+21 days'),
+				'end' => (clone $today)->modify('+25 days'),
+				'days' => 5.0,
+				'reason' => 'Demo-Urlaub (Outlook Feed) ' . self::DEMO_MARKER,
+			],
+			[
+				'type' => Absence::TYPE_SICK_LEAVE,
+				'start' => (clone $today)->modify('-14 days'),
+				'end' => (clone $today)->modify('-12 days'),
+				'days' => 3.0,
+				'reason' => 'Demo-Krankmeldung (Outlook Feed) ' . self::DEMO_MARKER,
+			],
+			[
+				'type' => Absence::TYPE_PERSONAL_LEAVE,
+				'start' => (clone $today)->modify('+3 days'),
+				'end' => (clone $today)->modify('+3 days'),
+				'days' => 0.5,
+				'reason' => 'Demo Halbtag (Outlook Feed) ' . self::DEMO_MARKER,
+			],
+		];
+
+		$n = 0;
+		foreach ($ranges as $r) {
+			$a = new Absence();
+			$a->setUserId($memberUserId);
+			$a->setType($r['type']);
+			$s = clone $r['start'];
+			$s->setTime(0, 0, 0);
+			$e = clone $r['end'];
+			$e->setTime(0, 0, 0);
+			$a->setStartDate($s);
+			$a->setEndDate($e);
+			$a->setDays($r['days']);
+			$a->setReason($r['reason']);
+			$a->setStatus(Absence::STATUS_APPROVED);
+			$a->setCreatedAt($now);
+			$a->setUpdatedAt($now);
+			$this->absenceMapper->insert($a);
+			$n++;
+		}
+
+		return $n;
 	}
 }

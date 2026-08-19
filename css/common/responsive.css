@@ -10,19 +10,66 @@
 /* ===== MAIN APP LAYOUT RESPONSIVE (100% SCREEN) ===== */
 /* Use 100dvh where supported for mobile viewport; fallback to 100vh. */
 
-/* Desktop: Side-by-side layout (Nextcloud core drawer below 1024px). */
+/* Mobile-first shell: stack sidebar + content below Nextcloud's native 1024px drawer breakpoint. */
+#arbeitszeitcheck-app,
+#app.arbeitszeitcheck-app,
+.arbeitszeitcheck-app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+}
+
+/* Mobile/tablet content: full width, safe-area aware, no custom nav hack below 1024px. */
+#app-content,
+.arbeitszeitcheck-content-wrapper {
+  width: 100% !important;
+  max-width: 100vw !important;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--space-2));
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+#app-content-wrapper,
+.arbeitszeitcheck-content {
+  width: 100%;
+  max-width: 100%;
+  padding:
+    var(--space-4)
+    calc(var(--space-4) + env(safe-area-inset-right, 0px))
+    calc(var(--space-6) + env(safe-area-inset-bottom, 0px))
+    calc(var(--space-4) + env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+}
+
+/* Prevent shell-level horizontal scrolling on narrow/tablet viewports. */
+body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+html {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Desktop breakpoint: 1024px restores the existing side-by-side shell with visible app navigation. */
 @media (min-width: 1024px) {
   /* Flex container: fills #content (below 50px header) */
   #arbeitszeitcheck-app,
   #app.arbeitszeitcheck-app,
   .arbeitszeitcheck-app {
-    display: flex;
     flex-direction: row;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    min-height: 0;
-    flex: 1;
     overflow: hidden;
   }
 
@@ -43,74 +90,13 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Content: fills remaining width, scrolls when content overflows */
+  /* Desktop content: fills the remaining width and keeps the existing bottom rhythm. */
   #app-content,
   .arbeitszeitcheck-content-wrapper {
     flex: 1 1 0;
-    min-width: 0;
-    min-height: 0;
     width: 100%;
     max-width: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
     padding-bottom: var(--space-8);
-    box-sizing: border-box;
-  }
-}
-
-/* Mobile / tablet: stacked layout; NC core #app-navigation-toggle below 1024px. */
-@media (max-width: 1023px) {
-  #arbeitszeitcheck-app,
-  #app,
-  .arbeitszeitcheck-app {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    min-height: 0;
-    flex: 1;
-    overflow-x: hidden;
-  }
-
-  /* Content: full width, scrollable */
-  #app-content,
-  .arbeitszeitcheck-content-wrapper {
-    width: 100% !important;
-    max-width: 100vw !important;
-    min-width: 0;
-    min-height: 0;
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-    padding-top: calc(env(safe-area-inset-top, 0px) + var(--space-2));
-    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
-    box-sizing: border-box;
-  }
-
-  #app-content-wrapper,
-  .arbeitszeitcheck-content {
-    width: 100%;
-    max-width: 100%;
-    padding:
-      var(--space-4)
-      calc(var(--space-4) + env(safe-area-inset-right, 0px))
-      calc(var(--space-6) + env(safe-area-inset-bottom, 0px))
-      calc(var(--space-4) + env(safe-area-inset-left, 0px));
-    box-sizing: border-box;
-  }
-
-  /* Prevent horizontal scrolling */
-  body {
-    overflow-x: hidden;
-    width: 100%;
-  }
-
-  html {
-    overflow-x: hidden;
-    width: 100%;
   }
 }
 
@@ -381,7 +367,15 @@
   }
 
   /* Small buttons still accessible: meet WCAG 2.5.5 minimum on touch devices */
-  .btn--sm {
+  .btn--sm,
+  #app-content.azc-app .azc-btn--sm,
+  #app-content-wrapper .azc-btn--sm,
+  .azc-nc-admin-settings .azc-btn--sm,
+  .azc-nc-settings-panel .azc-btn--sm,
+  #app-content.azc-app .azc-btn--small,
+  #app-content-wrapper .azc-btn--small,
+  .azc-nc-admin-settings .azc-btn--small,
+  .azc-nc-settings-panel .azc-btn--small {
     min-height: 44px;
     min-width: 44px;
   }

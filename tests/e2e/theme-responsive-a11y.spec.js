@@ -1,3 +1,4 @@
+/* global process */
 // @ts-check
 /**
  * Theme × viewport × WCAG 2.1 AA gauntlet for ArbeitszeitCheck policy pages.
@@ -140,6 +141,14 @@ async function assertPolicyChromeTouchTargets(page) {
 					'#admin-settings-save',
 					'#create-model',
 					'#wtm-model-submit',
+					'#user-search',
+					'#employee-list-show-all',
+					'#employee-list-empty-show-all',
+					'#export-users-csv',
+					'#refresh-users',
+					'#users-page-prev',
+					'#users-page-next',
+					'#users-table .azc-btn',
 					'.btn-delete-entry',
 					'#btn-gdpr-delete',
 				].join(', '),
@@ -218,7 +227,7 @@ test.describe('ArbeitszeitCheck theme × viewport a11y matrix (admin policy)', (
 					await page.setViewportSize(viewport)
 					await expectNoHorizontalOverflow(page, `${theme}/${route.id}@${viewport.width}px`)
 				}
-				await page.setViewportSize({ width: 1280, height: 800 })
+				await page.setViewportSize({ width: 375, height: 812 })
 				await assertPolicyChromeTouchTargets(page)
 				for (const viewport of axeViewports) {
 					await page.setViewportSize(viewport)

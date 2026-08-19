@@ -276,12 +276,20 @@
             const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
             if (selectedCount === 0) {
                 countEl.textContent = l10n.appAdminsAllAdmins || 'No app admins selected (all Nextcloud admins are allowed).';
+                const summary = Utils.$('#azcAccessAdminsSummary');
+                if (summary) {
+                    summary.textContent = countEl.textContent;
+                }
                 return;
             }
             const template = l10n.appAdminsSelected || '%s app admin(s) selected';
             countEl.textContent = template.indexOf('%s') !== -1
                 ? template.replace('%s', String(selectedCount))
                 : String(selectedCount) + ' ' + template;
+            const summary = Utils.$('#azcAccessAdminsSummary');
+            if (summary) {
+                summary.textContent = countEl.textContent;
+            }
         }
 
         function applyFilter() {
@@ -373,15 +381,39 @@
     function initAccessModeToggle() {
         const radios = Array.prototype.slice.call(document.querySelectorAll('input[name="accessRestrictionEnabled"]'));
         const panels = Array.prototype.slice.call(document.querySelectorAll('[data-azc-access-allowlists]'));
+        const summaryPanels = Array.prototype.slice.call(document.querySelectorAll('[data-azc-access-summary-panel]'));
+        const modeSummary = Utils.$('#azcAccessModeSummary');
+        const resetSearches = [
+            Utils.$('#accessAllowedUsersSearch'),
+            Utils.$('#accessAllowedGroupsSearch'),
+        ].filter(Boolean);
         if (radios.length === 0) {
             return;
         }
 
         function sync() {
-            const restricted = radios.some(function(r) { return r.checked && String(r.value) === '1'; });
+            const checked = radios.find(function(r) { return r.checked; }) || null;
+            const restricted = checked !== null && String(checked.value) === '1';
+            if (modeSummary && checked) {
+                const label = checked.closest('label');
+                const text = label ? label.textContent : '';
+                modeSummary.textContent = String(text || '').trim();
+            }
             panels.forEach(function(panel) {
                 panel.hidden = !restricted;
             });
+            summaryPanels.forEach(function(panel) {
+                panel.hidden = !restricted;
+            });
+            if (!restricted) {
+                resetSearches.forEach(function(input) {
+                    if (String(input.value || '') === '') {
+                        return;
+                    }
+                    input.value = '';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+            }
         }
 
         radios.forEach(function(radio) {
@@ -411,12 +443,20 @@
             const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
             if (selectedCount === 0) {
                 countEl.textContent = l10n.accessUsersNone || 'No individual users selected.';
+                const summary = Utils.$('#azcAccessUsersSummary');
+                if (summary) {
+                    summary.textContent = countEl.textContent;
+                }
                 return;
             }
             const template = l10n.accessUsersSelected || '%s user(s) selected';
             countEl.textContent = template.indexOf('%s') !== -1
                 ? template.replace('%s', String(selectedCount))
                 : String(selectedCount) + ' ' + template;
+            const summary = Utils.$('#azcAccessUsersSummary');
+            if (summary) {
+                summary.textContent = countEl.textContent;
+            }
         }
 
         function applyFilter() {
@@ -524,12 +564,20 @@
             const selectedCount = checkboxes.filter(function(box) { return box.checked; }).length;
             if (selectedCount === 0) {
                 countEl.textContent = l10n.accessGroupsNone || 'No groups selected.';
+                const summary = Utils.$('#azcAccessGroupsSummary');
+                if (summary) {
+                    summary.textContent = countEl.textContent;
+                }
                 return;
             }
             const template = l10n.accessGroupsSelected || '%s group(s) selected';
             countEl.textContent = template.indexOf('%s') !== -1
                 ? template.replace('%s', String(selectedCount))
                 : String(selectedCount) + ' ' + template;
+            const summary = Utils.$('#azcAccessGroupsSummary');
+            if (summary) {
+                summary.textContent = countEl.textContent;
+            }
         }
 
         function applyFilter() {
@@ -822,10 +870,22 @@
      * Searchable user picker for month reopen (GET /api/admin/users?picker=1).
      */
     function initMonthReopenUserPicker() {
+        const search = Utils.$('#monthClosureReopenUserSearch');
+        const hidden = Utils.$('#monthClosureReopenUserId');
+        const list = Utils.$('#monthClosureReopenUserListbox');
+        // Single-topic settings pages (e.g. outlook-subscription) omit month-closure
+        // controls — skip quietly instead of surfacing a misleading user-search error.
+        if (!search || !hidden || !list) {
+            return;
+        }
+
         const initPicker = window.ArbeitszeitCheck && window.ArbeitszeitCheck.initAdminUserPicker;
         const baseUrl = window.ArbeitszeitCheck && window.ArbeitszeitCheck.adminUsersListUrl;
         const l10n = window.ArbeitszeitCheck && window.ArbeitszeitCheck.l10n ? window.ArbeitszeitCheck.l10n : {};
         if (typeof initPicker !== 'function' || !baseUrl) {
+            Messaging && Messaging.showError && Messaging.showError(
+                l10n.monthReopenSearchUnavailable || l10n.searchError || 'Employee search is unavailable. Reload the page.'
+            );
             return;
         }
         monthReopenPicker = initPicker({
@@ -841,7 +901,9 @@
             l10n: l10n,
         });
         if (!monthReopenPicker) {
-            Messaging && Messaging.showError && Messaging.showError(l10n.searchError || 'User search is unavailable. Reload the page.');
+            Messaging && Messaging.showError && Messaging.showError(
+                l10n.monthReopenSearchUnavailable || l10n.searchError || 'Employee search is unavailable. Reload the page.'
+            );
         }
     }
 

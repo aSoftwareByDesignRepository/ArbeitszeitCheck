@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { login, credsFromEnv } from './helpers/auth.js'
 import { apiAllowFailure, getRequestToken } from './helpers/api.js'
 import { assertArbeitszeitcheckLoaded } from './helpers/app-config.js'
@@ -19,8 +20,11 @@ test.describe('Compliance gate smoke (Docker dev)', () => {
 		await expect(page.locator('.time-entry-request-form')).toBeVisible()
 		await expect(page.locator('.time-entry-form-fieldset').first()).toBeVisible()
 		await expect(page.locator('.time-entry-form__actions .azc-btn').first()).toBeVisible()
+		await expect(page.locator('#time-summary')).toBeVisible()
+		await expect(page.locator('.time-summary-title')).toContainText(/Day Summary|Tageszusammenfassung/i)
+		await expect(page.locator('#compliance-status')).not.toBeEmpty()
 
-		const calloutIcon = page.locator('.azc-callout__icon .azc-icon').first()
+		const calloutIcon = page.locator('.azc-callout__icon .azc-icon:visible').first()
 		if ((await calloutIcon.count()) > 0) {
 			const box = await calloutIcon.boundingBox()
 			expect(box).not.toBeNull()
@@ -36,6 +40,32 @@ test.describe('Compliance gate smoke (Docker dev)', () => {
 		}
 	})
 
+	test('time entry create page: live day summary updates after time selection', async ({ page }) => {
+		await page.goto('/apps/arbeitszeitcheck/time-entries/create')
+		await assertArbeitszeitcheckLoaded(page)
+		await page.waitForSelector('#time-entry-form', { timeout: 30000 })
+
+		await page.locator('#entry-start-time-hour').selectOption('08')
+		await page.locator('#entry-start-time-minute').selectOption('00')
+		await page.locator('#entry-end-time-hour').selectOption('16')
+		await page.locator('#entry-end-time-minute').selectOption('00')
+
+		await expect(page.locator('#summary-working-hours')).not.toHaveText('0.00')
+		await expect(page.locator('#compliance-status')).not.toContainText(/Please enter both start and end time|Bitte.*Start.*End/i)
+	})
+
+	test('time entry create page: axe clean with visible day summary', async ({ page }) => {
+		await page.goto('/apps/arbeitszeitcheck/time-entries/create')
+		await assertArbeitszeitcheckLoaded(page)
+		await page.waitForSelector('#time-entry-form', { timeout: 30000 })
+
+		const results = await new AxeBuilder({ page })
+			.include('#app-content')
+			.withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+			.analyze()
+		expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
+	})
+
 	test('absences list: filter panel and apply control', async ({ page }) => {
 		await page.goto('/apps/arbeitszeitcheck/absences')
 		await assertArbeitszeitcheckLoaded(page)
@@ -47,7 +77,7 @@ test.describe('Compliance gate smoke (Docker dev)', () => {
 		await expect(filterPanel).toBeVisible()
 		await expect(page.locator('#btn-apply-filter')).toBeVisible()
 
-		const calloutIcon = page.locator('.azc-callout__icon .azc-icon').first()
+		const calloutIcon = page.locator('.azc-callout__icon .azc-icon:visible').first()
 		if ((await calloutIcon.count()) > 0) {
 			const box = await calloutIcon.boundingBox()
 			expect(box).not.toBeNull()
@@ -61,7 +91,7 @@ test.describe('Compliance gate smoke (Docker dev)', () => {
 		await assertArbeitszeitcheckLoaded(page)
 		await page.waitForSelector('#absence-form', { timeout: 30000 })
 
-		const calloutIcon = page.locator('.azc-callout__icon .azc-icon').first()
+	const calloutIcon = page.locator('.azc-callout__icon .azc-icon:visible').first()
 		await expect(calloutIcon).toBeVisible()
 		const box = await calloutIcon.boundingBox()
 		expect(box).not.toBeNull()

@@ -119,6 +119,7 @@ test.describe('Get the App + Help footer theme × viewport a11y', () => {
 			const footer = page.locator('#azc-nav-footer')
 			await expect(footer).toBeVisible()
 			await expect(footer).toHaveAttribute('data-app-feedback', '1')
+			await page.locator('#azc-nav-footer .azc-nav-footer__trigger').click()
 			await expect(page.locator('#azc-feedback-problem')).toBeVisible()
 			await expect(page.locator('#azc-feedback-idea')).toBeVisible()
 
@@ -136,7 +137,7 @@ test.describe('Get the App + Help footer theme × viewport a11y', () => {
 			}
 
 			await page.setViewportSize({ width: 320, height: 640 })
-			await assertTouchTargets(page, 'a.azc-get-app__play, #azc-nav-footer .azc-nav-footer__link')
+			await assertTouchTargets(page, 'a.azc-get-app__play, #azc-nav-footer .azc-nav-footer__menu-item, #azc-nav-footer .azc-nav-footer__trigger')
 			await runAxe(page, `${theme}/get-the-app@320`)
 
 			await page.setViewportSize({ width: 1280, height: 800 })
@@ -188,7 +189,7 @@ test.describe('Support & us theme × viewport a11y', () => {
 			await page.setViewportSize({ width: 320, height: 640 })
 			await assertTouchTargets(
 				page,
-				'#azc-support-us a.azc-support-us__cta, #azc-nav-footer .azc-nav-footer__link',
+				'#azc-support-us a.azc-support-us__cta, #azc-nav-footer .azc-nav-footer__menu-item, #azc-nav-footer .azc-nav-footer__trigger',
 			)
 			await runAxe(page, `${theme}/support-us@320`)
 		})

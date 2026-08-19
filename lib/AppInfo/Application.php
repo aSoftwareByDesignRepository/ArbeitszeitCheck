@@ -926,6 +926,35 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		$context->registerService(\OCA\ArbeitszeitCheck\Db\OutlookIcalSubscriptionTokenMapper::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Db\OutlookIcalSubscriptionTokenMapper(
+				$c->query(IDBConnection::class)
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\OutlookIcalSubscriptionFeedService::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Service\OutlookIcalSubscriptionFeedService(
+				$c->query(\OCP\L10N\IFactory::class)
+			);
+		});
+
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\OutlookIcalSubscriptionService::class, function($c) {
+			return new \OCA\ArbeitszeitCheck\Service\OutlookIcalSubscriptionService(
+				$c->query(\OCA\ArbeitszeitCheck\Db\OutlookIcalSubscriptionTokenMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\OutlookIcalSubscriptionFeedService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\AbsenceMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TeamMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TeamMemberMapper::class),
+				$c->query(\OCA\ArbeitszeitCheck\Db\TeamManagerMapper::class),
+				$c->query(TeamResolverService::class),
+				$c->query(PermissionService::class),
+				$c->query(\OCP\IUserManager::class),
+				$c->query(\OCP\IConfig::class),
+				$c->query(IDBConnection::class),
+				$c->query(\OCP\L10N\IFactory::class),
+			);
+		});
+
 		$context->registerService(AdminEmployeeDirectoryService::class, function ($c) {
 			return new AdminEmployeeDirectoryService(
 				$c->query(\OCP\IUserManager::class),

@@ -139,8 +139,33 @@ class PermissionService
 	}
 
 	/**
-	 * Whether the user is a Nextcloud administrator (admin group).
+	 * Enabled Nextcloud accounts that may open ArbeitszeitCheck (directory door).
+	 *
+	 * @return list<string>
 	 */
+	public function listAppAccessUserIds(int $maxScan = Constants::ADMIN_EMPLOYEE_FILTER_MAX_SCAN): array
+	{
+		$maxScan = max(1, min($maxScan, Constants::ADMIN_EMPLOYEE_FILTER_MAX_SCAN));
+		/** @var list<\OCP\IUser> $users */
+		$users = $this->userManager->search('', $maxScan, 0);
+		$unique = [];
+		foreach ($users as $user) {
+			$userId = (string)$user->getUID();
+			if ($userId === '' || isset($unique[$userId])) {
+				continue;
+			}
+			if (!$user->isEnabled()) {
+				continue;
+			}
+			if (!$this->isUserAllowedByAccessGroups($userId)) {
+				continue;
+			}
+			$unique[$userId] = true;
+		}
+
+		return array_keys($unique);
+	}
+
 	/**
 	 * Dedicated App Admin (portfolio ACCESS-AND-DIRECTORY-PICKERS §2.1 / BudgetCheck):
 	 * Nextcloud system admin OR listed in app_admin_user_ids.

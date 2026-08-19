@@ -1,3 +1,4 @@
+/* global process */
 // @ts-check
 /**
  * Bachus: days-mode half-day vacation UX (fixture + live create when credentials present).
@@ -50,6 +51,39 @@ test.describe('Bachus: half-day days-mode fixture', () => {
 			.analyze();
 		expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 	});
+
+	test('responsive stacking adapts without overflow', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 812 });
+		await page.goto(fixtureUrl);
+		await page.locator('#absence-day-fraction-half + .absence-day-fraction__face').click();
+
+		const mobileLayout = await page.evaluate(() => {
+			const segments = Array.from(document.querySelectorAll('.absence-day-fraction__segment'));
+			const boxes = segments.map((node) => node.getBoundingClientRect());
+			return {
+				scrollWidth: document.documentElement.scrollWidth,
+				innerWidth: window.innerWidth,
+				firstTop: boxes[0]?.top ?? 0,
+				secondTop: boxes[1]?.top ?? 0,
+			};
+		});
+		expect(mobileLayout.scrollWidth).toBeLessThanOrEqual(mobileLayout.innerWidth);
+		expect(mobileLayout.secondTop).toBeGreaterThan(mobileLayout.firstTop);
+
+		await page.setViewportSize({ width: 1280, height: 900 });
+		const desktopLayout = await page.evaluate(() => {
+			const segments = Array.from(document.querySelectorAll('.absence-day-fraction__segment'));
+			const boxes = segments.map((node) => node.getBoundingClientRect());
+			return {
+				scrollWidth: document.documentElement.scrollWidth,
+				innerWidth: window.innerWidth,
+				firstTop: boxes[0]?.top ?? 0,
+				secondTop: boxes[1]?.top ?? 0,
+			};
+		});
+		expect(desktopLayout.scrollWidth).toBeLessThanOrEqual(desktopLayout.innerWidth);
+		expect(Math.abs(desktopLayout.secondTop - desktopLayout.firstTop)).toBeLessThan(2);
+	});
 });
 
 test.describe('Bachus: half-day days-mode live create', () => {
@@ -85,5 +119,40 @@ test.describe('Bachus: half-day days-mode live create', () => {
 		test.skip(hoursMode === '1', 'Hours mode uses presets instead of day_fraction');
 		await expect(page.locator('#absence-day-fraction-group')).toBeVisible();
 		await expect(page.locator('#absence-day-fraction-half')).toBeChecked();
+	});
+
+	test('J-H3: live create adapts to Nextcloud theme variables when days mode is active', async ({ page }) => {
+		await page.goto('/apps/arbeitszeitcheck/absences/create');
+		await page.waitForSelector('#absence-form', { timeout: 30000 });
+		const hoursMode = await page.locator('#absence-duration-hours-group').getAttribute('data-hours-mode');
+		test.skip(hoursMode === '1', 'Hours mode hides the day-fraction cards.');
+
+		await page.locator('#absence-day-fraction-half + .absence-day-fraction__face').click();
+		const readFace = () => page.locator('#absence-day-fraction-half + .absence-day-fraction__face').evaluate((node) => {
+			const style = getComputedStyle(node);
+			return {
+				border: style.borderColor,
+				color: style.color,
+			};
+		});
+
+		await page.evaluate(() => {
+			document.body.style.setProperty('--color-main-background', '#ffffff');
+			document.body.style.setProperty('--color-main-text', '#1b1b1b');
+			document.body.style.setProperty('--color-primary-element', '#005ea8');
+			document.body.style.setProperty('--color-border', '#8a8a8a');
+		});
+		const light = await readFace();
+
+		await page.evaluate(() => {
+			document.body.style.setProperty('--color-main-background', '#171717');
+			document.body.style.setProperty('--color-main-text', '#f5f5f5');
+			document.body.style.setProperty('--color-primary-element', '#78b8ff');
+			document.body.style.setProperty('--color-border', '#d0d0d0');
+		});
+		const dark = await readFace();
+
+		expect(dark.border).not.toBe(light.border);
+		expect(dark.color).not.toBe(light.color);
 	});
 });

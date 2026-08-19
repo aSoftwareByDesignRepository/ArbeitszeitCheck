@@ -93,7 +93,7 @@ $mutations = [
 	],
 	'drop_desklet_primary_fill' => [
 		'file' => 'css/dashboard-widgets.css',
-		'from' => ".dz-workspace .azc-btn--primary,\n.dz-workspace .btn-primary,\n.dz-workspace .btn--primary {\n\tbackground-color: var(--color-primary-element, #0082c9) !important;",
+		'from' => ".dz-workspace .azc-btn--primary,\n.dz-workspace .btn-primary,\n.dz-workspace .btn--primary {\n\tbackground-color: var(--color-primary-element) !important;",
 		'to' => ".dz-workspace .azc-btn--primary,\n.dz-workspace .btn-primary,\n.dz-workspace .btn--primary {\n\tbackground-color: transparent;",
 		'filters' => [
 			'AzcBtnCascadeContractTest::testDeskletUsesAzcBtnTaxonomyWithScopedFills',

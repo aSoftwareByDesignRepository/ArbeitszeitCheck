@@ -289,6 +289,7 @@
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--azc-space-2);
+	min-width: 0;
 	padding: var(--azc-space-2) var(--azc-space-3);
 	border: 1px solid var(--azc-border);
 	border-radius: var(--azc-radius-sm);
@@ -308,6 +309,9 @@
 }
 .azc-scope-strip__chip {
 	text-decoration: none;
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 }
 
 /* ── Buttons (azc-btn taxonomy) ────────────────────────────────
@@ -433,7 +437,8 @@
 #app-content-wrapper .azc-btn--sm,
 .azc-nc-admin-settings .azc-btn--sm,
 .azc-nc-settings-panel .azc-btn--sm {
-	min-height: 2.25rem;
+	min-height: var(--azc-touch, 44px);
+	min-width: var(--azc-touch, 44px);
 	padding: 0.35rem 0.85rem;
 	font-size: var(--azc-fs-sm);
 }
@@ -443,9 +448,25 @@
 #app-content-wrapper .azc-btn--small,
 .azc-nc-admin-settings .azc-btn--small,
 .azc-nc-settings-panel .azc-btn--small {
-	min-height: 2.25rem;
+	min-height: var(--azc-touch, 44px);
+	min-width: var(--azc-touch, 44px);
 	padding: 0.35rem 0.85rem;
 	font-size: var(--azc-fs-sm);
+}
+
+/* Tablet/desktop breakpoint: from 769px upward small utility buttons can return to compact chrome. */
+@media (min-width: 769px) {
+	#app-content.azc-app .azc-btn--sm,
+	#app-content-wrapper .azc-btn--sm,
+	.azc-nc-admin-settings .azc-btn--sm,
+	.azc-nc-settings-panel .azc-btn--sm,
+	#app-content.azc-app .azc-btn--small,
+	#app-content-wrapper .azc-btn--small,
+	.azc-nc-admin-settings .azc-btn--small,
+	.azc-nc-settings-panel .azc-btn--small {
+		min-height: 2.25rem;
+		min-width: 0;
+	}
 }
 
 #app-content.azc-app .azc-btn[aria-busy="true"],
@@ -1192,13 +1213,16 @@ dialog.entitlement-explain-dialog::backdrop {
 .azc-nav-footer__popover {
 	position: relative;
 	display: flex;
-	justify-content: center;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--azc-space-2, 0.5rem);
 }
 
 .azc-nav-footer__trigger {
 	display: inline-flex;
 	gap: var(--azc-space-3, 0.75rem);
 	min-height: 44px;
+	min-width: 44px;
 	padding: var(--azc-space-2, 0.5rem) var(--azc-space-3, 0.75rem);
 	border-radius: var(--azc-radius-sm, 6px);
 	box-sizing: border-box;
@@ -1261,12 +1285,15 @@ dialog.entitlement-explain-dialog::backdrop {
 	align-items: center;
 	gap: var(--azc-space-3, 0.75rem);
 	min-height: 44px;
+	min-width: 44px;
 	padding: var(--azc-space-2, 0.5rem) var(--azc-space-3, 0.75rem);
 	border-radius: var(--azc-radius-sm, 6px);
 	color: var(--color-main-text);
 	text-decoration: none;
 	font-size: var(--azc-fs-sm, 0.875rem);
-	white-space: nowrap;
+	line-height: var(--azc-line-base, 1.45);
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 
 .azc-nav-footer__menu-item:hover {
@@ -1285,6 +1312,15 @@ dialog.entitlement-explain-dialog::backdrop {
 .azc-nav-footer__menu-icon .azc-icon {
 	width: 18px;
 	height: 18px;
+}
+
+.azc-nav-footer__note {
+	margin: 0;
+	font-size: var(--azc-fs-xs, 0.75rem);
+	line-height: 1.45;
+	color: var(--color-text-maxcontrast);
+	text-align: center;
+	overflow-wrap: anywhere;
 }
 
 @media (width < 480px) {

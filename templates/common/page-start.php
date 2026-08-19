@@ -111,7 +111,7 @@ $roleSlug = (string)($_['roleSlug'] ?? 'employee');
 				<div class="azc-page-header__text">
 					<h1 id="azc-page-title"><?php p($pageTitle); ?></h1>
 					<?php if ($pageHelp !== ''): ?>
-						<p class="azc-page-header__lead"><?php p($pageHelp); ?></p>
+						<p class="azc-page-header__lead" id="azc-page-help"><?php p($pageHelp); ?></p>
 					<?php endif; ?>
 				</div>
 				<div id="azc-page-actions" class="azc-page-header__actions" aria-live="polite"></div>

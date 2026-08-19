@@ -100,6 +100,20 @@ class L10nPrintfSafetyContractTest extends TestCase
 		);
 	}
 
+	public function testAdminSettingsOutlookBootstrapUsesTemplateL10n(): void
+	{
+		$src = file_get_contents(dirname(__DIR__, 3) . '/templates/admin-settings.php');
+		$this->assertNotFalse($src);
+		$this->assertStringContainsString(
+			"TemplateL10n::translate(\$l, 'Approved absences in the current window: %d')",
+			$src,
+		);
+		$this->assertStringContainsString(
+			"TemplateL10n::translate(\$l, 'Current window: %1\$s through %2\$s (last 3 months through next 12 months).')",
+			$src,
+		);
+	}
+
 	public function testAdminNotificationsPremiumPercentStringsAreEscaped(): void
 	{
 		$src = file_get_contents(dirname(__DIR__, 3) . '/templates/partials/admin-policy-hour-premiums.php');

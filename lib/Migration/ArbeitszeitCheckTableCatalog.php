@@ -26,6 +26,7 @@ final class ArbeitszeitCheckTableCatalog
 		'azc_license_state',
 		'azc_mobile_seat',
 		'azc_terminal_device',
+		'azc_outlook_ical_tokens',
 		'at_kiosk_creds',
 		'at_kiosk_enrollment',
 		'at_kiosk_sessions',

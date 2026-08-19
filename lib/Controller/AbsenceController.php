@@ -777,7 +777,7 @@ class AbsenceController extends Controller
 	#[NoCSRFRequired]
 	public function create(): TemplateResponse
 	{
-		\OCP\Util::addTranslations('arbeitszeitcheck');
+		\OCA\ArbeitszeitCheck\Service\FrontEndAssetService::registerTranslations();
 
 		$userId = $this->getUserId();
 		$colleagues = $this->getColleaguesForSubstitute($userId);
@@ -855,7 +855,7 @@ class AbsenceController extends Controller
 	#[NoCSRFRequired]
 	public function edit(int $id): TemplateResponse
 	{
-		\OCP\Util::addTranslations('arbeitszeitcheck');
+		\OCA\ArbeitszeitCheck\Service\FrontEndAssetService::registerTranslations();
 
 		try {
 			$userId = $this->getUserId();
@@ -926,7 +926,7 @@ class AbsenceController extends Controller
 	#[NoCSRFRequired]
 	public function show(int $id): TemplateResponse
 	{
-		\OCP\Util::addTranslations('arbeitszeitcheck');
+		\OCA\ArbeitszeitCheck\Service\FrontEndAssetService::registerTranslations();
 
 		try {
 			$userId = $this->getUserId();

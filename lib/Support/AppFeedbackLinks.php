@@ -157,7 +157,7 @@ final class AppFeedbackLinks
 				$query = [];
 			}
 			foreach (array_keys($query) as $key) {
-				if ($this->isCredentialQueryKey((string)$key)) {
+				if ($this->isBlockedQueryKey((string)$key)) {
 					unset($query[$key]);
 				}
 			}
@@ -253,7 +253,7 @@ final class AppFeedbackLinks
 			. '&body=' . rawurlencode($body);
 	}
 
-	private function isCredentialQueryKey(string $key): bool
+	private function isBlockedQueryKey(string $key): bool
 	{
 		static $blocked = [
 			'token' => true,
@@ -263,6 +263,10 @@ final class AppFeedbackLinks
 			'key' => true,
 			'auth' => true,
 			'session' => true,
+			'requesttoken' => true,
+			'guestname' => true,
+			'guestpassword' => true,
+			'iknowthatthisisabiginstanceandtheupdaterequestcouldrunintoatimeoutandhowtorestoreabackup' => true,
 		];
 
 		return isset($blocked[strtolower($key)]);

@@ -867,8 +867,8 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 .absence-day-fraction__segment {
 	position: relative;
 	display: flex;
-	flex: 1 1 10rem;
-	min-width: 8rem;
+	flex: 1 1 100%;
+	min-width: 0;
 	min-height: 3rem;
 	margin: 0;
 	cursor: pointer;
@@ -890,10 +890,10 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 	width: 100%;
 	min-height: 3rem;
 	padding: 0.75rem 1.1rem;
-	border: 2px solid var(--arbeitszeitcheck-color-border, var(--color-border, #c8c8c8));
-	border-radius: 0.5rem;
-	background: var(--arbeitszeitcheck-color-background-elevated, var(--color-main-background, #fff));
-	color: var(--arbeitszeitcheck-color-text, var(--color-main-text, #222));
+	border: 2px solid var(--azc-border, var(--color-border));
+	border-radius: var(--azc-radius-md, var(--border-radius-large, 12px));
+	background: var(--azc-bg-card, var(--color-main-background));
+	color: var(--azc-text, var(--color-main-text));
 	font-size: 1.125rem;
 	font-weight: 700;
 	line-height: 1.2;
@@ -902,21 +902,21 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 }
 
 .absence-day-fraction__input:focus-visible + .absence-day-fraction__face {
-	outline: 3px solid var(--arbeitszeitcheck-color-primary, var(--color-primary-element, #005fcc));
+	outline: 3px solid var(--color-primary-element);
 	outline-offset: 2px;
 }
 
 .absence-day-fraction__input:checked + .absence-day-fraction__face {
-	border-color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element, #0b6e4f));
-	background: var(--arbeitszeitcheck-color-primary-light, color-mix(in srgb, var(--color-primary-element, #0b6e4f) 18%, white));
-	box-shadow: inset 0 0 0 2px var(--arbeitszeitcheck-color-primary, var(--color-primary-element, #0b6e4f));
+	border-color: var(--color-primary-element);
+	background: var(--azc-tint-info, color-mix(in srgb, var(--color-primary-element) 16%, var(--color-main-background)));
+	box-shadow: inset 0 0 0 2px var(--color-primary-element);
 }
 
 .absence-multi-day-half-tip {
 	margin: 0.35rem 0 0;
 	padding: 0.5rem 0.65rem;
-	border-left: 3px solid var(--arbeitszeitcheck-color-primary, var(--color-primary-element, #0b6e4f));
-	background: var(--arbeitszeitcheck-color-primary-light, color-mix(in srgb, var(--color-primary-element, #0b6e4f) 8%, white));
+	border-left: 3px solid var(--color-primary-element);
+	background: color-mix(in srgb, var(--color-primary-element) 8%, var(--color-main-background));
 }
 
 .absence-empty-actions {
@@ -938,7 +938,7 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 	align-items: center;
 	gap: 0.35rem;
 	font-weight: 700;
-	color: var(--arbeitszeitcheck-color-primary, var(--color-primary-element, #0b6e4f));
+	color: var(--color-primary-element);
 }
 
 .absence-days-cell__qty {
@@ -956,14 +956,15 @@ html.entitlement-explain-page-locked .entitlement-explain-dialog__fallback-backd
 
 .absence-day-fraction .form-error {
 	margin-top: 0.35rem;
-	color: var(--arbeitszeitcheck-color-error, var(--color-error, #b42318));
+	color: var(--color-error-text, var(--color-error));
 	font-weight: 600;
 }
 
-@media (max-width: 480px) {
+/* Compact breakpoint: from 481px upward the half-day choices can sit side by side without crowding. */
+@media (min-width: 481px) {
 	.absence-day-fraction__segment {
-		flex: 1 1 100%;
-		min-width: 0;
+		flex: 1 1 10rem;
+		min-width: 8rem;
 	}
 }
 

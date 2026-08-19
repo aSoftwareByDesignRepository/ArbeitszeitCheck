@@ -76,7 +76,7 @@
   margin: -1px;
   padding: 0;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
@@ -253,6 +253,25 @@
   line-height: 1.45;
 }
 
+/* Mobile default: employee-list row actions need full touch targets below the tablet breakpoint. */
+.table .user-actions .azc-btn,
+.table .azc-table-actions .azc-btn,
+.admin-users-pager .btn,
+.admin-users-pager .azc-btn {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+/* Tablet/desktop breakpoint: from 641px upward the dense table actions can return to compact sizing. */
+@media (min-width: 641px) {
+  .table .user-actions .azc-btn,
+  .table .azc-table-actions .azc-btn {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+  }
+}
+
+/* Compact breakpoint: at 640px and below the search/pager stack and actions center cleanly. */
 @media (max-width: 640px) {
   .admin-users-toolbar__search {
     max-width: none;
@@ -261,6 +280,11 @@
   .admin-users-pager .btn,
   .admin-users-pager .azc-btn {
     flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .table .user-actions .azc-btn,
+  .table .azc-table-actions .azc-btn {
     justify-content: center;
   }
 }

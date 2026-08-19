@@ -1,0 +1,250 @@
+/* global process */
+import { test, expect } from '@playwright/test'
+import { execFileSync } from 'child_process'
+import { dirname, resolve } from 'path'
+import { fileURLToPath } from 'url'
+import { login, credsFromEnv } from './helpers/auth.js'
+import { assertArbeitszeitcheckLoaded } from './helpers/app-config.js'
+
+const nextcloudRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+
+function occ(args) {
+	return execFileSync('docker', [
+		'compose', 'exec', '-T', '-u', 'www-data', 'nextcloud', 'php', 'occ', ...args,
+	], { cwd: nextcloudRoot, encoding: 'utf8', timeout: 60_000 })
+}
+
+async function wireOutlookMocks(page) {
+	const sampleIcs = [
+		'BEGIN:VCALENDAR',
+		'VERSION:2.0',
+		'PRODID:-//ArbeitszeitCheck//Outlook iCal//EN',
+		'CALSCALE:GREGORIAN',
+		'BEGIN:VEVENT',
+		'UID:test-1@example.com',
+		'DSTART;VALUE=DATE:20260101',
+		'DEND;VALUE=DATE:20260102',
+		'SUMMARY:Test: Absence',
+		'DESCRIPTION:Test',
+		'END:VEVENT',
+		'END:VCALENDAR',
+	].join('\n')
+
+	await page.route('**/feed-*.ics', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'text/calendar; charset=utf-8',
+			body: sampleIcs,
+		})
+	})
+
+	await page.route('**/api/admin/outlook-ical/**', async (route) => {
+		const url = route.request().url()
+		if (url.includes('/teams/') && url.includes('/managers')) {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					success: true,
+					useAppTeams: true,
+					managers: [
+						{ userId: 'boss', displayName: 'Boss User' },
+					],
+				}),
+			})
+			return
+		}
+		if (url.includes('/teams')) {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					success: true,
+					useAppTeams: true,
+					teams: [
+						{ id: 17, name: 'Support', path: 'HQ / Support' },
+					],
+				}),
+			})
+			return
+		}
+		if (url.includes('/rotate')) {
+			await route.continue()
+			return
+		}
+		await route.continue()
+	})
+
+	await page.route('**/api/outlook-ical/tokenized**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'text/calendar; charset=utf-8',
+			body: [
+				'BEGIN:VCALENDAR',
+				'BEGIN:VEVENT',
+				'SUMMARY:Support Vacation',
+				'END:VEVENT',
+				'END:VCALENDAR',
+			].join('\\r\\n'),
+		})
+	})
+}
+
+test.describe('Admin calendar subscription UI', () => {
+	test.skip(!process.env.NC_ADMIN_USER, 'Requires NC_ADMIN_USER')
+
+	let previousUseAppTeams = null
+
+	test.beforeAll(() => {
+		previousUseAppTeams = occ(['config:app:get', 'arbeitszeitcheck', 'use_app_teams']).trim()
+	})
+
+	test.beforeEach(() => {
+		occ(['config:app:set', 'arbeitszeitcheck', 'use_app_teams', '--value=1'])
+	})
+
+	test.afterAll(() => {
+		if (previousUseAppTeams === null || previousUseAppTeams === '') {
+			occ(['config:app:delete', 'arbeitszeitcheck', 'use_app_teams'])
+			return
+		}
+		occ(['config:app:set', 'arbeitszeitcheck', 'use_app_teams', '--value=' + previousUseAppTeams])
+	})
+
+	test('does not show spurious user-search error on single-topic page load', async ({ page }) => {
+		await login(page, credsFromEnv('ADMIN'))
+		await page.goto('/apps/arbeitszeitcheck/admin/settings/outlook-subscription')
+		await assertArbeitszeitcheckLoaded(page)
+		await expect(page.locator('#outlook-ical-subscription')).toBeVisible()
+		await expect(page.getByText('User search failed')).toHaveCount(0)
+		await expect(page.locator('.toast-message')).toHaveCount(0)
+	})
+
+	test('generate, copy, and rotate tokenized subscription link', async ({ page }) => {
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'clipboard', {
+				value: { writeText: async () => {} },
+				configurable: true,
+			})
+		})
+
+		await login(page, credsFromEnv('ADMIN'))
+		await wireOutlookMocks(page)
+
+		let rotateCalls = 0
+		await page.route('**/api/admin/outlook-ical/rotate', async (route) => {
+			rotateCalls++
+			const body = route.request().postDataJSON()
+			expect(body.teamId).toBe(17)
+			expect(body.languageCode).toBe('de')
+			expect(body.managerUserId).toBeUndefined()
+			expect(body.start).toBeUndefined()
+			expect(body.end).toBeUndefined()
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					success: true,
+					eventCount: 4,
+					feedUrl: `http://localhost:8081/apps/arbeitszeitcheck/api/outlook-ical/tokenized?token=test-${rotateCalls}&teamId=17`,
+				}),
+			})
+		})
+
+		await page.goto('/apps/arbeitszeitcheck/admin/settings/outlook-subscription')
+		await assertArbeitszeitcheckLoaded(page)
+		await expect(page.locator('#outlook-ical-subscription')).toBeVisible()
+		await expect(page.locator('text=Internal Server Error')).toHaveCount(0)
+
+		await page.locator('#outlookIcalTeamSearch').click()
+		await page.locator('#outlookIcalTeamSearch').fill('sup')
+		await expect(page.locator('#outlookIcalTeamListbox .user-picker__item').first()).toBeVisible()
+		await page.locator('#outlookIcalTeamListbox .user-picker__item').filter({ hasText: 'HQ / Support' }).click()
+
+		await page.locator('#outlookIcalFeedLanguage').selectOption('de')
+		await page.locator('#outlookIcalGenerateBtn').click()
+
+		await expect(page.locator('#outlookIcalResultCard')).toBeVisible()
+		await expect(page.locator('#outlookIcalFeedUrl')).toHaveValue(/token=test-1/)
+		await expect(page.locator('#outlookIcalEventCount')).toContainText('4')
+
+		await page.locator('#outlookIcalCopyBtn').click()
+		await expect(page.locator('#outlookIcalLive')).toContainText(/copied/i)
+
+		// Feed fetch smoke: valid VCALENDAR + VEVENT.
+		const feedUrl1 = await page.locator('#outlookIcalFeedUrl').inputValue()
+		const feedText1 = await page.evaluate(async (url) => {
+			const res = await fetch(url)
+			return await res.text()
+		}, feedUrl1)
+		expect(feedText1).toContain('BEGIN:VCALENDAR')
+		expect(feedText1).toContain('BEGIN:VEVENT')
+
+		page.once('dialog', (dialog) => dialog.accept())
+		await page.locator('#outlookIcalRotateBtn').click()
+		await expect(page.locator('#outlookIcalFeedUrl')).toHaveValue(/token=test-2/)
+		expect(rotateCalls).toBe(2)
+
+		const feedUrl2 = await page.locator('#outlookIcalFeedUrl').inputValue()
+		const feedText2 = await page.evaluate(async (url) => {
+			const res = await fetch(url)
+			return await res.text()
+		}, feedUrl2)
+		expect(feedText2).toContain('BEGIN:VCALENDAR')
+		expect(feedText2).toContain('BEGIN:VEVENT')
+	})
+
+	test('responsive layout stays usable across core breakpoints', async ({ page }) => {
+		await login(page, credsFromEnv('ADMIN'))
+		await wireOutlookMocks(page)
+
+		const viewports = [
+			{ width: 320, height: 900, columns: '1', buttonDirection: 'column' },
+			{ width: 375, height: 900, columns: '1', buttonDirection: 'column' },
+			{ width: 414, height: 900, columns: '1', buttonDirection: 'column' },
+			{ width: 768, height: 1024, columns: '2', buttonDirection: 'row' },
+			{ width: 1024, height: 900, columns: '2', buttonDirection: 'row' },
+			{ width: 1280, height: 900, columns: '2', buttonDirection: 'row' },
+		]
+
+		for (const viewport of viewports) {
+			await page.setViewportSize({ width: viewport.width, height: viewport.height })
+			await page.goto('/apps/arbeitszeitcheck/admin/settings/outlook-subscription')
+			await assertArbeitszeitcheckLoaded(page)
+
+			await page.locator('#outlookIcalTeamSearch').fill('sup')
+			if (viewport.width < 1024) {
+				const clearBox = await page.locator('#outlookIcalTeamClear').boundingBox()
+				expect(clearBox?.width ?? 0).toBeGreaterThanOrEqual(44)
+				expect(clearBox?.height ?? 0).toBeGreaterThanOrEqual(44)
+			}
+
+			const overflow = await page.evaluate(() => ({
+				doc: document.documentElement.scrollWidth,
+				win: window.innerWidth,
+			}))
+			expect(overflow.doc).toBeLessThanOrEqual(overflow.win)
+
+			const layout = await page.locator('#outlook-ical-subscription').evaluate((section) => {
+				const row = section.querySelector('.form-row--2')
+				const actions = section.querySelector('.card-actions--inline')
+				const generate = section.querySelector('#outlookIcalGenerateBtn')
+				const input = section.querySelector('#outlookIcalTeamSearch')
+				const rowColumns = row ? getComputedStyle(row).gridTemplateColumns.split(' ').length : 0
+				return {
+					rowColumns,
+					actionDirection: actions ? getComputedStyle(actions).flexDirection : '',
+					generateWidth: generate ? generate.getBoundingClientRect().width : 0,
+					inputWidth: input ? input.getBoundingClientRect().width : 0,
+				}
+			})
+
+			expect(String(layout.rowColumns)).toBe(viewport.columns)
+			expect(layout.actionDirection).toBe(viewport.buttonDirection)
+			expect(layout.inputWidth).toBeGreaterThan(0)
+			if (viewport.width < 768) {
+				expect(layout.generateWidth).toBeGreaterThanOrEqual(layout.inputWidth - 4)
+			}
+		}
+	})
+})

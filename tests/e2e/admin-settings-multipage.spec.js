@@ -1,3 +1,4 @@
+/* global process */
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { login, credsFromEnv } from './helpers/auth.js'
@@ -10,6 +11,7 @@ const SECTIONS = [
 	{ id: 'time-recording', marker: '#clockStampingEnabled' },
 	{ id: 'time-approvals', marker: '#timeEntryChangesRequireApproval' },
 	{ id: 'exports', marker: '#exportMidnightSplitEnabled' },
+	{ id: 'outlook-subscription', marker: '#section-outlook-subscription-heading' },
 	{ id: 'month-closure', marker: '#monthClosureEnabled' },
 	{ id: 'hours', marker: '#maxDailyHours' },
 	{ id: 'regional', marker: '#country-de' },
@@ -82,6 +84,31 @@ test.describe('Admin global settings multipage', () => {
 		await expect(page.locator('#clockStampingEnabled')).toBeAttached()
 		await expect(page.locator('.admin-time-capture__card').first()).toBeVisible()
 		await expect(page.locator('#timeEntryChangesRequireApproval')).toHaveCount(0)
+	})
+
+	test('access page keeps the current rule obvious while toggling open and restricted modes', async ({ page }) => {
+		await login(page, credsFromEnv('ADMIN'))
+		await page.goto('/apps/arbeitszeitcheck/admin/settings/access')
+		await assertArbeitszeitcheckLoaded(page)
+
+		const overview = page.locator('.azc-access-overview')
+		await expect(overview).toBeVisible()
+		await expect(overview.locator('.azc-access-overview__item')).toHaveCount(4)
+
+		const modeSummary = page.locator('#azcAccessModeSummary')
+		await expect(modeSummary).toContainText(/Open|Restricted|Offen|Beschränkt/i)
+
+		await page.locator('input[name="accessRestrictionEnabled"][value="1"]').check()
+		await expect(modeSummary).toContainText(/Restricted|Beschränkt/i)
+		await expect(page.locator('[data-azc-access-allowlists]')).toHaveCount(2)
+		await expect(page.locator('[data-azc-access-allowlists]').first()).toBeVisible()
+		await expect(page.locator('[data-azc-access-summary-panel]')).toHaveCount(2)
+		await expect(page.locator('[data-azc-access-summary-panel]').first()).toBeVisible()
+
+		await page.locator('input[name="accessRestrictionEnabled"][value="0"]').check()
+		await expect(modeSummary).toContainText(/Open|Offen/i)
+		await expect(page.locator('[data-azc-access-allowlists]').first()).toBeHidden()
+		await expect(page.locator('[data-azc-access-summary-panel]').first()).toBeHidden()
 	})
 
 	for (const section of SECTIONS) {

@@ -24,6 +24,7 @@ final class HalfDayVacationDaysModeIntegrationTest extends TestCase
 	private string $uid = '';
 	private string $managerUid = '';
 	private ?string $prevUnit = null;
+	private ?string $prevYearMode = null;
 
 	protected function setUp(): void
 	{
@@ -33,7 +34,9 @@ final class HalfDayVacationDaysModeIntegrationTest extends TestCase
 
 		$config = \OC::$server->get(IConfig::class);
 		$this->prevUnit = $config->getAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_UNIT, Constants::VACATION_UNIT_DAYS);
+		$this->prevYearMode = $config->getAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_YEAR_MODE, Constants::VACATION_YEAR_MODE_CALENDAR);
 		$config->setAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_UNIT, Constants::VACATION_UNIT_DAYS);
+		$config->setAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_YEAR_MODE, Constants::VACATION_YEAR_MODE_CALENDAR);
 
 		$unit = \OC::$server->get(VacationUnitService::class);
 		if (!$unit->isDaysMode()) {
@@ -76,6 +79,16 @@ final class HalfDayVacationDaysModeIntegrationTest extends TestCase
 					'arbeitszeitcheck',
 					Constants::CONFIG_VACATION_UNIT,
 					$this->prevUnit
+				);
+			} catch (\Throwable) {
+			}
+		}
+		if ($this->prevYearMode !== null) {
+			try {
+				\OC::$server->get(IConfig::class)->setAppValue(
+					'arbeitszeitcheck',
+					Constants::CONFIG_VACATION_YEAR_MODE,
+					$this->prevYearMode
 				);
 			} catch (\Throwable) {
 			}

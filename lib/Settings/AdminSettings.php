@@ -70,6 +70,7 @@ class AdminSettings implements ISettings
 			'admin-settings',
 			'admin-settings',
 			['common/projectcheck', 'common/country-region'],
+			['common/admin-user-picker', 'admin-outlook-ical-subscription'],
 		);
 
 		$requireSubstituteJson = $this->appConfig->getAppValueString('require_substitute_types', '[]');
@@ -149,6 +150,7 @@ class AdminSettings implements ISettings
 			'projectCheckEnabledForCurrentUser' => $this->appManager->isEnabledForUser(Constants::APP_ID_PROJECTCHECK) === true,
 			'projectCheckAppsUrl' => $this->projectCheckAppsSettingsUrl(),
 			'requesttoken' => Util::callRegister(),
+			'useAppTeams' => $this->appConfig->getAppValueString('use_app_teams', '0') === '1',
 		]);
 	}
 

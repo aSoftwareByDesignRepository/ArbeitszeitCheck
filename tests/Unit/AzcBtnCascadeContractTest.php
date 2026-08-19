@@ -83,11 +83,19 @@ final class AzcBtnCascadeContractTest extends TestCase {
 
 		$css = (string)file_get_contents($root . '/css/dashboard-widgets.css');
 		self::assertStringContainsString('.dz-workspace .azc-btn--primary', $css);
-		self::assertMatchesRegularExpression(
-			'/\.dz-workspace \.azc-btn--primary,\s*\n\.dz-workspace \.btn-primary,\s*\n\.dz-workspace \.btn--primary \{\s*\n\tbackground-color:\s*var\(--color-primary-element[^)]*\)\s*!important;/',
+		$matched = preg_match(
+			'/\.dz-workspace \.azc-btn--primary,\s*\n\.dz-workspace \.btn-primary,\s*\n\.dz-workspace \.btn--primary \{(?P<body>[\s\S]*?)\n\}/',
 			$css,
+			$primaryBlock
+		);
+		self::assertSame(1, $matched, 'Desklet primary CTA block must exist in dashboard-widgets.css');
+		self::assertStringContainsString(
+			'background-color: var(--color-primary-element) !important;',
+			$primaryBlock['body'] ?? '',
 			'Desklet does not load app.css — base primary fill must live in dashboard-widgets.css'
 		);
+		self::assertStringContainsString('border-color: var(--color-primary-element) !important;', $primaryBlock['body'] ?? '');
+		self::assertStringContainsString('color: var(--color-primary-element-text) !important;', $primaryBlock['body'] ?? '');
 		self::assertMatchesRegularExpression(
 			'/\.dz-workspace \.azc-btn--secondary,\s*\n\.dz-workspace \.btn-secondary,\s*\n\.dz-workspace \.btn--secondary \{\s*\n\tbackground-color:[^;]*!important;/',
 			$css

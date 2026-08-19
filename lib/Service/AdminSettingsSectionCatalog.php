@@ -23,6 +23,7 @@ final class AdminSettingsSectionCatalog
 	public const SECTION_TIME_RECORDING = 'time-recording';
 	public const SECTION_TIME_APPROVALS = 'time-approvals';
 	public const SECTION_EXPORTS = 'exports';
+	public const SECTION_OUTLOOK_SUBSCRIPTION = 'outlook-subscription';
 	public const SECTION_MONTH_CLOSURE = 'month-closure';
 	public const SECTION_HOURS = 'hours';
 	public const SECTION_REGIONAL = 'regional';
@@ -43,6 +44,7 @@ final class AdminSettingsSectionCatalog
 		self::SECTION_TIME_RECORDING,
 		self::SECTION_TIME_APPROVALS,
 		self::SECTION_EXPORTS,
+		self::SECTION_OUTLOOK_SUBSCRIPTION,
 		self::SECTION_MONTH_CLOSURE,
 		self::SECTION_HOURS,
 		self::SECTION_REGIONAL,
@@ -66,6 +68,7 @@ final class AdminSettingsSectionCatalog
 		],
 		'ops' => [
 			self::SECTION_EXPORTS,
+			self::SECTION_OUTLOOK_SUBSCRIPTION,
 			self::SECTION_MONTH_CLOSURE,
 			self::SECTION_RETENTION,
 		],
@@ -84,6 +87,7 @@ final class AdminSettingsSectionCatalog
 		self::SECTION_TIME_RECORDING => 'time-recording.php',
 		self::SECTION_TIME_APPROVALS => 'time-approvals.php',
 		self::SECTION_EXPORTS => 'exports.php',
+		self::SECTION_OUTLOOK_SUBSCRIPTION => 'outlook-ical-subscription.php',
 		self::SECTION_MONTH_CLOSURE => 'month-closure.php',
 		self::SECTION_HOURS => 'hours.php',
 		self::SECTION_REGIONAL => 'regional.php',
@@ -102,6 +106,7 @@ final class AdminSettingsSectionCatalog
 		'section-time-capture-heading' => self::SECTION_TIME_RECORDING,
 		'section-time-approval-heading' => self::SECTION_TIME_APPROVALS,
 		'section-export-heading' => self::SECTION_EXPORTS,
+		'section-outlook-subscription-heading' => self::SECTION_OUTLOOK_SUBSCRIPTION,
 		'section-month-closure-heading' => self::SECTION_MONTH_CLOSURE,
 		'section-hours-heading' => self::SECTION_HOURS,
 		'section-regional-heading' => self::SECTION_REGIONAL,
@@ -143,6 +148,7 @@ final class AdminSettingsSectionCatalog
 			'datevLohnartNormal',
 			'datevLohnartUeberstunden',
 		],
+		self::SECTION_OUTLOOK_SUBSCRIPTION => [],
 		self::SECTION_MONTH_CLOSURE => [
 			'monthClosureEnabled',
 			'monthClosureGraceDaysAfterEom',
@@ -189,6 +195,7 @@ final class AdminSettingsSectionCatalog
 			self::SECTION_TIME_RECORDING => $l->t('Time recording'),
 			self::SECTION_TIME_APPROVALS => $l->t('Time entry approvals'),
 			self::SECTION_EXPORTS => $l->t('Exports and reporting'),
+			self::SECTION_OUTLOOK_SUBSCRIPTION => $l->t('Calendar subscription'),
 			self::SECTION_MONTH_CLOSURE => $l->t('Month closure'),
 			self::SECTION_HOURS => $l->t('Daily hours and rest periods'),
 			self::SECTION_REGIONAL => $l->t('Country and region'),
@@ -206,6 +213,7 @@ final class AdminSettingsSectionCatalog
 			self::SECTION_TIME_RECORDING => $l->t('Time recording'),
 			self::SECTION_TIME_APPROVALS => $l->t('Approvals'),
 			self::SECTION_EXPORTS => $l->t('Exports'),
+			self::SECTION_OUTLOOK_SUBSCRIPTION => $l->t('Calendar'),
 			self::SECTION_MONTH_CLOSURE => $l->t('Month close'),
 			self::SECTION_HOURS => $l->t('Hours & rest'),
 			self::SECTION_REGIONAL => $l->t('Country'),
@@ -223,6 +231,7 @@ final class AdminSettingsSectionCatalog
 			self::SECTION_TIME_RECORDING => $l->t('Choose how the organisation records working time.'),
 			self::SECTION_TIME_APPROVALS => $l->t('When edits and new manual entries need manager approval.'),
 			self::SECTION_EXPORTS => $l->t('Midnight split for exports and DATEV payroll numbers.'),
+			self::SECTION_OUTLOOK_SUBSCRIPTION => $l->t('Generate privacy-safe calendar subscription links per team and manager scope.'),
 			self::SECTION_MONTH_CLOSURE => $l->t('Finalize months safely, and reopen when needed.'),
 			self::SECTION_HOURS => $l->t('Daily maximum, rest between days, and default hours.'),
 			self::SECTION_REGIONAL => $l->t('Country, default holiday region, and statutory holiday seeding.'),

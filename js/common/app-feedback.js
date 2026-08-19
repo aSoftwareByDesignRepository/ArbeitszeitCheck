@@ -39,6 +39,18 @@
 		}
 	}
 
+	function isBlockedQueryKey(key) {
+		return /^(token|password|code|secret|key|auth|session|requesttoken|guestname|guestpassword|iknowthatthisisabiginstanceandtheupdaterequestcouldrunintoatimeoutandhowtorestoreabackup)$/i.test(key);
+	}
+
+	function stripBlockedQueryParams(parsed) {
+		parsed.searchParams.forEach(function (_value, key) {
+			if (isBlockedQueryKey(key)) {
+				parsed.searchParams.delete(key);
+			}
+		});
+	}
+
 	function sanitizePageUrl(url) {
 		url = String(url || '').trim();
 		if (!url || url.length > 500) {
@@ -59,11 +71,7 @@
 			if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
 				return '';
 			}
-			parsed.searchParams.forEach(function (_value, key) {
-				if (/^(token|password|code|secret|key|auth|session)$/i.test(key)) {
-					parsed.searchParams.delete(key);
-				}
-			});
+			stripBlockedQueryParams(parsed);
 			var out = parsed.pathname + (parsed.search ? parsed.search : '');
 			if (url.indexOf('://') !== -1) {
 				out = parsed.origin + out;
@@ -71,6 +79,23 @@
 			return out.length > 500 ? out.slice(0, 500) : out;
 		} catch (e) {
 			return '';
+		}
+	}
+
+	function stripNoiseFromLocation() {
+		if (!global.location || !global.history || typeof global.history.replaceState !== 'function') {
+			return;
+		}
+		try {
+			var parsed = new URL(global.location.href);
+			var before = parsed.search;
+			stripBlockedQueryParams(parsed);
+			if (parsed.search !== before) {
+				var next = parsed.pathname + (parsed.search ? parsed.search : '') + parsed.hash;
+				global.history.replaceState(null, '', next);
+			}
+		} catch (e) {
+			/* never break navigation */
 		}
 	}
 
@@ -254,6 +279,7 @@
 		sanitizePageUrl: sanitizePageUrl,
 		buildMailto: buildMailto,
 		install: function () {
+			stripNoiseFromLocation();
 			refreshNavHrefs();
 			installPopover();
 			installToastHooks();

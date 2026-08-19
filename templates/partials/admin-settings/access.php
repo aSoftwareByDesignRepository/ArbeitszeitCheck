@@ -11,10 +11,13 @@ declare(strict_types=1);
 
 /** @var \OCP\IL10N $l */
 /** @var array $settings */
+/** @var array $availableGroups */
+/** @var array $availableAppAdmins */
+/** @var array $availableAccessUsers */
 $settings = is_array($settings ?? null) ? $settings : (is_array($_['settings'] ?? null) ? $_['settings'] : []);
-$availableGroups = is_array($availableGroups ?? null) ? $availableGroups : (is_array($_['availableGroups'] ?? null) ? $_['availableGroups'] : []);
-$availableAppAdmins = is_array($availableAppAdmins ?? null) ? $availableAppAdmins : (is_array($_['availableAppAdmins'] ?? null) ? $_['availableAppAdmins'] : []);
-$availableAccessUsers = is_array($availableAccessUsers ?? null) ? $availableAccessUsers : (is_array($_['availableAccessUsers'] ?? null) ? $_['availableAccessUsers'] : []);
+$availableGroups = isset($availableGroups) && is_array($availableGroups) ? $availableGroups : (is_array($_['availableGroups'] ?? null) ? $_['availableGroups'] : []);
+$availableAppAdmins = isset($availableAppAdmins) && is_array($availableAppAdmins) ? $availableAppAdmins : (is_array($_['availableAppAdmins'] ?? null) ? $_['availableAppAdmins'] : []);
+$availableAccessUsers = isset($availableAccessUsers) && is_array($availableAccessUsers) ? $availableAccessUsers : (is_array($_['availableAccessUsers'] ?? null) ? $_['availableAccessUsers'] : []);
 $azcSettingsShowCardChrome = !empty($azcSettingsShowCardChrome) || !empty($renderAll);
 ?>
                 <section class="azc-card admin-settings-section" aria-labelledby="section-access-heading">
@@ -29,8 +32,78 @@ $azcSettingsShowCardChrome = !empty($azcSettingsShowCardChrome) || !empty($rende
                         </div>
                     </header>
                     <div class="azc-card__body">
-                    <div class="form-group">
-                        <?php $selectedAppAdmins = is_array($settings['appAdminUserIds'] ?? null) ? $settings['appAdminUserIds'] : []; ?>
+                    <?php
+                    $selectedAppAdmins = is_array($settings['appAdminUserIds'] ?? null) ? $settings['appAdminUserIds'] : [];
+                    $accessRestrictionEnabled = !empty($settings['accessRestrictionEnabled']);
+                    $selectedAccessUsers = is_array($settings['accessAllowedUserIds'] ?? null) ? $settings['accessAllowedUserIds'] : [];
+                    $selectedAccessGroups = is_array($settings['accessAllowedGroups'] ?? null) ? $settings['accessAllowedGroups'] : [];
+                    ?>
+                    <section class="azc-access-overview" aria-labelledby="section-access-heading">
+                        <div class="azc-access-overview__item">
+                            <p class="azc-access-overview__label"><?php p($l->t('Access mode')); ?></p>
+                            <p id="azcAccessModeSummary" class="azc-access-overview__value">
+                                <?php p($accessRestrictionEnabled
+                                    ? $l->t('Restricted — only allow-listed users and groups can open the app')
+                                    : $l->t('Open — every logged-in Nextcloud user can open ArbeitszeitCheck')); ?>
+                            </p>
+                        </div>
+                        <div class="azc-access-overview__item">
+                            <p class="azc-access-overview__label"><?php p($l->t('ArbeitszeitCheck app administrators')); ?></p>
+                            <p id="azcAccessAdminsSummary" class="azc-access-overview__value">
+                                <?php
+                                $selectedAdminCount = count($selectedAppAdmins);
+                                p($selectedAdminCount > 0
+                                    ? $l->t('%d app admin(s) selected', [$selectedAdminCount])
+                                    : $l->t('No app admins selected (all Nextcloud admins are allowed).'));
+                                ?>
+                            </p>
+                        </div>
+                        <div class="azc-access-overview__item" data-azc-access-summary-panel <?php echo $accessRestrictionEnabled ? '' : 'hidden'; ?>>
+                            <p class="azc-access-overview__label"><?php p($l->t('Allowed users')); ?></p>
+                            <p id="azcAccessUsersSummary" class="azc-access-overview__value">
+                                <?php
+                                $selectedUserCount = count($selectedAccessUsers);
+                                p($selectedUserCount > 0
+                                    ? $l->t('%d user(s) selected', [$selectedUserCount])
+                                    : $l->t('No individual users selected.'));
+                                ?>
+                            </p>
+                        </div>
+                        <div class="azc-access-overview__item" data-azc-access-summary-panel <?php echo $accessRestrictionEnabled ? '' : 'hidden'; ?>>
+                            <p class="azc-access-overview__label"><?php p($l->t('Allowed Nextcloud groups')); ?></p>
+                            <p id="azcAccessGroupsSummary" class="azc-access-overview__value">
+                                <?php
+                                $selectedGroupCount = count($selectedAccessGroups);
+                                p($selectedGroupCount > 0
+                                    ? $l->t('%d group(s) selected', [$selectedGroupCount])
+                                    : $l->t('No groups selected.'));
+                                ?>
+                            </p>
+                        </div>
+                    </section>
+                    <div class="form-group azc-settings-step azc-settings-step--access-mode">
+                        <fieldset class="azc-access-mode" aria-describedby="accessMode-help">
+                            <legend class="form-label"><?php p($l->t('Access mode')); ?></legend>
+                            <label class="access-mode-option">
+                                <input type="radio"
+                                       name="accessRestrictionEnabled"
+                                       value="0"
+                                       <?php echo !$accessRestrictionEnabled ? 'checked' : ''; ?>>
+                                <span><?php p($l->t('Open — every logged-in Nextcloud user can open ArbeitszeitCheck')); ?></span>
+                            </label>
+                            <label class="access-mode-option">
+                                <input type="radio"
+                                       name="accessRestrictionEnabled"
+                                       value="1"
+                                       <?php echo $accessRestrictionEnabled ? 'checked' : ''; ?>>
+                                <span><?php p($l->t('Restricted — only allow-listed users and groups can open the app')); ?></span>
+                            </label>
+                        </fieldset>
+                        <p id="accessMode-help" class="form-help">
+                            <?php p($l->t('Open shows ArbeitszeitCheck in the menu for everyone. Restricted hides it unless the person is allow-listed. System and delegated app administrators always pass the door. Employee and manager roles still apply after the door.')); ?>
+                        </p>
+                    </div>
+                    <div class="form-group azc-settings-step">
                         <label for="appAdminUsersSearch" class="form-label"><?php p($l->t('ArbeitszeitCheck app administrators')); ?></label>
                         <input type="text"
                                id="appAdminUsersSearch"
@@ -87,33 +160,7 @@ $azcSettingsShowCardChrome = !empty($azcSettingsShowCardChrome) || !empty($rende
                             <ul id="appAdminUsersAddList" class="user-picker__list" role="listbox" hidden></ul>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <?php
-                        $accessRestrictionEnabled = !empty($settings['accessRestrictionEnabled']);
-                        $selectedAccessUsers = is_array($settings['accessAllowedUserIds'] ?? null) ? $settings['accessAllowedUserIds'] : [];
-                        ?>
-                        <fieldset class="azc-access-mode" aria-describedby="accessMode-help">
-                            <legend class="form-label"><?php p($l->t('Access mode')); ?></legend>
-                            <label class="access-mode-option">
-                                <input type="radio"
-                                       name="accessRestrictionEnabled"
-                                       value="0"
-                                       <?php echo !$accessRestrictionEnabled ? 'checked' : ''; ?>>
-                                <span><?php p($l->t('Open — every logged-in Nextcloud user can open ArbeitszeitCheck')); ?></span>
-                            </label>
-                            <label class="access-mode-option">
-                                <input type="radio"
-                                       name="accessRestrictionEnabled"
-                                       value="1"
-                                       <?php echo $accessRestrictionEnabled ? 'checked' : ''; ?>>
-                                <span><?php p($l->t('Restricted — only allow-listed users and groups can open the app')); ?></span>
-                            </label>
-                        </fieldset>
-                        <p id="accessMode-help" class="form-help">
-                            <?php p($l->t('Open shows ArbeitszeitCheck in the menu for everyone. Restricted hides it unless the person is allow-listed. System and delegated app administrators always pass the door. Employee and manager roles still apply after the door.')); ?>
-                        </p>
-                    </div>
-                    <div class="form-group" data-azc-access-allowlists <?php echo $accessRestrictionEnabled ? '' : 'hidden'; ?>>
+                    <div class="form-group azc-settings-step" data-azc-access-allowlists <?php echo $accessRestrictionEnabled ? '' : 'hidden'; ?>>
                         <label for="accessAllowedUsersSearch" class="form-label"><?php p($l->t('Allowed users')); ?></label>
                         <input type="text"
                                id="accessAllowedUsersSearch"
@@ -167,8 +214,7 @@ $azcSettingsShowCardChrome = !empty($azcSettingsShowCardChrome) || !empty($rende
                             <ul id="accessAllowedUsersAddList" class="user-picker__list" role="listbox" hidden></ul>
                         </div>
                     </div>
-                    <div class="form-group" data-azc-access-allowlists <?php echo $accessRestrictionEnabled ? '' : 'hidden'; ?>>
-                        <?php $selectedAccessGroups = is_array($settings['accessAllowedGroups'] ?? null) ? $settings['accessAllowedGroups'] : []; ?>
+                    <div class="form-group azc-settings-step" data-azc-access-allowlists <?php echo $accessRestrictionEnabled ? '' : 'hidden'; ?>>
                         <label for="accessAllowedGroupsSearch" class="form-label"><?php p($l->t('Allowed Nextcloud groups')); ?></label>
                         <input type="text"
                                id="accessAllowedGroupsSearch"

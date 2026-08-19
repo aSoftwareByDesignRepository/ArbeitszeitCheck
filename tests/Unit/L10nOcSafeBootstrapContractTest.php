@@ -12,6 +12,9 @@ use PHPUnit\Framework\TestCase;
  */
 class L10nOcSafeBootstrapContractTest extends TestCase {
 	public function testEveryLocaleJsDefersUntilOcExists(): void {
+		$boot = (string)file_get_contents(dirname(__DIR__, 2) . '/js/common/l10n-boot.js');
+		$this->assertStringContainsString('__azcBootL10n', $boot);
+
 		$dir = __DIR__ . '/../../l10n';
 		$files = glob($dir . '/*.js') ?: [];
 		$this->assertNotEmpty($files, 'expected l10n/*.js locales');

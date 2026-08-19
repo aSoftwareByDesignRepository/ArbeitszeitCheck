@@ -72,6 +72,32 @@ class TemplateL10nTest extends TestCase {
 		);
 	}
 
+	public function testTranslatePreservesOutlookSubscriptionClientTemplates(): void {
+		$l = $this->createMock(\OCP\IL10N::class);
+		$l->method('t')->willReturnCallback(static function (string $id, array $params): string {
+			return match ($id) {
+				'Approved absences in the current window: %d' => vsprintf(
+					'Genehmigte Abwesenheiten im aktuellen Fenster: %d',
+					$params,
+				),
+				'Current window: %1$s through %2$s (last 3 months through next 12 months).' => vsprintf(
+					'Aktuelles Fenster: %1$s bis %2$s (letzte 3 Monate bis nächste 12 Monate).',
+					$params,
+				),
+				default => vsprintf($id, $params),
+			};
+		});
+
+		$this->assertSame(
+			'Genehmigte Abwesenheiten im aktuellen Fenster: %d',
+			TemplateL10n::translate($l, 'Approved absences in the current window: %d'),
+		);
+		$this->assertSame(
+			'Aktuelles Fenster: %1$s bis %2$s (letzte 3 Monate bis nächste 12 Monate).',
+			TemplateL10n::translate($l, 'Current window: %1$s through %2$s (last 3 months through next 12 months).'),
+		);
+	}
+
 	public function testTranslatePreservesPlaceholdersInReorderedTranslations(): void {
 		$l = $this->createMock(\OCP\IL10N::class);
 		$l->method('t')->willReturnCallback(static function (string $id, array $params): string {

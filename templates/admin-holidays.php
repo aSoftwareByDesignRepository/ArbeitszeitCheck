@@ -20,6 +20,7 @@ $country = $_['country'] ?? RegionRegistry::COUNTRY_DE;
 $defaultState = $_['defaultState'] ?? RegionRegistry::defaultRegionForCountry($country);
 $statutoryAutoReseed = (bool)($_['statutoryAutoReseed'] ?? true);
 $settingsUrl = $_['settingsUrl'] ?? '';
+$calendarSubscriptionUrl = $_['calendarSubscriptionUrl'] ?? '';
 $currentYear = (int)date('Y');
 
 // Regions of the instance country (default-region select must not cross the
@@ -130,6 +131,27 @@ $holidaysUiStrings = [
 	</script>
 
 	<div class="admin-holidays">
+
+		<?php if ($calendarSubscriptionUrl !== ''): ?>
+		<?php
+		$calloutVariant = 'info';
+		$calloutRole = 'region';
+		$calloutId = 'holiday-calendar-subscription-link';
+		$calloutTitleId = 'holiday-calendar-subscription-title';
+		$calloutExtraClass = 'admin-holidays__subscription-link';
+		$calloutTitle = $l->t('Calendar subscription');
+		$calloutText = $l->t('Subscribe to approved team absences in Thunderbird, Nextcloud Calendar, Outlook, or other calendar apps. The feed refreshes automatically (last 3 months through next 12 months).');
+		$calloutTextHtml = null;
+		$calloutHint = $l->t('Requires app-owned teams. Configure links under Global settings → Calendar subscription.');
+		$calloutActions = [[
+			'href' => $calendarSubscriptionUrl,
+			'label' => $l->t('Open calendar subscription settings'),
+			'id' => 'holiday-calendar-subscription-settings-link',
+			'class' => 'azc-btn azc-btn--primary azc-btn--sm azc-btn--touch',
+		]];
+		include __DIR__ . '/common/alert-callout.php';
+		?>
+		<?php endif; ?>
 
 		<section class="azc-card" aria-labelledby="holiday-country-region-title" data-initial-country="<?php p($country); ?>">
 			<header class="azc-card__header">

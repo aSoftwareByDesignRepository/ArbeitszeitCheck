@@ -4,6 +4,14 @@
  * @license AGPL-3.0-or-later
  */
 
+#app-content.azc-app--admin-holidays .admin-holidays__subscription-link {
+	margin-bottom: var(--azc-space-4, 1rem);
+}
+
+#app-content.azc-app--admin-holidays .admin-holidays__subscription-link .azc-callout__actions {
+	margin-top: var(--azc-space-3, 0.75rem);
+}
+
 #app-content.azc-app--admin-holidays .admin-holidays {
 	display: flex;
 	flex-direction: column;

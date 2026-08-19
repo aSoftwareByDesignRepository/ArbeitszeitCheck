@@ -59,6 +59,15 @@ class AdminHolidaysDachTemplateTest extends TestCase
 		$this->assertStringContainsString('holiday-good-friday-note', $src);
 	}
 
+	public function testHolidaysPageLinksToCalendarSubscriptionSettings(): void
+	{
+		$src = $this->templateSource();
+		$this->assertStringContainsString('calendarSubscriptionUrl', $src);
+		$this->assertStringContainsString('holiday-calendar-subscription-link', $src);
+		$this->assertStringContainsString('Open calendar subscription settings', $src);
+		$this->assertStringContainsString('Calendar subscription', $src);
+	}
+
 	public function testParameterizedRegionLiveStringProvidesPlaceholderArg(): void
 	{
 		$src = $this->templateSource();

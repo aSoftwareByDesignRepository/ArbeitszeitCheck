@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+use OCA\ArbeitszeitCheck\Util\TemplateL10n;
+
 /**
  * Admin global settings — SETTINGS-PAGES-STANDARD multipage shell.
  *
@@ -38,6 +40,7 @@ $sectionFiles = [
 	'time-recording' => 'time-recording.php',
 	'time-approvals' => 'time-approvals.php',
 	'exports' => 'exports.php',
+	'outlook-subscription' => 'outlook-ical-subscription.php',
 	'month-closure' => 'month-closure.php',
 	'hours' => 'hours.php',
 	'regional' => 'regional.php',
@@ -54,6 +57,10 @@ $azcSettingsShowCardChrome = $renderAll;
 $projectCheckAvailable = !empty($_['projectCheckAvailable']);
 $projectCheckEnabledForCurrentUser = !empty($_['projectCheckEnabledForCurrentUser']);
 $projectCheckAppsUrl = (string)($_['projectCheckAppsUrl'] ?? '');
+$useAppTeams = !empty($_['useAppTeams']);
+// Outlook subscription uses dedicated API actions — hide misleading sticky Save on that page only.
+$showSettingsSaveFooter = $renderAll
+	|| $settingsSection !== \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::SECTION_OUTLOOK_SUBSCRIPTION;
 ?>
 
 <?php if (!$isNcAdminShell): ?>
@@ -122,7 +129,8 @@ $projectCheckAppsUrl = (string)($_['projectCheckAppsUrl'] ?? '');
 					$renderAll,
 					$projectCheckAvailable,
 					$projectCheckEnabledForCurrentUser,
-					$projectCheckAppsUrl
+					$projectCheckAppsUrl,
+					$useAppTeams
 				): void {
 					if ($slug === 'projectcheck') {
 						include __DIR__ . '/partials/projectcheck-admin-settings-section.php';
@@ -147,6 +155,7 @@ $projectCheckAppsUrl = (string)($_['projectCheckAppsUrl'] ?? '');
 				}
 				?>
 
+				<?php if ($showSettingsSaveFooter): ?>
                 <div class="azc-admin-settings-form__actions azc-admin-settings-form__actions--sticky" role="group" aria-labelledby="admin-settings-actions-heading">
                     <h2 id="admin-settings-actions-heading" class="visually-hidden"><?php p($l->t('Save')); ?></h2>
                     <div id="admin-settings-live" class="admin-settings-live" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -168,6 +177,7 @@ $projectCheckAppsUrl = (string)($_['projectCheckAppsUrl'] ?? '');
 						<?php endif; ?>
                     </div>
                 </div>
+				<?php endif; ?>
             </form>
             </div><!-- /.azc-settings-layout__main -->
             </div><!-- /.azc-settings-layout -->
@@ -176,6 +186,9 @@ window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
 window.ArbeitszeitCheck.adminSettingsApiUrl = <?php echo json_encode($apiSettingsUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.monthClosureReopenUrl = <?php echo json_encode($monthClosureReopenUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.adminUsersListUrl = <?php echo json_encode($adminUsersListUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.outlookIcalTeamsUrl = <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.outlook_ical_subscription.adminTeams'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.outlookIcalRotateUrl = <?php echo json_encode($urlGenerator->linkToRoute('arbeitszeitcheck.outlook_ical_subscription.adminRotateToken'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.useAppTeams = <?php echo !empty($_['useAppTeams']) ? 'true' : 'false'; ?>;
 window.ArbeitszeitCheck.adminSettingsPages = <?php echo json_encode($settingsPages, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
 window.ArbeitszeitCheck.l10n.settingsSavedSuccessfully = <?php echo json_encode($l->t('Settings saved successfully'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
@@ -206,7 +219,27 @@ window.ArbeitszeitCheck.l10n.accessUsersNone = <?php echo json_encode($l->t('No 
 window.ArbeitszeitCheck.l10n.appAdminsSelected = <?php echo json_encode($l->t('%s app admin(s) selected', ['%s']), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.appAdminsAllAdmins = <?php echo json_encode($l->t('No app admins selected (all Nextcloud admins are allowed).'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 window.ArbeitszeitCheck.l10n.timeCaptureAtLeastOneOrg = <?php echo json_encode($l->t('Enable clock in/out or manual time entries — at least one method is required for the organisation.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookSelectTeam = <?php echo json_encode($l->t('Choose a team first.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookLoadingTeams = <?php echo json_encode($l->t('Loading teams…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookTeamLoadFailed = <?php echo json_encode($l->t('Could not load teams. Please try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookNoTeams = <?php echo json_encode($l->t('No matching teams found.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookManagersMinSearch = <?php echo json_encode($l->t('Type at least 2 characters to search managers for the selected team.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookNoManagers = <?php echo json_encode($l->t('No matching managers found for this team.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookLoadingManagers = <?php echo json_encode($l->t('Loading managers…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookManagerLoadFailed = <?php echo json_encode($l->t('Could not load managers. Please try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.monthReopenSearchUnavailable = <?php echo json_encode($l->t('Employee search is unavailable on this page. Reload and try again.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookFeedReady = <?php echo json_encode($l->t('Subscription link ready.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookCopySuccess = <?php echo json_encode($l->t('Subscription link copied.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookCopyFallback = <?php echo json_encode($l->t('Copy the subscription link manually.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookRotateConfirm = <?php echo json_encode($l->t('Rotate the subscription link now? Calendar apps will stop refreshing the old link immediately.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookRotating = <?php echo json_encode($l->t('Generating subscription link…'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookAppTeamsRequired = <?php echo json_encode($l->t('Enable app-owned teams first. Calendar subscriptions are only available for app team scopes.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookPickTeamManager = <?php echo json_encode($l->t('Pick a team and manager first.'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+window.ArbeitszeitCheck.l10n.outlookEventCount = <?php echo json_encode(TemplateL10n::translate($l, 'Approved absences in the current window: %d'), TemplateL10n::JSON_ENCODE_FLAGS); ?>;
+window.ArbeitszeitCheck.l10n.outlookFeedLanguageSaved = <?php echo json_encode(TemplateL10n::translate($l, 'Calendar language for this link: %s'), TemplateL10n::JSON_ENCODE_FLAGS); ?>;
+window.ArbeitszeitCheck.l10n.outlookWindowRange = <?php echo json_encode(TemplateL10n::translate($l, 'Current window: %1$s through %2$s (last 3 months through next 12 months).'), TemplateL10n::JSON_ENCODE_FLAGS); ?>;
 </script>
+        </div><!-- /.section -->
 
 <?php if (!$isNcAdminShell): ?>
         </div><!-- /.azc-page-stack -->

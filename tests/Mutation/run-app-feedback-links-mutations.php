@@ -73,8 +73,8 @@ $mutations = [
 	],
 	[
 		'name' => 'drop query sanitizer',
-		'from' => 'if ($this->isCredentialQueryKey((string)$key)) {',
-		'to' => 'if (false && $this->isCredentialQueryKey((string)$key)) {',
+		'from' => 'if ($this->isBlockedQueryKey((string)$key)) {',
+		'to' => 'if (false && $this->isBlockedQueryKey((string)$key)) {',
 	],
 	[
 		'name' => 'allow unsafe error codes in mailto body',

@@ -26,7 +26,7 @@ class AdminSettingsSectionCatalogContractTest extends TestCase
 		$this->assertStringContainsString('/admin/settings/{section}', $routes);
 		$this->assertStringContainsString('AdminSettingsSectionCatalog::routeRequirement()', $routes);
 		$this->assertSame(
-			'access|compliance|time-recording|time-approvals|exports|month-closure|hours|regional|retention|projectcheck',
+			'access|compliance|time-recording|time-approvals|exports|outlook-subscription|month-closure|hours|regional|retention|projectcheck',
 			$req,
 			'routeRequirement must stay the stable allowlist'
 		);
@@ -97,6 +97,7 @@ class AdminSettingsSectionCatalogContractTest extends TestCase
 			'section-time-capture-heading',
 			'section-time-approval-heading',
 			'section-export-heading',
+			'section-outlook-subscription-heading',
 			'section-month-closure-heading',
 			'section-hours-heading',
 			'section-regional-heading',

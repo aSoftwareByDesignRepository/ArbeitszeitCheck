@@ -23,11 +23,16 @@ final class AppFeedbackFooterContractTest extends TestCase
 		$src = $this->footer();
 		self::assertStringContainsString('data-app-feedback="1"', $src);
 		self::assertStringContainsString('<nav', $src);
+		self::assertStringContainsString('nav-footer__trigger', $src);
+		self::assertStringContainsString('nav-footer__menu', $src);
+		self::assertStringContainsString('role="menu"', $src);
+		self::assertStringContainsString('aria-haspopup="true"', $src);
 		self::assertStringContainsString('Report a problem', $src);
 		self::assertStringContainsString('Suggest an improvement', $src);
 		self::assertStringContainsString('Open GitHub Issues', $src);
 		self::assertStringContainsString('(opens in a new tab)', $src);
 		self::assertStringContainsString('nav-footer__new-tab', $src);
+		self::assertStringContainsString('nav-footer__note', $src);
 		self::assertStringContainsString('problemMailto', $src);
 		self::assertStringContainsString('ideaMailto', $src);
 		self::assertStringContainsString('githubIssuesUrl', $src);
@@ -37,13 +42,14 @@ final class AppFeedbackFooterContractTest extends TestCase
 		self::assertSame('dev@software-by-design.de', AppFeedbackLinks::FEEDBACK_EMAIL);
 	}
 
-	public function testJsHelperStripsSecretsAndWrapsToasts(): void
+	public function testJsHelperStripsSecretsWrapsToastsAndInstallsPopover(): void
 	{
 		$js = (string)file_get_contents(dirname(__DIR__, 3) . '/js/common/app-feedback.js');
 		self::assertStringContainsString('dev@software-by-design.de', $js);
 		self::assertStringContainsString('sanitizePageUrl', $js);
 		self::assertStringContainsString('token|password|code|secret|key|auth|session', $js);
 		self::assertStringContainsString('showToast', $js);
+		self::assertStringContainsString('installPopover', $js);
 		self::assertStringContainsString('Report this problem', $js);
 		self::assertStringContainsString('SbdAppFeedback', $js);
 	}
@@ -64,6 +70,9 @@ final class AppFeedbackFooterContractTest extends TestCase
 		self::assertNotFalse($end);
 		$block = substr($css, $start, $end - $start);
 		self::assertStringContainsString('azc-nav-footer', $block);
+		self::assertStringContainsString('nav-footer__trigger', $block);
+		self::assertStringContainsString('nav-footer__menu', $block);
+		self::assertStringContainsString('nav-footer__menu-item', $block);
 		self::assertStringContainsString('min-height: 44px', $block);
 		self::assertStringContainsString('min-width: 44px', $block);
 		self::assertStringContainsString('overflow-wrap: anywhere', $block);

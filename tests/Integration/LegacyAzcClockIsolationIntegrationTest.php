@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Tests\Integration;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\TimeTrackingService;
 use OCP\App\IAppManager;
+use OCP\IConfig;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use Test\TestCase;
@@ -25,12 +27,16 @@ final class LegacyAzcClockIsolationIntegrationTest extends TestCase
 
 	/** @var array<string, bool> */
 	private array $wasEnabled = [];
+	private ?string $prevYearMode = null;
 
 	protected function setUp(): void
 	{
 		if (!class_exists(\OC::class) || !isset(\OC::$server)) {
 			$this->markTestSkipped('Nextcloud runtime required');
 		}
+		$config = \OC::$server->get(IConfig::class);
+		$this->prevYearMode = $config->getAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_YEAR_MODE, Constants::VACATION_YEAR_MODE_CALENDAR);
+		$config->setAppValue('arbeitszeitcheck', Constants::CONFIG_VACATION_YEAR_MODE, Constants::VACATION_YEAR_MODE_CALENDAR);
 		$this->uid = 'azc_legacy_' . bin2hex(random_bytes(3));
 		$um = \OC::$server->get(IUserManager::class);
 		if ($um->userExists($this->uid)) {
@@ -60,6 +66,16 @@ final class LegacyAzcClockIsolationIntegrationTest extends TestCase
 			}
 		}
 		$this->wasEnabled = [];
+		if ($this->prevYearMode !== null) {
+			try {
+				\OC::$server->get(IConfig::class)->setAppValue(
+					'arbeitszeitcheck',
+					Constants::CONFIG_VACATION_YEAR_MODE,
+					$this->prevYearMode
+				);
+			} catch (\Throwable) {
+			}
+		}
 		try {
 			\OC::$server->get(IUserManager::class)->get($this->uid)?->delete();
 		} catch (\Throwable) {

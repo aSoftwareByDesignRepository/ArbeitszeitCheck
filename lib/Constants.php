@@ -133,6 +133,23 @@ final class Constants
 	 */
 	public const MAX_EXPORT_DATE_RANGE_DAYS = 365;
 
+	/** Rolling calendar subscription: months of history included on each refresh. */
+	public const SUBSCRIPTION_ROLLING_PAST_MONTHS = 3;
+
+	/** Rolling calendar subscription: months ahead included on each refresh. */
+	public const SUBSCRIPTION_ROLLING_FUTURE_MONTHS = 12;
+
+	/**
+	 * Hard cap for subscription rolling-window span (3 past + 12 future months can exceed export limit).
+	 */
+	public const MAX_SUBSCRIPTION_DATE_RANGE_DAYS = 460;
+
+	/**
+	 * Virtual team id for organization-wide calendar subscription scope (all app-access employees).
+	 * Does not reference {@see at_teams}; stored in token rows and API payloads as teamId=0.
+	 */
+	public const OUTLOOK_ICAL_ORG_WIDE_TEAM_ID = 0;
+
 	/**
 	 * Batch size for chunked DB operations (e.g. recursive team queries).
 	 */

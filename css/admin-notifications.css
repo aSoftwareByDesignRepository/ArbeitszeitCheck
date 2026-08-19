@@ -701,6 +701,13 @@
 	background: var(--azc-tint-info);
 }
 
+#app-content.azc-app--admin-notifications .azc-choice-card:has(> input[type='radio']:checked) .azc-choice-card__hint,
+#app-content.azc-app--admin-overtime-settings .azc-choice-card:has(> input[type='radio']:checked) .azc-choice-card__hint,
+#app-content.azc-app--admin-vacation-rules .azc-choice-card:has(> input[type='radio']:checked) .azc-choice-card__hint,
+#app-content.azc-app--admin-vacation-layers .azc-choice-card:has(> input[type='radio']:checked) .azc-choice-card__hint {
+	color: var(--azc-text, var(--color-main-text));
+}
+
 #app-content.azc-app--admin-notifications .azc-choice-card:focus-within,
 #app-content.azc-app--admin-overtime-settings .azc-choice-card:focus-within,
 #app-content.azc-app--admin-vacation-rules .azc-choice-card:focus-within,

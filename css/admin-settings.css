@@ -350,7 +350,6 @@
   border-radius: 3px;
   color-scheme: inherit;
   appearance: auto;
-  -webkit-appearance: auto;
 }
 
 #admin-settings-form .form-checkbox .form-label,
@@ -456,6 +455,48 @@
   padding: 0;
 }
 
+#admin-settings-form .azc-access-overview {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--azc-space-3, 0.75rem);
+  margin-bottom: var(--azc-space-4, 1rem);
+}
+
+#admin-settings-form .azc-access-overview__item {
+  min-width: 0;
+  padding: var(--azc-space-3, 0.75rem) var(--azc-space-4, 1rem);
+  border: 1px solid var(--azc-border, var(--color-border));
+  border-radius: var(--azc-radius-md, 12px);
+  background: var(--azc-bg-soft, var(--color-background-hover));
+}
+
+#admin-settings-form .azc-access-overview__label {
+  margin: 0 0 var(--azc-space-1, 0.25rem);
+  font-size: var(--azc-fs-xs, 0.75rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--azc-muted, var(--color-text-maxcontrast));
+}
+
+#admin-settings-form .azc-access-overview__value {
+  margin: 0;
+  font-size: var(--azc-fs-sm, 0.875rem);
+  line-height: 1.45;
+  color: var(--azc-text, var(--color-main-text));
+}
+
+#admin-settings-form .azc-settings-step {
+  padding: var(--azc-space-4, 1rem);
+  border: 1px solid var(--azc-border, var(--color-border));
+  border-radius: var(--azc-radius-md, 12px);
+  background: var(--azc-bg-card, var(--color-main-background));
+}
+
+#admin-settings-form .azc-settings-step--access-mode {
+  background: color-mix(in srgb, var(--color-main-background) 90%, var(--color-primary-element) 10%);
+}
+
 #admin-settings-form .azc-access-mode .form-label,
 #admin-settings-form .azc-access-mode legend.form-label {
   display: block;
@@ -482,6 +523,10 @@
   padding: 0;
   box-sizing: border-box;
   flex-shrink: 0;
+}
+
+#admin-settings-form .access-mode-option + .access-mode-option {
+  border-top: 1px solid var(--azc-border, var(--color-border));
 }
 
 #admin-settings-form .access-groups-list,
@@ -548,6 +593,13 @@
   font-size: 0.8125rem;
   color: var(--arbeitszeitcheck-color-text-lighter, var(--color-text-lighter));
   line-height: 1.35;
+}
+
+/* Tablet breakpoint: from 768px upward the overview can split into tiles without reducing legibility. */
+@media (min-width: 768px) {
+  #admin-settings-form .azc-access-overview {
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  }
 }
 
 /* Month reopen: full-width user search + suggestion list */
@@ -829,6 +881,94 @@
 	}
 }
 
+/* Outlook iCal subscription section: mobile base keeps every control full-width and avoids overflow on narrow screens. */
+#outlook-ical-subscription,
+#outlook-ical-subscription .azc-card__body,
+#outlook-ical-subscription .form-fieldset,
+#outlook-ical-subscription .form-group,
+#outlook-ical-subscription .user-picker,
+#outlook-ical-subscription .user-picker__control,
+#outlook-ical-subscription .user-picker__list,
+#outlook-ical-subscription .card-actions--inline,
+#outlook-ical-subscription #outlookIcalResultCard {
+	min-width: 0;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+#outlook-ical-subscription .form-fieldset {
+	display: flex;
+	flex-direction: column;
+	gap: var(--azc-space-4, 1rem);
+}
+
+#outlook-ical-subscription .form-group {
+	margin-bottom: 0;
+}
+
+#outlook-ical-subscription .form-row--2 {
+	grid-template-columns: 1fr;
+}
+
+#outlook-ical-subscription .form-input,
+#outlook-ical-subscription textarea.form-input,
+#outlook-ical-subscription .user-picker__search,
+#outlook-ical-subscription .form-select {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+#outlook-ical-subscription .user-picker__clear {
+	min-width: 44px;
+	min-height: 44px;
+	align-self: stretch;
+}
+
+#outlook-ical-subscription .card-actions--inline {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--azc-space-3, 0.75rem);
+}
+
+#outlook-ical-subscription .card-actions--inline .azc-btn {
+	width: 100%;
+	justify-content: center;
+}
+
+#outlook-ical-subscription #outlookIcalFeedUrl {
+	inline-size: 100%;
+	min-block-size: 7rem;
+	resize: vertical;
+}
+
+/* Tablet breakpoint: from 768px upward the date pair can sit side-by-side again while keeping wrapped actions. */
+@media (min-width: 768px) {
+	#outlook-ical-subscription .form-row--2 {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	#outlook-ical-subscription .card-actions--inline {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+	}
+
+	#outlook-ical-subscription .card-actions--inline .azc-btn {
+		width: auto;
+	}
+}
+
+/* Desktop breakpoint: from 1024px upward restore existing compact clear-button sizing so desktop remains unchanged. */
+@media (min-width: 1024px) {
+	#outlook-ical-subscription .user-picker__clear {
+		min-width: 2.25rem;
+		min-height: 2.25rem;
+		align-self: center;
+	}
+}
+
 /* === support-us:azc start === */
 /**
  * Support & Us — shared family styles (WCAG 2.1 AA, responsive).
@@ -1067,7 +1207,6 @@
 	padding: 0;
 	margin: -1px;
 	overflow: hidden;
-	clip: rect(0, 0, 0, 0);
 	clip-path: inset(50%);
 	white-space: nowrap;
 	border: 0;

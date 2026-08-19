@@ -43,6 +43,28 @@ class TeamManagerMapper extends QBMapper
 	}
 
 	/**
+	 * @return list<string>
+	 */
+	public function getManagerUserIdsByTeamIds(array $teamIds): array
+	{
+		if ($teamIds === []) {
+			return [];
+		}
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('user_id')
+			->from($this->getTableName())
+			->where($qb->expr()->in('team_id', $qb->createParameter('team_ids')));
+		$qb->setParameter('team_ids', $teamIds, IQueryBuilder::PARAM_INT_ARRAY);
+		$result = $qb->executeQuery();
+		$ids = [];
+		while ($row = $result->fetch()) {
+			$ids[] = (string)$row['user_id'];
+		}
+		$result->closeCursor();
+		return $ids;
+	}
+
+	/**
 	 * @return TeamManager[]
 	 */
 	public function findByTeamId(int $teamId): array

@@ -739,7 +739,7 @@ class TimeEntryController extends Controller
 	#[NoCSRFRequired]
 	public function create(): TemplateResponse
 	{
-		\OCP\Util::addTranslations('arbeitszeitcheck');
+		\OCA\ArbeitszeitCheck\Service\FrontEndAssetService::registerTranslations();
 
 		$userId = $this->getUserId();
 
@@ -813,7 +813,7 @@ class TimeEntryController extends Controller
 	#[NoCSRFRequired]
 	public function edit(int $id): TemplateResponse
 	{
-		\OCP\Util::addTranslations('arbeitszeitcheck');
+		\OCA\ArbeitszeitCheck\Service\FrontEndAssetService::registerTranslations();
 
 		try {
 			$userId = $this->getUserId();

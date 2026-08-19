@@ -991,21 +991,40 @@ class TimeEntryFormManager {
 	}
 
 	updateTimeSummary() {
-		if (!this.timeSummary || !this.hasFormData()) {
-			if (this.timeSummary) this.timeSummary.style.display = 'none';
+		if (!this.timeSummary) {
+			return;
+		}
+		this.timeSummary.style.display = 'block';
+
+		const showSummaryPrompt = (message) => {
+			if (this.summaryWorkingHours) {
+				this.summaryWorkingHours.textContent = '0.00';
+			}
+			if (this.summaryBreakTime) {
+				this.summaryBreakTime.textContent = '0.00';
+			}
+			if (this.complianceStatus) {
+				this.complianceStatus.className = 'compliance-status warning';
+				this.complianceStatus.textContent = message;
+			}
+			this.updateBreakRequirementIndicator(0);
+		};
+
+		if (!this.hasFormData()) {
+			showSummaryPrompt(t('Please enter both start and end time.', 'Please enter both start and end time.'));
 			return;
 		}
 
 		const dateStr = this.convertDateFormat(this.dateInput.value);
 		if (!dateStr) {
-			if (this.timeSummary) this.timeSummary.style.display = 'none';
+			showSummaryPrompt(t('Please enter valid start and end times.', 'Please enter valid start and end times.'));
 			return;
 		}
 
 		const startTime = this.startTimeHidden.value;
 		const endTime = this.endTimeHidden.value;
 		if (!startTime || !endTime || startTime === '00:00' || endTime === '00:00') {
-			if (this.timeSummary) this.timeSummary.style.display = 'none';
+			showSummaryPrompt(t('Please enter both start and end time.', 'Please enter both start and end time.'));
 			return;
 		}
 
@@ -1016,7 +1035,7 @@ class TimeEntryFormManager {
 			// Validate Date objects
 			if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
 				console.warn('Invalid date/time values');
-				if (this.timeSummary) this.timeSummary.style.display = 'none';
+				showSummaryPrompt(t('Please enter valid start and end times.', 'Please enter valid start and end times.'));
 				return;
 			}
 
@@ -1069,7 +1088,7 @@ class TimeEntryFormManager {
 			// Validate duration is positive
 			if (totalDurationMs <= 0) {
 				console.warn('Invalid work duration');
-				if (this.timeSummary) this.timeSummary.style.display = 'none';
+				showSummaryPrompt(t('Please enter valid start and end times.', 'Please enter valid start and end times.'));
 				return;
 			}
 
@@ -1103,10 +1122,6 @@ class TimeEntryFormManager {
 			if (this.summaryBreakTime) {
 				this.summaryBreakTime.textContent = breakDurationHours.toFixed(2);
 			}
-			if (this.timeSummary) {
-				this.timeSummary.style.display = 'block';
-			}
-
 			// Update compliance status (sum + AZG split patterns when configured)
 			this.updateComplianceStatus(workingDurationHours, breakDurationHours, this.collectBreakPortionMinutes(dateStr));
 
@@ -1115,7 +1130,7 @@ class TimeEntryFormManager {
 
 		} catch (error) {
 			console.warn('Error updating time summary:', error);
-			if (this.timeSummary) this.timeSummary.style.display = 'none';
+			showSummaryPrompt(t('Please enter valid start and end times.', 'Please enter valid start and end times.'));
 		}
 	}
 
@@ -1396,7 +1411,6 @@ class TimeEntryFormManager {
 			}
 
 			const workDurationMs = endDateTime - startDateTime;
-			const workDurationHours = workDurationMs / (1000 * 60 * 60);
 
 			if (workDurationMs <= 0) {
 				if (this.endTimeHour) {

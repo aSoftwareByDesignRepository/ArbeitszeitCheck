@@ -290,6 +290,15 @@ return [
 		['name' => 'admin#getTeamsUseAppTeams', 'url' => '/api/admin/teams/config/use-app-teams', 'verb' => 'GET'],
 		['name' => 'admin#setTeamsUseAppTeams', 'url' => '/api/admin/teams/config/use-app-teams', 'verb' => 'PUT'],
 
+		// Outlook iCalendar subscriptions (RFC 5545)
+		['name' => 'outlook_ical_subscription#adminTeams', 'url' => '/api/admin/outlook-ical/teams', 'verb' => 'GET'],
+		['name' => 'outlook_ical_subscription#adminWebcalLocalAccess', 'url' => '/api/admin/outlook-ical/webcal-local-access', 'verb' => 'GET'],
+		['name' => 'outlook_ical_subscription#adminEnableWebcalLocalAccess', 'url' => '/api/admin/outlook-ical/webcal-local-access', 'verb' => 'POST'],
+		['name' => 'outlook_ical_subscription#adminRotateToken', 'url' => '/api/admin/outlook-ical/rotate', 'verb' => 'POST'],
+		['name' => 'outlook_ical_subscription#tokenizedFeed', 'url' => '/api/outlook-ical/feed.ics', 'verb' => 'GET'],
+		['name' => 'outlook_ical_subscription#tokenizedFeedLegacy', 'url' => '/api/outlook-ical/tokenized', 'verb' => 'GET'],
+		['name' => 'outlook_ical_subscription#authenticatedFeed', 'url' => '/api/outlook-ical/authenticated', 'verb' => 'GET'],
+
 		// Export routes
 		['name' => 'export#timeEntries', 'url' => '/export/time-entries', 'verb' => 'GET'],
 		['name' => 'export#absences', 'url' => '/export/absences', 'verb' => 'GET'],

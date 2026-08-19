@@ -13,6 +13,21 @@ use OCP\Util;
 final class FrontEndAssetService
 {
 	private static bool $coreRegistered = false;
+	private static bool $translationsRegistered = false;
+
+	/**
+	 * Register l10n boot helper before locale JS (idempotent per request).
+	 */
+	public static function registerTranslations(): void
+	{
+		if (self::$translationsRegistered) {
+			return;
+		}
+		self::$translationsRegistered = true;
+
+		Util::addScript(Application::APP_ID, 'common/l10n-boot');
+		Util::addTranslations(Application::APP_ID);
+	}
 
 	/**
 	 * Register shared stylesheet + JS stack (idempotent per request).
@@ -24,7 +39,7 @@ final class FrontEndAssetService
 		}
 		self::$coreRegistered = true;
 
-		Util::addTranslations(Application::APP_ID);
+		self::registerTranslations();
 		Util::addStyle(Application::APP_ID, 'app');
 		Util::addScript(Application::APP_ID, 'common/api');
 		Util::addScript(Application::APP_ID, 'common/catalog');

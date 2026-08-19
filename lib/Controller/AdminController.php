@@ -857,7 +857,6 @@ class AdminController extends Controller
 	 * Admin settings page (admin-only by default)
 	 *
 	 */
-	#[NoCSRFRequired]
 	/**
 	 * Global settings index → default section (SETTINGS-PAGES-STANDARD).
 	 */
@@ -885,7 +884,7 @@ class AdminController extends Controller
 			'admin-settings',
 			'admin-settings',
 			['common/projectcheck', 'common/country-region'],
-			['common/admin-user-picker', 'admin-settings-legacy-redirect']
+			['common/admin-user-picker', 'admin-settings-legacy-redirect', 'admin-outlook-ical-subscription']
 		);
 
 		$requireSubstituteJson = $this->appConfig->getAppValueString('require_substitute_types', '[]');
@@ -980,6 +979,7 @@ class AdminController extends Controller
 				'projectCheckEnabledForCurrentUser' => $this->appManager->isEnabledForUser(Constants::APP_ID_PROJECTCHECK) === true,
 				'projectCheckAppsUrl' => $this->projectCheckAppsSettingsUrl(),
 				'requesttoken' => Util::callRegister(),
+				'useAppTeams' => $this->appConfig->getAppValueString('use_app_teams', '0') === '1',
 			],
 		));
 		return $this->configureCSP($response, 'admin');
@@ -1297,6 +1297,7 @@ class AdminController extends Controller
 
 		$defaultState = $this->getConfiguredDefaultRegion();
 		$statutoryAutoReseed = $this->appConfig->getAppValueString('statutory_auto_reseed', '1') === '1';
+		$settingsCatalog = new \OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog();
 
 		$response = new TemplateResponse('arbeitszeitcheck', 'admin-holidays', array_merge(
 			$this->buildAdminShellParams(
@@ -1309,6 +1310,10 @@ class AdminController extends Controller
 				'country' => $this->getConfiguredCountry(),
 				'statutoryAutoReseed' => $statutoryAutoReseed,
 				'settingsUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.admin.settings'),
+				'calendarSubscriptionUrl' => $settingsCatalog->url(
+					$this->urlGenerator,
+					\OCA\ArbeitszeitCheck\Service\AdminSettingsSectionCatalog::SECTION_OUTLOOK_SUBSCRIPTION,
+				),
 				'urlGenerator' => $this->urlGenerator,
 				'l' => $this->l10n,
 			],

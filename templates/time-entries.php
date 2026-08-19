@@ -38,6 +38,7 @@ $appTimezone = \OCP\Server::get(\OCP\IConfig::class)->getAppValue('arbeitszeitch
 $timeCapture = is_array($_['timeCapture'] ?? null) ? $_['timeCapture'] : [];
 $manualTimeEntryEnabled = (bool)($timeCapture['manualTimeEntryEnabled'] ?? true);
 require __DIR__ . '/common/user-display-timezone.php';
+/** @var \DateTimeZone $arbeitszeitCheckUserDisplayTz */
 ?>
 
 <?php include __DIR__ . '/common/page-start.php'; ?>
@@ -267,9 +268,8 @@ require __DIR__ . '/common/user-display-timezone.php';
                              role="status" 
                              aria-live="polite" 
                              aria-atomic="true"
-                             class="time-summary-card"
-                             style="display: none;">
-                            <h4 class="time-summary-title"><?php p($l->t('Summary')); ?></h4>
+                             class="time-summary-card">
+                            <h4 class="time-summary-title"><?php p($l->t('Day Summary')); ?></h4>
                             <div class="summary-row">
                                 <span class="summary-label"><?php p($l->t('Working Hours')); ?>:</span>
                                 <span class="summary-amount">
