@@ -7,7 +7,6 @@
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>arbeitszeitcheck</id>
 	<name>ArbeitszeitCheck</name>
-	<name lang="de">ArbeitszeitCheck</name>
 	<summary>Track working time with DACH profiles — ArbZG / AZG / ArG on your Nextcloud</summary>
 	<summary lang="de">Arbeitszeit erfassen mit DACH-Profilen — ArbZG / AZG / ArG in Ihrer Nextcloud</summary>
 	<summary lang="fr">Suivi du temps avec conformité DACH (ArbZG / AZG / ArG) et contrôles RGPD dans Nextcloud</summary>
@@ -134,9 +133,154 @@ Registro de tiempo para Alemania, Austria y Suiza (DACH). Registra horas de trab
 - PHP 8.1–8.5
 	]]></description>
 
-	<version>1.6.9</version>
+	<description lang="nl"><![CDATA[
+# Inklokken. Blijf binnen de regels die u zelf instelt.
+
+ArbeitszeitCheck registreert in- en uitklokken en pauzes in de Nextcloud die u al beheert. Kies een landprofiel voor Duitsland (ArbZG), Oostenrijk (AZG/ARG) of Zwitserland (ArG), stem vakantiegebieden af, keur afwezigheden goed, voer rapporten uit (inclusief DATEV) en houd een auditlog bij.
+
+Ook bekend als **TimeGuard** in sommige App Store-zoekopdrachten.
+
+**Gratis webapp** (AGPL-3.0-or-later). Companion apps: https://nextcloud.software-by-design.de/
+
+## Waarom teams het installeren
+
+- **Werk netjes beginnen en stoppen** — pauzes, hervatten, handmatige invoer met reden
+- **Pas uw land aan** — DE / AT / CH-profielen met Länder, Bundesländer of kantons
+- **Bekijk problemen met pauzes en rust vroeg** — technische controles op basis van het profiel dat u configureert
+- **Voer afwezigheden correct uit** — vakantie, ziekte, speciaal verlof en onbetaald verlof met goedkeuring; rechtenmodi en CSV-import via `occ`
+- **Rapporteer wat er gebeurde** — overzichten voor medewerker, team en manager; overuren- en afwezigheidsrapporten; DATEV-export
+- **Sluit een maand af wanneer u dat nodig heeft** — optionele afronding met snapshot, hash en PDF; admin heropenen met reden
+- **Beheer de toegang** — open voor alle gebruikers of allowlists; Nextcloud-beheerders behouden de toegang
+
+## Duidelijke grenzen
+
+- Deze app is **geen juridisch advies**. U blijft verantwoordelijk voor modellen voor werktijden, collectieve overeenkomsten, configuratie en het gebruik van vastgelegde gegevens. Vraag advies wanneer dat nodig is.
+- Technische rapporten over schendingen tegen uw profiel zijn geen certificering door derden.
+- Gedeclareerde databases: MySQL en PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+
+## Vereisten
+
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL of PostgreSQL
+	]]></description>
+	<description lang="it"><![CDATA[
+# Iniziare e timbrare. Restare entro le regole che avete definito.
+
+ArbeitszeitCheck registra l’entrata, l’uscita e le pause nella Nextcloud che avete già in hosting. Scegli un profilo Paese per Germania (ArbZG), Austria (AZG/ARG) o Svizzera (ArG), abbina le aree di festività, approva le assenze, esegui i report (incluso DATEV) e conserva un audit log.
+
+Inoltre indicato come **TimeGuard** in alcune ricerche dell’App Store.
+
+**Web app gratuita** (AGPL-3.0-or-later). App associate: https://nextcloud.software-by-design.de/
+
+## Perché i team lo installano
+
+- **Iniziare e terminare il lavoro in modo pulito** — pause, ripresa, inserimenti manuali con motivazione
+- **Abbina il tuo Paese** — profili DE / AT / CH con Länder, Bundesländer o cantoni
+- **Vedi presto i problemi di pause e riposo** — controlli tecnici rispetto al profilo configurato
+- **Gestisci le assenze correttamente** — ferie, malattia, permessi speciali e congedi non retribuiti con approvazione; modalità di entitlement e import CSV via `occ`
+- **Riporta cosa è successo** — viste per dipendente, team e responsabile; report su straordinari e assenze; export DATEV
+- **Blocca un mese quando serve** — finalizzazione opzionale con snapshot, hash e PDF; riapertura admin con motivazione
+- **Controlla l’accesso** — aperto a tutti gli utenti o allow-list; gli admin Nextcloud mantengono l’accesso
+
+## Limiti chiari
+
+- Questa app **non è una consulenza legale**. Resta a voi la responsabilità dei modelli di orario di lavoro, dei contratti collettivi, della configurazione e di come vengono usati i dati registrati. Chiedete consulenza quando necessario.
+- I report tecnici sulle violazioni contro il vostro profilo non sono una certificazione di terze parti.
+- Database dichiarati: MySQL e PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+
+## Requisiti
+
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL o PostgreSQL
+	]]></description>
+	<description lang="pl"><![CDATA[
+# Zaloguj się. Trzymaj się zasad, które Państwo ustalili.
+
+ArbeitszeitCheck rejestruje przyjście, wyjście i przerwy w Nextcloud, którą Państwo już hostują. Wybierz profil kraju dla Niemiec (ArbZG), Austrii (AZG/ARG) lub Szwajcarii (ArG), dopasuj regiony świąt, zatwierdzaj nieobecności, uruchamiaj raporty (w tym DATEV) i prowadź dziennik audytu.
+
+W niektórych wyszukiwaniach w App Store aplikacja jest też znana jako **TimeGuard**.
+
+**Darmowa aplikacja webowa** (AGPL-3.0-or-later). Aplikacje towarzyszące: https://nextcloud.software-by-design.de/
+
+## Dlaczego zespoły ją instalują
+
+- **Zaczynaj i kończ pracę czytelnie** — przerwy, wznowienie, ręczne wpisy z uzasadnieniem
+- **Dopasuj swój kraj** — profile DE / AT / CH z Länder, Bundesländer lub kantonami
+- **Wczesne wykrywanie problemów z przerwami i odpoczynkiem** — kontrole techniczne w oparciu o skonfigurowany profil
+- **Prowadź nieobecności poprawnie** — urlop, choroba, urlop specjalny i urlop bezpłatny z akceptacją; tryby uprawnień i import CSV przez `occ`
+- **Raportuj to, co się wydarzyło** — widoki pracownika, zespołu i menedżera; raporty o nadgodzinach i nieobecnościach; eksport DATEV
+- **Zamykaj miesiąc, kiedy trzeba** — opcjonalne domknięcie z snapshotem, hashem i PDF; ponowne otwarcie przez admina z uzasadnieniem
+- **Kontroluj dostęp** — otwarte dla wszystkich użytkowników lub allow-listy; administratorzy Nextcloud zachowują dostęp
+
+## Jasne ograniczenia
+
+- Ta aplikacja **nie jest poradą prawną**. To Państwo pozostają odpowiedzialni za modele czasu pracy, umowy zbiorowe, konfigurację oraz to, jak używane są zarejestrowane dane. W razie potrzeby skonsultuj się z prawnikiem.
+- Techniczne raporty o naruszeniach względem twojego profilu nie są certyfikacją strony trzeciej.
+- Deklarowane bazy danych: MySQL i PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+
+## Wymagania
+
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL lub PostgreSQL
+	]]></description>
+	<description lang="sv"><![CDATA[
+# Stämpla in. Håll dig inom reglerna ni anger.
+
+ArbeitszeitCheck registrerar in-, utstämplingar och pauser i den Nextcloud ni redan hostar. Välj ett landsprofil för Tyskland (ArbZG), Österrike (AZG/ARG) eller Schweiz (ArG), matcha helgdagregioner, godkänn frånvaro, kör rapporter (inklusive DATEV) och behåll en auditlogg.
+
+Appen finns också listad som **TimeGuard** i vissa App Store-sökningar.
+
+**Gratis webbapp** (AGPL-3.0-or-later). Companion-appar: https://nextcloud.software-by-design.de/
+
+## Varför team installerar den
+
+- **Starta och avsluta arbetet snyggt** — pauser, återuppta, manuella inmatningar med en anledning
+- **Matcha ert land** — DE / AT / CH-profiler med Länder, Bundesländer eller kantoner
+- **Se problem med pauser och vila tidigt** — tekniska kontroller mot den profil ni har konfigurerat
+- **Kör frånvaro korrekt** — semester, sjukdom, särskilt och obetalt ledigt med godkännande; entitlement-lägen och CSV-import via `occ`
+- **Rapportera vad som hände** — vyer för medarbetare, team och chef; rapporter om övertid och frånvaro; DATEV-export
+- **Lås en månad när ni behöver** — valfri finalisering med snapshot, hash och PDF; admin återöppnar med en anledning
+- **Kontrollera åtkomst** — öppen för alla användare eller allow-listor; Nextcloud-administratörer behåller åtkomst
+
+## Tydliga gränser
+
+- Den här appen är **inte juridisk rådgivning**. Ni ansvarar fortfarande för modellerna för arbetstid, kollektivavtal, konfiguration och hur registrerade data används. Rådgör vid behov.
+- Tekniska rapporter om regelbrott mot er profil är inte en tredjepartscertifiering.
+- Deklarerade databaser: MySQL och PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+
+## Krav
+
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL eller PostgreSQL
+	]]></description>
+	<description lang="nb"><![CDATA[
+# Stemple inn. Hold dere innenfor reglene dere har satt.
+
+ArbeitszeitCheck registrerer inn-, utstempling og pauser i Nextclouden dere allerede hoster. Velg en landsprofil for Tyskland (ArbZG), Østerrike (AZG/ARG) eller Sveits (ArG), match ferieområder, godkjenn fravær, kjør rapporter (inkludert DATEV) og hold en auditlogg.
+
+Appen står også oppført som **TimeGuard** i noen App Store-søk.
+
+**Gratis nettapp** (AGPL-3.0-or-later). Følgeapper: https://nextcloud.software-by-design.de/
+
+## Hvorfor team installerer den
+
+- **Start og stopp jobben ryddig** — pauser, gjenoppta, manuelle innføringer med begrunnelse
+- **Tilpass landet deres** — DE / AT / CH-profiler med Länder, Bundesländer eller kantoner
+- **Se problemer med pauser og hvile tidlig** — tekniske sjekker mot profilen dere har konfigurert
+- **Kjør fravær riktig** — ferie, sykdom, permisjon og ubetalt permisjon med godkjenning; entitlement-moduser og CSV-import via `occ`
+- **Rapporter hva som skjedde** — visninger for ansatt, team og leder; rapporter om overtid og fravær; DATEV-eksport
+- **Lås en måned når dere trenger det** — valgfri fullføring med snapshot, hash og PDF; admin gjenåpner med en begrunnelse
+- **Kontroller tilgang** — åpen for alle brukere eller allow-lister; Nextcloud-administratorer beholder tilgang
+
+## Klare grenser
+
+- Denne appen er **ikke juridisk rådgivning**. Dere er fortsatt ansvarlige for modeller for arbeidstid, tariffavtaler, konfigurasjon og hvordan registrerte data brukes. Spør om råd ved behov.
+- Tekniske rapporter om regelbrudd mot profilen deres er ikke en tredjepartssertifisering.
+- Deklarerte databaser: MySQL og PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+
+## Krav
+
+- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL eller PostgreSQL
+	]]></description>
+	<version>1.6.10</version>
 	<licence>AGPL-3.0-or-later</licence>
-	<author mail="info@software-by-design.de" homepage="http://nextcloud.software-by-design.de">Alexander Mäule</author>
+	<author mail="info@software-by-design.de" homepage="http://nextcloud.software-by-design.de">Software by Design GbR</author>
 
 	<namespace>ArbeitszeitCheck</namespace>
 
