@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Db;
 
+use OCA\ArbeitszeitCheck\Support\QueryInChunker;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -123,7 +124,7 @@ class AbsenceMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
-			->where($qb->expr()->in('user_id', $qb->createNamedParameter(array_values($userIds), IQueryBuilder::PARAM_STR_ARRAY)))
+			->where(QueryInChunker::in($qb, 'user_id', $userIds, IQueryBuilder::PARAM_STR_ARRAY))
 			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->orderBy('start_date', 'DESC')
@@ -168,7 +169,7 @@ class AbsenceMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->createFunction('COUNT(*)'))
 			->from($this->getTableName())
-			->where($qb->expr()->in('user_id', $qb->createNamedParameter(array_values($userIds), IQueryBuilder::PARAM_STR_ARRAY)))
+			->where(QueryInChunker::in($qb, 'user_id', $userIds, IQueryBuilder::PARAM_STR_ARRAY))
 			->andWhere($qb->expr()->lte('start_date', $qb->createNamedParameter($endDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->gte('end_date', $qb->createNamedParameter($startDate->format('Y-m-d'), IQueryBuilder::PARAM_STR)));
 
@@ -253,11 +254,15 @@ class AbsenceMapper extends QBMapper
 	 */
 	public function findPendingForUsers(array $userIds, ?int $limit = null, ?int $offset = null): array
 	{
+		if ($userIds === []) {
+			return [];
+		}
+
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('status', $qb->createNamedParameter(Absence::STATUS_PENDING)))
-			->andWhere($qb->expr()->in('user_id', $qb->createNamedParameter($userIds, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere(QueryInChunker::in($qb, 'user_id', $userIds, IQueryBuilder::PARAM_STR_ARRAY))
 			->orderBy('start_date', 'ASC');
 
 		if ($limit !== null) {

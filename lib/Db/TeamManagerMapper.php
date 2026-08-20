@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Db;
 
+use OCA\ArbeitszeitCheck\Support\QueryInChunker;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
@@ -53,8 +54,7 @@ class TeamManagerMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->selectDistinct('user_id')
 			->from($this->getTableName())
-			->where($qb->expr()->in('team_id', $qb->createParameter('team_ids')));
-		$qb->setParameter('team_ids', $teamIds, IQueryBuilder::PARAM_INT_ARRAY);
+			->where(QueryInChunker::in($qb, 'team_id', $teamIds, IQueryBuilder::PARAM_INT_ARRAY));
 		$result = $qb->executeQuery();
 		$ids = [];
 		while ($row = $result->fetch()) {

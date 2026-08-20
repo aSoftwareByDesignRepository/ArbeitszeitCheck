@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Db;
 
+use OCA\ArbeitszeitCheck\Support\QueryInChunker;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception as DBException;
@@ -44,7 +45,7 @@ class TeamVacationPolicyMapper extends QBMapper
 			$qb = $this->db->getQueryBuilder();
 			$qb->select('*')
 				->from($this->getTableName())
-				->where($qb->expr()->in('team_id', $qb->createNamedParameter($teamIds, IQueryBuilder::PARAM_INT_ARRAY)))
+				->where(QueryInChunker::in($qb, 'team_id', $teamIds, IQueryBuilder::PARAM_INT_ARRAY))
 				->andWhere($qb->expr()->lte('effective_from', $qb->createNamedParameter($date, IQueryBuilder::PARAM_STR)))
 				->andWhere($qb->expr()->orX(
 					$qb->expr()->isNull('effective_to'),

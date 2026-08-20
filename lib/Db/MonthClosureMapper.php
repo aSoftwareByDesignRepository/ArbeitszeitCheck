@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Db;
 
+use OCA\ArbeitszeitCheck\Support\QueryInChunker;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -77,7 +78,7 @@ class MonthClosureMapper extends QBMapper
 		$qb->select('year', 'month')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('status', $qb->createNamedParameter(MonthClosure::STATUS_FINALIZED)))
-			->andWhere($qb->expr()->in('user_id', $qb->createNamedParameter($userIds, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere(QueryInChunker::in($qb, 'user_id', $userIds, IQueryBuilder::PARAM_STR_ARRAY))
 			->groupBy('year')
 			->addGroupBy('month')
 			->orderBy('year', 'DESC')
@@ -135,7 +136,7 @@ class MonthClosureMapper extends QBMapper
 			if ($restrictUserIds === []) {
 				return [];
 			}
-			$qb->andWhere($qb->expr()->in('user_id', $qb->createNamedParameter($restrictUserIds, IQueryBuilder::PARAM_STR_ARRAY)));
+			$qb->andWhere(QueryInChunker::in($qb, 'user_id', $restrictUserIds, IQueryBuilder::PARAM_STR_ARRAY));
 		}
 		$result = $qb->executeQuery();
 		$out = [];

@@ -68,14 +68,14 @@ final class SupportUsSectionRenderTest extends TestCase {
 			new SupportUsLinks('ArbeitszeitCheck', false, null),
 			'de',
 			[
-				'Support & us' => 'Support & wir',
+				'Support & us' => 'Hilfe & Support',
 				'Ask for a partner offer' => 'Partner-Angebot anfragen',
 				'Check Partner' => 'Check Partner',
 				'Annual hour packs — Small, Standard, or Premium — with priority email for your organisation. This is invoiceable service — not a donation. See packages on our support page.' =>
 					'Jährliche Stundenpakete — Small, Standard oder Premium — plus priorisierte E-Mail für Ihre Organisation. Verrechenbare Leistung, keine Spende. Pakete auf unserer Support-Seite.',
 			]
 		);
-		self::assertStringContainsString('Support &amp; wir', $html);
+		self::assertStringContainsString('Hilfe &amp; Support', $html);
 		self::assertStringContainsString('Partner-Angebot anfragen', $html);
 		self::assertStringContainsString('Verrechenbare Leistung', $html);
 	}

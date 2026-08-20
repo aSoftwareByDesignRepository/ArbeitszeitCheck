@@ -38,7 +38,9 @@ final class AppFeedbackFooterContractTest extends TestCase
 		self::assertStringContainsString('githubIssuesUrl', $src);
 		self::assertStringContainsString('rel="noopener noreferrer"', $src);
 		self::assertStringContainsString('no reply SLA', $src);
-		self::assertStringContainsString('Support & us', $src);
+		self::assertStringContainsString("\$l->t('Help')", $src);
+		self::assertStringContainsString('Use Support & us.', $src);
+		self::assertStringNotContainsString("\$l->t('Support & us')", $src);
 		self::assertSame('dev@software-by-design.de', AppFeedbackLinks::FEEDBACK_EMAIL);
 	}
 

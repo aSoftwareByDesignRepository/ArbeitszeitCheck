@@ -151,7 +151,8 @@ final class Constants
 	public const OUTLOOK_ICAL_ORG_WIDE_TEAM_ID = 0;
 
 	/**
-	 * Batch size for chunked DB operations (e.g. recursive team queries).
+	 * Batch size for chunked DB operations (recursive team walks, Oracle-safe IN lists).
+	 * Must stay ≤ {@see \OCA\ArbeitszeitCheck\Support\QueryInChunker::MAX_EXPRESSIONS_PER_LIST}.
 	 */
 	public const BATCH_CHUNK_SIZE = 500;
 

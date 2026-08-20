@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace OCA\ArbeitszeitCheck\Db;
 
 use OCA\ArbeitszeitCheck\Service\AppLocalNaiveDateTimeNormalizer;
+use OCA\ArbeitszeitCheck\Support\QueryInChunker;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\Entity;
 use OCP\AppFramework\Db\QBMapper;
@@ -633,11 +634,15 @@ class TimeEntryMapper extends QBMapper
 	 */
 	public function findPendingApprovalForUsers(array $userIds, ?int $limit = null, ?int $offset = null): array
 	{
+		if ($userIds === []) {
+			return [];
+		}
+
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
 			->where($qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_PENDING_APPROVAL)))
-			->andWhere($qb->expr()->in('user_id', $qb->createNamedParameter($userIds, IQueryBuilder::PARAM_STR_ARRAY)))
+			->andWhere(QueryInChunker::in($qb, 'user_id', $userIds, IQueryBuilder::PARAM_STR_ARRAY))
 			->orderBy('start_time', 'DESC');
 
 		if ($limit !== null) {
@@ -676,7 +681,7 @@ class TimeEntryMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from($this->getTableName())
-			->where($qb->expr()->in('user_id', $qb->createNamedParameter($userIds, IQueryBuilder::PARAM_STR_ARRAY)))
+			->where(QueryInChunker::in($qb, 'user_id', $userIds, IQueryBuilder::PARAM_STR_ARRAY))
 			->andWhere($qb->expr()->gte('start_time', $qb->createNamedParameter($startDate->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endDateExclusive->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
 			->orderBy('start_time', 'DESC')
@@ -713,7 +718,7 @@ class TimeEntryMapper extends QBMapper
 		$qb = $this->db->getQueryBuilder();
 		$qb->select($qb->createFunction('COUNT(*)'))
 			->from($this->getTableName())
-			->where($qb->expr()->in('user_id', $qb->createNamedParameter($userIds, IQueryBuilder::PARAM_STR_ARRAY)))
+			->where(QueryInChunker::in($qb, 'user_id', $userIds, IQueryBuilder::PARAM_STR_ARRAY))
 			->andWhere($qb->expr()->gte('start_time', $qb->createNamedParameter($startDate->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->lt('start_time', $qb->createNamedParameter($endDateExclusive->format('Y-m-d H:i:s'), IQueryBuilder::PARAM_STR)));
 

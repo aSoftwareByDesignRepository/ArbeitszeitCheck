@@ -3,8 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Nav footer: single "Support & us" button that opens a dropdown with
+ * Nav footer: single "Help" button that opens a dropdown with
  * Report a problem / Suggest an improvement / GitHub Issues.
+ * (Commercial "Support & us" is a separate nav page — do not reuse that label here.)
  *
  * Expected variables (set by the including template):
  * @var \OCP\IL10N $l
@@ -92,7 +93,7 @@ $sbdFeedbackIcon = static function (string $iconPrefix, string $inner): string {
 			<span class="<?php p($prefix); ?>-nav-footer__trigger-icon" aria-hidden="true"><?php
 				print_unescaped($sbdFeedbackIcon($prefix, '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/>'));
 			?></span>
-			<span class="<?php p($prefix); ?>-nav-footer__trigger-label"><?php p($l->t('Support & us')); ?></span>
+			<span class="<?php p($prefix); ?>-nav-footer__trigger-label"><?php p($l->t('Help')); ?></span>
 		</button>
 		<ul
 			class="<?php p($prefix); ?>-nav-footer__menu"
