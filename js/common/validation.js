@@ -604,7 +604,8 @@ const ArbeitszeitCheckValidation = {
 
   /**
    * Required break minutes for a shift duration, using profile tiers
-   * (highest matching threshold wins — same as LaborLawProfile::requiredBreakMinutes).
+   * (highest exclusive threshold wins — same as LaborLawProfile::requiredBreakMinutes).
+   * ArbZG §4 / AZG §11 / ArG Art. 15: more than afterHours, not equal to it.
    */
   calculateRequiredBreakMinutes(workingHours) {
     const hours = Number(workingHours);
@@ -613,7 +614,7 @@ const ArbeitszeitCheckValidation = {
     }
     const tiers = this.getBreakTiers().slice().reverse(); // highest first
     for (const tier of tiers) {
-      if (hours >= tier.afterHours) {
+      if (hours > tier.afterHours) {
         return tier.breakMinutes;
       }
     }

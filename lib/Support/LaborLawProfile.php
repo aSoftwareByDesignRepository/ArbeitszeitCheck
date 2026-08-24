@@ -70,18 +70,34 @@ final class LaborLawProfile
 	}
 
 	/**
-	 * Required total break minutes for a gross shift duration.
+	 * Highest break tier whose exclusive threshold the duration has crossed.
 	 * Tiers are evaluated from the highest threshold down (first match wins).
+	 *
+	 * DACH statutes use “mehr als” / more than (ArbZG §4, AZG §11, ArG Art. 15):
+	 * exactly 6 hours is not yet a 30-minute break; exactly 9 hours (DE) is still
+	 * the 30-minute band, not 45.
+	 *
+	 * @return array{afterHours: float, breakMinutes: int}|null
 	 */
-	public function requiredBreakMinutes(float $durationHours): int
+	public function matchingBreakTier(float $durationHours): ?array
 	{
 		foreach ($this->breakTiers as $tier) {
-			if ($durationHours >= $tier['afterHours']) {
-				return $tier['breakMinutes'];
+			if ($durationHours > $tier['afterHours']) {
+				return $tier;
 			}
 		}
 
-		return 0;
+		return null;
+	}
+
+	/**
+	 * Required total break minutes for a shift duration.
+	 */
+	public function requiredBreakMinutes(float $durationHours): int
+	{
+		$tier = $this->matchingBreakTier($durationHours);
+
+		return $tier !== null ? (int)$tier['breakMinutes'] : 0;
 	}
 
 	/**

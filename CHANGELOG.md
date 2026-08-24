@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.13 - 2026-08-24
+
+### Changed
+
+- **Nextcloud:** `max-version` remains **34** (current stable **34.0.3**).
+
+### Fixed
+
+- **Break requirement (ArbZG §4 / AZG §11 / ArG Art. 15):** the 30-minute break applies only after **more than** six hours of work, not at exactly six hours. A shift such as 08:00–14:00 is no longer blocked. The same exclusive threshold applies at the higher bands (DE 9 h → 45 min only after more than nine hours; CH 5.5 / 7 / 9 h).
+- **Reports page:** DATEV/admin controls no longer follow `$isAdmin` after the navigation partial overwrites it, so admins still see the DATEV section.
+
 ## 1.6.12 - 2026-08-20
 
 ### Added

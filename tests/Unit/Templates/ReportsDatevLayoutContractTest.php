@@ -24,8 +24,9 @@ class ReportsDatevLayoutContractTest extends TestCase
 		$this->assertStringContainsString("export.datev", $src);
 		$this->assertStringContainsString("export.datevConfig", $src);
 		$this->assertStringContainsString('DATEV section under this form', $src);
-		$this->assertStringNotContainsString(
-			'This page offers CSV and JSON only',
+		$this->assertStringContainsString('$reportsIsAdmin', $src);
+		$this->assertStringContainsString(
+			'Do not reuse $isAdmin / $isManager',
 			$src
 		);
 	}

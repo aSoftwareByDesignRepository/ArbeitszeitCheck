@@ -114,7 +114,7 @@ class ComplianceService
     }
 
     /**
-     * First break tier whose threshold the shift reached but whose required
+     * First break tier whose exclusive threshold the shift crossed but whose required
      * break minutes (and AZG split patterns, when configured) are not met —
      * or null when the entry is compliant.
      *
@@ -126,21 +126,19 @@ class ComplianceService
         $profile = $this->profile($userId);
         $timeEntry->setCountableMinBreakMinutes($profile->minBreakMinutes);
         $durationHours = $timeEntry->getDurationHours();
-
-        foreach ($profile->breakTiers as $tier) {
-            if ($durationHours >= $tier['afterHours']) {
-                $portions = $this->breakPortionMinutes($timeEntry, $profile->minBreakMinutes);
-                $ok = BreakSplitValidator::meetsRequirement(
-                    $portions,
-                    (int)$tier['breakMinutes'],
-                    $profile->allowedBreakSplitPatterns,
-                );
-
-                return $ok ? null : $tier;
-            }
+        $tier = $profile->matchingBreakTier($durationHours);
+        if ($tier === null) {
+            return null;
         }
 
-        return null;
+        $portions = $this->breakPortionMinutes($timeEntry, $profile->minBreakMinutes);
+        $ok = BreakSplitValidator::meetsRequirement(
+            $portions,
+            (int)$tier['breakMinutes'],
+            $profile->allowedBreakSplitPatterns,
+        );
+
+        return $ok ? null : $tier;
     }
 
     /**

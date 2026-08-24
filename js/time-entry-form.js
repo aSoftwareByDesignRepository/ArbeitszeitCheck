@@ -348,7 +348,7 @@ class TimeEntryFormManager {
 			{ afterHours: 9, breakMinutes: 45 },
 		]).slice().sort((a, b) => Number(b.afterHours) - Number(a.afterHours));
 		for (const tier of tiers) {
-			if (workingHours >= Number(tier.afterHours)) {
+			if (workingHours > Number(tier.afterHours)) {
 				return Math.round(Number(tier.breakMinutes)) || 0;
 			}
 		}
@@ -1493,7 +1493,7 @@ class TimeEntryFormManager {
 			const firstTierHours = (Validation && typeof Validation.getBreakTiers === 'function'
 				? Validation.getBreakTiers()
 				: [{ afterHours: 6 }])[0]?.afterHours ?? 6;
-			if (netWorkingHours < firstTierHours && totalBreakMs > 0) {
+			if (netWorkingHours <= firstTierHours && totalBreakMs > 0) {
 				console.info('Breaks added for short shift - this is allowed but not required');
 			}
 		} catch (error) {

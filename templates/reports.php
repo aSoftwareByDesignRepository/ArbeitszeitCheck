@@ -16,9 +16,10 @@ use OCA\ArbeitszeitCheck\Service\IconCatalog;
 // Assets registered by PageController::registerFrontEndAssets
 
 $urlGenerator = $_['urlGenerator'] ?? \OCP\Server::get(\OCP\IURLGenerator::class);
-$isAdmin = $_['isAdmin'] ?? false;
-$isManager = $_['isManager'] ?? false;
-$canAccessReports = $isAdmin || $isManager;
+// Do not reuse $isAdmin / $isManager — common/navigation.php overwrites $isAdmin for nav highlighting.
+$reportsIsAdmin = !empty($_['isAdmin']);
+$reportsIsManager = !empty($_['isManager']);
+$canAccessReports = $reportsIsAdmin || $reportsIsManager;
 
 // Whether app-owned teams are enabled (controls whether manager-specific team selection makes sense)
 $config = \OCP\Server::get(\OCP\IConfig::class);
@@ -66,7 +67,7 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                 <h3 id="report-scope-heading" class="reports-section__title"><?php p($l->t('Who should be included in the report?')); ?></h3>
                 <p class="reports-section__desc">
                     <?php
-                    if ($isAdmin) {
+                    if ($reportsIsAdmin) {
                         p($l->t('Choose whether you want a report for the whole organization or for a specific team.'));
                     } else {
                         p($l->t('Choose whether you want a report for everyone you manage.'));
@@ -78,7 +79,7 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                     <fieldset class="form-fieldset" aria-labelledby="scope-legend">
                         <legend id="scope-legend" class="form-legend"><?php p($l->t('Report scope')); ?></legend>
 
-                        <?php if ($isAdmin): ?>
+                        <?php if ($reportsIsAdmin): ?>
                             <div class="form-group">
                                 <div class="form-radio">
                                     <input type="radio"
@@ -357,14 +358,14 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                         <select id="format" 
                                 name="format" 
                                 class="form-select"
-                                aria-describedby="<?php echo $isAdmin ? 'format-help format-help-datev' : 'format-help'; ?>">
+                                aria-describedby="<?php echo $reportsIsAdmin ? 'format-help format-help-datev' : 'format-help'; ?>">
                             <option value="csv"><?php p($l->t('CSV (for Excel or other programs)')); ?></option>
                             <option value="json"><?php p($l->t('JSON (for computer programs)')); ?></option>
                         </select>
                         <p id="format-help" class="form-help">
                             <?php p($l->t('Choose how you want to save the report. CSV works well with spreadsheet programs. JSON is best if another system needs to process the data.')); ?>
                         </p>
-                        <?php if ($isAdmin): ?>
+                        <?php if ($reportsIsAdmin): ?>
                         <p id="format-help-datev" class="form-help">
                             <?php p($l->t('CSV and JSON downloads use the buttons below. For payroll DATEV files, use the DATEV section under this form — configure Beraternummer and Mandantennummer in Administration → Global settings first.')); ?>
                         </p>
@@ -426,7 +427,7 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
                     </div>
                 </form>
 
-                <?php if ($isAdmin): ?>
+                <?php if ($reportsIsAdmin): ?>
                 <aside id="datev-export-panel"
                        class="datev-export-panel"
                        aria-labelledby="datev-export-heading"
@@ -486,8 +487,8 @@ $useAppTeams = $config->getAppValue('arbeitszeitcheck', 'use_app_teams', '0') ==
     window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
     window.ArbeitszeitCheck.page = 'reports';
     window.ArbeitszeitCheck.canAccessReports = <?php echo json_encode($canAccessReports, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    window.ArbeitszeitCheck.isAdmin = <?php echo json_encode($isAdmin, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    window.ArbeitszeitCheck.isManager = <?php echo json_encode($isManager, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.isAdmin = <?php echo json_encode($reportsIsAdmin, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.ArbeitszeitCheck.isManager = <?php echo json_encode($reportsIsManager, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     
     window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
     window.ArbeitszeitCheck.l10n.error = <?php echo json_encode($l->t('An error occurred'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

@@ -41,10 +41,13 @@ class LaborLawProfileFactoryTest extends TestCase
 		$this->assertSame(6, $profile->nightWindowEndHour);
 		$this->assertSame(15, $profile->minBreakMinutes);
 
+		// ArbZG §4: mehr als sechs / mehr als neun (exclusive thresholds).
 		$this->assertSame(0, $profile->requiredBreakMinutes(5.99));
-		$this->assertSame(30, $profile->requiredBreakMinutes(6.0));
+		$this->assertSame(0, $profile->requiredBreakMinutes(6.0));
+		$this->assertSame(30, $profile->requiredBreakMinutes(6 + 1 / 60));
 		$this->assertSame(30, $profile->requiredBreakMinutes(8.99));
-		$this->assertSame(45, $profile->requiredBreakMinutes(9.0));
+		$this->assertSame(30, $profile->requiredBreakMinutes(9.0));
+		$this->assertSame(45, $profile->requiredBreakMinutes(9 + 1 / 60));
 		$this->assertSame(45, $profile->requiredBreakMinutes(14.0));
 
 		$this->assertSame('ArbZG §3', $profile->lawLabel('daily'));
@@ -71,8 +74,10 @@ class LaborLawProfileFactoryTest extends TestCase
 		$this->assertSame(10, $profile->minBreakMinutes, 'AZG §11 portions may be 10 minutes');
 		$this->assertSame([[15, 15], [10, 10, 10]], $profile->allowedBreakSplitPatterns);
 
+		// AZG §11: mehr als sechs Stunden.
 		$this->assertSame(0, $profile->requiredBreakMinutes(5.5));
-		$this->assertSame(30, $profile->requiredBreakMinutes(6.0));
+		$this->assertSame(0, $profile->requiredBreakMinutes(6.0));
+		$this->assertSame(30, $profile->requiredBreakMinutes(6 + 1 / 60));
 		$this->assertSame(30, $profile->requiredBreakMinutes(12.0));
 
 		$this->assertSame('AZG §9', $profile->lawLabel('daily'));
@@ -100,12 +105,16 @@ class LaborLawProfileFactoryTest extends TestCase
 		$this->assertSame(15, $profile->minBreakMinutes);
 		$this->assertNull($profile->allowedBreakSplitPatterns);
 
+		// ArG Art. 15: mehr als 5.5 / 7 / 9 Stunden.
 		$this->assertSame(0, $profile->requiredBreakMinutes(5.49));
-		$this->assertSame(15, $profile->requiredBreakMinutes(5.5));
+		$this->assertSame(0, $profile->requiredBreakMinutes(5.5));
+		$this->assertSame(15, $profile->requiredBreakMinutes(5.5 + 1 / 60));
 		$this->assertSame(15, $profile->requiredBreakMinutes(6.9));
-		$this->assertSame(30, $profile->requiredBreakMinutes(7.0));
+		$this->assertSame(15, $profile->requiredBreakMinutes(7.0));
+		$this->assertSame(30, $profile->requiredBreakMinutes(7 + 1 / 60));
 		$this->assertSame(30, $profile->requiredBreakMinutes(8.9));
-		$this->assertSame(60, $profile->requiredBreakMinutes(9.0));
+		$this->assertSame(30, $profile->requiredBreakMinutes(9.0));
+		$this->assertSame(60, $profile->requiredBreakMinutes(9 + 1 / 60));
 
 		$this->assertSame('ArG Art. 9', $profile->lawLabel('daily'));
 		$this->assertSame('ArG Art. 15', $profile->lawLabel('breaks'));

@@ -1565,14 +1565,14 @@ class TimeTrackingService
 		$minBreakFloor = max(1, $this->lawProfile($userId)->minBreakMinutes);
 		$minChunk = max($minBreakFloor, (int)floor($highest['breakMinutes'] / 2));
 
-		// Critical: at/past the highest tier and still missing a meaningful chunk.
-		if ($hoursWorked >= $highest['afterHours'] && $remainingBreak >= $minChunk) {
+		// Critical: past the highest exclusive tier and still missing a meaningful chunk.
+		if ($hoursWorked > $highest['afterHours'] && $remainingBreak >= $minChunk) {
 			return 'critical';
 		}
 
-		// Warning: at/past the lowest tier with a meaningful deficit, or within
+		// Warning: past the lowest exclusive tier with a meaningful deficit, or within
 		// 30 minutes of the next (higher) tier when that tier's break is already required.
-		if ($hoursWorked >= $lowest['afterHours'] && $remainingBreak >= $minBreakFloor) {
+		if ($hoursWorked > $lowest['afterHours'] && $remainingBreak >= $minBreakFloor) {
 			return 'warning';
 		}
 		if (count($tiers) > 1
