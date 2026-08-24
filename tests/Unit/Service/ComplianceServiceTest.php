@@ -1103,6 +1103,134 @@ class ComplianceServiceTest extends TestCase
 		$this->assertEquals(1, $report['violations_by_severity'][ComplianceViolation::SEVERITY_WARNING]);
 	}
 
+	public function testBlockingIssuesForCompletedEntryAllowsExactlySixHoursWithoutBreak(): void
+	{
+		$timeEntry = new TimeEntry();
+		$timeEntry->setUserId('testuser');
+		$timeEntry->setStartTime(new \DateTime('2026-05-02 08:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2026-05-02 14:00:00'));
+		$timeEntry->setBreaks(json_encode([]));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$timeEntry->setIsManualEntry(true);
+		$timeEntry->setCreatedAt(new \DateTime());
+		$timeEntry->setUpdatedAt(new \DateTime());
+
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
+	}
+
+	public function testBlockingIssuesForCompletedEntryUsesNetHoursNotGrossSpan(): void
+	{
+		$timeEntry = new TimeEntry();
+		$timeEntry->setUserId('testuser');
+		$timeEntry->setStartTime(new \DateTime('2026-05-02 08:00:00'));
+		$timeEntry->setEndTime(new \DateTime('2026-05-02 14:30:00'));
+		$timeEntry->setBreaks(json_encode([[
+			'start' => '2026-05-02T11:00:00',
+			'end' => '2026-05-02T11:30:00',
+		]]));
+		$timeEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$timeEntry->setIsManualEntry(true);
+		$timeEntry->setCreatedAt(new \DateTime());
+		$timeEntry->setUpdatedAt(new \DateTime());
+
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($timeEntry));
+	}
+
+	public function testBlockingIssuesForCompletedEntryCountsOtherEntriesOnTheSameDay(): void
+	{
+		$morning = new TimeEntry();
+		$morning->setId(11);
+		$morning->setUserId('testuser');
+		$morning->setStartTime(new \DateTime('2026-05-02 08:00:00'));
+		$morning->setEndTime(new \DateTime('2026-05-02 12:00:00'));
+		$morning->setBreaks(json_encode([]));
+		$morning->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$afternoon = new TimeEntry();
+		$afternoon->setUserId('testuser');
+		$afternoon->setStartTime(new \DateTime('2026-05-02 13:00:00'));
+		$afternoon->setEndTime(new \DateTime('2026-05-02 17:00:00'));
+		$afternoon->setBreaks(json_encode([]));
+		$afternoon->setStatus(TimeEntry::STATUS_COMPLETED);
+		$afternoon->setIsManualEntry(true);
+		$afternoon->setCreatedAt(new \DateTime());
+		$afternoon->setUpdatedAt(new \DateTime());
+
+		$this->timeEntryMapper = $this->createMock(TimeEntryMapper::class);
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([$morning]);
+		$dailyHoursCalculator = new \OCA\ArbeitszeitCheck\Service\DailyWorkingHoursCalculator(
+			$this->timeEntryMapper,
+			$this->timeZoneService,
+		);
+		$this->service = new ComplianceService(
+			$this->timeEntryMapper,
+			$this->violationMapper,
+			$this->workingTimeModelMapper,
+			$this->userWorkingTimeModelMapper,
+			$this->userManager,
+			$this->l10n,
+			$this->notificationService,
+			$this->holidayCalendarService,
+			$this->config,
+			$this->permissionService,
+			$this->timeZoneService,
+			$dailyHoursCalculator,
+			new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($this->config),
+		);
+
+		$issues = $this->service->blockingIssuesForCompletedEntry($afternoon);
+		$this->assertNotEmpty($issues);
+		$this->assertStringContainsString('30-minute', $issues[0]);
+	}
+
+	public function testBlockingIssuesForCompletedEntryAcceptsBreakOnEarlierEntrySameDay(): void
+	{
+		$morning = new TimeEntry();
+		$morning->setId(12);
+		$morning->setUserId('testuser');
+		$morning->setStartTime(new \DateTime('2026-05-02 08:00:00'));
+		$morning->setEndTime(new \DateTime('2026-05-02 12:30:00'));
+		$morning->setBreaks(json_encode([[
+			'start' => '2026-05-02T10:00:00',
+			'end' => '2026-05-02T10:30:00',
+		]]));
+		$morning->setStatus(TimeEntry::STATUS_COMPLETED);
+
+		$afternoon = new TimeEntry();
+		$afternoon->setUserId('testuser');
+		$afternoon->setStartTime(new \DateTime('2026-05-02 13:00:00'));
+		$afternoon->setEndTime(new \DateTime('2026-05-02 16:30:00'));
+		$afternoon->setBreaks(json_encode([]));
+		$afternoon->setStatus(TimeEntry::STATUS_COMPLETED);
+		$afternoon->setIsManualEntry(true);
+		$afternoon->setCreatedAt(new \DateTime());
+		$afternoon->setUpdatedAt(new \DateTime());
+
+		$this->timeEntryMapper = $this->createMock(TimeEntryMapper::class);
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([$morning]);
+		$dailyHoursCalculator = new \OCA\ArbeitszeitCheck\Service\DailyWorkingHoursCalculator(
+			$this->timeEntryMapper,
+			$this->timeZoneService,
+		);
+		$this->service = new ComplianceService(
+			$this->timeEntryMapper,
+			$this->violationMapper,
+			$this->workingTimeModelMapper,
+			$this->userWorkingTimeModelMapper,
+			$this->userManager,
+			$this->l10n,
+			$this->notificationService,
+			$this->holidayCalendarService,
+			$this->config,
+			$this->permissionService,
+			$this->timeZoneService,
+			$dailyHoursCalculator,
+			new \OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory($this->config),
+		);
+
+		$this->assertSame([], $this->service->blockingIssuesForCompletedEntry($afternoon));
+	}
+
 	public function testBlockingIssuesForCompletedEntryFlagsMissingThirtyMinuteBreak(): void
 	{
 		$timeEntry = new TimeEntry();

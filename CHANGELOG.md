@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.14 - 2026-08-24
+
+### Changed
+
+- **Nextcloud:** `max-version` remains **34** (current stable **34.0.3**).
+
+### Fixed
+
+- **Break gate uses calendar-day net hours:** ArbZG §4 / AZG §11 / ArG Art. 15 now look at the peak calendar-day total (and countable breaks already recorded that day), not only the row being saved. Two 4-hour blocks on the same day can no longer skip the 30-minute break. Auto-break in the form uses net working time (span minus entered breaks), so 08:00–14:20 plus 20 minutes of break is not padded up to 30.
+
 ## 1.6.13 - 2026-08-24
 
 ### Changed

@@ -62,7 +62,7 @@ class DailyWorkingHoursCalculator
 		$now = $liveEnd ?? $this->timeZoneService->nowInStorage();
 		$periods = [];
 
-		$overlapping = $this->timeEntryMapper->findOverlapping($userId, $dayStart, $dayEnd);
+		$overlapping = $this->timeEntryMapper->findOverlapping($userId, $dayStart, $dayEnd) ?? [];
 		foreach ($overlapping as $entry) {
 			if ($excludeEntryId !== null && $entry->getId() === $excludeEntryId) {
 				continue;
@@ -76,7 +76,7 @@ class DailyWorkingHoursCalculator
 			}
 		}
 
-		if ($liveEntry !== null && ($excludeEntryId === null || $liveEntry->getId() !== $excludeEntryId)) {
+		if ($liveEntry !== null) {
 			$period = $this->buildClippedPeriod($liveEntry, $dayStartTs, $dayEndTs, $now);
 			if ($period !== null) {
 				$periods[] = $period;
@@ -118,13 +118,31 @@ class DailyWorkingHoursCalculator
 		?\DateTime $effectiveEnd = null,
 		?int $excludeEntryId = null,
 	): float {
+		return $this->describePeakWorkingDay($userId, $entry, $effectiveEnd, $excludeEntryId)['hours'];
+	}
+
+	/**
+	 * Peak calendar-day net working hours plus that day's window (storage TZ).
+	 *
+	 * @return array{hours: float, dayStart: \DateTime, dayEnd: \DateTime}
+	 */
+	public function describePeakWorkingDay(
+		string $userId,
+		TimeEntry $entry,
+		?\DateTime $effectiveEnd = null,
+		?int $excludeEntryId = null,
+	): array {
 		$start = $entry->getStartTime();
 		$end = $entry->getEndTime() ?? $effectiveEnd;
 		if ($start === null || $end === null) {
-			return 0.0;
+			[$dayStart, $dayEnd] = $this->timeZoneService->dayWindowInStorage($this->timeZoneService->nowInStorage());
+
+			return ['hours' => 0.0, 'dayStart' => $dayStart, 'dayEnd' => $dayEnd];
 		}
 
-		$peak = 0.0;
+		$peak = -1.0;
+		$peakStart = null;
+		$peakEnd = null;
 		$dayCursor = $this->timeZoneService->dayWindowInStorage($start)[0];
 		$lastDay = $this->timeZoneService->dayWindowInStorage($end)[0];
 
@@ -138,11 +156,69 @@ class DailyWorkingHoursCalculator
 				$effectiveEnd ?? $end,
 				$excludeEntryId,
 			);
-			$peak = max($peak, $hours);
+			if ($hours > $peak) {
+				$peak = $hours;
+				$peakStart = $dayStart;
+				$peakEnd = $dayEnd;
+			}
 			$dayCursor = (clone $dayCursor)->modify('+1 day');
 		}
 
-		return $peak;
+		if ($peakStart === null || $peakEnd === null) {
+			[$peakStart, $peakEnd] = $this->timeZoneService->dayWindowInStorage($start);
+			$peak = 0.0;
+		}
+
+		return ['hours' => $peak, 'dayStart' => $peakStart, 'dayEnd' => $peakEnd];
+	}
+
+	/**
+	 * Countable break portions (whole minutes) on a calendar day, including $liveEntry.
+	 *
+	 * Portions shorter than $minBreakMinutes do not count (DE/CH: 15; AT: 10).
+	 *
+	 * @return list<int>
+	 */
+	public function countableBreakPortionsOnCalendarDay(
+		string $userId,
+		\DateTime $dayStart,
+		\DateTime $dayEnd,
+		TimeEntry $liveEntry,
+		int $minBreakMinutes,
+		?int $excludeEntryId = null,
+	): array {
+		$dayStartTs = $dayStart->getTimestamp();
+		$dayEndTs = $dayEnd->getTimestamp();
+		if ($dayEndTs <= $dayStartTs) {
+			return [];
+		}
+
+		$now = $liveEntry->getEndTime() ?? $this->timeZoneService->nowInStorage();
+		$liveId = $liveEntry->getId();
+		$intervals = [];
+		$overlapping = $this->timeEntryMapper->findOverlapping($userId, $dayStart, $dayEnd) ?? [];
+		foreach ($overlapping as $entry) {
+			if ($excludeEntryId !== null && $entry->getId() === $excludeEntryId) {
+				continue;
+			}
+			if ($liveId !== null && $entry->getId() === $liveId) {
+				continue;
+			}
+			$intervals = array_merge($intervals, $this->breakIntervalsInWindow($entry, $dayStartTs, $dayEndTs, $now));
+		}
+		$intervals = array_merge($intervals, $this->breakIntervalsInWindow($liveEntry, $dayStartTs, $dayEndTs, $now));
+
+		$merged = $this->mergeTimeIntervals($intervals);
+		$minSeconds = max(0, $minBreakMinutes) * 60;
+		$portions = [];
+		foreach ($merged as $interval) {
+			$seconds = $interval['end'] - $interval['start'];
+			if ($seconds >= $minSeconds) {
+				$portions[] = (int)round($seconds / 60);
+			}
+		}
+
+		return $portions;
 	}
 
 	/**
@@ -359,6 +435,19 @@ class DailyWorkingHoursCalculator
 	 */
 	private function breakSecondsInWindow(TimeEntry $entry, int $windowStart, int $windowEnd, \DateTime $now): int
 	{
+		$total = 0;
+		foreach ($this->breakIntervalsInWindow($entry, $windowStart, $windowEnd, $now) as $interval) {
+			$total += $interval['end'] - $interval['start'];
+		}
+
+		return $total;
+	}
+
+	/**
+	 * @return list<array{start: int, end: int}>
+	 */
+	private function breakIntervalsInWindow(TimeEntry $entry, int $windowStart, int $windowEnd, \DateTime $now): array
+	{
 		$intervals = [];
 
 		$breaksJson = $entry->getBreaks();
@@ -389,8 +478,26 @@ class DailyWorkingHoursCalculator
 			}
 		}
 
+		$clipped = [];
+		foreach ($this->mergeTimeIntervals($intervals) as $interval) {
+			$clipStart = max($interval['start'], $windowStart);
+			$clipEnd = min($interval['end'], $windowEnd);
+			if ($clipEnd > $clipStart) {
+				$clipped[] = ['start' => $clipStart, 'end' => $clipEnd];
+			}
+		}
+
+		return $clipped;
+	}
+
+	/**
+	 * @param list<array{start: int, end: int}> $intervals
+	 * @return list<array{start: int, end: int}>
+	 */
+	private function mergeTimeIntervals(array $intervals): array
+	{
 		if ($intervals === []) {
-			return 0;
+			return [];
 		}
 
 		usort($intervals, static fn (array $a, array $b): int => $a['start'] <=> $b['start']);
@@ -408,16 +515,7 @@ class DailyWorkingHoursCalculator
 		}
 		$merged[] = $current;
 
-		$total = 0;
-		foreach ($merged as $interval) {
-			$clipStart = max($interval['start'], $windowStart);
-			$clipEnd = min($interval['end'], $windowEnd);
-			if ($clipEnd > $clipStart) {
-				$total += $clipEnd - $clipStart;
-			}
-		}
-
-		return $total;
+		return $merged;
 	}
 
 	/**

@@ -114,7 +114,9 @@ class ComplianceService
     }
 
     /**
-     * First break tier whose exclusive threshold the shift crossed but whose required
+     * First break tier whose exclusive threshold the **calendar-day** net hours
+     * crossed but whose required break minutes (and AZG split patterns, when
+     * configured) are not met by countable breaks that day — or null when compliant.
      * break minutes (and AZG split patterns, when configured) are not met —
      * or null when the entry is compliant.
      *
@@ -125,13 +127,25 @@ class ComplianceService
         $userId = $timeEntry->getUserId();
         $profile = $this->profile($userId);
         $timeEntry->setCountableMinBreakMinutes($profile->minBreakMinutes);
-        $durationHours = $timeEntry->getDurationHours();
-        $tier = $profile->matchingBreakTier($durationHours);
+        $peak = $this->dailyWorkingHoursCalculator->describePeakWorkingDay(
+            $userId,
+            $timeEntry,
+            $timeEntry->getEndTime(),
+            $timeEntry->getId(),
+        );
+        $tier = $profile->matchingBreakTier($peak['hours']);
         if ($tier === null) {
             return null;
         }
 
-        $portions = $this->breakPortionMinutes($timeEntry, $profile->minBreakMinutes);
+        $portions = $this->dailyWorkingHoursCalculator->countableBreakPortionsOnCalendarDay(
+            $userId,
+            $peak['dayStart'],
+            $peak['dayEnd'],
+            $timeEntry,
+            $profile->minBreakMinutes,
+            $timeEntry->getId(),
+        );
         $ok = BreakSplitValidator::meetsRequirement(
             $portions,
             (int)$tier['breakMinutes'],
@@ -139,80 +153,6 @@ class ComplianceService
         );
 
         return $ok ? null : $tier;
-    }
-
-    /**
-     * Non-overlapping break lengths in whole minutes, ignoring portions shorter
-     * than the country minimum (DE/CH: 15; AT: 10 so AZG 3×10 is countable).
-     *
-     * @return list<int>
-     */
-    private function breakPortionMinutes(TimeEntry $timeEntry, int $minBreakMinutes): array
-    {
-        $minSeconds = max(0, $minBreakMinutes) * 60;
-        $breakPeriods = [];
-
-        $breaksJson = $timeEntry->getBreaks();
-        if ($breaksJson !== null && $breaksJson !== '') {
-            $breaks = json_decode($breaksJson, true) ?? [];
-            if (is_array($breaks)) {
-                foreach ($breaks as $break) {
-                    if (!isset($break['start'], $break['end'])) {
-                        continue;
-                    }
-                    try {
-                        $start = new \DateTime((string)$break['start']);
-                        $end = new \DateTime((string)$break['end']);
-                    } catch (\Throwable) {
-                        continue;
-                    }
-                    $durationSeconds = $end->getTimestamp() - $start->getTimestamp();
-                    if ($durationSeconds >= $minSeconds) {
-                        $breakPeriods[] = [
-                            'start' => $start->getTimestamp(),
-                            'end' => $end->getTimestamp(),
-                        ];
-                    }
-                }
-            }
-        }
-
-        if ($timeEntry->getBreakStartTime() !== null) {
-            $endTime = $timeEntry->getBreakEndTime() ?? new \DateTime();
-            $durationSeconds = $endTime->getTimestamp() - $timeEntry->getBreakStartTime()->getTimestamp();
-            if ($durationSeconds >= $minSeconds) {
-                $breakPeriods[] = [
-                    'start' => $timeEntry->getBreakStartTime()->getTimestamp(),
-                    'end' => $endTime->getTimestamp(),
-                ];
-            }
-        }
-
-        if ($breakPeriods === []) {
-            return [];
-        }
-
-        usort($breakPeriods, static fn (array $a, array $b): int => $a['start'] <=> $b['start']);
-
-        $merged = [];
-        $current = $breakPeriods[0];
-        for ($i = 1; $i < count($breakPeriods); $i++) {
-            $next = $breakPeriods[$i];
-            if ($next['start'] <= $current['end']) {
-                $current['end'] = max($current['end'], $next['end']);
-            } else {
-                $merged[] = $current;
-                $current = $next;
-            }
-        }
-        $merged[] = $current;
-
-        $portions = [];
-        foreach ($merged as $period) {
-            $portions[] = (int)round(($period['end'] - $period['start']) / 60);
-        }
-
-        return $portions;
     }
 
     private function missingBreakMessage(array $tier, ?string $userId = null): string

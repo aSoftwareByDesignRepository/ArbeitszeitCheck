@@ -280,4 +280,44 @@ class DailyWorkingHoursCalculatorTest extends TestCase
 			'Only 09:30–11:45 must count; the future tail until 17:00 must not inflate today hours.'
 		);
 	}
+
+	public function testCountableBreakPortionsIncludeLiveEntryAndIgnoreSubMinBreaks(): void
+	{
+		$tz = new \DateTimeZone('Europe/Berlin');
+		$morning = new TimeEntry();
+		$morning->setId(7);
+		$morning->setUserId('alex');
+		$morning->setStatus(TimeEntry::STATUS_COMPLETED);
+		$morning->setStartTime(new \DateTime('2026-05-02 08:00:00', $tz));
+		$morning->setEndTime(new \DateTime('2026-05-02 12:00:00', $tz));
+		$morning->setBreaks(json_encode([[
+			'start' => '2026-05-02T10:00:00+02:00',
+			'end' => '2026-05-02T10:10:00+02:00',
+		]]));
+
+		$afternoon = new TimeEntry();
+		$afternoon->setId(8);
+		$afternoon->setUserId('alex');
+		$afternoon->setStatus(TimeEntry::STATUS_COMPLETED);
+		$afternoon->setStartTime(new \DateTime('2026-05-02 13:00:00', $tz));
+		$afternoon->setEndTime(new \DateTime('2026-05-02 17:00:00', $tz));
+		$afternoon->setBreaks(json_encode([[
+			'start' => '2026-05-02T15:00:00+02:00',
+			'end' => '2026-05-02T15:30:00+02:00',
+		]]));
+
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([$morning, $afternoon]);
+		[$dayStart, $dayEnd] = $this->timeZoneService->dayWindowInStorage(new \DateTime('2026-05-02 12:00:00', $tz));
+
+		$portions = $this->calculator->countableBreakPortionsOnCalendarDay(
+			'alex',
+			$dayStart,
+			$dayEnd,
+			$afternoon,
+			15,
+			8,
+		);
+
+		$this->assertSame([30], $portions, '10-minute morning break is below the DE floor; afternoon 30 minutes counts.');
+	}
 }

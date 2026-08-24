@@ -603,6 +603,20 @@ const ArbeitszeitCheckValidation = {
   },
 
   /**
+   * Net working hours from a wall-clock span minus countable break minutes.
+   * ArbZG §4 / AZG §11 / ArG Art. 15 apply to net working time, not the clock span.
+   */
+  netWorkingHours(grossHours, countableBreakMinutes) {
+    const gross = Number(grossHours);
+    const breakMinutes = Number(countableBreakMinutes);
+    if (!Number.isFinite(gross) || gross <= 0) {
+      return 0;
+    }
+    const breakHours = Number.isFinite(breakMinutes) && breakMinutes > 0 ? breakMinutes / 60 : 0;
+    return Math.max(0, gross - breakHours);
+  },
+
+  /**
    * Required break minutes for a shift duration, using profile tiers
    * (highest exclusive threshold wins — same as LaborLawProfile::requiredBreakMinutes).
    * ArbZG §4 / AZG §11 / ArG Art. 15: more than afterHours, not equal to it.

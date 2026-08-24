@@ -307,15 +307,20 @@ class TimeEntryFormManager {
 				return;
 			}
 
-			const workDurationHours = workDurationMs / (1000 * 60 * 60);
-			const requiredBreakMinutes = this.resolveRequiredBreakMinutes(workDurationHours);
+			const grossHours = workDurationMs / (1000 * 60 * 60);
+			const manualBreakMinutes = this.calculateManualBreakTime(dateStr);
+			const validation = window.ArbeitszeitCheckValidation;
+			const netWorkingHours = validation && typeof validation.netWorkingHours === 'function'
+				? validation.netWorkingHours(grossHours, manualBreakMinutes)
+				: Math.max(0, grossHours - manualBreakMinutes / 60);
+			const requiredBreakMinutes = this.resolveRequiredBreakMinutes(netWorkingHours);
 
 			if (requiredBreakMinutes === 0) {
 				this.removeAutoAddedBreaks();
+				this.updateBreakRequirementIndicator(netWorkingHours);
 				return;
 			}
 
-			const manualBreakMinutes = this.calculateManualBreakTime(dateStr);
 			const shortfallMinutes = Math.max(0, requiredBreakMinutes - manualBreakMinutes);
 
 			this.removeAutoAddedBreaks();
@@ -324,7 +329,7 @@ class TimeEntryFormManager {
 				this.addAutomaticBreak(startDateTime, endDateTime, shortfallMinutes, notify);
 			}
 
-			this.updateBreakRequirementIndicator(workDurationHours);
+			this.updateBreakRequirementIndicator(netWorkingHours);
 		} catch (error) {
 			console.warn('Error in auto-break calculation:', error);
 		}

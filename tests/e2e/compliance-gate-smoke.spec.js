@@ -137,4 +137,45 @@ test.describe('Compliance gate smoke (Docker dev)', () => {
 		expect(blocked.json?.error_code).toBe('compliance_blocked')
 		expect(String(blocked.json?.error || '')).toMatch(/30.minute|30 Minuten|Pflichtpause/i)
 	})
+
+	test('API allows exactly six hours without a break (ArbZG §4 mehr als sechs Stunden)', async ({ page }) => {
+		await page.goto('/apps/arbeitszeitcheck/time-entries')
+		await assertArbeitszeitcheckLoaded(page)
+		await getRequestToken(page)
+
+		const allowed = await apiAllowFailure(page, 'POST', '/apps/arbeitszeitcheck/api/time-entries', {
+			data: {
+				date: '2026-06-05',
+				startTime: '08:00',
+				endTime: '14:00',
+			},
+		})
+
+		if (allowed.ok) {
+			expect(allowed.json?.success).toBe(true)
+			const id = allowed.json?.data?.id ?? allowed.json?.id ?? allowed.json?.entry?.id
+			if (id) {
+				await apiAllowFailure(page, 'DELETE', `/apps/arbeitszeitcheck/api/time-entries/${id}`)
+			}
+			return
+		}
+
+		// Auto-break off is not required here: 6.00 h must not be compliance_blocked.
+		expect(allowed.json?.error_code).not.toBe('compliance_blocked')
+	})
+
+	test('time entry create: 08:00–14:00 stays compliant without a break', async ({ page }) => {
+		await page.goto('/apps/arbeitszeitcheck/time-entries/create')
+		await assertArbeitszeitcheckLoaded(page)
+		await page.waitForSelector('#time-entry-form', { timeout: 30000 })
+
+		await page.locator('#entry-start-time-hour').selectOption('08')
+		await page.locator('#entry-start-time-minute').selectOption('00')
+		await page.locator('#entry-end-time-hour').selectOption('14')
+		await page.locator('#entry-end-time-minute').selectOption('00')
+
+		await expect(page.locator('#summary-working-hours')).toHaveText('6.00')
+		const status = page.locator('#compliance-status')
+		await expect(status).not.toContainText(/30 minutes break required|30 Minuten Pause erforderlich/i)
+	})
 })
