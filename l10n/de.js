@@ -4912,7 +4912,7 @@
 	"“Generate feed URL” creates the first link for a scope. “Revoke & rotate” replaces an existing link — the old URL stops working immediately." : "„Feed-URL generieren“ erstellt den ersten Link für einen Bereich. „Widerrufen & rotieren“ ersetzt einen bestehenden Link — die alte URL funktioniert sofort nicht mehr.",
 	"Generate a new link for this scope? The current subscription URL will stop working immediately." : "Neuen Link für diesen Bereich generieren? Die aktuelle Abonnement-URL funktioniert danach sofort nicht mehr.",
 	"%1$s · last generated %2$s" : "%1$s · zuletzt generiert am %2$s",
-	"Team #%d" : "Team #%d",
+	"Team #%d" : "Team Nr. %d",
 	"Share approved absences with Thunderbird, Nextcloud Calendar, or Outlook — one subscription link per scope and calendar language." : "Genehmigte Abwesenheiten mit Thunderbird, Nextcloud Calendar oder Outlook teilen — ein Abonnement-Link pro Bereich und Kalendersprache.",
 	"Each scope and calendar language has its own link. Links are stored encrypted on this server so you can copy them again later. Rotating a link invalidates the previous URL immediately." : "Jeder Bereich und jede Kalendersprache hat einen eigenen Link. Links werden auf diesem Server verschlüsselt gespeichert, damit Sie sie später erneut kopieren können. Beim Ersetzen eines Links wird die vorherige URL sofort ungültig.",
 	"Your subscription links" : "Ihre Abonnement-Links",

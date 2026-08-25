@@ -77,8 +77,8 @@ final class UninstallDropTables implements IRepairStep
 		'at_violations',
 		'azc_license_state',
 		'azc_mobile_seat',
-		'azc_terminal_device',
 		'azc_outlook_ical_tokens',
+		'azc_terminal_device',
 	];
 
 	public function __construct(

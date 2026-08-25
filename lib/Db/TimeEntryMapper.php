@@ -232,6 +232,61 @@ class TimeEntryMapper extends QBMapper
 	}
 
 	/**
+	 * Live punch status for many users in one query (admin/manager desklet summaries).
+	 *
+	 * Does not run getStatus side-effects. Priority when a user has multiple open
+	 * rows: active, then break, then paused. Users with no open row are omitted
+	 * (callers treat them as clocked_out).
+	 *
+	 * @param list<string> $userIds
+	 * @return array<string, 'active'|'break'|'paused'>
+	 */
+	public function findLiveStatusByUserIds(array $userIds): array
+	{
+		$userIds = QueryInChunker::normalizeValues($userIds);
+		if ($userIds === []) {
+			return [];
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('user_id', 'status')
+			->from($this->getTableName())
+			->where(QueryInChunker::in($qb, 'user_id', $userIds, IQueryBuilder::PARAM_STR_ARRAY))
+			->andWhere($qb->expr()->in(
+				'status',
+				$qb->createNamedParameter(
+					[
+						TimeEntry::STATUS_ACTIVE,
+						TimeEntry::STATUS_BREAK,
+						TimeEntry::STATUS_PAUSED,
+					],
+					IQueryBuilder::PARAM_STR_ARRAY
+				)
+			));
+
+		$rank = [
+			TimeEntry::STATUS_ACTIVE => 3,
+			TimeEntry::STATUS_BREAK => 2,
+			TimeEntry::STATUS_PAUSED => 1,
+		];
+		$map = [];
+		$result = $qb->executeQuery();
+		while ($row = $result->fetch()) {
+			$uid = (string)($row['user_id'] ?? '');
+			$status = (string)($row['status'] ?? '');
+			if ($uid === '' || !isset($rank[$status])) {
+				continue;
+			}
+			if (!isset($map[$uid]) || $rank[$status] > $rank[$map[$uid]]) {
+				$map[$uid] = $status;
+			}
+		}
+		$result->closeCursor();
+
+		return $map;
+	}
+
+	/**
 	 * Find paused or unfinished time entry for “today” for a user.
 	 *
 	 * Calendar-day bounds must match {@see \OCA\ArbeitszeitCheck\Constants::CONFIG_APP_TIMEZONE}

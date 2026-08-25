@@ -7,6 +7,7 @@ namespace OCA\ArbeitszeitCheck\Service;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\Absence;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
+use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCP\IUserManager;
 
 class DashboardWidgetDataService {
@@ -29,6 +30,7 @@ class DashboardWidgetDataService {
 		private readonly TimeCaptureMethodService $timeCaptureMethodService,
 		private readonly ProjectCheckIntegrationService $projectCheckIntegration,
 		private readonly VacationHoursDebitService $vacationHoursDebitService,
+		private readonly TimeEntryMapper $timeEntryMapper,
 	) {
 	}
 
@@ -256,41 +258,59 @@ class DashboardWidgetDataService {
 		}
 
 		$memberIds = $this->teamResolverService->getTeamMemberIds($userId);
-		$members = [];
 		$summary = $this->emptySummary();
-		$absenceSummary = [
-			'vacation' => 0,
-			'sick' => 0,
-			'other_absent' => 0,
-			'total_absent' => 0,
-		];
+		$resolvedIds = [];
+		foreach ($memberIds as $memberId) {
+			if ($this->userManager->get($memberId) === null) {
+				continue;
+			}
+			$resolvedIds[] = $memberId;
+		}
 
+		$live = $this->timeEntryMapper->findLiveStatusByUserIds($resolvedIds);
+		foreach ($resolvedIds as $memberId) {
+			$summary['total']++;
+			$this->incrementStatus($summary, $live[$memberId] ?? 'clocked_out');
+		}
+
+		$rank = ['active' => 0, 'break' => 1, 'paused' => 2, 'clocked_out' => 3];
+		usort($resolvedIds, static function (string $a, string $b) use ($live, $rank): int {
+			$sa = $live[$a] ?? 'clocked_out';
+			$sb = $live[$b] ?? 'clocked_out';
+			return ($rank[$sa] ?? 3) <=> ($rank[$sb] ?? 3) ?: strcmp($a, $b);
+		});
+
+		$members = [];
 		$effectiveLimit = max(1, min(self::MAX_MANAGER_MEMBERS, $limit));
-		foreach (array_slice($memberIds, 0, $effectiveLimit) as $memberId) {
+		foreach (array_slice($resolvedIds, 0, $effectiveLimit) as $memberId) {
 			$member = $this->userManager->get($memberId);
 			if ($member === null) {
 				continue;
 			}
-			$status = $this->timeTrackingService->getStatus($memberId);
-			$statusKey = (string)($status['status'] ?? 'clocked_out');
-			$summary['total']++;
-			$this->incrementStatus($summary, $statusKey);
-
+			$statusKey = $live[$memberId] ?? 'clocked_out';
+			$hours = 0.0;
+			if ($statusKey !== 'clocked_out') {
+				try {
+					$status = $this->timeTrackingService->getStatus($memberId);
+					$statusKey = (string)($status['status'] ?? $statusKey);
+					$hours = (float)($status['working_today_hours'] ?? 0.0);
+				} catch (\Throwable) {
+					// Keep batch status; hours stay 0.
+				}
+			}
 			$members[] = [
 				'userId' => $memberId,
 				'displayName' => $member->getDisplayName(),
 				'status' => $statusKey,
-				'workingTodayHours' => (float)($status['working_today_hours'] ?? 0.0),
+				'workingTodayHours' => $hours,
 			];
 		}
-
-		$absenceSummary = $this->buildTeamAbsenceSummary($memberIds);
 
 		return [
 			'authorized' => true,
 			'members' => $members,
 			'summary' => $summary,
-			'absenceSummary' => $absenceSummary,
+			'absenceSummary' => $this->buildTeamAbsenceSummary($memberIds),
 		];
 	}
 
@@ -316,28 +336,51 @@ class DashboardWidgetDataService {
 		$users = [];
 		$effectiveLimit = max(1, min(self::MAX_ADMIN_WIDGET_USERS, $limit));
 		$allUsers = $this->userManager->search('', self::MAX_ADMIN_USERS_SCAN, 0);
-		$allUserIds = [];
-		$index = 0;
+		$enabled = [];
 		foreach ($allUsers as $user) {
 			if (!$user->isEnabled()) {
 				continue;
 			}
-			$uid = $user->getUID();
-			$allUserIds[] = $uid;
-			$status = $this->timeTrackingService->getStatus($uid);
-			$statusKey = (string)($status['status'] ?? 'clocked_out');
-			$summary['total']++;
-			$this->incrementStatus($summary, $statusKey);
+			$enabled[] = $user;
+		}
 
-			if ($index < $effectiveLimit) {
-				$users[] = [
-					'userId' => $uid,
-					'displayName' => $user->getDisplayName(),
-					'status' => $statusKey,
-					'workingTodayHours' => (float)($status['working_today_hours'] ?? 0.0),
-				];
-				$index++;
+		$allUserIds = array_map(static fn ($user) => $user->getUID(), $enabled);
+		$live = $this->timeEntryMapper->findLiveStatusByUserIds($allUserIds);
+		foreach ($enabled as $user) {
+			$summary['total']++;
+			$this->incrementStatus($summary, $live[$user->getUID()] ?? 'clocked_out');
+		}
+
+		$rank = ['active' => 0, 'break' => 1, 'paused' => 2, 'clocked_out' => 3];
+		usort($enabled, static function ($a, $b) use ($live, $rank): int {
+			$sa = $live[$a->getUID()] ?? 'clocked_out';
+			$sb = $live[$b->getUID()] ?? 'clocked_out';
+			$byStatus = ($rank[$sa] ?? 3) <=> ($rank[$sb] ?? 3);
+			if ($byStatus !== 0) {
+				return $byStatus;
 			}
+			return strcmp($a->getDisplayName(), $b->getDisplayName());
+		});
+
+		foreach (array_slice($enabled, 0, $effectiveLimit) as $user) {
+			$uid = $user->getUID();
+			$statusKey = $live[$uid] ?? 'clocked_out';
+			$hours = 0.0;
+			if ($statusKey !== 'clocked_out') {
+				try {
+					$status = $this->timeTrackingService->getStatus($uid);
+					$statusKey = (string)($status['status'] ?? $statusKey);
+					$hours = (float)($status['working_today_hours'] ?? 0.0);
+				} catch (\Throwable) {
+					// Keep batch status; hours stay 0.
+				}
+			}
+			$users[] = [
+				'userId' => $uid,
+				'displayName' => $user->getDisplayName(),
+				'status' => $statusKey,
+				'workingTodayHours' => $hours,
+			];
 		}
 
 		$directoryTotal = $this->userManager->countUsersTotal(0, false);
@@ -348,13 +391,11 @@ class DashboardWidgetDataService {
 		// Only flag truncation when the scan window was exhausted (not when disabled accounts inflate directoryTotal).
 		$summaryTruncated = $hitScanCap;
 
-		$absenceSummary = $this->buildTeamAbsenceSummary($allUserIds);
-
 		return [
 			'authorized' => true,
 			'users' => $users,
 			'summary' => $summary,
-			'absenceSummary' => $absenceSummary,
+			'absenceSummary' => $this->buildTeamAbsenceSummary($allUserIds),
 			'summaryTruncated' => $summaryTruncated,
 			'summaryScopeLimit' => self::MAX_ADMIN_USERS_SCAN,
 			'directoryTotal' => (int)$directoryTotal,

@@ -6,6 +6,7 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Service;
 
 use OCA\ArbeitszeitCheck\Db\Absence;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
+use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Service\DashboardWidgetDataService;
@@ -75,7 +76,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		TimeTrackingService $timeTrackingService,
 		PermissionService $permissionService,
 		IUserManager $userManager,
-		?TeamResolverService $teamResolverService = null
+		?TeamResolverService $teamResolverService = null,
+		?TimeEntryMapper $timeEntryMapper = null
 	): DashboardWidgetDataService {
 		$display = $this->createMock(OvertimeDisplayService::class);
 		$display->method('getYearToDateBalanceForTrafficLight')->willReturn(0.0);
@@ -83,6 +85,11 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 		$bank = $this->createMock(OvertimeBankService::class);
 		$bank->method('isEnabled')->willReturn(false);
+
+		$mapper = $timeEntryMapper ?? $this->createMock(TimeEntryMapper::class);
+		if ($timeEntryMapper === null) {
+			$mapper->method('findLiveStatusByUserIds')->willReturn([]);
+		}
 
 		return new DashboardWidgetDataService(
 			$timeTrackingService,
@@ -98,6 +105,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createTimeCaptureMethodService(),
 			$this->createMock(ProjectCheckIntegrationService::class),
 			$this->createVacationHoursDebitService(),
+			$mapper,
 		);
 	}
 
@@ -142,7 +150,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
 			$this->createMock(ProjectCheckIntegrationService::class),
-			$this->createVacationHoursDebitService()
+			$this->createVacationHoursDebitService(),
+			$this->createMock(TimeEntryMapper::class),
 		);
 
 		$data = $service->getEmployeeWidgetData('u1', true);
@@ -215,6 +224,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createTimeCaptureMethodService(),
 			$projectCheck,
 			$this->createVacationHoursDebitService(),
+			$this->createMock(TimeEntryMapper::class),
 		);
 
 		$data = $service->getEmployeeWidgetData('u1', true);
@@ -262,7 +272,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
 			$this->createMock(ProjectCheckIntegrationService::class),
-			$this->createVacationHoursDebitService()
+			$this->createVacationHoursDebitService(),
+			$this->createMock(TimeEntryMapper::class),
 		);
 
 		$data = $service->getEmployeeStatusSummary('u1');
@@ -317,7 +328,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
 			$this->createMock(ProjectCheckIntegrationService::class),
-			$this->createVacationHoursDebitService()
+			$this->createVacationHoursDebitService(),
+			$this->createMock(TimeEntryMapper::class),
 		);
 
 		$data = $service->getEmployeeWidgetData('u1', true);
@@ -360,7 +372,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
 			$this->createMock(ProjectCheckIntegrationService::class),
-			$this->createVacationHoursDebitService()
+			$this->createVacationHoursDebitService(),
+			$this->createMock(TimeEntryMapper::class),
 		);
 
 		$data = $service->getEmployeeWidgetData('u1', true);
@@ -415,10 +428,7 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 		$team = $this->createMock(TeamResolverService::class);
 		$timeTrackingService = $this->createMock(TimeTrackingService::class);
-		$timeTrackingService->method('getStatus')->willReturn([
-			'status' => 'clocked_out',
-			'working_today_hours' => 0.0,
-		]);
+		$timeTrackingService->expects($this->never())->method('getStatus');
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('u1');
@@ -433,7 +443,9 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 		$this->assertTrue($data['authorized']);
 		$this->assertSame(1, $data['summary']['total']);
+		$this->assertSame(1, $data['summary']['clocked_out']);
 		$this->assertCount(1, $data['users']);
+		$this->assertSame('clocked_out', $data['users'][0]['status']);
 		$this->assertFalse($data['summaryTruncated']);
 	}
 
@@ -442,36 +454,81 @@ class DashboardWidgetDataServiceTest extends TestCase {
 		$permission->method('isAdmin')->willReturn(true);
 
 		$timeTrackingService = $this->createMock(TimeTrackingService::class);
-		$timeTrackingService->method('getStatus')->willReturn([
+		$timeTrackingService->expects($this->exactly(50))->method('getStatus')->willReturn([
 			'status' => 'active',
 			'working_today_hours' => 1.0,
 		]);
 
 		// Build 60 user mocks — more than MAX_ADMIN_WIDGET_USERS (50)
 		$users = [];
+		$live = [];
 		for ($i = 1; $i <= 60; $i++) {
 			$u = $this->createMock(IUser::class);
 			$u->method('getUID')->willReturn('u' . $i);
 			$u->method('getDisplayName')->willReturn('User ' . $i);
 			$u->method('isEnabled')->willReturn(true);
 			$users[] = $u;
+			$live['u' . $i] = 'active';
 		}
 
 		$userManager = $this->createMock(IUserManager::class);
 		$userManager->method('search')->with('', Constants::MAX_LIST_LIMIT, 0)->willReturn($users);
 		$userManager->method('countUsersTotal')->with(0, false)->willReturn(60);
 
+		$mapper = $this->createMock(TimeEntryMapper::class);
+		$mapper->expects($this->once())->method('findLiveStatusByUserIds')->willReturn($live);
+
 		$service = $this->createService(
 			$timeTrackingService,
 			$permission,
-			$userManager
+			$userManager,
+			null,
+			$mapper
 		);
 
 		// Request more than max; display list must be capped at 50
 		$data = $service->getAdminWidgetData('admin1', 100);
 		$this->assertCount(50, $data['users']);
-		// Summary counts all 60 users
+		// Summary counts all 60 users from the batch map (not N×getStatus)
 		$this->assertSame(60, $data['summary']['total']);
+		$this->assertSame(60, $data['summary']['active']);
+	}
+
+	public function testAdminWidgetDataPrefersLiveUsersInDisplayList(): void {
+		$permission = $this->createMock(PermissionService::class);
+		$permission->method('isAdmin')->willReturn(true);
+
+		$timeTrackingService = $this->createMock(TimeTrackingService::class);
+		$timeTrackingService->expects($this->once())->method('getStatus')->with('live1')->willReturn([
+			'status' => 'break',
+			'working_today_hours' => 2.5,
+		]);
+
+		$out = $this->createMock(IUser::class);
+		$out->method('getUID')->willReturn('out1');
+		$out->method('getDisplayName')->willReturn('AAA Out');
+		$out->method('isEnabled')->willReturn(true);
+		$liveUser = $this->createMock(IUser::class);
+		$liveUser->method('getUID')->willReturn('live1');
+		$liveUser->method('getDisplayName')->willReturn('ZZZ Live');
+		$liveUser->method('isEnabled')->willReturn(true);
+
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('search')->willReturn([$out, $liveUser]);
+		$userManager->method('countUsersTotal')->willReturn(2);
+
+		$mapper = $this->createMock(TimeEntryMapper::class);
+		$mapper->method('findLiveStatusByUserIds')->willReturn(['live1' => 'break']);
+
+		$service = $this->createService($timeTrackingService, $permission, $userManager, null, $mapper);
+		$data = $service->getAdminWidgetData('admin1', 1);
+
+		$this->assertCount(1, $data['users']);
+		$this->assertSame('live1', $data['users'][0]['userId']);
+		$this->assertSame('break', $data['users'][0]['status']);
+		$this->assertSame(2.5, $data['users'][0]['workingTodayHours']);
+		$this->assertSame(1, $data['summary']['break']);
+		$this->assertSame(1, $data['summary']['clocked_out']);
 	}
 
 	public function testManagerAbsenceSummaryUsesStorageCalendarToday(): void {
@@ -509,6 +566,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 
 		$display = $this->createMock(OvertimeDisplayService::class);
 		$bank = $this->createMock(OvertimeBankService::class);
+		$timeEntryMapper = $this->createMock(TimeEntryMapper::class);
+		$timeEntryMapper->method('findLiveStatusByUserIds')->willReturn([]);
 		$service = new DashboardWidgetDataService(
 			$timeTrackingService,
 			$this->createMock(OvertimeService::class),
@@ -522,7 +581,8 @@ class DashboardWidgetDataServiceTest extends TestCase {
 			$this->createTimeZoneService(),
 			$this->createTimeCaptureMethodService(),
 			$this->createMock(ProjectCheckIntegrationService::class),
-			$this->createVacationHoursDebitService()
+			$this->createVacationHoursDebitService(),
+			$timeEntryMapper,
 		);
 		$service->getManagerWidgetData('mgr1');
 	}

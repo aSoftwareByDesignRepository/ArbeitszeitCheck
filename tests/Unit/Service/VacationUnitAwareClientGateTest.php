@@ -13,6 +13,7 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Service;
 
 use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
+use OCA\ArbeitszeitCheck\Db\TimeEntryMapper;
 use OCA\ArbeitszeitCheck\Service\AbsenceService;
 use OCA\ArbeitszeitCheck\Service\DashboardWidgetDataService;
 use OCA\ArbeitszeitCheck\Service\OvertimeBankService;
@@ -103,6 +104,7 @@ class VacationUnitAwareClientGateTest extends TestCase
 			$capture,
 			$this->createMock(ProjectCheckIntegrationService::class),
 			$debit,
+			$this->createMock(TimeEntryMapper::class),
 		);
 	}
 
