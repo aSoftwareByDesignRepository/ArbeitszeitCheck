@@ -36,6 +36,7 @@ class KioskAuthServiceEnrollmentGateTest extends TestCase
 
 		$sessionMapper = $this->createMock(KioskSessionMapper::class);
 		$sessionMapper->expects($this->once())->method('deleteExpiredForTerminal');
+		$sessionMapper->expects($this->never())->method('deleteUnusedForTerminal');
 		$sessionMapper->expects($this->never())->method('insert');
 
 		$credService = $this->createMock(KioskCredentialService::class);

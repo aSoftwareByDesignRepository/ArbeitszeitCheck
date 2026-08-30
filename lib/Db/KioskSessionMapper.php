@@ -23,6 +23,20 @@ class KioskSessionMapper extends QBMapper
 		$qb->executeStatement();
 	}
 
+	/**
+	 * Drop unused open sessions for this terminal before a new identify.
+	 * A foyer tablet is one-person-at-a-time; prior unused rows only slow hash
+	 * scans and invite confused multi-session races.
+	 */
+	public function deleteUnusedForTerminal(string $terminalId): void
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('terminal_id', $qb->createNamedParameter($terminalId)))
+			->andWhere($qb->expr()->isNull('used_at'));
+		$qb->executeStatement();
+	}
+
 	public function deleteByUserId(string $userId): void
 	{
 		$qb = $this->db->getQueryBuilder();

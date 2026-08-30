@@ -53,6 +53,7 @@ class KioskAuthServicePinIdentifyTest extends TestCase
 
 		$sessionMapper = $this->createMock(KioskSessionMapper::class);
 		$sessionMapper->expects($this->once())->method('deleteExpiredForTerminal');
+		$sessionMapper->expects($this->never())->method('deleteUnusedForTerminal');
 		$sessionMapper->expects($this->never())->method('insert');
 
 		$time = $this->createMock(ITimeFactory::class);
@@ -108,6 +109,7 @@ class KioskAuthServicePinIdentifyTest extends TestCase
 
 		$sessionMapper = $this->createMock(KioskSessionMapper::class);
 		$sessionMapper->expects($this->once())->method('deleteExpiredForTerminal');
+		$sessionMapper->expects($this->once())->method('deleteUnusedForTerminal')->with('term-1');
 		$sessionMapper->expects($this->once())->method('insert');
 
 		$user = $this->createMock(IUser::class);
@@ -151,5 +153,7 @@ class KioskAuthServicePinIdentifyTest extends TestCase
 		$this->assertSame('off', $result['status']);
 		$this->assertSame(['clock_in'], $result['allowedActions']);
 		$this->assertNotSame('', $result['sessionToken']);
+		$this->assertArrayHasKey('sessionExpiresAt', $result);
+		$this->assertNotFalse(\DateTimeImmutable::createFromFormat(\DateTimeInterface::ATOM, $result['sessionExpiresAt']));
 	}
 }

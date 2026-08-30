@@ -42,7 +42,7 @@ class KioskAuthService
 	}
 
 	/**
-	 * @return array{sessionToken: string, userId: string, displayName: string, status: string, workedSecondsToday: int, allowedActions: list<string>}
+	 * @return array{sessionToken: string, userId: string, displayName: string, status: string, workedSecondsToday: int, allowedActions: list<string>, sessionExpiresAt: string}
 	 */
 	public function identify(KioskTerminal $terminal, string $method, ?string $rfidUid, ?string $userId, ?string $pin): array
 	{
@@ -88,11 +88,14 @@ class KioskAuthService
 			try {
 				$nowGate = $this->timeFactory->getDateTime();
 				$this->assertNoActiveEnrollment($terminal->getTerminalId(), $nowGate);
+				// Invalidate prior unused sessions under the same lock as insert.
+				$this->sessionMapper->deleteUnusedForTerminal($terminal->getTerminalId());
 				$this->sessionMapper->insert($session);
 			} finally {
 				$this->lockingProvider->releaseLock($termLock, ILockingProvider::LOCK_EXCLUSIVE);
 			}
 		} else {
+			$this->sessionMapper->deleteUnusedForTerminal($terminal->getTerminalId());
 			$this->sessionMapper->insert($session);
 		}
 
@@ -114,6 +117,8 @@ class KioskAuthService
 			'status' => $kioskStatus,
 			'workedSecondsToday' => $workedSeconds,
 			'allowedActions' => $allowedActions,
+			// Absolute wall expiry (ATOM) — tablet countdown must never invent past this.
+			'sessionExpiresAt' => $expires->format(\DateTimeInterface::ATOM),
 		];
 	}
 

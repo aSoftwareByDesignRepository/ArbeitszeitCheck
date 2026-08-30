@@ -22,6 +22,7 @@ class KioskIdentifyPayloadContractTest extends TestCase
 		'status',
 		'workedSecondsToday',
 		'allowedActions',
+		'sessionExpiresAt',
 	];
 
 	private const FORBIDDEN = [
@@ -53,9 +54,9 @@ class KioskIdentifyPayloadContractTest extends TestCase
 		$src = file_get_contents(dirname(__DIR__, 4) . '/lib/Service/Kiosk/KioskAuthService.php');
 		$this->assertNotFalse($src);
 		$this->assertMatchesRegularExpression(
-			'/@return array\{sessionToken: string, userId: string, displayName: string, status: string, workedSecondsToday: int, allowedActions: list<string>\}/',
+			'/@return array\{sessionToken: string, userId: string, displayName: string, status: string, workedSecondsToday: int, allowedActions: list<string>, sessionExpiresAt: string\}/',
 			$src,
-			'identify @return must stay the frozen companion contract'
+			'identify @return must stay the companion contract (incl. sessionExpiresAt)'
 		);
 	}
 
