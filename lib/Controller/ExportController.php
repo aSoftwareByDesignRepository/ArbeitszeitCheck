@@ -252,7 +252,7 @@ class ExportController extends Controller
 	/**
 	 * @return DataDownloadResponse|JSONResponse
 	 */
-	public function absences(string $format = 'csv', ?string $startDate = null, ?string $endDate = null): DataDownloadResponse|JSONResponse
+	public function absences(string $format = 'csv', ?string $startDate = null, ?string $endDate = null, ?string $sort = null): DataDownloadResponse|JSONResponse
 	{
 		try {
 			$user = $this->userSession->getUser();
@@ -292,14 +292,14 @@ class ExportController extends Controller
 			$data = [];
 			foreach ($absences as $absence) {
 				try {
-					$startDate = $absence->getStartDate();
-					$endDate = $absence->getEndDate();
+					$startDateRow = $absence->getStartDate();
+					$endDateRow = $absence->getEndDate();
 					$createdAt = $absence->getCreatedAt();
 					$data[] = [
 						'id' => $absence->getId(),
 						'type' => $absence->getType(),
-						'start_date' => $startDate ? $startDate->format('Y-m-d') : '',
-						'end_date' => $endDate ? $endDate->format('Y-m-d') : '',
+						'start_date' => $startDateRow ? $startDateRow->format('Y-m-d') : '',
+						'end_date' => $endDateRow ? $endDateRow->format('Y-m-d') : '',
 						'days' => $absence->getDays(),
 						'reason' => $absence->getReason() ?? '',
 						'status' => $absence->getStatus(),
@@ -313,6 +313,11 @@ class ExportController extends Controller
 				}
 			}
 
+			$sortMode = strtolower(trim((string)($sort ?? $this->request->getParam('sort') ?? 'date')));
+			if ($sortMode === 'type') {
+				$data = $this->sortAbsenceExportRowsByType($data);
+			}
+
 			$filename = 'absences-' . date('Y-m-d') . '.' . $format;
 
 			if ($format === 'pdf') {
@@ -322,6 +327,9 @@ class ExportController extends Controller
 			}
 
 			$timezone = $this->getExportTimezone();
+			if ($format === 'csv' && $sortMode === 'type') {
+				return $this->exportAbsencesCsvGroupedByType($data, $filename, $timezone);
+			}
 			return match($format) {
 				'csv' => $this->exportAsCsv($data, $filename, $timezone),
 				'json' => $this->exportAsJson($data, $filename, $timezone),
@@ -333,6 +341,69 @@ class ExportController extends Controller
 			$errorData = [['error' => $this->safeExportErrorMessage($e)]];
 			return $this->exportAsCsv($errorData, 'absences-export-error-' . date('Y-m-d') . '.csv', $this->getExportTimezone());
 		}
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $rows
+	 * @return list<array<string, mixed>>
+	 */
+	private function sortAbsenceExportRowsByType(array $rows): array
+	{
+		usort($rows, static function (array $a, array $b): int {
+			$typeCmp = strcasecmp((string)($a['type'] ?? ''), (string)($b['type'] ?? ''));
+			if ($typeCmp !== 0) {
+				return $typeCmp;
+			}
+			$startCmp = strcmp((string)($a['start_date'] ?? ''), (string)($b['start_date'] ?? ''));
+			if ($startCmp !== 0) {
+				return $startCmp;
+			}
+			return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
+		});
+
+		return $rows;
+	}
+
+	/**
+	 * CSV with section markers by absence type for payroll handoff (still flat-parseable:
+	 * comment rows start with #; data rows keep the same column headers after each section).
+	 *
+	 * @param list<array<string, mixed>> $data
+	 */
+	private function exportAbsencesCsvGroupedByType(array $data, string $filename, string $timezone): DataDownloadResponse
+	{
+		$fp = fopen('php://temp', 'r+');
+		if ($fp === false) {
+			throw new \RuntimeException('Failed to open temporary stream for CSV export');
+		}
+		fputcsv($fp, ['# ' . $this->l10n->t('Timezone'), $timezone]);
+		fputcsv($fp, ['# ' . $this->l10n->t('Exported at'), (new \DateTime('now', new \DateTimeZone($timezone)))->format('Y-m-d H:i:s T')]);
+		fputcsv($fp, ['# ' . $this->l10n->t('Sorted by absence type')]);
+
+		if ($data === []) {
+			fputcsv($fp, ['message', 'No data available']);
+		} else {
+			$headers = array_keys($data[0]);
+			$currentType = null;
+			foreach ($data as $row) {
+				$type = (string)($row['type'] ?? '');
+				if ($type !== $currentType) {
+					$currentType = $type;
+					fputcsv($fp, ['# ' . $this->l10n->t('Absence type') . ': ' . ($type !== '' ? $type : $this->l10n->t('(none)'))]);
+					fputcsv($fp, $headers);
+				}
+				$sanitizedRow = array_map(
+					static fn ($value): string => self::sanitizeCsvCellValue((string)$value),
+					array_values($row)
+				);
+				fputcsv($fp, $sanitizedRow);
+			}
+		}
+		rewind($fp);
+		$csv = stream_get_contents($fp);
+		fclose($fp);
+
+		return new DataDownloadResponse($csv !== false ? $csv : '', $filename, 'text/csv; charset=utf-8');
 	}
 
 	/**

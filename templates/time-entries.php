@@ -6,6 +6,7 @@ use OCA\ArbeitszeitCheck\Service\IconCatalog;
 use OCA\ArbeitszeitCheck\Support\BadgeVariant;
 use OCA\ArbeitszeitCheck\Support\LaborLawProfileFactory;
 use OCA\ArbeitszeitCheck\Support\RegionRegistry;
+use OCA\ArbeitszeitCheck\Support\TimePickerMinutes;
 /**
  * Time Entries template for arbeitszeitcheck app
  *
@@ -51,8 +52,12 @@ require __DIR__ . '/common/user-display-timezone.php';
             </div>
         <?php endif; ?>
         <?php if ($mode === 'list'): ?>
-            <div class="azc-callout azc-callout--info arbeitszeit-check-tz-context" role="region" aria-labelledby="arbeitszeit-tz-context-title">
-                <h2 id="arbeitszeit-tz-context-title" class="sr-only"><?php p($l->t('How time zones are used')); ?></h2>
+            <?php
+            $tzMismatchList = $appTimezone !== $arbeitszeitCheckUserDisplayTz->getName();
+            ?>
+            <?php if ($tzMismatchList): ?>
+            <details class="azc-callout azc-callout--info arbeitszeit-check-tz-context azc-collapsed-callout">
+                <summary class="azc-callout__title"><?php p($l->t('Time zones')); ?></summary>
                 <div class="arbeitszeit-check-tz-context__body">
                     <p class="azc-callout__text arbeitszeit-check-tz-context__text" id="arbeitszeit-tz-context-desc">
                         <?php p($l->t('Start and end times are shown in your personal timezone (%2$s). Values are stored using the organization timezone (%1$s) so daylight saving time is handled consistently.', [$appTimezone, $arbeitszeitCheckUserDisplayTz->getName()])); ?>
@@ -66,16 +71,17 @@ require __DIR__ . '/common/user-display-timezone.php';
                         </div>
                     </div>
                 </div>
-            </div>
+            </details>
+            <?php endif; ?>
 
-            <div class="azc-callout azc-callout--info time-entries-page__deletion-guide" role="region" aria-labelledby="time-entries-deletion-guide-title">
-                <h2 id="time-entries-deletion-guide-title" class="azc-callout__title time-entries-page__deletion-guide-title">
+            <details class="azc-callout azc-callout--info time-entries-page__deletion-guide azc-collapsed-callout">
+                <summary id="time-entries-deletion-guide-title" class="azc-callout__title time-entries-page__deletion-guide-title">
                     <?php p($l->t('Changing or removing time entries')); ?>
-                </h2>
+                </summary>
                 <p class="azc-callout__text">
                     <?php p($l->t('For clocked entries less than %d days old: use Edit to change times, or Delete to remove the entry entirely. Older clocked entries: use Request correction. Entries in a finalized month or approved by your manager cannot be deleted here.', [$editWindowDays])); ?>
                 </p>
-            </div>
+            </details>
 
             <div class="header-actions azc-page-actions-source">
                 <?php if ($manualTimeEntryEnabled): ?>
@@ -194,18 +200,20 @@ require __DIR__ . '/common/user-display-timezone.php';
             <?php
             $manualTimeEntriesRequireApproval = !empty($_['manualTimeEntriesRequireApproval']);
             $timeEntryChangesRequireApproval = !empty($_['timeEntryChangesRequireApproval']);
+            $tzMismatchForm = $appTimezone !== $arbeitszeitCheckUserDisplayTz->getName();
             ?>
-            <div class="azc-callout azc-callout--info time-entries-page__tz-callout" role="region" aria-labelledby="time-entry-tz-title">
-                <span class="azc-callout__icon azc-notif-icon-well" aria-hidden="true"><?php print_unescaped(IconCatalog::render('clock', 'azc-callout__icon-svg')); ?></span>
+            <?php if ($tzMismatchForm): ?>
+            <details class="azc-callout azc-callout--info time-entries-page__tz-callout azc-collapsed-callout">
+                <summary class="azc-callout__title"><?php p($l->t('How times are stored')); ?></summary>
                 <div class="azc-callout__body">
-                    <p id="time-entry-tz-title" class="azc-callout__title"><?php p($l->t('How times are stored')); ?></p>
                     <p class="azc-callout__text"><?php p($l->t('You enter start and end in your personal timezone (%2$s). The app stores them in the organization timezone (%1$s).', [$appTimezone, $arbeitszeitCheckUserDisplayTz->getName()])); ?></p>
                     <div class="time-entries-page__tz-badges" role="list" aria-label="<?php p($l->t('Time zone summary')); ?>">
                         <span class="timezone-badge timezone-badge--inline" role="listitem"><?php p($l->t('Organization')); ?>: <?php p($appTimezone); ?></span>
                         <span class="timezone-badge timezone-badge--inline" role="listitem"><?php p($l->t('Your display')); ?>: <?php p($arbeitszeitCheckUserDisplayTz->getName()); ?></span>
                     </div>
                 </div>
-            </div>
+            </details>
+            <?php endif; ?>
             <?php if ($mode === 'create' && $manualTimeEntriesRequireApproval): ?>
             <div class="azc-callout azc-callout--info time-entries-page__workflow-callout" role="status">
                 <span class="azc-callout__icon azc-notif-icon-well" aria-hidden="true"><?php print_unescaped(IconCatalog::render('user-check', 'azc-callout__icon-svg')); ?></span>
@@ -263,28 +271,7 @@ require __DIR__ . '/common/user-display-timezone.php';
                             </div>
                         <?php endif; ?>
 
-                        <!-- Real-time Summary Section -->
-                        <div id="time-summary" 
-                             role="status" 
-                             aria-live="polite" 
-                             aria-atomic="true"
-                             class="time-summary-card">
-                            <h4 class="time-summary-title"><?php p($l->t('Day Summary')); ?></h4>
-                            <div class="summary-row">
-                                <span class="summary-label"><?php p($l->t('Working Hours')); ?>:</span>
-                                <span class="summary-amount">
-                                    <span id="summary-working-hours" class="summary-value">0.0</span><span class="summary-unit"> h</span>
-                                </span>
-                            </div>
-                            <div class="summary-row">
-                                <span class="summary-label"><?php p($l->t('Break Time')); ?>:</span>
-                                <span class="summary-amount">
-                                    <span id="summary-break-time" class="summary-value">0.0</span><span class="summary-unit"> h</span>
-                                </span>
-                            </div>
-                            <div id="compliance-status" class="compliance-status" role="status" aria-live="polite"></div>
-                        </div>
-
+                        <div class="time-entry-form__primary">
                         <fieldset class="time-entry-form-fieldset">
                             <legend class="time-entry-form-fieldset__legend"><?php p($l->t('Date and time')); ?></legend>
                             <div class="time-entry-form__date">
@@ -358,7 +345,7 @@ require __DIR__ . '/common/user-display-timezone.php';
                                     $startHour = $startTimeParts[0] ?? '09';
                                     $startMinute = $startTimeParts[1] ?? '00';
                                     ?>
-                                    <div class="time-input-group" 
+                                    <div class="time-input-group time-input-group--with-type" 
                                          data-time-input="entry-start-time"
                                          role="group"
                                          aria-labelledby="entry-start-time-label"
@@ -382,12 +369,21 @@ require __DIR__ . '/common/user-display-timezone.php';
                                                 required 
                                                 aria-label="<?php p($l->t('Start minute')); ?>"
                                                 aria-required="true">
-                                            <?php for ($m = 0; $m < 60; $m += 1): ?>
-                                                <option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $startMinute ? 'selected' : ''); ?>>
-                                                    <?php p(sprintf('%02d', $m)); ?>
+                                            <?php foreach (TimePickerMinutes::options($startMinute) as $minuteOpt): ?>
+                                                <option value="<?php p($minuteOpt); ?>" <?php p($minuteOpt === $startMinute ? 'selected' : ''); ?>>
+                                                    <?php p($minuteOpt); ?>
                                                 </option>
-                                            <?php endfor; ?>
+                                            <?php endforeach; ?>
                                         </select>
+                                        <input type="text"
+                                               id="entry-start-time-type"
+                                               class="form-input time-input-group__type"
+                                               inputmode="numeric"
+                                               autocomplete="off"
+                                               maxlength="5"
+                                               placeholder="<?php p($l->t('HH:MM')); ?>"
+                                               value="<?php p($startTimeValue); ?>"
+                                               aria-label="<?php p($l->t('Or type start time as HH:MM')); ?>">
                                         <input type="hidden" 
                                                id="entry-start-time" 
                                                name="startTime" 
@@ -395,7 +391,7 @@ require __DIR__ . '/common/user-display-timezone.php';
                                                required
                                                aria-invalid="false">
                                     </div>
-                                    <p id="entry-start-time-help" class="form-help"><?php p($l->t('When you started (e.g. 09:00).')); ?></p>
+                                    <p id="entry-start-time-help" class="form-help"><?php p($l->t('When you started (e.g. 09:00). Minutes use 5-minute steps — or type any time as HH:MM.')); ?></p>
                                     <div id="entry-start-time-error" role="alert" class="form-error-container" style="display: none;"></div>
                                 </div>
 
@@ -422,7 +418,7 @@ require __DIR__ . '/common/user-display-timezone.php';
                                     $endHour = $endTimeParts[0] ?? '17';
                                     $endMinute = $endTimeParts[1] ?? '00';
                                     ?>
-                                    <div class="time-input-group" 
+                                    <div class="time-input-group time-input-group--with-type" 
                                          data-time-input="entry-end-time"
                                          role="group"
                                          aria-labelledby="entry-end-time-label"
@@ -446,12 +442,21 @@ require __DIR__ . '/common/user-display-timezone.php';
                                                 required 
                                                 aria-label="<?php p($l->t('End minute')); ?>"
                                                 aria-required="true">
-                                            <?php for ($m = 0; $m < 60; $m += 1): ?>
-                                                <option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $endMinute ? 'selected' : ''); ?>>
-                                                    <?php p(sprintf('%02d', $m)); ?>
+                                            <?php foreach (TimePickerMinutes::options($endMinute) as $minuteOpt): ?>
+                                                <option value="<?php p($minuteOpt); ?>" <?php p($minuteOpt === $endMinute ? 'selected' : ''); ?>>
+                                                    <?php p($minuteOpt); ?>
                                                 </option>
-                                            <?php endfor; ?>
+                                            <?php endforeach; ?>
                                         </select>
+                                        <input type="text"
+                                               id="entry-end-time-type"
+                                               class="form-input time-input-group__type"
+                                               inputmode="numeric"
+                                               autocomplete="off"
+                                               maxlength="5"
+                                               placeholder="<?php p($l->t('HH:MM')); ?>"
+                                               value="<?php p($endTimeValue); ?>"
+                                               aria-label="<?php p($l->t('Or type end time as HH:MM')); ?>">
                                         <input type="hidden" 
                                                id="entry-end-time" 
                                                name="endTime" 
@@ -466,6 +471,29 @@ require __DIR__ . '/common/user-display-timezone.php';
                                 </div>
                             </div>
                         </fieldset>
+                        </div><!-- /.time-entry-form__primary -->
+
+                        <!-- Real-time Summary — after primary fields so entry starts above the fold -->
+                        <div id="time-summary" 
+                             role="status" 
+                             aria-live="polite" 
+                             aria-atomic="true"
+                             class="time-summary-card time-summary-card--secondary">
+                            <h4 class="time-summary-title"><?php p($l->t('Day Summary')); ?></h4>
+                            <div class="summary-row">
+                                <span class="summary-label"><?php p($l->t('Working Hours')); ?>:</span>
+                                <span class="summary-amount">
+                                    <span id="summary-working-hours" class="summary-value">0.0</span><span class="summary-unit"> h</span>
+                                </span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label"><?php p($l->t('Break Time')); ?>:</span>
+                                <span class="summary-amount">
+                                    <span id="summary-break-time" class="summary-value">0.0</span><span class="summary-unit"> h</span>
+                                </span>
+                            </div>
+                            <div id="compliance-status" class="compliance-status" role="status" aria-live="polite"></div>
+                        </div>
 
                         <fieldset class="time-entry-form-fieldset time-entry-form-fieldset--breaks">
                             <legend class="time-entry-form-fieldset__legend"><?php p($l->t('Breaks')); ?> <span class="form-optional"><?php p($l->t('(optional)')); ?></span></legend>
@@ -622,11 +650,11 @@ require __DIR__ . '/common/user-display-timezone.php';
                                                     <span class="time-separator" aria-hidden="true">:</span>
                                                     <select class="form-input time-minute break-start-time-minute" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break start minute')); ?>">
                                                         <option value="">--</option>
-                                                        <?php for ($m = 0; $m < 60; $m += 1): ?>
-                                                            <option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $breakStartMinute ? 'selected' : ''); ?>>
-                                                                <?php p(sprintf('%02d', $m)); ?>
+                                                        <?php foreach (TimePickerMinutes::options($breakStartMinute !== '' ? $breakStartMinute : null) as $minuteOpt): ?>
+                                                            <option value="<?php p($minuteOpt); ?>" <?php p($minuteOpt === $breakStartMinute ? 'selected' : ''); ?>>
+                                                                <?php p($minuteOpt); ?>
                                                             </option>
-                                                        <?php endfor; ?>
+                                                        <?php endforeach; ?>
                                                     </select>
                                                     <input type="hidden" class="break-start-time" data-break-index="<?php p((string)$index); ?>" name="breaks[<?php p((string)$index); ?>][start]" value="<?php p($breakStartValue); ?>">
                                                 </div>
@@ -656,11 +684,11 @@ require __DIR__ . '/common/user-display-timezone.php';
                                                         <span class="time-separator" aria-hidden="true">:</span>
                                                         <select class="form-input time-minute break-end-time-minute" data-break-index="<?php p((string)$index); ?>" aria-label="<?php p($l->t('Break end minute')); ?>">
                                                             <option value="">--</option>
-                                                            <?php for ($m = 0; $m < 60; $m += 1): ?>
-                                                                <option value="<?php p(sprintf('%02d', $m)); ?>" <?php p(sprintf('%02d', $m) === $breakEndMinute ? 'selected' : ''); ?>>
-                                                                    <?php p(sprintf('%02d', $m)); ?>
+                                                            <?php foreach (TimePickerMinutes::options($breakEndMinute !== '' ? $breakEndMinute : null) as $minuteOpt): ?>
+                                                                <option value="<?php p($minuteOpt); ?>" <?php p($minuteOpt === $breakEndMinute ? 'selected' : ''); ?>>
+                                                                    <?php p($minuteOpt); ?>
                                                                 </option>
-                                                            <?php endfor; ?>
+                                                            <?php endforeach; ?>
                                                         </select>
                                                         <input type="hidden" class="break-end-time" data-break-index="<?php p((string)$index); ?>" name="breaks[<?php p((string)$index); ?>][end]" value="<?php p($breakEndValue); ?>">
                                                     </div>

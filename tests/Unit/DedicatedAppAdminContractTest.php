@@ -25,7 +25,9 @@ final class DedicatedAppAdminContractTest extends TestCase
 		$body = substr($src, $start, $end - $start);
 		$this->assertStringContainsString('if ($this->groupManager->isAdmin($userId))', $body);
 		$this->assertStringContainsString('return true;', $body);
-		$this->assertStringContainsString('return in_array($userId, $this->getConfiguredAppAdminUserIds(), true);', $body);
+		$this->assertStringContainsString('getConfiguredAppAdminUserIds()', $body);
+		$this->assertStringContainsString('userManager->get($userId)', $body);
+		$this->assertStringContainsString('isEnabled()', $body);
 		$this->assertStringNotContainsString('if (!$this->groupManager->isAdmin($userId))', $body);
 	}
 
@@ -72,4 +74,96 @@ final class DedicatedAppAdminContractTest extends TestCase
 		$this->assertStringNotContainsString('type a UID exactly', $js);
 		$this->assertStringContainsString('Please pick an employee from the suggestions first.', $js);
 	}
+
+	public function testAdminControllersRequireNoAdminRequiredOnEveryPublicAction(): void
+	{
+		$controllers = [
+			'lib/Controller/AdminController.php',
+			'lib/Controller/LicenseAdminController.php',
+			'lib/Controller/KioskAdminController.php',
+		];
+		foreach ($controllers as $rel) {
+			$src = (string)file_get_contents($this->root . '/' . $rel);
+			$this->assertStringContainsString('use OCP\AppFramework\Http\Attribute\NoAdminRequired;', $src, $rel);
+			preg_match_all('/^\tpublic function (\w+)\(/m', $src, $matches);
+			foreach ($matches[1] as $method) {
+				if ($method === '__construct') {
+					continue;
+				}
+				$pos = strpos($src, 'public function ' . $method . '(');
+				$this->assertNotFalse($pos, $rel . '::' . $method);
+				$preceding = substr($src, max(0, $pos - 400), 400);
+				$lines = array_reverse(explode("\n", $preceding));
+				$attrs = [];
+				foreach ($lines as $line) {
+					$s = trim($line);
+					if (str_starts_with($s, '#[')) {
+						$attrs[] = $s;
+						continue;
+					}
+					if ($s === '') {
+						continue;
+					}
+					break;
+				}
+				$joined = implode("\n", $attrs);
+				$this->assertStringContainsString('NoAdminRequired', $joined, $rel . '::' . $method . ' must declare #[NoAdminRequired]');
+			}
+		}
+	}
+
+	public function testOvertimePayoutAdminActionsHaveNoAdminRequired(): void
+	{
+		$src = (string)file_get_contents($this->root . '/lib/Controller/OvertimePayoutController.php');
+		foreach (['auditIndex', 'listAudit', 'adminMonthClosurePdf', 'index', 'listMonth', 'processOne', 'exportCsv', 'processBulk', 'myHistory'] as $method) {
+			$pos = strpos($src, 'public function ' . $method . '(');
+			$this->assertNotFalse($pos, $method);
+			$preceding = substr($src, max(0, $pos - 400), 400);
+			$this->assertStringContainsString('NoAdminRequired', $preceding, $method);
+		}
+	}
+
+	public function testAppAdminMiddlewareGatesOvertimeAndUsesAccessDeniedTemplate(): void
+	{
+		$src = (string)file_get_contents($this->root . '/lib/Middleware/AppAdminMiddleware.php');
+		$this->assertStringContainsString('OvertimePayoutController', $src);
+		$this->assertStringContainsString("'myHistory'", $src);
+		$this->assertStringContainsString('access-denied', $src);
+		$this->assertStringNotContainsString("'core', '403'", $src);
+	}
+
+	public function testAdminControllerDocRequiresNoAdminRequiredPattern(): void
+	{
+		$src = (string)file_get_contents($this->root . '/lib/Controller/AdminController.php');
+		$this->assertStringContainsString('AppAdminMiddleware', $src);
+		$this->assertStringContainsString('PermissionService::isAdmin()', $src);
+		$this->assertStringNotContainsString('Do not add NoAdminRequired', $src);
+	}
+
+	public function testAuthenticatedFeedHasNoAdminRequired(): void
+	{
+		$src = (string)file_get_contents($this->root . '/lib/Controller/OutlookIcalSubscriptionController.php');
+		$pos = strpos($src, 'public function authenticatedFeed');
+		$this->assertNotFalse($pos);
+		$preceding = substr($src, max(0, $pos - 250), 250);
+		$this->assertStringContainsString('NoAdminRequired', $preceding);
+	}
+
+	public function testAppAccessMiddlewareSkipsPublicPage(): void
+	{
+		$src = (string)file_get_contents($this->root . '/lib/Middleware/AppAccessMiddleware.php');
+		$this->assertStringContainsString('isPublicPage', $src);
+		$this->assertStringContainsString('PublicPage::class', $src);
+		$this->assertStringContainsString('IControllerMethodReflector', $src);
+	}
+
+	public function testMobileSeatAssignUsesExclusiveCapacityLock(): void
+	{
+		$src = (string)file_get_contents($this->root . '/lib/Service/MobileSeatService.php');
+		$this->assertStringContainsString('CAPACITY_LOCK', $src);
+		$this->assertStringContainsString('LOCK_EXCLUSIVE', $src);
+		$this->assertStringContainsString('acquireLock', $src);
+		$this->assertStringContainsString('releaseLock', $src);
+	}
+
 }

@@ -12,6 +12,8 @@ namespace OCA\ArbeitszeitCheck;
 final class BusinessRuleCode
 {
 	public const ALREADY_CLOCKED_IN = 'already_clocked_in';
+	/** Clock-in blocked while a paused/open session has a pending correction. */
+	public const OPEN_SESSION_CORRECTION_PENDING = 'open_session_correction_pending';
 	public const ON_BREAK_END_FIRST = 'on_break_end_first';
 	public const NOT_CLOCKED_IN = 'not_clocked_in';
 	public const BREAK_ALREADY_STARTED = 'break_already_started';

@@ -36,10 +36,15 @@ use OCA\ArbeitszeitCheck\Support\MobileAppLinks;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
+use OCP\AppFramework\Http\DataDownloadResponse;
+use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\NotFoundResponse;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCA\ArbeitszeitCheck\Service\OvertimeBalancePdfBuilder;
+use OCP\AppFramework\Http;
 use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IURLGenerator;
@@ -271,6 +276,48 @@ class PageController extends Controller
 	}
 
 	/**
+	 * Download a printable year-to-date overtime balance PDF for the current user.
+	 * Mirrors dashboard Saldo numbers (bank-aware when enabled).
+	 */
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	#[UserRateLimit(limit: 30, period: 60)]
+	public function overtimeBalancePdf(): DataDownloadResponse|JSONResponse
+	{
+		try {
+			$userId = $this->getUserId();
+			$user = $this->userSession->getUser();
+			$displayName = $user ? ($user->getDisplayName() ?: $userId) : $userId;
+			$bank = $this->overtimeBankService->getBankStatus($userId);
+			$balance = $this->overtimeDisplayService->getYearToDateBalanceForTrafficLight($userId);
+			$asOf = (string)($bank['as_of_date'] ?? date('Y-m-d'));
+
+			$pdf = OvertimeBalancePdfBuilder::build([
+				'balance' => $balance,
+				'balance_label' => !empty($bank['enabled']) ? 'effective' : 'cumulative',
+				'bank_enabled' => !empty($bank['enabled']),
+				'bank' => $bank,
+				'as_of' => $asOf,
+				'display_name' => $displayName,
+				'user_id' => $userId,
+			], $this->l10n);
+
+			$filename = sprintf('overtime-balance-%s-%s.pdf', preg_replace('/[^a-zA-Z0-9_-]+/', '-', $userId) ?: 'user', $asOf);
+
+			return new DataDownloadResponse($pdf, $filename, 'application/pdf');
+		} catch (\Throwable $e) {
+			\OCP\Log\logger('arbeitszeitcheck')->error(
+				'PageController::overtimeBalancePdf: ' . $e->getMessage(),
+				['exception' => $e]
+			);
+			return new JSONResponse([
+				'success' => false,
+				'error' => $this->buildSafePageErrorMessage($e),
+			], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
 	 * Dashboard page
 	 *
 	 */
@@ -357,6 +404,7 @@ class PageController extends Controller
 				'overtime' => $overtimeData,
 				'weekOvertime' => $weekOvertime,
 				'overtimeYtdBalance' => $overtimeYtdBalance,
+				'overtimeBalancePdfUrl' => $this->urlGenerator->linkToRoute('arbeitszeitcheck.page.overtimeBalancePdf'),
 				'overtimeBank' => $overtimeExtras['overtimeBank'],
 				'overtimeTrafficLight' => $overtimeExtras['overtimeTrafficLight'],
 				'overtimePayoutHistory' => $overtimeExtras['overtimePayoutHistory'],

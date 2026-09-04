@@ -147,7 +147,7 @@ $azcSettingsShowCardChrome = !empty($azcSettingsShowCardChrome) || !empty($rende
                             <?php p($l->t('Nextcloud admins always keep ArbeitszeitCheck admin powers. Add any colleague below to delegate app administration without making them a Nextcloud admin. Search and pick — never type a raw user id.')); ?>
                         </p>
                         <p id="appAdminUsers-note" class="form-help form-help--note">
-                            <?php p($l->t('Dedicated app administrators appear in the list together with Nextcloud admins. Use search to find colleagues, then tick them. Changes take effect immediately after saving.')); ?>
+                            <?php p($l->t('Dedicated app administrators appear in the list together with Nextcloud admins. Use search to find colleagues, then tick them. After saving they can open Administration (and Manager) without Nextcloud admin rights. You cannot remove your own last app-admin seat — ask a Nextcloud admin if you need to step down.')); ?>
                         </p>
                         <div class="user-picker" id="appAdminUsersAddPicker" data-azc-app-admin-add>
                             <div class="user-picker__control">

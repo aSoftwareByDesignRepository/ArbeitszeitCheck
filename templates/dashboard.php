@@ -556,6 +556,20 @@ $arbeitszeitCheckFormatHours = static function (float $hours): string {
                                     <?php p($balanceSignPrefix . number_format($displayBalance, 2)); ?> <?php p($l->t('h')); ?>
                                 </span>
                             </div>
+                            <?php
+                            $overtimeBalancePdfUrl = (string)($_['overtimeBalancePdfUrl'] ?? '');
+                            if ($overtimeBalancePdfUrl !== ''):
+                            ?>
+                            <div class="dashboard-overtime-card__actions">
+                                <a id="dashboard-overtime-balance-pdf"
+                                   class="azc-btn azc-btn--secondary azc-btn--sm"
+                                   href="<?php p($overtimeBalancePdfUrl); ?>"
+                                   download
+                                   aria-describedby="dashboard-overtime-formula">
+                                    <?php p($l->t('Download balance PDF')); ?>
+                                </a>
+                            </div>
+                            <?php endif; ?>
 
                             <?php
                             $premiumSummary = is_array($_['premiumSummary'] ?? null) ? $_['premiumSummary'] : [];

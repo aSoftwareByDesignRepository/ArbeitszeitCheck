@@ -24,6 +24,7 @@ use OCA\ArbeitszeitCheck\Service\TimeCaptureMethodService;
 use OCA\ArbeitszeitCheck\Service\TimeZoneService;
 use OCA\ArbeitszeitCheck\Service\ProjectCheckIntegrationService;
 use OCA\ArbeitszeitCheck\Service\MonthClosureGuard;
+use OCA\ArbeitszeitCheck\BusinessRuleCode;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Exception\BusinessRuleException;
 use OCP\IConfig;
@@ -151,6 +152,28 @@ class TimeTrackingServiceTest extends TestCase {
 		$this->expectExceptionMessage('User is already clocked in');
 
 		$this->service->clockIn($userId);
+	}
+
+	public function testClockInWhenPendingOpenSessionCorrectionThrows(): void {
+		$userId = 'testuser';
+		$pending = new TimeEntry();
+		$pending->setId(7);
+		$pending->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+
+		$this->timeEntryMapper->method('findActiveByUser')->willReturn(null);
+		$this->timeEntryMapper->method('findOnBreakByUser')->willReturn(null);
+		$this->timeEntryMapper->expects($this->once())
+			->method('findPendingOpenSessionByUser')
+			->with($userId)
+			->willReturn($pending);
+		$this->l10n->method('t')->willReturnCallback(static fn ($s) => $s);
+
+		try {
+			$this->service->clockIn($userId);
+			$this->fail('expected BusinessRuleException');
+		} catch (BusinessRuleException $e) {
+			$this->assertSame(BusinessRuleCode::OPEN_SESSION_CORRECTION_PENDING, $e->getReasonCode());
+		}
 	}
 
 	/**

@@ -1196,7 +1196,7 @@ class AbsenceController extends Controller
 			try {
 				$existing = $this->absenceMapper->find($id);
 				if ($existing->getUserId() !== $userId) {
-					return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Access denied')], Http::STATUS_FORBIDDEN);
+					return new JSONResponse(['success' => false, 'error' => $this->l10n->t('Absence not found')], Http::STATUS_NOT_FOUND);
 				}
 				$this->monthClosureService->assertDateRangeMutable(
 					$userId,

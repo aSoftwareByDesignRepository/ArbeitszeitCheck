@@ -62,6 +62,7 @@ assertTrue(str_contains((string)$js, 'outlookTeamLoadFailed'), 'js uses team-spe
 assertTrue(str_contains((string)$adminSettingsJs, '#monthClosureReopenUserSearch'), 'admin-settings references month reopen search');
 assertTrue(str_contains((string)$adminSettingsJs, 'if (!search || !hidden || !list)'), 'admin-settings skips month reopen picker when controls absent');
 assertTrue(str_contains((string)$controller, '#[NoAdminRequired]'), 'outlook admin endpoints allow delegated app admins through NC middleware');
+assertTrue(str_contains((string)$controller, "#[NoAdminRequired]\n\t#[NoCSRFRequired]\n\tpublic function authenticatedFeed"), 'authenticatedFeed has NoAdminRequired so managers are not blocked by NC admin middleware');
 
 $phpunit = is_file($root . '/vendor/bin/phpunit') ? $root . '/vendor/bin/phpunit' : 'phpunit';
 $appId = basename($root);

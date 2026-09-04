@@ -346,38 +346,8 @@ class TimeEntryCorrectionService
 			$justificationData = [];
 		}
 
-		$originalData = $justificationData['original'] ?? [];
-
-		if (isset($originalData['startTime'])) {
-			$entry->setStartTime(new \DateTime($originalData['startTime']));
-		} elseif (isset($originalData['date'])) {
-			$entry->setStartTime(new \DateTime($originalData['date']));
-		}
-		if (isset($originalData['endTime'])) {
-			$entry->setEndTime(new \DateTime($originalData['endTime']));
-		} elseif (isset($originalData['hours']) && $entry->getStartTime()) {
-			$endTime = clone $entry->getStartTime();
-			$endTime->modify('+' . (int)round((float)$originalData['hours'] * 3600) . ' seconds');
-			$entry->setEndTime($endTime);
-		}
-		if (isset($originalData['breakStartTime']) && $originalData['breakStartTime'] !== null) {
-			$entry->setBreakStartTime(new \DateTime($originalData['breakStartTime']));
-		} else {
-			$entry->setBreakStartTime(null);
-		}
-		if (isset($originalData['breakEndTime']) && $originalData['breakEndTime'] !== null) {
-			$entry->setBreakEndTime(new \DateTime($originalData['breakEndTime']));
-		} else {
-			$entry->setBreakEndTime(null);
-		}
-		if (isset($originalData['breaks']) && is_array($originalData['breaks'])) {
-			$this->applyBreaksJson($entry, $originalData['breaks']);
-		}
-		if (array_key_exists('description', $originalData)) {
-			$entry->setDescription($originalData['description'] ?? '');
-		}
-
-		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$originalData = is_array($justificationData['original'] ?? null) ? $justificationData['original'] : [];
+		$this->restoreOriginalSnapshot($entry, $originalData);
 		$entry->setApprovedByUserId(null);
 		$entry->setApprovedAt(null);
 		$entry->setUpdatedAt(AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config));
@@ -406,27 +376,8 @@ class TimeEntryCorrectionService
 			return null;
 		}
 
-		$originalData = $justificationData['original'] ?? [];
-		if (isset($originalData['startTime'])) {
-			$entry->setStartTime(new \DateTime($originalData['startTime']));
-		}
-		if (isset($originalData['endTime'])) {
-			$entry->setEndTime(new \DateTime($originalData['endTime']));
-		}
-		if (array_key_exists('breakStartTime', $originalData)) {
-			$entry->setBreakStartTime($originalData['breakStartTime'] ? new \DateTime($originalData['breakStartTime']) : null);
-		}
-		if (array_key_exists('breakEndTime', $originalData)) {
-			$entry->setBreakEndTime($originalData['breakEndTime'] ? new \DateTime($originalData['breakEndTime']) : null);
-		}
-		if (isset($originalData['breaks']) && is_array($originalData['breaks'])) {
-			$this->applyBreaksJson($entry, $originalData['breaks']);
-		}
-		if (array_key_exists('description', $originalData)) {
-			$entry->setDescription($originalData['description'] ?? '');
-		}
-
-		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$originalData = is_array($justificationData['original'] ?? null) ? $justificationData['original'] : [];
+		$this->restoreOriginalSnapshot($entry, $originalData);
 		$entry->setApprovedByUserId(null);
 		$entry->setApprovedAt(null);
 		$entry->setJustification(null);
@@ -535,6 +486,58 @@ class TimeEntryCorrectionService
 	 * Proposal validation clones entries before persistence. New rows (e.g. manager-recorded
 	 * entries) have no status yet; infer the completed shape when the proposal includes an end time.
 	 */
+
+	/**
+	 * Restore times/status from the correction snapshot.
+	 *
+	 * `isset($original['endTime'])` is false when the original was paused
+	 * (endTime: null). Using array_key_exists keeps a null end and restores
+	 * STATUS_PAUSED so cancel/reject cannot create a completed row with no end.
+	 *
+	 * @param array<string, mixed> $originalData
+	 */
+	private function restoreOriginalSnapshot(TimeEntry $entry, array $originalData): void
+	{
+		if (isset($originalData['startTime'])) {
+			$entry->setStartTime(new \DateTime((string)$originalData['startTime']));
+		} elseif (isset($originalData['date'])) {
+			$entry->setStartTime(new \DateTime((string)$originalData['date']));
+		}
+		if (array_key_exists('endTime', $originalData)) {
+			$rawEnd = $originalData['endTime'];
+			$entry->setEndTime(is_string($rawEnd) && $rawEnd !== '' ? new \DateTime($rawEnd) : null);
+		} elseif (isset($originalData['hours']) && $entry->getStartTime()) {
+			$endTime = clone $entry->getStartTime();
+			$endTime->modify('+' . (int)round((float)$originalData['hours'] * 3600) . ' seconds');
+			$entry->setEndTime($endTime);
+		}
+		if (array_key_exists('breakStartTime', $originalData)) {
+			$raw = $originalData['breakStartTime'];
+			$entry->setBreakStartTime(is_string($raw) && $raw !== '' ? new \DateTime($raw) : null);
+		} else {
+			$entry->setBreakStartTime(null);
+		}
+		if (array_key_exists('breakEndTime', $originalData)) {
+			$raw = $originalData['breakEndTime'];
+			$entry->setBreakEndTime(is_string($raw) && $raw !== '' ? new \DateTime($raw) : null);
+		} else {
+			$entry->setBreakEndTime(null);
+		}
+		if (isset($originalData['breaks']) && is_array($originalData['breaks'])) {
+			$this->applyBreaksJson($entry, $originalData['breaks']);
+		}
+		if (array_key_exists('description', $originalData)) {
+			$entry->setDescription($originalData['description'] ?? '');
+		}
+
+		$originalStatus = $originalData['status'] ?? null;
+		if ($entry->getEndTime() === null || $originalStatus === TimeEntry::STATUS_PAUSED) {
+			$entry->setStatus(TimeEntry::STATUS_PAUSED);
+		} else {
+			$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		}
+	}
+
 	private function ensureCandidateStatusForValidation(TimeEntry $candidate): void
 	{
 		$status = $candidate->getStatus();

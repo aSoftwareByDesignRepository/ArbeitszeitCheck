@@ -212,6 +212,7 @@ class SubstituteController extends Controller
 	 * Get pending substitution requests for the current user
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function getPending(): JSONResponse
 	{
 		try {
@@ -242,6 +243,7 @@ class SubstituteController extends Controller
 	 * Approve substitution request
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function approve(int $absenceId): JSONResponse
 	{
 		try {
@@ -308,6 +310,7 @@ class SubstituteController extends Controller
 	 * Decline substitution request
 	 */
 	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function decline(int $absenceId, ?string $comment = null): JSONResponse
 	{
 		try {

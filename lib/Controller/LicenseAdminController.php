@@ -15,6 +15,7 @@ use OCA\ArbeitszeitCheck\Support\UserDirectorySearch;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IL10N;
@@ -83,6 +84,7 @@ class LicenseAdminController extends Controller
 		return $this->buildShellParams($pageId, $title, $help, $this->buildAdminNavFlags(), $this->l10n->t('Administration'));
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function index(): TemplateResponse
 	{
@@ -155,6 +157,7 @@ class LicenseAdminController extends Controller
 		return $this->configureCSP($response, 'admin');
 	}
 
+	#[NoAdminRequired]
 	public function applyLicense(): JSONResponse
 	{
 		$body = file_get_contents('php://input');
@@ -206,6 +209,7 @@ class LicenseAdminController extends Controller
 		};
 	}
 
+	#[NoAdminRequired]
 	public function clearLicense(): JSONResponse
 	{
 		$cleared = $this->licenseEnforcementService->clearAllCommercialState();
@@ -215,6 +219,7 @@ class LicenseAdminController extends Controller
 		]);
 	}
 
+	#[NoAdminRequired]
 	public function assignSeat(): JSONResponse
 	{
 		$body = file_get_contents('php://input');
@@ -244,6 +249,7 @@ class LicenseAdminController extends Controller
 		]);
 	}
 
+	#[NoAdminRequired]
 	public function removeSeat(): JSONResponse
 	{
 		$body = file_get_contents('php://input');
@@ -262,6 +268,7 @@ class LicenseAdminController extends Controller
 		]);
 	}
 
+	#[NoAdminRequired]
 	public function searchUsers(): JSONResponse
 	{
 		$query = trim((string)$this->request->getParam('q', ''));

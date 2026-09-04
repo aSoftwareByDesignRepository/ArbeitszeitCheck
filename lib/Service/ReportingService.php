@@ -488,13 +488,24 @@ class ReportingService
 	 * @param \DateTime $startDate Start date
 	 * @param \DateTime $endDate End date
 	 * @param string|null $userId User ID (null for all users)
+	 * @param string $sort Row order inside each user block: `date` (default, chronological)
+	 *                    or `type` (absence type, then start date) for payroll handoff.
 	 * @return array Report data
 	 */
-	public function generateAbsenceReport(\DateTime $startDate, \DateTime $endDate, ?string $userId = null): array
-	{
+	public function generateAbsenceReport(
+		\DateTime $startDate,
+		\DateTime $endDate,
+		?string $userId = null,
+		string $sort = 'date'
+	): array {
 		$absences = $userId
 			? $this->absenceMapper->findByUserAndDateRange($userId, $startDate, $endDate)
 			: $this->absenceMapper->findByDateRange($startDate, $endDate);
+
+		$sortMode = strtolower(trim($sort));
+		if ($sortMode !== 'type') {
+			$sortMode = 'date';
+		}
 
 		$report = [
 			'type' => 'absence',
@@ -502,6 +513,7 @@ class ReportingService
 				'start' => $startDate->format('Y-m-d'),
 				'end' => $endDate->format('Y-m-d')
 			],
+			'sort' => $sortMode,
 			'total_absences' => count($absences),
 			'absences_by_type' => [],
 			'absences_by_status' => [],
@@ -539,13 +551,13 @@ class ReportingService
 				];
 			}
 
-			$startDate = $absence->getStartDate();
-			$endDate = $absence->getEndDate();
+			$startDateRow = $absence->getStartDate();
+			$endDateRow = $absence->getEndDate();
 			// Use stored days; fallback to HolidayService (state-aware) for legacy null
 			if ($absence->getDays() !== null) {
 				$days = (float)$absence->getDays();
-			} elseif ($startDate && $endDate) {
-				$days = $this->holidayCalendarService->computeWorkingDaysForUser($uid, $startDate, $endDate);
+			} elseif ($startDateRow && $endDateRow) {
+				$days = $this->holidayCalendarService->computeWorkingDaysForUser($uid, $startDateRow, $endDateRow);
 			} else {
 				$days = 0.0;
 			}
@@ -553,8 +565,8 @@ class ReportingService
 			$userAbsences[$uid]['absences'][] = [
 				'id' => $absence->getId(),
 				'type' => $type,
-				'start_date' => $startDate ? $startDate->format('Y-m-d') : null,
-				'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
+				'start_date' => $startDateRow ? $startDateRow->format('Y-m-d') : null,
+				'end_date' => $endDateRow ? $endDateRow->format('Y-m-d') : null,
 				'days' => $days,
 				'status' => $status
 			];
@@ -562,6 +574,27 @@ class ReportingService
 			$userAbsences[$uid]['total_days'] += $days;
 			$totalDays += $days;
 		}
+
+		foreach ($userAbsences as &$userBlock) {
+			usort($userBlock['absences'], static function (array $a, array $b) use ($sortMode): int {
+				if ($sortMode === 'type') {
+					$typeCmp = strcasecmp((string)($a['type'] ?? ''), (string)($b['type'] ?? ''));
+					if ($typeCmp !== 0) {
+						return $typeCmp;
+					}
+				}
+				$startCmp = strcmp((string)($a['start_date'] ?? ''), (string)($b['start_date'] ?? ''));
+				if ($startCmp !== 0) {
+					return $startCmp;
+				}
+				return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
+			});
+		}
+		unset($userBlock);
+
+		// Summary maps stay alphabetically keyed for stable JSON (counts only).
+		ksort($report['absences_by_type'], SORT_STRING);
+		ksort($report['absences_by_status'], SORT_STRING);
 
 		$report['users'] = array_values($userAbsences);
 		$report['total_days'] = $totalDays;

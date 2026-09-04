@@ -362,6 +362,14 @@ class TimeTrackingService
 					);
 				}
 
+				$pendingOpen = $this->timeEntryMapper->findPendingOpenSessionByUser($userId);
+				if ($pendingOpen !== null) {
+					throw new BusinessRuleException(
+						$this->l10n->t('A correction request is still pending for an unfinished session. Cancel it or wait for approval before clocking in.'),
+						BusinessRuleCode::OPEN_SESSION_CORRECTION_PENDING,
+					);
+				}
+
 				[$today, $tomorrow] = $this->getAppLocalTodayWindow();
 				$pausedTodayEntry = $this->timeEntryMapper->findPausedOrUnfinishedTodayByUser($userId, $today, $tomorrow);
 				if ($pausedTodayEntry !== null && $pausedTodayEntry->getStatus() === TimeEntry::STATUS_PAUSED) {

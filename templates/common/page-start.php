@@ -111,7 +111,32 @@ $roleSlug = (string)($_['roleSlug'] ?? 'employee');
 				<div class="azc-page-header__text">
 					<h1 id="azc-page-title"><?php p($pageTitle); ?></h1>
 					<?php if ($pageHelp !== ''): ?>
-						<p class="azc-page-header__lead" id="azc-page-help"><?php p($pageHelp); ?></p>
+						<?php
+						$helpTrim = trim($pageHelp);
+						$helpLead = $helpTrim;
+						$helpMore = '';
+						// Collapse long leads so primary actions stay above the fold.
+						if (mb_strlen($helpTrim) > 90) {
+							if (preg_match('/^(.+?[.!?])(\s|$)/u', $helpTrim, $helpMatch) === 1) {
+								$helpLead = $helpMatch[1];
+								$helpMore = trim(mb_substr($helpTrim, mb_strlen($helpMatch[1])));
+							} else {
+								$cut = 88;
+								while ($cut > 40 && !preg_match('/\s$/u', mb_substr($helpTrim, 0, $cut))) {
+									$cut--;
+								}
+								$helpLead = rtrim(mb_substr($helpTrim, 0, $cut)) . '…';
+								$helpMore = trim(mb_substr($helpTrim, $cut));
+							}
+						}
+						?>
+						<p class="azc-page-header__lead" id="azc-page-help"><?php p($helpLead); ?></p>
+						<?php if ($helpMore !== '' && $helpMore !== $helpLead): ?>
+							<details class="azc-help-more">
+								<summary class="azc-help-more__summary"><?php p($l->t('More help')); ?></summary>
+								<p class="azc-help-more__body" id="azc-page-help-more"><?php p($helpMore); ?></p>
+							</details>
+						<?php endif; ?>
 					<?php endif; ?>
 				</div>
 				<div id="azc-page-actions" class="azc-page-header__actions" aria-live="polite"></div>

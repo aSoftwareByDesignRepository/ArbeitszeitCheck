@@ -9,14 +9,14 @@
 	<name>ArbeitszeitCheck</name>
 	<summary>Track working time with DACH profiles — ArbZG / AZG / ArG on your Nextcloud</summary>
 	<summary lang="de">Arbeitszeit erfassen mit DACH-Profilen — ArbZG / AZG / ArG in Ihrer Nextcloud</summary>
-	<summary lang="fr">Suivi du temps avec conformité DACH (ArbZG / AZG / ArG) et contrôles RGPD dans Nextcloud</summary>
-	<summary lang="da">Tidsregistrering med DACH-arbejdslovsoverholdelse (ArbZG / AZG / ArG) og GDPR-kontrol i Nextcloud</summary>
-	<summary lang="es">Registro de tiempo con cumplimiento laboral DACH (ArbZG / AZG / ArG) y comprobaciones RGPD en Nextcloud</summary>
+	<summary lang="fr">Suivi du temps avec conformité DACH (ArbZG / AZG / ArG) dans Nextcloud</summary>
+	<summary lang="da">Tidsregistrering med DACH-arbejdslovsoverholdelse (ArbZG / AZG / ArG) i Nextcloud</summary>
+	<summary lang="es">Registro de tiempo con cumplimiento laboral DACH (ArbZG / AZG / ArG) en Nextcloud</summary>
 	<summary lang="nl">Tijdregistratie met DACH-arbeidsrechtnaleving (ArbZG / AZG / ArG) en AVG-controles in Nextcloud</summary>
-	<summary lang="it">Registrazione ore con conformità DACH (ArbZG / AZG / ArG) e controlli GDPR in Nextcloud</summary>
+	<summary lang="it">Registrazione ore con conformità DACH (ArbZG / AZG / ArG) in Nextcloud</summary>
 	<summary lang="pl">Rejestracja czasu ze zgodnością prawa pracy DACH (ArbZG / AZG / ArG) i kontrolą RODO w Nextcloud</summary>
-	<summary lang="sv">Tidsregistrering med DACH-arbetslagstiftning (ArbZG / AZG / ArG) och GDPR-kontroller i Nextcloud</summary>
-	<summary lang="nb">Tidsregistrering med DACH-arbeidsrett (ArbZG / AZG / ArG) og GDPR-kontroller i Nextcloud</summary>
+	<summary lang="sv">Tidsregistrering med DACH-arbetslagstiftning (ArbZG / AZG / ArG) i Nextcloud</summary>
+	<summary lang="nb">Tidsregistrering med DACH-arbeidsrett (ArbZG / AZG / ArG) i Nextcloud</summary>
 	<description><![CDATA[
 # Clock in. Stay within the rules you set.
 
@@ -40,11 +40,11 @@ Also listed as **TimeGuard** in some App Store searches.
 
 - This app is **not legal advice**. You stay responsible for working-time models, collective agreements, configuration and how recorded data is used. Ask counsel when needed.
 - Technical violation reports against your profile are not a third-party certification.
-- Declared databases: MySQL and PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+- Declared databases: MySQL and PostgreSQL. Nextcloud 32–35, PHP 8.1–8.5.
 
 ## Requirements
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL or PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL or PostgreSQL
 	]]></description>
 	<description lang="de"><![CDATA[
 # Einstempeln. Innerhalb der Regeln bleiben, die Sie setzen.
@@ -69,11 +69,11 @@ In manchen App-Store-Suchen auch als **TimeGuard**.
 
 - Diese App ist **keine Rechtsberatung**. Sie bleiben verantwortlich für Arbeitszeitmodelle, Tarif- und Betriebsregeln, Konfiguration und die Auswertung erfasster Daten. Bei Bedarf Fachberatung hinzuziehen.
 - Technische Verstoßmeldungen am Profil sind keine Fremdzertifizierung.
-- Deklarierte Datenbanken: MySQL und PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+- Deklarierte Datenbanken: MySQL und PostgreSQL. Nextcloud 32–35, PHP 8.1–8.5.
 
 ## Voraussetzungen
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL oder PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL oder PostgreSQL
 	]]></description>
 	<description lang="fr"><![CDATA[
 # ArbeitszeitCheck
@@ -91,7 +91,7 @@ Suivi du temps pour l'Allemagne, l'Autriche et la Suisse (DACH). Enregistrez les
 
 ## Prérequis
 
-- Nextcloud 32–34
+- Nextcloud 32–35
 - PHP 8.1–8.5
 	]]></description>
 	<description lang="da"><![CDATA[
@@ -110,7 +110,7 @@ Tidsregistrering for Tyskland, Østrig og Schweiz (DACH). Registrer arbejdstid, 
 
 ## Krav
 
-- Nextcloud 32–34
+- Nextcloud 32–35
 - PHP 8.1–8.5
 	]]></description>
 	<description lang="es"><![CDATA[
@@ -129,7 +129,7 @@ Registro de tiempo para Alemania, Austria y Suiza (DACH). Registra horas de trab
 
 ## Requisitos
 
-- Nextcloud 32–34
+- Nextcloud 32–35
 - PHP 8.1–8.5
 	]]></description>
 
@@ -156,11 +156,11 @@ Ook bekend als **TimeGuard** in sommige App Store-zoekopdrachten.
 
 - Deze app is **geen juridisch advies**. U blijft verantwoordelijk voor modellen voor werktijden, collectieve overeenkomsten, configuratie en het gebruik van vastgelegde gegevens. Vraag advies wanneer dat nodig is.
 - Technische rapporten over schendingen tegen uw profiel zijn geen certificering door derden.
-- Gedeclareerde databases: MySQL en PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+- Gedeclareerde databases: MySQL en PostgreSQL. Nextcloud 32–35, PHP 8.1–8.5.
 
 ## Vereisten
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL of PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL of PostgreSQL
 	]]></description>
 	<description lang="it"><![CDATA[
 # Iniziare e timbrare. Restare entro le regole che avete definito.
@@ -185,11 +185,11 @@ Inoltre indicato come **TimeGuard** in alcune ricerche dell’App Store.
 
 - Questa app **non è una consulenza legale**. Resta a voi la responsabilità dei modelli di orario di lavoro, dei contratti collettivi, della configurazione e di come vengono usati i dati registrati. Chiedete consulenza quando necessario.
 - I report tecnici sulle violazioni contro il vostro profilo non sono una certificazione di terze parti.
-- Database dichiarati: MySQL e PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+- Database dichiarati: MySQL e PostgreSQL. Nextcloud 32–35, PHP 8.1–8.5.
 
 ## Requisiti
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL o PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL o PostgreSQL
 	]]></description>
 	<description lang="pl"><![CDATA[
 # Zaloguj się. Trzymaj się zasad, które Państwo ustalili.
@@ -214,11 +214,11 @@ W niektórych wyszukiwaniach w App Store aplikacja jest też znana jako **TimeGu
 
 - Ta aplikacja **nie jest poradą prawną**. To Państwo pozostają odpowiedzialni za modele czasu pracy, umowy zbiorowe, konfigurację oraz to, jak używane są zarejestrowane dane. W razie potrzeby skonsultuj się z prawnikiem.
 - Techniczne raporty o naruszeniach względem twojego profilu nie są certyfikacją strony trzeciej.
-- Deklarowane bazy danych: MySQL i PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+- Deklarowane bazy danych: MySQL i PostgreSQL. Nextcloud 32–35, PHP 8.1–8.5.
 
 ## Wymagania
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL lub PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL lub PostgreSQL
 	]]></description>
 	<description lang="sv"><![CDATA[
 # Stämpla in. Håll dig inom reglerna ni anger.
@@ -243,11 +243,11 @@ Appen finns också listad som **TimeGuard** i vissa App Store-sökningar.
 
 - Den här appen är **inte juridisk rådgivning**. Ni ansvarar fortfarande för modellerna för arbetstid, kollektivavtal, konfiguration och hur registrerade data används. Rådgör vid behov.
 - Tekniska rapporter om regelbrott mot er profil är inte en tredjepartscertifiering.
-- Deklarerade databaser: MySQL och PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+- Deklarerade databaser: MySQL och PostgreSQL. Nextcloud 32–35, PHP 8.1–8.5.
 
 ## Krav
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL eller PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL eller PostgreSQL
 	]]></description>
 	<description lang="nb"><![CDATA[
 # Stemple inn. Hold dere innenfor reglene dere har satt.
@@ -272,13 +272,13 @@ Appen står også oppført som **TimeGuard** i noen App Store-søk.
 
 - Denne appen er **ikke juridisk rådgivning**. Dere er fortsatt ansvarlige for modeller for arbeidstid, tariffavtaler, konfigurasjon og hvordan registrerte data brukes. Spør om råd ved behov.
 - Tekniske rapporter om regelbrudd mot profilen deres er ikke en tredjepartssertifisering.
-- Deklarerte databaser: MySQL og PostgreSQL. Nextcloud 32–34, PHP 8.1–8.5.
+- Deklarerte databaser: MySQL og PostgreSQL. Nextcloud 32–35, PHP 8.1–8.5.
 
 ## Krav
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL eller PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL eller PostgreSQL
 	]]></description>
-	<version>1.6.15</version>
+	<version>1.7.1</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="info@software-by-design.de" homepage="http://nextcloud.software-by-design.de">Software by Design GbR</author>
 
@@ -292,8 +292,8 @@ Appen står også oppført som **TimeGuard** i noen App Store-søk.
 	<repository>https://github.com/aSoftwareByDesignRepository/nextcloud-arbeitszeitcheck.git</repository>
 
 	<dependencies>
-		<!-- Compatible with current stable Nextcloud 33 and previous stable 32. -->
-		<nextcloud min-version="32" max-version="34"/>
+		<!-- Compatible with Nextcloud 32–35. -->
+		<nextcloud min-version="32" max-version="35"/>
 		<php min-version="8.1" max-version="8.5"/>
 		<!-- Required under <dependencies>: MigrationService reads these for schema naming checks -->
 		<database>mysql</database>

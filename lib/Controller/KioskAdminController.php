@@ -19,6 +19,7 @@ use OCA\ArbeitszeitCheck\Support\UserDirectorySearch;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IL10N;
@@ -82,6 +83,7 @@ class KioskAdminController extends Controller
 		return $this->buildShellParams($pageId, $title, $help, $this->buildAdminNavFlags(), $this->l10n->t('Administration'));
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function index(): TemplateResponse
 	{
@@ -227,6 +229,7 @@ class KioskAdminController extends Controller
 		return $this->configureCSP($response, 'admin');
 	}
 
+	#[NoAdminRequired]
 	public function setKioskEnabled(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -235,6 +238,7 @@ class KioskAdminController extends Controller
 		return new JSONResponse(['success' => true, 'enabled' => $enabled]);
 	}
 
+	#[NoAdminRequired]
 	public function createTerminal(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -271,12 +275,14 @@ class KioskAdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function revokeTerminal(string $terminalId): JSONResponse
 	{
 		$this->terminalService->revoke($terminalId);
 		return new JSONResponse(['success' => true]);
 	}
 
+	#[NoAdminRequired]
 	public function listCredentials(): JSONResponse
 	{
 		$userId = trim((string)$this->request->getParam('userId', ''));
@@ -298,6 +304,7 @@ class KioskAdminController extends Controller
 		return new JSONResponse(['success' => true, 'data' => ['credentials' => $credentials]]);
 	}
 
+	#[NoAdminRequired]
 	public function assignRfid(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -313,6 +320,7 @@ class KioskAdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function generatePin(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -333,6 +341,7 @@ class KioskAdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function deleteCredential(int $id): JSONResponse
 	{
 		$actor = $this->userSession->getUser()?->getUID() ?? '';
@@ -344,6 +353,7 @@ class KioskAdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function setUserAllowed(string $userId): JSONResponse
 	{
 		$userId = trim(rawurldecode($userId));
@@ -360,6 +370,7 @@ class KioskAdminController extends Controller
 		return new JSONResponse(['success' => true, 'userId' => $userId, 'kioskAllowed' => $allowed]);
 	}
 
+	#[NoAdminRequired]
 	public function importCredentials(): JSONResponse
 	{
 		$csv = (string)($this->request->getParam('csv') ?? '');
@@ -384,6 +395,7 @@ class KioskAdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function startEnrollment(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -398,12 +410,14 @@ class KioskAdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function enrollmentStatus(): JSONResponse
 	{
 		$terminalId = trim((string)$this->request->getParam('terminalId', ''));
 		return new JSONResponse(['success' => true, 'data' => $this->enrollmentService->getStatus($terminalId)]);
 	}
 
+	#[NoAdminRequired]
 	public function cancelEnrollment(): JSONResponse
 	{
 		$data = $this->readJsonBody();
@@ -424,6 +438,7 @@ class KioskAdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function searchUsers(): JSONResponse
 	{
 		$query = trim((string)$this->request->getParam('q', ''));

@@ -90,6 +90,17 @@ class Application extends App implements IBootstrap {
 
 		// Register notification provider
 		$context->registerNotifierService(Notifier::class);
+		$context->registerService(AppAdminMiddleware::class, function ($c): AppAdminMiddleware {
+			$l10nFactory = $c->query(\OCP\L10N\IFactory::class);
+			return new AppAdminMiddleware(
+				$c->query(\OCP\IUserSession::class),
+				$c->query(PermissionService::class),
+				$l10nFactory->get(self::APP_ID),
+				$c->query(\OCP\IRequest::class),
+				$c->query(\OCP\IURLGenerator::class),
+				$l10nFactory,
+			);
+		});
 		$context->registerMiddleware(AppAdminMiddleware::class);
 		$context->registerService(AppAccessMiddleware::class, function ($c): AppAccessMiddleware {
 			return new AppAccessMiddleware(
@@ -99,6 +110,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IURLGenerator::class),
 				$c->query(\OCP\L10N\IFactory::class),
 				$c->query(\Psr\Log\LoggerInterface::class),
+				$c->query(\OCP\AppFramework\Utility\IControllerMethodReflector::class),
 			);
 		});
 		$context->registerMiddleware(AppAccessMiddleware::class);
@@ -986,6 +998,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IUserManager::class),
 				$c->query(\OCP\AppFramework\Utility\ITimeFactory::class),
 				$c->query(\OCP\IDBConnection::class),
+				$c->query(\OCP\Lock\ILockingProvider::class),
 			);
 		});
 		$context->registerService(\OCA\ArbeitszeitCheck\Service\TerminalDeviceService::class, function ($c) {

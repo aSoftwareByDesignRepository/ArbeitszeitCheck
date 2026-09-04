@@ -91,6 +91,7 @@ class MobileBootstrapController extends Controller {
 						'clockStampingEnabled' => true,
 						'manualTimeEntryEnabled' => true,
 					],
+					'requireSubstituteTypes' => $this->requireSubstituteTypes(),
 				],
 				'licensing' => [
 					'mobile' => [
@@ -133,6 +134,25 @@ class MobileBootstrapController extends Controller {
 				$this->isVacationUnitAwareClient()
 			),
 		]);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function requireSubstituteTypes(): array
+	{
+		$raw = $this->config->getAppValue('arbeitszeitcheck', 'require_substitute_types', '[]');
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [];
+		}
+		$out = [];
+		foreach ($decoded as $type) {
+			if (is_string($type) && $type !== '') {
+				$out[] = $type;
+			}
+		}
+		return array_values(array_unique($out));
 	}
 
 	/**

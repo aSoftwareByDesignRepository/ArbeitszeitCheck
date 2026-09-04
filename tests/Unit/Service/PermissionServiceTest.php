@@ -11,6 +11,7 @@ use OCA\ArbeitszeitCheck\Constants;
 use OCP\App\IAppManager;
 use OCP\IConfig;
 use OCP\IGroupManager;
+use OCP\IUser;
 use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -259,12 +260,25 @@ class PermissionServiceTest extends TestCase
 		$config = $this->createMock(IConfig::class);
 		$config->method('getAppValue')
 			->with(Application::APP_ID, Constants::CONFIG_APP_ADMIN_USER_IDS, '[]')
-			->willReturn('["colleague"]');
+			->willReturn('["colleague","disabled_admin"]');
+		$enabled = $this->createMock(IUser::class);
+		$enabled->method('isEnabled')->willReturn(true);
+		$disabled = $this->createMock(IUser::class);
+		$disabled->method('isEnabled')->willReturn(false);
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->willReturnCallback(static function (string $uid) use ($enabled, $disabled) {
+			return match ($uid) {
+				'colleague' => $enabled,
+				'disabled_admin' => $disabled,
+				default => null,
+			};
+		});
 		$teamResolver = $this->createMock(TeamResolverService::class);
-		$service = $this->createService($groupManager, $teamResolver, null, $config);
+		$service = $this->createService($groupManager, $teamResolver, null, $config, $userManager);
 
 		$this->assertTrue($service->isAdmin('nc_admin'));
 		$this->assertTrue($service->isAdmin('colleague'));
+		$this->assertFalse($service->isAdmin('disabled_admin'));
 		$this->assertFalse($service->isAdmin('random'));
 	}
 

@@ -38,8 +38,12 @@ class KioskCredMapper extends QBMapper
 
 	public function findById(int $id): ?KioskCred
 	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
 		try {
-			return $this->getById($id);
+			return $this->findEntity($qb);
 		} catch (\OCP\AppFramework\Db\DoesNotExistException) {
 			return null;
 		}

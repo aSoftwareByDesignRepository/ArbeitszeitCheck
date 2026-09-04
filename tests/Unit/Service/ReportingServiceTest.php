@@ -487,6 +487,7 @@ class ReportingServiceTest extends TestCase
 
 		$this->assertIsArray($report);
 		$this->assertEquals('absence', $report['type']);
+		$this->assertSame('date', $report['sort']);
 		$this->assertEquals(2, $report['total_absences']);
 		$this->assertEquals(5, $report['total_days']); // 3 + 2
 		$this->assertArrayHasKey('absences_by_type', $report);
@@ -495,6 +496,53 @@ class ReportingServiceTest extends TestCase
 		$this->assertArrayHasKey('absences_by_status', $report);
 		$this->assertEquals(2, $report['absences_by_status'][Absence::STATUS_APPROVED]);
 		$this->assertCount(1, $report['users']); // One user with absences
+		// Default chronological: vacation (Jan 10) before sick (Jan 20)
+		$rows = $report['users'][0]['absences'];
+		$this->assertSame(Absence::TYPE_VACATION, $rows[0]['type']);
+		$this->assertSame(Absence::TYPE_SICK_LEAVE, $rows[1]['type']);
+	}
+
+	public function testGenerateAbsenceReportSortByType(): void
+	{
+		$userId = 'testuser';
+		$startDate = new \DateTime('2024-01-01');
+		$endDate = new \DateTime('2024-01-31');
+
+		$vacation = new Absence();
+		$vacation->setId(1);
+		$vacation->setUserId($userId);
+		$vacation->setType(Absence::TYPE_VACATION);
+		$vacation->setStatus(Absence::STATUS_APPROVED);
+		$vacation->setStartDate(new \DateTime('2024-01-10'));
+		$vacation->setEndDate(new \DateTime('2024-01-12'));
+		$vacation->setDays(3.0);
+		$vacation->setCreatedAt(new \DateTime());
+		$vacation->setUpdatedAt(new \DateTime());
+
+		$sick = new Absence();
+		$sick->setId(2);
+		$sick->setUserId($userId);
+		$sick->setType(Absence::TYPE_SICK_LEAVE);
+		$sick->setStatus(Absence::STATUS_APPROVED);
+		$sick->setStartDate(new \DateTime('2024-01-20'));
+		$sick->setEndDate(new \DateTime('2024-01-21'));
+		$sick->setDays(2.0);
+		$sick->setCreatedAt(new \DateTime());
+		$sick->setUpdatedAt(new \DateTime());
+
+		$this->absenceMapper->expects($this->once())
+			->method('findByUserAndDateRange')
+			->willReturn([$vacation, $sick]);
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getDisplayName')->willReturn('Test User');
+		$this->userManager->method('get')->with($userId)->willReturn($user);
+
+		$report = $this->service->generateAbsenceReport($startDate, $endDate, $userId, 'type');
+		$this->assertSame('type', $report['sort']);
+		$rows = $report['users'][0]['absences'];
+		$this->assertSame(Absence::TYPE_SICK_LEAVE, $rows[0]['type']);
+		$this->assertSame(Absence::TYPE_VACATION, $rows[1]['type']);
 	}
 
 	/**

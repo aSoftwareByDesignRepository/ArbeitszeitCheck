@@ -638,10 +638,13 @@ class ComplianceService
      *  - The rest anchor is the latest completed end_time strictly before now.
      *    Entries with end_time in the future (bad manual rows / planned days) must
      *    never block clock-in — they are not an ended shift yet.
-     *  - Stamp path always enforces elapsed rest against that anchor (no calendar-day
-     *    shortcut). Mid-session interruptions must use Pause, not Gehen→Kommen.
-     *    A calendar "same day" skip would wrongly clear Ruhezeit after night shifts
-     *    that end after midnight (e.g. 22:00→06:00 then Kommen at 10:00).
+     *  - Same-calendar-day geteilte Arbeitszeit (morning block then afternoon Kommen)
+     *    may skip the cross-shift rest gate via {@see isIntradayWorkInterruption} —
+     *    identical rule to {@see checkRestPeriodForStartTime}. Overnight Wachdienst
+     *    (start day &lt; end day) never qualifies, so 22:00→06:00 then Kommen at 10:00
+     *    still requires elapsed Ruhezeit.
+     *  - Short breaks inside an open session should still use Pause, not Gehen→Kommen;
+     *    the error message says so when rest is blocked.
      *  - User-facing times always include the calendar date so "04:00" cannot be
      *    mistaken for a time that already passed today when it is tomorrow.
      *
@@ -650,8 +653,34 @@ class ComplianceService
     private function evaluateRestPeriodForClockIn(string $userId): array
     {
         $now = $this->timeZoneService->nowInStorage();
-        $lastEndTime = $this->resolveRestPeriodAnchor($userId, $now);
         $minRest = $this->getMinRestPeriod($userId);
+
+        // Prefer the last completed entry so we can apply the same intraday-split
+        // gate as manual entries (needs start + end, not only the end instant).
+        $lastCompleted = $this->timeEntryMapper->findLastCompletedBeforeTime($userId, $now);
+        $lastEndTime = $lastCompleted?->getEndTime();
+        $lastStartTime = $lastCompleted?->getStartTime();
+
+        if ($lastEndTime !== null
+            && $lastStartTime instanceof \DateTimeInterface
+            && $this->isIntradayWorkInterruption($lastStartTime, $lastEndTime, $now)
+        ) {
+            return [
+                'valid' => true,
+                'message' => null,
+                'lastEndTime' => $lastEndTime,
+                'earliestClockIn' => null,
+                'details' => [
+                    'intraday_split' => true,
+                    'min_rest_hours' => (int)$minRest,
+                ],
+            ];
+        }
+
+        if ($lastEndTime === null) {
+            // No completed end before now — fall back to paused-session anchor.
+            $lastEndTime = $this->resolveRestPeriodAnchor($userId, $now);
+        }
 
         if ($lastEndTime === null) {
             return [
@@ -683,7 +712,7 @@ class ComplianceService
         return [
             'valid' => false,
             'message' => $this->l10n->t(
-                'Minimum %1$d-hour rest period required between shifts (%2$s). Your last shift ended on %3$s at %4$s. You can clock in after %5$s (in %6$.1f hours).',
+                'Minimum %1$d-hour rest period required between shifts (%2$s). Your last shift ended on %3$s at %4$s. You can clock in after %5$s (in %6$.1f hours). For a short break in the same session, use Pause instead of clocking out. Morning and afternoon blocks on the same calendar day (split shift) are allowed when the previous block did not run overnight.',
                 [
                     (int)$minRest,
                     $lawLabel,
@@ -702,6 +731,7 @@ class ComplianceService
                 'last_end_clock' => $lastEndClock,
                 'earliest_clock_in' => $earliestDisplay,
                 'hours_remaining' => round($hoursRemainingSafe, 1),
+                'intraday_split' => false,
             ],
         ];
     }

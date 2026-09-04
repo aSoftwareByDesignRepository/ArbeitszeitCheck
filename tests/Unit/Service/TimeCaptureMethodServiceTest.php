@@ -65,6 +65,7 @@ class TimeCaptureMethodServiceTest extends TestCase
 		self::assertSame([
 			'clockStampingEnabled' => true,
 			'manualTimeEntryEnabled' => true,
+			'manualTimeEntriesRequireApproval' => false,
 		], $this->service->getSettings('alice'));
 	}
 

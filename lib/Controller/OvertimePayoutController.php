@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Controller;
 
+use OCA\ArbeitszeitCheck\Exception\NotAppAdminException;
 use OCA\ArbeitszeitCheck\Service\CSPService;
 use OCA\ArbeitszeitCheck\Service\MonthClosureService;
 use OCA\ArbeitszeitCheck\Service\OvertimeBankService;
@@ -14,6 +15,7 @@ use OCA\ArbeitszeitCheck\Service\LocaleFormatService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -81,6 +83,7 @@ class OvertimePayoutController extends Controller
 		return $this->buildShellParams($pageId, $title, $help, $this->buildAdminNavFlags(), $this->l10n->t('Administration'));
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function auditIndex(): TemplateResponse
 	{
@@ -124,6 +127,7 @@ class OvertimePayoutController extends Controller
 		return $this->configureCSP($response, 'admin');
 	}
 
+	#[NoAdminRequired]
 	public function listAudit(): JSONResponse
 	{
 		try {
@@ -200,6 +204,7 @@ class OvertimePayoutController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function adminMonthClosurePdf(): DataDownloadResponse|JSONResponse
 	{
@@ -237,6 +242,7 @@ class OvertimePayoutController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function index(): TemplateResponse
 	{
@@ -259,6 +265,7 @@ class OvertimePayoutController extends Controller
 		return $this->configureCSP($response, 'admin');
 	}
 
+	#[NoAdminRequired]
 	public function listMonth(): JSONResponse
 	{
 		try {
@@ -280,6 +287,7 @@ class OvertimePayoutController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function processOne(): JSONResponse
 	{
 		try {
@@ -309,6 +317,7 @@ class OvertimePayoutController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function exportCsv(): DataDownloadResponse|JSONResponse
 	{
 		try {
@@ -331,6 +340,7 @@ class OvertimePayoutController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function processBulk(): JSONResponse
 	{
 		try {
@@ -394,7 +404,7 @@ class OvertimePayoutController extends Controller
 	{
 		$user = $this->userSession->getUser();
 		if ($user === null || !$this->permissionService->isAdmin($user->getUID())) {
-			throw new \RuntimeException('forbidden');
+			throw new NotAppAdminException($this->l10n->t('Access denied. You are not an ArbeitszeitCheck app administrator.'));
 		}
 	}
 }

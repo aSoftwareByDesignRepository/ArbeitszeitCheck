@@ -130,6 +130,13 @@
 		if (!hourSelect || !minuteSelect) {
 			return;
 		}
+		const stepRaw = parseInt(
+			(window.ArbeitszeitCheck && window.ArbeitszeitCheck.timeEntryForm && window.ArbeitszeitCheck.timeEntryForm.minuteStep)
+				|| (window.ArbeitszeitCheck && window.ArbeitszeitCheck.correctionMinuteStep)
+				|| 5,
+			10
+		);
+		const step = (!isNaN(stepRaw) && stepRaw >= 1 && stepRaw <= 30) ? stepRaw : 5;
 		hourSelect.innerHTML = '';
 		minuteSelect.innerHTML = '';
 		if (includeEmpty) {
@@ -145,12 +152,26 @@
 			opt.textContent = opt.value;
 			hourSelect.appendChild(opt);
 		}
-		for (let m = 0; m < 60; m++) {
+		for (let m = 0; m < 60; m += step) {
 			const opt = document.createElement('option');
 			opt.value = String(m).padStart(2, '0');
 			opt.textContent = opt.value;
 			minuteSelect.appendChild(opt);
 		}
+	}
+
+	function ensureMinuteOption(minuteSelect, minutePadded) {
+		if (!minuteSelect || !minutePadded) {
+			return;
+		}
+		const exists = Array.from(minuteSelect.options).some((o) => o.value === minutePadded);
+		if (exists) {
+			return;
+		}
+		const opt = document.createElement('option');
+		opt.value = minutePadded;
+		opt.textContent = minutePadded;
+		minuteSelect.appendChild(opt);
 	}
 
 	function bindTimeInputs(hourSelect, minuteSelect, hiddenInput) {
@@ -183,6 +204,7 @@
 			hourSelect.value = hm.hour;
 		}
 		if (hm && hm.minute) {
+			ensureMinuteOption(minuteSelect, hm.minute);
 			minuteSelect.value = hm.minute;
 		}
 		hourSelect.dispatchEvent(new Event('change'));

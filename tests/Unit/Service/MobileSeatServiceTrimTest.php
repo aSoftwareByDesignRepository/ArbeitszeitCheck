@@ -11,6 +11,7 @@ use OCA\ArbeitszeitCheck\Service\MobileSeatService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IDBConnection;
 use OCP\IUserManager;
+use OCP\Lock\ILockingProvider;
 use PHPUnit\Framework\TestCase;
 
 class MobileSeatServiceTrimTest extends TestCase
@@ -36,6 +37,7 @@ class MobileSeatServiceTrimTest extends TestCase
 			$this->createMock(IUserManager::class),
 			$this->createMock(ITimeFactory::class),
 			$this->createMock(IDBConnection::class),
+			$this->createMock(ILockingProvider::class),
 		);
 
 		self::assertSame(2, $service->trimToLimit(1));

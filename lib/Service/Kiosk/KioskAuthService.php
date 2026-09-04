@@ -95,8 +95,20 @@ class KioskAuthService
 				$this->lockingProvider->releaseLock($termLock, ILockingProvider::LOCK_EXCLUSIVE);
 			}
 		} else {
-			$this->sessionMapper->deleteUnusedForTerminal($terminal->getTerminalId());
-			$this->sessionMapper->insert($session);
+			// Same terminal lock as RFID so concurrent PIN identifies cannot
+			// deleteUnused each other's brand-new unused session.
+			$termLock = KioskEnrollmentLockKeys::forTerminal($terminal->getTerminalId());
+			try {
+				$this->lockingProvider->acquireLock($termLock, ILockingProvider::LOCK_EXCLUSIVE, 'Kiosk identify PIN session gate');
+			} catch (LockedException) {
+				throw new KioskException('KIOSK_BUSY');
+			}
+			try {
+				$this->sessionMapper->deleteUnusedForTerminal($terminal->getTerminalId());
+				$this->sessionMapper->insert($session);
+			} finally {
+				$this->lockingProvider->releaseLock($termLock, ILockingProvider::LOCK_EXCLUSIVE);
+			}
 		}
 
 		$user = $this->userManager->get($userIdResolved);
@@ -132,11 +144,16 @@ class KioskAuthService
 	public function validateSession(KioskTerminal $terminal, string $sessionToken): KioskSession
 	{
 		$now = $this->timeFactory->getDateTime();
-		$session = $this->sessionMapper->findValidSession($terminal->getTerminalId(), $sessionToken, $now);
-		if ($session === null) {
-			throw new KioskException('KIOSK_SESSION_INVALID');
+		$terminalId = $terminal->getTerminalId();
+		$session = $this->sessionMapper->findValidSession($terminalId, $sessionToken, $now);
+		if ($session !== null) {
+			return $session;
 		}
-		return $session;
+		// Already claimed (stamp may have landed while the tablet timed out) — not "expired".
+		if ($this->sessionMapper->findUsedSession($terminalId, $sessionToken, $now) !== null) {
+			throw new KioskException('KIOSK_SESSION_USED');
+		}
+		throw new KioskException('KIOSK_SESSION_INVALID');
 	}
 
 	public function assertUserEligibleForAction(string $userId): void

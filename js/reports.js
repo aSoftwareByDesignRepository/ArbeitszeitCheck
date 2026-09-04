@@ -587,6 +587,12 @@
 						});
 					});
 
+					allAbsences.sort((a, b) => {
+						const t = String(a.type).localeCompare(String(b.type));
+						if (t !== 0) return t;
+						return String(a.start).localeCompare(String(b.start));
+					});
+
 					if (allAbsences.length) {
 						html += `<h4 class="report-subhead">${esc(L.details || 'Details')}</h4>`;
 						html += `<div class="table-container" role="region"><table class="table table--hover azc-table--responsive report-table"><thead><tr><th>${esc(L.name || 'Name')}</th><th>${esc(L.type || 'Type')}</th><th>${esc(L.startDateCol || L.startDate || 'Start')}</th><th>${esc(L.endDateCol || L.endDate || 'End')}</th><th>${esc(L.days || 'Days')}</th><th>${esc(L.status || 'Status')}</th></tr></thead><tbody>`;
@@ -967,6 +973,12 @@
 					const u = new URL(url);
 					// Important: organization scope uses an empty string to mean "all users".
 					u.searchParams.set('userId', String(scopeResolution.queryParams.userId));
+					url = u.toString();
+				}
+				// Payroll-friendly absence preview: same type-then-date order as CSV export.
+				if (reportType === 'absence') {
+					const u = new URL(url, window.location.origin);
+					u.searchParams.set('sort', 'type');
 					url = u.toString();
 				}
 			}
@@ -1383,6 +1395,9 @@
 				if (startIso) urlObj.searchParams.set('startDate', startIso);
 				if (endIso) urlObj.searchParams.set('endDate', endIso);
 				if (format) urlObj.searchParams.set('format', format);
+				if (reportType === 'absence') {
+					urlObj.searchParams.set('sort', 'type');
+				}
 				const layoutVal = exportLayoutSelect ? exportLayoutSelect.value : 'long';
 				if (
 					reportType === 'monthly' &&

@@ -148,7 +148,7 @@ $currentUrl = $_SERVER['REQUEST_URI'];
                                 </a>
                             </li>
 
-                            <?php if (\OCP\Server::get(\OCP\IGroupManager::class)->isAdmin($user->getUID())): ?>
+                            <?php if (\OCP\Server::get(\OCA\ArbeitszeitCheck\Service\PermissionService::class)->isAdmin($user->getUID())): ?>
                                 <li class="header__user-dropdown-item">
                                     <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.dashboard')); ?>"
                                         class="header__user-dropdown-link">

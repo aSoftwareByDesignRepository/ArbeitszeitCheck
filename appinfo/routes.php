@@ -17,6 +17,7 @@ return [
 		// Main page routes
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 		['name' => 'page#dashboard', 'url' => '/dashboard', 'verb' => 'GET'],
+		['name' => 'page#overtimeBalancePdf', 'url' => '/api/overtime/balance-pdf', 'verb' => 'GET'],
 		['name' => 'page#timeEntries', 'url' => '/time-entries', 'verb' => 'GET'],
 		['name' => 'page#absences', 'url' => '/absences', 'verb' => 'GET'],
 		['name' => 'page#reports', 'url' => '/reports', 'verb' => 'GET'],

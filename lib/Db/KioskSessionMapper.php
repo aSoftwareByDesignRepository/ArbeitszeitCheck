@@ -61,6 +61,27 @@ class KioskSessionMapper extends QBMapper
 		return null;
 	}
 
+	/**
+	 * Find a session that already consumed its one-shot claim (used_at set).
+	 * Distinguishes "already stamped" from "unknown/expired" so a post-timeout
+	 * retry can return KIOSK_SESSION_USED instead of lying with SESSION_INVALID.
+	 */
+	public function findUsedSession(string $terminalId, string $sessionToken, \DateTimeInterface $now): ?KioskSession
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('terminal_id', $qb->createNamedParameter($terminalId)))
+			->andWhere($qb->expr()->gt('expires_at', $qb->createNamedParameter($now->format('Y-m-d H:i:s'))))
+			->andWhere($qb->expr()->isNotNull('used_at'));
+		foreach ($this->findEntities($qb) as $session) {
+			if (\OCA\ArbeitszeitCheck\Kiosk\KioskCrypto::verifySecret($sessionToken, $session->getTokenHash())) {
+				return $session;
+			}
+		}
+		return null;
+	}
+
 	public function markUsed(KioskSession $session): void
 	{
 		$session->setUsedAt(new \DateTime());

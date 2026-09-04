@@ -6,6 +6,7 @@ namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
 use OCA\ArbeitszeitCheck\Controller\AbsenceController;
 use OCA\ArbeitszeitCheck\Controller\ManagerController;
+use OCA\ArbeitszeitCheck\Controller\SubstituteController;
 use OCA\ArbeitszeitCheck\Controller\TimeTrackingController;
 use OCP\AppFramework\Http\Attribute\BruteForceProtection;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
@@ -60,6 +61,14 @@ class MobileApiAttributesTest extends TestCase {
 			'correctTimeEntry',
 			'createEmployeeAbsence',
 			'createEmployeeTimeEntry',
+		]);
+	}
+
+	public function testSubstituteEndpointsHaveNoCsrfRequired(): void {
+		$this->assertMethodsHaveAttribute(NoCSRFRequired::class, SubstituteController::class, [
+			'getPending',
+			'approve',
+			'decline',
 		]);
 	}
 }

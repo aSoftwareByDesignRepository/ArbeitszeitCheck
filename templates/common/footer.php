@@ -93,7 +93,7 @@ $currentYear = date('Y');
                                 <?php p($l->t('Calendar View')); ?>
                             </a>
                         </li>
-                        <?php if ($user && \OCP\Server::get(\OCP\IGroupManager::class)->isAdmin($user->getUID())): ?>
+                        <?php if ($user && \OCP\Server::get(\OCA\ArbeitszeitCheck\Service\PermissionService::class)->isAdmin($user->getUID())): ?>
                             <li class="footer__link-item">
                                 <a href="<?php print_unescaped(\OCP\Server::get(\OCP\IURLGenerator::class)->linkToRoute('arbeitszeitcheck.admin.dashboard')); ?>"
                                     class="footer__link">

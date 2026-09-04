@@ -160,18 +160,24 @@ class ComplianceServiceTest extends TestCase
 	public function testCheckComplianceBeforeClockInInsufficientRest(): void
 	{
 		$userId = 'testuser';
+		$now = $this->timeZoneService->nowInStorage();
 
-		$endTime = new \DateTime('now', new \DateTimeZone('Europe/Berlin'));
-		$endTime->modify('-10 hours');
+		// Overnight block that ended recently — not geteilte Arbeitszeit; §5 must block.
+		$endTime = (clone $now)->modify('-4 hours');
+		$startTime = (clone $endTime)->modify('-8 hours');
+		if ($startTime->format('Y-m-d') === $endTime->format('Y-m-d')) {
+			$startTime = (clone $endTime)->setTime(0, 0, 0)->modify('-2 hours');
+		}
+
 		$lastEntry = new TimeEntry();
 		$lastEntry->setId(1);
 		$lastEntry->setUserId($userId);
-		$lastEntry->setStartTime((clone $endTime)->modify('-8 hours'));
+		$lastEntry->setStartTime($startTime);
 		$lastEntry->setEndTime($endTime);
 		$lastEntry->setStatus(TimeEntry::STATUS_COMPLETED);
 		$lastEntry->setIsManualEntry(false);
-		$lastEntry->setCreatedAt(new \DateTime());
-		$lastEntry->setUpdatedAt(new \DateTime());
+		$lastEntry->setCreatedAt(clone $endTime);
+		$lastEntry->setUpdatedAt(clone $endTime);
 
 		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
 			->with($userId, $this->isInstanceOf(\DateTime::class))
@@ -189,6 +195,51 @@ class ComplianceServiceTest extends TestCase
 		$this->assertEquals(ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD, $issues[0]['type']);
 		$this->assertEquals(ComplianceViolation::SEVERITY_ERROR, $issues[0]['severity']);
 		$this->assertStringContainsString('ended on', $issues[0]['message']);
+		$this->assertStringContainsString('Pause', $issues[0]['message']);
+	}
+
+	/**
+	 * Same-calendar-day geteilte Arbeitszeit on the stamp path (Gehen→Kommen)
+	 * must be allowed — identical rule to manual entries.
+	 */
+	public function testCheckComplianceBeforeClockInAllowsIntradaySplitSameDay(): void
+	{
+		$userId = 'dayworker';
+		$now = $this->timeZoneService->nowInStorage();
+		$morningEnd = (clone $now)->modify('-2 hours');
+		$morningStart = (clone $morningEnd)->modify('-3 hours');
+		// Ensure all three instants share one storage calendar day.
+		if ($morningStart->format('Y-m-d') !== $now->format('Y-m-d')) {
+			$morningStart = (clone $now)->setTime(8, 0, 0);
+			$morningEnd = (clone $now)->setTime(11, 0, 0);
+			if ($morningEnd->getTimestamp() >= $now->getTimestamp()) {
+				$morningEnd = (clone $now)->modify('-30 minutes');
+				$morningStart = (clone $morningEnd)->modify('-3 hours');
+			}
+		}
+
+		$lastEntry = new TimeEntry();
+		$lastEntry->setId(77);
+		$lastEntry->setUserId($userId);
+		$lastEntry->setStartTime($morningStart);
+		$lastEntry->setEndTime($morningEnd);
+		$lastEntry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$lastEntry->setIsManualEntry(false);
+		$lastEntry->setCreatedAt(clone $morningEnd);
+		$lastEntry->setUpdatedAt(clone $morningEnd);
+
+		$this->timeEntryMapper->method('findLastCompletedBeforeTime')
+			->with($userId, $this->isInstanceOf(\DateTime::class))
+			->willReturn($lastEntry);
+		$this->timeEntryMapper->method('findOverlapping')->willReturn([]);
+		$this->timeEntryMapper->method('getTotalHoursByUserAndDateRange')->willReturn(240.0);
+
+		$issues = $this->service->checkComplianceBeforeClockIn($userId);
+		$restIssues = array_values(array_filter(
+			$issues,
+			static fn (array $i): bool => ($i['type'] ?? '') === ComplianceViolation::TYPE_INSUFFICIENT_REST_PERIOD
+		));
+		$this->assertSame([], $restIssues, 'Same-day split shift must not raise stamp-path Ruhezeit');
 	}
 
 	/**

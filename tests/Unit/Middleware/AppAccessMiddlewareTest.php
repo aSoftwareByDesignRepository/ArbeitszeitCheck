@@ -10,6 +10,7 @@ use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\AppFramework\Utility\IControllerMethodReflector;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use OCP\IUser;
@@ -44,6 +45,9 @@ class AppAccessMiddlewareTest extends TestCase
 		$l10nFactory = $this->createMock(IFactory::class);
 		$l10nFactory->method('get')->willReturn($l10n);
 
+		$reflector = $this->createMock(IControllerMethodReflector::class);
+		$reflector->method('hasAnnotation')->willReturn(false);
+
 		$this->middleware = new AppAccessMiddleware(
 			$this->userSession,
 			$this->permissionService,
@@ -51,6 +55,7 @@ class AppAccessMiddlewareTest extends TestCase
 			$urlGenerator,
 			$l10nFactory,
 			$this->createMock(LoggerInterface::class),
+			$reflector,
 		);
 	}
 
@@ -81,6 +86,17 @@ class AppAccessMiddlewareTest extends TestCase
 		$this->middleware->beforeController($this->fakeController(), 'dashboard');
 	}
 
+	public function testSkipsPublicPageEvenWhenUserDenied(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('restricted');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->expects($this->never())->method('isUserAllowedByAccessGroups');
+
+		$this->middleware->beforeController($this->fakeController(), 'publicPing');
+		$this->addToAssertionCount(1);
+	}
+
 	public function testAfterExceptionReturnsForbiddenTemplateForPage(): void
 	{
 		$exception = new AppAccessDeniedException('restriction');
@@ -101,6 +117,8 @@ class AppAccessMiddlewareTest extends TestCase
 		$l10nFactory = $this->createMock(IFactory::class);
 		$l10nFactory->method('get')->willReturn($l10n);
 
+		$reflector = $this->createMock(IControllerMethodReflector::class);
+		$reflector->method('hasAnnotation')->willReturn(false);
 		$middleware = new AppAccessMiddleware(
 			$this->userSession,
 			$this->permissionService,
@@ -108,6 +126,7 @@ class AppAccessMiddlewareTest extends TestCase
 			$this->createMock(IURLGenerator::class),
 			$l10nFactory,
 			$this->createMock(LoggerInterface::class),
+			$reflector,
 		);
 
 		$response = $middleware->afterException(null, 'clockIn', new AppAccessDeniedException('restriction'));

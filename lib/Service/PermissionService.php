@@ -180,7 +180,13 @@ class PermissionService
 			return true;
 		}
 
-		return in_array($userId, $this->getConfiguredAppAdminUserIds(), true);
+		if (!in_array($userId, $this->getConfiguredAppAdminUserIds(), true)) {
+			return false;
+		}
+
+		// Stale / disabled UIDs must not keep app-admin powers after re-auth.
+		$user = $this->userManager->get($userId);
+		return $user !== null && $user->isEnabled();
 	}
 
 	/**

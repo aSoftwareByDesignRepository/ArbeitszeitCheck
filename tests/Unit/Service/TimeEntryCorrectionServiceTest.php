@@ -265,6 +265,50 @@ class TimeEntryCorrectionServiceTest extends TestCase
 		$this->assertNull($result->getJustification(), 'Justification must be cleared on cancel');
 	}
 
+	public function testCancelByEmployeeRestoresPausedWhenOriginalEndWasNull(): void
+	{
+		$entry = $this->buildEntry();
+		$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$entry->setEndTime(new \DateTime('2026-01-15T18:00:00+00:00'));
+		$entry->setJustification(json_encode([
+			'justification' => 'pause mistake',
+			'original' => [
+				'startTime' => '2026-01-15T09:00:00+00:00',
+				'endTime' => null,
+				'status' => TimeEntry::STATUS_PAUSED,
+				'description' => 'paused work',
+			],
+			'proposed' => ['endTime' => '2026-01-15T18:00:00+00:00'],
+		]));
+
+		$result = $this->service->cancelByEmployee($entry);
+
+		$this->assertNotNull($result);
+		$this->assertSame(TimeEntry::STATUS_PAUSED, $result->getStatus());
+		$this->assertNull($result->getEndTime(), 'Paused original must restore a null end');
+		$this->assertSame('paused work', $result->getDescription());
+	}
+
+	public function testRejectRestoresPausedWhenOriginalEndWasNull(): void
+	{
+		$entry = $this->buildEntry();
+		$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$entry->setEndTime(new \DateTime('2026-01-15T18:00:00+00:00'));
+		$entry->setJustification(json_encode([
+			'justification' => 'pause mistake',
+			'original' => [
+				'startTime' => '2026-01-15T09:00:00+00:00',
+				'endTime' => null,
+				'status' => TimeEntry::STATUS_PAUSED,
+			],
+		]));
+
+		$result = $this->service->reject($entry, 'manager1', 'Keep the pause');
+
+		$this->assertSame(TimeEntry::STATUS_PAUSED, $result->getStatus());
+		$this->assertNull($result->getEndTime());
+	}
+
 	public function testApplyManagerCorrectionPreservesPreviousJustification(): void
 	{
 		$entry = $this->buildEntry();

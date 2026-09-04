@@ -17,15 +17,21 @@ $mutations = [
 	],
 	[
 		'file' => $appRoot . '/lib/Service/PermissionService.php',
-		'from' => 'return in_array($userId, $this->getConfiguredAppAdminUserIds(), true);',
-		'to' => 'return false;',
+		'from' => "\t\tif (!in_array(\$userId, \$this->getConfiguredAppAdminUserIds(), true)) {\n\t\t\treturn false;\n\t\t}",
+		'to' => "\t\tif (true) {\n\t\t\treturn false;\n\t\t}",
 		'label' => 'ignores_dedicated_list',
 	],
 	[
-		'file' => $appRoot . '/templates/admin-settings.php',
+		'file' => $appRoot . '/templates/partials/admin-settings/access.php',
 		'from' => 'without making them a Nextcloud admin',
 		'to' => 'Only Nextcloud admins may administer',
 		'label' => 'reverts_help_copy',
+	],
+	[
+		'file' => $appRoot . '/lib/Controller/AdminController.php',
+		'from' => "\t#[NoAdminRequired]\n\t#[NoCSRFRequired]\n\tpublic function dashboard()",
+		'to' => "\t#[NoCSRFRequired]\n\tpublic function dashboard()",
+		'label' => 'drops_no_admin_required_on_dashboard',
 	],
 	[
 		'file' => $appRoot . '/js/admin-vacation-layers.js',
@@ -44,46 +50,45 @@ $mutations = [
 function run_phpunit(string $phpunit, string $appRoot): int
 {
 	$cmd = escapeshellarg($phpunit)
-		. ' -c ' . escapeshellarg($appRoot . '/phpunit.unit.xml')
-		. ' --filter "DedicatedAppAdminContractTest|PermissionServiceTest::testIsAdminUsesSystemAdminOrDedicatedList|PermissionServiceTest::testNonListedSystemAdminRemainsAppAdminWhenListNonEmpty"';
+		. ' -c ' . escapeshellarg($appRoot . '/phpunit.xml')
+		. ' --filter "DedicatedAppAdminContractTest|PermissionServiceTest::testIsAdminUsesSystemAdminOrDedicatedList|PermissionServiceTest::testNonListedSystemAdminRemainsAppAdminWhenListNonEmpty|AppAdminMiddlewareTest"';
 	passthru($cmd, $code);
 	return (int)$code;
 }
 
-$config = $appRoot . '/phpunit.unit.xml';
+$config = $appRoot . '/phpunit.xml';
 if (!is_file($config)) {
 	$config = $appRoot . '/phpunit.xml';
 }
 
 echo "Baseline…\n";
 $cmd = escapeshellarg($phpunit) . ' -c ' . escapeshellarg($config)
-	. ' --filter "DedicatedAppAdminContractTest|testIsAdminUsesSystemAdminOrDedicatedList|testNonListedSystemAdminRemainsAppAdminWhenListNonEmpty|testUpdateAdminSettingsNormalizesAppAdminUsers"';
-passthru($cmd, $base);
-if ($base !== 0) {
+	. ' --filter "DedicatedAppAdminContractTest|testIsAdminUsesSystemAdminOrDedicatedList|testNonListedSystemAdminRemainsAppAdminWhenListNonEmpty|testUpdateAdminSettingsNormalizesAppAdminUsers|AppAdminMiddlewareTest"';
+passthru($cmd, $baseline);
+if ((int)$baseline !== 0) {
 	fwrite(STDERR, "Baseline failed\n");
 	exit(1);
 }
 
-$failed = 0;
-$killed = 0;
-foreach ($mutations as $m) {
-	$original = (string)file_get_contents($m['file']);
-	if (!str_contains($original, $m['from'])) {
-		fwrite(STDERR, "SKIP missing: {$m['label']}\n");
-		$failed++;
-		continue;
+foreach ($mutations as $mutation) {
+	$file = $mutation['file'];
+	$from = $mutation['from'];
+	$to = $mutation['to'];
+	$label = $mutation['label'];
+	$original = file_get_contents($file);
+	if ($original === false || !str_contains($original, $from)) {
+		fwrite(STDERR, "Mutation source not found: {$label}\n");
+		exit(1);
 	}
-	file_put_contents($m['file'], str_replace($m['from'], $m['to'], $original));
-	echo "Mutant {$m['label']}…\n";
-	passthru($cmd, $code);
-	file_put_contents($m['file'], $original);
+	file_put_contents($file, str_replace($from, $to, $original));
+	echo "Mutation {$label}…\n";
+	$code = run_phpunit($phpunit, $appRoot);
+	file_put_contents($file, $original);
 	if ($code === 0) {
-		fwrite(STDERR, "SURVIVED: {$m['label']}\n");
-		$failed++;
-	} else {
-		echo "Killed: {$m['label']}\n";
-		$killed++;
+		fwrite(STDERR, "Mutation survived (tests should have failed): {$label}\n");
+		exit(1);
 	}
+	echo "killed {$label}\n";
 }
-echo "Done: killed={$killed} failed={$failed}\n";
-exit($failed === 0 ? 0 : 1);
+
+echo "All dedicated app-admin mutations killed.\n";

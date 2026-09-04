@@ -70,6 +70,7 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\TTransactional;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\NotFoundResponse;
@@ -89,10 +90,12 @@ use OCP\IL10N;
 use OCP\Util;
 
 /**
- * Admin controller – all routes require admin privileges.
+ * Admin controller – all routes require ArbeitszeitCheck app-admin privileges.
  *
- * Admin access is enforced by Nextcloud middleware when NoAdminRequired
- * is not present. Do not add NoAdminRequired to any method in this class.
+ * Every public action MUST carry #[NoAdminRequired] so Nextcloud's
+ * SecurityMiddleware does not demand a system admin. AppAdminMiddleware
+ * then enforces PermissionService::isAdmin() (system admin OR delegated
+ * app administrator from app_admin_user_ids).
  */
 class AdminController extends Controller
 {
@@ -609,6 +612,7 @@ class AdminController extends Controller
 	 * Atomically update all employee profile sections (work schedule, vacation
 	 * policy, time capture, overtime) in a single DB transaction.
 	 */
+	#[NoAdminRequired]
 	public function updateUserProfile(string $userId): JSONResponse
 	{
 		try {
@@ -649,9 +653,10 @@ class AdminController extends Controller
 	}
 
 	/**
-	 * Admin dashboard page (admin-only by default; no NoAdminRequired)
+	 * Admin dashboard page (gated by AppAdminMiddleware / PermissionService::isAdmin)
 	 *
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function dashboard(): TemplateResponse
 	{
@@ -742,6 +747,7 @@ class AdminController extends Controller
 	 * Admin users management page (admin-only by default)
 	 *
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function users(): TemplateResponse
 	{
@@ -801,6 +807,7 @@ class AdminController extends Controller
 	 * userId path segment is resolved via the Nextcloud user manager; unknown
 	 * accounts render a clear not-found state (no data leakage).
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function userDetail(string $userId): TemplateResponse
 	{
@@ -860,6 +867,7 @@ class AdminController extends Controller
 	/**
 	 * Global settings index → default section (SETTINGS-PAGES-STANDARD).
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function settings(): RedirectResponse
 	{
@@ -872,6 +880,7 @@ class AdminController extends Controller
 	/**
 	 * Global settings section page (`/admin/settings/{section}`).
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function settingsSection(string $section): Response
 	{
@@ -992,6 +1001,7 @@ class AdminController extends Controller
 	 * never gates AGPL use; it only surfaces mailto/https CTAs with noopener on
 	 * external targets.
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function supportUs(): TemplateResponse
 	{
@@ -1013,6 +1023,7 @@ class AdminController extends Controller
 	/**
 	 * Admin notifications page (alerts, calendar email, HR mailbox).
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function notifications(): TemplateResponse
 	{
@@ -1045,6 +1056,7 @@ class AdminController extends Controller
 	/**
 	 * Admin overtime settings (bank cap + hour premiums).
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function overtimeSettings(): TemplateResponse
 	{
@@ -1287,6 +1299,7 @@ class AdminController extends Controller
 	 *
 	 * Dedicated UI to explain and manage holiday calendars per region.
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function holidays(): TemplateResponse
 	{
@@ -1329,6 +1342,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getCompanyHolidays(): JSONResponse
 	{
@@ -1375,6 +1389,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function saveCompanyHoliday(): JSONResponse
 	{
 		try {
@@ -1450,6 +1465,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function deleteCompanyHoliday(): JSONResponse
 	{
 		try {
@@ -1494,6 +1510,7 @@ class AdminController extends Controller
 	 * @param int $year
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getStateHolidays(string $state, int $year): JSONResponse
 	{
@@ -1555,6 +1572,7 @@ class AdminController extends Controller
 	 * @param string $state Region code (e.g. 'NW', 'AT-W')
 	 * @param int $year Four-digit year
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getHolidaySuggestions(string $state, int $year): JSONResponse
 	{
@@ -1633,6 +1651,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function saveStateHoliday(): JSONResponse
 	{
 		try {
@@ -1797,6 +1816,7 @@ class AdminController extends Controller
 	 * @param int $id
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function deleteStateHoliday(int $id): JSONResponse
 	{
 		try {
@@ -1943,6 +1963,7 @@ class AdminController extends Controller
 	 * Admin working time models management page (admin-only by default)
 	 *
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function workingTimeModels(): TemplateResponse
 	{
@@ -1989,6 +2010,7 @@ class AdminController extends Controller
 	 * resorting to direct API calls or DB edits. Existing assignment
 	 * dropdowns (admin-users → vacation policy) are unaffected.
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function tariffRuleSets(): TemplateResponse
 	{
@@ -2012,6 +2034,7 @@ class AdminController extends Controller
 	 * Admin audit log viewer page (admin-only by default)
 	 *
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function auditLog(): TemplateResponse
 	{
@@ -2199,6 +2222,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getAdminSettings(): JSONResponse
 	{
@@ -2267,6 +2291,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getNotificationSettings(): JSONResponse
 	{
@@ -2290,6 +2315,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function updateAdminSettings(): JSONResponse
 	{
 		try {
@@ -2615,6 +2641,24 @@ class AdminController extends Controller
 					$userIds = [];
 				}
 				$normalizedAdminUserIds = $this->normalizeAppAdminUserIds($userIds);
+				$actor = $this->userSession->getUser();
+				$actorId = $actor !== null ? $actor->getUID() : '';
+				// Delegated app admins must not wipe the last seat (incl. themselves)
+				// without leaving another delegated admin — Nextcloud system admins
+				// always retain break-glass access and may clear the list.
+				if (
+					$actorId !== ''
+					&& !$this->groupManager->isAdmin($actorId)
+					&& $this->permissionService->isAdmin($actorId)
+				) {
+					$removingSelf = !in_array($actorId, $normalizedAdminUserIds, true);
+					if ($removingSelf && $normalizedAdminUserIds === []) {
+						return new JSONResponse([
+							'success' => false,
+							'error' => $this->l10n->t('You cannot remove your own app administrator access without assigning another administrator first.'),
+						], Http::STATUS_BAD_REQUEST);
+					}
+				}
 				$this->appConfig->setAppValueString(Constants::CONFIG_APP_ADMIN_USER_IDS, json_encode($normalizedAdminUserIds));
 				$updatedSettings['appAdminUserIds'] = $normalizedAdminUserIds;
 			}
@@ -2659,6 +2703,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function updateNotificationSettings(): JSONResponse
 	{
 		try {
@@ -3261,6 +3306,7 @@ class AdminController extends Controller
 	/**
 	 * Migrate org vacation unit (days ↔ hours) with balance conversion (US-102 / Q3=A / Q8).
 	 */
+	#[NoAdminRequired]
 	public function migrateVacationUnit(): JSONResponse
 	{
 		try {
@@ -3836,6 +3882,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getStatistics(): JSONResponse
 	{
@@ -3910,7 +3957,7 @@ class AdminController extends Controller
 	 *   `truncated` flag in the response is set.
 	 *
 	 * Security:
-	 * - Admin-only by middleware (`AdminController` has no `NoAdminRequired`).
+	 * - App-admin only (`#[NoAdminRequired]` + AppAdminMiddleware).
 	 * - `#[NoCSRFRequired]` is set because this is a GET endpoint used both by
 	 *   the modal (AJAX with auth cookie) and the CSV download (top-level
 	 *   navigation), neither of which can attach a CSRF token portably.
@@ -3920,6 +3967,7 @@ class AdminController extends Controller
 	 *
 	 * @param string $filter `all` (default) or `active_today`
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getDashboardEmployees(
 		string $filter = 'all',
@@ -4075,6 +4123,7 @@ class AdminController extends Controller
 	 * @param int|null $offset
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function getUsers(?string $search = null, ?int $limit = 50, ?int $offset = 0): JSONResponse
 	{
 		try {
@@ -4250,6 +4299,7 @@ class AdminController extends Controller
 	 * @param string $userId
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function getUser(string $userId): JSONResponse
 	{
 		try {
@@ -4397,6 +4447,7 @@ class AdminController extends Controller
 	 * @param string $userId
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function updateUserWorkingTimeModel(string $userId): JSONResponse
 	{
 		try {
@@ -4423,6 +4474,7 @@ class AdminController extends Controller
 	 * @param string $userId
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getUserAssignmentHistory(string $userId): JSONResponse
 	{
@@ -4475,6 +4527,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getWorkingTimeModels(): JSONResponse
 	{
@@ -4510,6 +4563,7 @@ class AdminController extends Controller
 	 * @param int $id
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getWorkingTimeModel(int $id): JSONResponse
 	{
@@ -4549,6 +4603,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function createWorkingTimeModel(): JSONResponse
 	{
 		try {
@@ -4639,6 +4694,7 @@ class AdminController extends Controller
 	 * @param int $id
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function updateWorkingTimeModel(int $id): JSONResponse
 	{
 		try {
@@ -4746,6 +4802,7 @@ class AdminController extends Controller
 	 * @param int $id
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	public function deleteWorkingTimeModel(int $id): JSONResponse
 	{
 		try {
@@ -4820,6 +4877,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getTariffRuleSets(): JSONResponse
 	{
@@ -4868,6 +4926,7 @@ class AdminController extends Controller
 	/**
 	 * Fetch a single tariff rule set with its modules for the edit modal.
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getTariffRuleSet(int $id): JSONResponse
 	{
@@ -4930,6 +4989,7 @@ class AdminController extends Controller
 	 * Once a set has been activated the audit trail requires it to be retired,
 	 * not deleted.
 	 */
+	#[NoAdminRequired]
 	public function deleteTariffRuleSet(int $id): JSONResponse
 	{
 		try {
@@ -4970,6 +5030,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function createTariffRuleSet(): JSONResponse
 	{
 		try {
@@ -5052,6 +5113,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function updateTariffRuleSet(int $id): JSONResponse
 	{
 		try {
@@ -5140,6 +5202,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function activateTariffRuleSet(int $id): JSONResponse
 	{
 		try {
@@ -5232,6 +5295,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function retireTariffRuleSet(int $id): JSONResponse
 	{
 		try {
@@ -5265,6 +5329,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function assignVacationPolicy(string $userId): JSONResponse
 	{
 		try {
@@ -5286,6 +5351,7 @@ class AdminController extends Controller
 	/**
 	 * Update per-user overtime Stichtag and opening balance (Eröffnungssaldo).
 	 */
+	#[NoAdminRequired]
 	public function updateUserOvertimeSettings(string $userId): JSONResponse
 	{
 		try {
@@ -5309,6 +5375,7 @@ class AdminController extends Controller
 	/**
 	 * Update per-user time recording methods (clock stamping / manual entries).
 	 */
+	#[NoAdminRequired]
 	public function updateUserTimeCaptureSettings(string $userId): JSONResponse
 	{
 		try {
@@ -5331,6 +5398,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function simulateVacationPolicy(): JSONResponse
 	{
 		try {
@@ -5468,7 +5536,7 @@ class AdminController extends Controller
 	 * Layered vacation entitlement (L0 / L1 / L2) admin endpoints
 	 *
 	 * Authorisation: AdminController is server-admin / app-admin gated by
-	 * Nextcloud middleware (no NoAdminRequired anywhere in this class).
+	 * AppAdminMiddleware (#[NoAdminRequired] + PermissionService::isAdmin).
 	 * Delegated HR managers are NOT allowed to mutate organisation or
 	 * model defaults — REQ-SEC-03. Future delegation work must align with
 	 * `TeamManagerMapper` instead of weakening this gate.
@@ -5477,6 +5545,7 @@ class AdminController extends Controller
 	/**
 	 * GET — Full overview of the layered configuration for the admin UI.
 	 */
+	#[NoAdminRequired]
 	public function getVacationLayers(): JSONResponse
 	{
 		try {
@@ -5537,6 +5606,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function saveOrgVacationDefault(): JSONResponse
 	{
 		return $this->handleLayeredSave(function () {
@@ -5546,6 +5616,7 @@ class AdminController extends Controller
 		});
 	}
 
+	#[NoAdminRequired]
 	public function deleteOrgVacationDefault(int $id): JSONResponse
 	{
 		return $this->handleLayeredDelete(function () use ($id) {
@@ -5553,6 +5624,7 @@ class AdminController extends Controller
 		});
 	}
 
+	#[NoAdminRequired]
 	public function saveModelVacationDefault(): JSONResponse
 	{
 		return $this->handleLayeredSave(function () {
@@ -5562,6 +5634,7 @@ class AdminController extends Controller
 		});
 	}
 
+	#[NoAdminRequired]
 	public function deleteModelVacationDefault(int $id): JSONResponse
 	{
 		return $this->handleLayeredDelete(function () use ($id) {
@@ -5569,6 +5642,7 @@ class AdminController extends Controller
 		});
 	}
 
+	#[NoAdminRequired]
 	public function saveTeamVacationPolicy(): JSONResponse
 	{
 		return $this->handleLayeredSave(function () {
@@ -5578,6 +5652,7 @@ class AdminController extends Controller
 		});
 	}
 
+	#[NoAdminRequired]
 	public function deleteTeamVacationPolicy(int $id): JSONResponse
 	{
 		return $this->handleLayeredDelete(function () use ($id) {
@@ -5597,8 +5672,9 @@ class AdminController extends Controller
 	 *  - `scope`: one of `org`, `model`, `team`
 	 *  - `targetId`: required for `model` / `team`
 	 *
-	 * Authorisation: admin-only (no `NoAdminRequired` on the class).
+	 * Authorisation: app-admin only (`#[NoAdminRequired]` + AppAdminMiddleware).
 	 */
+	#[NoAdminRequired]
 	public function previewVacationLayerImpact(): JSONResponse
 	{
 		try {
@@ -5633,8 +5709,9 @@ class AdminController extends Controller
 	 * Delegates to {@see getUsersForPicker()} so behaviour matches
 	 * {@code GET /api/admin/users?picker=1} (enabled users only, min search length).
 	 *
-	 * Authorisation: admin-only (no `NoAdminRequired` on the class).
+	 * Authorisation: app-admin only (`#[NoAdminRequired]` + AppAdminMiddleware).
 	 */
+	#[NoAdminRequired]
 	public function searchVacationLayersUsers(): JSONResponse
 	{
 		try {
@@ -5884,6 +5961,7 @@ class AdminController extends Controller
 	/**
 	 * Admin vacation rules (year, carryover, unit, pro-rata) — policy Leave → Rules.
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function vacationRules(): TemplateResponse
 	{
@@ -5916,6 +5994,7 @@ class AdminController extends Controller
 	 * Server-rendered shell + JS hydration mirroring the pattern used by
 	 * `admin#teams`, `admin#workingTimeModels`, etc.
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function vacationLayers(): TemplateResponse
 	{
@@ -5951,6 +6030,7 @@ class AdminController extends Controller
 	 * @param string $format Format: csv, json
 	 * @return DataDownloadResponse|JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function exportUsers(string $format = 'csv'): DataDownloadResponse|JSONResponse
 	{
@@ -6068,6 +6148,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getAuditLogs(): JSONResponse
 	{
@@ -6141,6 +6222,7 @@ class AdminController extends Controller
 	 *
 	 * @return JSONResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getAuditLogStats(): JSONResponse
 	{
@@ -6175,6 +6257,7 @@ class AdminController extends Controller
 	 * @param string $format Format: csv, json
 	 * @return DataDownloadResponse
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function exportAuditLogs(string $format = 'csv'): DataDownloadResponse
 	{
@@ -6234,6 +6317,7 @@ class AdminController extends Controller
 
 	// ---------- Admin Teams (app-owned teams/departments) ----------
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function teams(): TemplateResponse
 	{
@@ -6252,6 +6336,7 @@ class AdminController extends Controller
 		return $this->configureCSP($response, 'admin');
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getTeams(): JSONResponse
 	{
@@ -6303,6 +6388,7 @@ class AdminController extends Controller
 	 * by the admin UI to present a clear, WCAG-compliant confirmation dialog
 	 * before performing the destructive action.
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getTeamDeleteImpact(int $id): JSONResponse
 	{
@@ -6352,6 +6438,7 @@ class AdminController extends Controller
 		return $out;
 	}
 
+	#[NoAdminRequired]
 	public function createTeam(): JSONResponse
 	{
 		try {
@@ -6388,6 +6475,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function updateTeam(int $id): JSONResponse
 	{
 		try {
@@ -6430,6 +6518,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function deleteTeam(int $id): JSONResponse
 	{
 		try {
@@ -6464,6 +6553,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getTeamMembers(int $id): JSONResponse
 	{
@@ -6481,6 +6571,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function addTeamMember(int $id): JSONResponse
 	{
 		try {
@@ -6523,6 +6614,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function removeTeamMember(int $id, string $userId): JSONResponse
 	{
 		try {
@@ -6544,6 +6636,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getTeamManagers(int $id): JSONResponse
 	{
@@ -6561,6 +6654,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function addTeamManager(int $id): JSONResponse
 	{
 		try {
@@ -6603,6 +6697,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	public function removeTeamManager(int $id, string $userId): JSONResponse
 	{
 		try {
@@ -6624,6 +6719,7 @@ class AdminController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function getTeamsUseAppTeams(): JSONResponse
 	{
@@ -6631,6 +6727,7 @@ class AdminController extends Controller
 		return new JSONResponse(['success' => true, 'useAppTeams' => $use]);
 	}
 
+	#[NoAdminRequired]
 	public function setTeamsUseAppTeams(): JSONResponse
 	{
 		$params = $this->request->getParams();

@@ -77,6 +77,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 window.ArbeitszeitCheck = window.ArbeitszeitCheck || {};
 window.ArbeitszeitCheck.page = 'time-entries';
 window.ArbeitszeitCheck.mode = <?php echo json_encode($mode, $jsonFlags); ?>;
+window.ArbeitszeitCheck.correctionMinuteStep = <?php echo (int)\OCA\ArbeitszeitCheck\Constants::TIME_PICKER_MINUTE_STEP; ?>;
 window.ArbeitszeitCheck.entries = <?php echo json_encode($entriesPayload, $jsonFlags); ?>;
 window.ArbeitszeitCheck.l10n = window.ArbeitszeitCheck.l10n || {};
 Object.assign(window.ArbeitszeitCheck.l10n, <?php echo json_encode($listL10n, $jsonFlags); ?>);

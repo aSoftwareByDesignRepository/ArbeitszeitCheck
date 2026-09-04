@@ -118,13 +118,18 @@ class TimeCaptureMethodService
 	/**
 	 * Effective settings after organisation and per-employee rules.
 	 *
-	 * @return array{clockStampingEnabled: bool, manualTimeEntryEnabled: bool}
+	 * @return array{clockStampingEnabled: bool, manualTimeEntryEnabled: bool, manualTimeEntriesRequireApproval: bool}
 	 */
 	public function getSettings(string $userId): array
 	{
 		return [
 			'clockStampingEnabled' => $this->isClockStampingEnabled($userId),
 			'manualTimeEntryEnabled' => $this->isManualTimeEntryEnabled($userId),
+			'manualTimeEntriesRequireApproval' => $this->config->getAppValue(
+				'arbeitszeitcheck',
+				Constants::CONFIG_MANUAL_TIME_ENTRIES_REQUIRE_APPROVAL,
+				'0'
+			) === '1',
 		];
 	}
 

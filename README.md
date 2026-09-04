@@ -1,6 +1,6 @@
 # ArbeitszeitCheck (TimeGuard)
 
-[![Nextcloud](https://img.shields.io/badge/Nextcloud-32–34-0082c9?logo=nextcloud&logoColor=white)](https://nextcloud.com/)
+[![Nextcloud](https://img.shields.io/badge/Nextcloud-32–35-0082c9?logo=nextcloud&logoColor=white)](https://nextcloud.com/)
 [![PHP](https://img.shields.io/badge/PHP-8.1–8.5-777BB4?logo=php&logoColor=white)](https://www.php.net/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 
@@ -35,7 +35,7 @@ This app is **not legal advice**. You stay responsible for working-time models, 
 
 ### Requirements
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL/MariaDB or PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL/MariaDB or PostgreSQL
 
 ### Install
 
@@ -90,7 +90,7 @@ Diese App ist **keine Rechtsberatung**. Sie bleiben verantwortlich für Arbeitsz
 
 ### Voraussetzungen
 
-- Nextcloud 32–34 · PHP 8.1–8.5 · MySQL/MariaDB oder PostgreSQL
+- Nextcloud 32–35 · PHP 8.1–8.5 · MySQL/MariaDB oder PostgreSQL
 
 ### Installation
 

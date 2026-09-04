@@ -22,6 +22,12 @@ final class Constants
 	public const EDIT_WINDOW_DAYS = 14;
 
 	/**
+	 * Default minute step for time pickers (manual entry + correction).
+	 * Odd minutes remain enterable via free typing / preserved on edit.
+	 */
+	public const TIME_PICKER_MINUTE_STEP = 5;
+
+	/**
 	 * Default number of items per page for list endpoints (time entries, absences, violations, etc.).
 	 */
 	public const DEFAULT_LIST_LIMIT = 25;
@@ -166,10 +172,10 @@ final class Constants
 	public const CONFIG_KIOSK_RFID_SALT = 'kiosk_rfid_hmac_salt';
 
 	/**
-	 * TEMPORARY (Play Store review): 14 days so reviewer pairing codes stay usable.
-	 * Revert to 600 (10 minutes) after the Terminal app is published.
+	 * Pairing codes expire after 10 minutes (security: stolen/printed codes).
+	 * Play Store reviewers: generate a fresh code when the review starts.
 	 */
-	public const KIOSK_PAIRING_TTL_SECONDS = 1_209_600;
+	public const KIOSK_PAIRING_TTL_SECONDS = 600;
 
 	public const KIOSK_SESSION_TTL_SECONDS = 60;
 

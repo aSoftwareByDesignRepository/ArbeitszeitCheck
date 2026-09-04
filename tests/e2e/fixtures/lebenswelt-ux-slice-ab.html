@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<title>Lebenswelt form UX fixture</title>
+	<style>
+		body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+		.time-entry-form__primary { margin-bottom: 1rem; }
+		.time-summary-card--secondary { margin-top: 1.5rem; border: 1px solid #ccc; padding: 1rem; }
+		.time-input-group--with-type { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+		label { display: block; font-weight: 600; margin-top: 0.75rem; }
+		.azc-btn { min-height: 2.75rem; padding: 0.5rem 1rem; }
+	</style>
+</head>
+<body>
+	<main id="azc-main-content">
+		<form id="time-entry-form" class="time-entry-request-form" aria-labelledby="form-title">
+			<h1 id="form-title">Record working time</h1>
+			<div class="time-entry-form__primary">
+				<label for="entry-date">Date</label>
+				<input id="entry-date" name="date" value="04.09.2026" />
+				<label for="entry-start-time-hour">Start</label>
+				<div class="time-input-group time-input-group--with-type">
+					<select id="entry-start-time-hour" aria-label="Start hour">
+						<option value="08" selected>08</option>
+					</select>
+					<select id="entry-start-time-minute" aria-label="Start minute">
+						<option value="00" selected>00</option>
+						<option value="05">05</option>
+						<option value="10">10</option>
+					</select>
+					<input id="entry-start-time-type" class="time-input-group__type" aria-label="Or type start time as HH:MM" value="08:00" />
+					<input type="hidden" id="entry-start-time" value="08:00" />
+				</div>
+			</div>
+			<div id="time-summary" class="time-summary-card time-summary-card--secondary" role="status">
+				<h2 class="time-summary-title">Day Summary</h2>
+				<p>Working Hours: <span id="summary-working-hours">0.0</span> h</p>
+			</div>
+			<button type="submit" class="azc-btn">Save</button>
+		</form>
+		<article class="dashboard-overtime-card" aria-labelledby="dashboard-overtime-heading">
+			<h2 id="dashboard-overtime-heading">Your overtime balance</h2>
+			<p id="dashboard-overtime-formula">Worked hours minus your contract target (this year).</p>
+			<p id="dashboard-overtime-balance-value">+12.50 h</p>
+			<a id="dashboard-overtime-balance-pdf" class="azc-btn" href="/apps/arbeitszeitcheck/api/overtime/balance-pdf">Download balance PDF</a>
+		</article>
+	</main>
+</body>
+</html>

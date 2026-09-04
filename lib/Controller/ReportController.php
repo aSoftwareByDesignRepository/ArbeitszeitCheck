@@ -522,7 +522,7 @@ class ReportController extends Controller
 	 */
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function absence(?string $startDate = null, ?string $endDate = null, ?string $userId = null): JSONResponse
+	public function absence(?string $startDate = null, ?string $endDate = null, ?string $userId = null, ?string $sort = null): JSONResponse
 	{
 		try {
 			$currentUserId = $this->getUserId();
@@ -550,7 +550,8 @@ class ReportController extends Controller
 		}
 		$endExclusive = (clone $end)->modify('+1 day');
 
-		$report = $this->reportingService->generateAbsenceReport($start, $endExclusive, $reportUserId);
+		$sortMode = strtolower(trim((string)($sort ?? $this->request->getParam('sort') ?? 'date')));
+		$report = $this->reportingService->generateAbsenceReport($start, $endExclusive, $reportUserId, $sortMode);
 
 			return new JSONResponse([
 				'success' => true,

@@ -77,7 +77,13 @@ class Version1009Date20260314000000 extends SimpleMigrationStep
 			return null;
 		}
 
-		$column->setType(\Doctrine\DBAL\Types\Type::getType('string'));
+		// NC35: Column::setType accepts OCP\DB\Types string constants.
+		// NC32–34: still requires a Doctrine Type instance. Support both.
+		try {
+			$column->setType(Types::STRING);
+		} catch (\TypeError) {
+			$column->setType(\Doctrine\DBAL\Types\Type::getType(Types::STRING));
+		}
 		$column->setLength(64);
 		$column->setNotnull(false);
 		$column->setDefault(null);

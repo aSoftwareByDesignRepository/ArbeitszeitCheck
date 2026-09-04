@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace OCA\ArbeitszeitCheck\Tests\Unit\Controller;
 
+use OCA\ArbeitszeitCheck\Constants;
 use OCA\ArbeitszeitCheck\Controller\TimeEntryController;
 use OCA\ArbeitszeitCheck\Db\TimeEntry;
 use OCA\ArbeitszeitCheck\Db\AbsenceMapper;
@@ -101,6 +102,14 @@ class TimeEntryControllerTest extends TestCase
 	/** @var TimeCaptureMethodService|\PHPUnit\Framework\MockObject\MockObject */
 	private $timeCaptureMethodService;
 
+	/** @var TimeEntryCorrectionService|\PHPUnit\Framework\MockObject\MockObject */
+	private $correctionService;
+
+	/** @var array<string, string> */
+	private $appConfigValues = [];
+
+	private bool $hasAssignableManager = false;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
@@ -133,7 +142,9 @@ class TimeEntryControllerTest extends TestCase
 		);
 		$this->teamResolver = $this->createMock(TeamResolverService::class);
 		$this->teamResolver->method('getColleagueIds')->willReturn([]);
-		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(false);
+		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturnCallback(
+			fn () => $this->hasAssignableManager
+		);
 		$this->notificationService = $this->createMock(NotificationService::class);
 		$this->monthClosureGuard = $this->createMock(MonthClosureGuard::class);
 		$this->absenceMapper = $this->createMock(AbsenceMapper::class);
@@ -179,12 +190,31 @@ class TimeEntryControllerTest extends TestCase
 		]);
 		$this->timeCaptureMethodService->method('isManualTimeEntryEnabled')->willReturn(true);
 
-		$this->config->method('getAppValue')->willReturnCallback(static fn ($app, $key, $default) => $default);
+		$this->config->method('getAppValue')->willReturnCallback(
+			fn ($app, $key, $default) => $this->appConfigValues[$key] ?? $default
+		);
 
 		$deletionPolicy = new TimeEntryDeletionPolicy(
 			$this->config,
 			$this->monthClosureGuard,
 			$this->l10n,
+		);
+
+		$this->correctionService = $this->createMock(TimeEntryCorrectionService::class);
+		$this->correctionService->method('prepareManualPending')->willReturnCallback(
+			static function (TimeEntry $entry, string $text): void {
+				$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+				$entry->setJustification(json_encode([
+					'type' => 'manual_create',
+					'justification' => $text,
+				]));
+			}
+		);
+		$this->correctionService->method('autoApprove')->willReturnCallback(
+			static function (TimeEntry $entry): TimeEntry {
+				$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+				return $entry;
+			}
 		);
 
 		$this->controller = new TimeEntryController(
@@ -207,7 +237,7 @@ class TimeEntryControllerTest extends TestCase
 			$this->absenceMapper,
 			$this->permissionService,
 			$timeZoneService,
-			$this->createMock(TimeEntryCorrectionService::class),
+			$this->correctionService,
 			$localeFormat,
 			$navigationFlags,
 			$projectCheckIntegration,
@@ -554,6 +584,61 @@ class TimeEntryControllerTest extends TestCase
 	}
 
 	/**
+	 * Mobile/API aliases must enforce the same ownership gate (BOLA).
+	 */
+	public function testApiShowReturnsForbiddenWhenNotOwned(): void
+	{
+		$userId = 'testuser';
+		$otherUserId = 'otheruser';
+		$entryId = 42;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$entry = new TimeEntry();
+		$entry->setId($entryId);
+		$entry->setUserId($otherUserId);
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setIsManualEntry(false);
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+
+		$response = $this->controller->apiShow($entryId);
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertEquals('Access denied', $response->getData()['error']);
+	}
+
+	public function testApiDeleteReturnsForbiddenWhenNotOwned(): void
+	{
+		$userId = 'testuser';
+		$otherUserId = 'otheruser';
+		$entryId = 42;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$entry = new TimeEntry();
+		$entry->setId($entryId);
+		$entry->setUserId($otherUserId);
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setIsManualEntry(true);
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+		$this->timeEntryMapper->expects($this->never())->method('delete');
+
+		$response = $this->controller->apiDelete($entryId);
+		$this->assertEquals(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	/**
 	 * Test update returns error when entry is not manual
 	 */
 	public function testUpdateReturnsErrorWhenNotManual(): void
@@ -597,7 +682,7 @@ class TimeEntryControllerTest extends TestCase
 
 		$this->userSession->method('getUser')->willReturn($user);
 		$this->teamResolver->method('getColleagueIds')->willReturn(['manager1']);
-		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(true);
+		$this->hasAssignableManager = true;
 		$this->request->expects($this->once())->method('getParams')->willReturn([
 			'justification' => 'Wrong time recorded',
 			'newDate' => '2024-01-16',
@@ -680,7 +765,7 @@ class TimeEntryControllerTest extends TestCase
 
 		$this->userSession->method('getUser')->willReturn($user);
 		$this->teamResolver->method('getColleagueIds')->willReturn(['manager1']);
-		$this->teamResolver->method('hasAssignableManagerForEmployee')->willReturn(true);
+		$this->hasAssignableManager = true;
 		$this->request->expects($this->once())->method('getParams')->willReturn([
 			'justification' => 'Hab mich um ne halbe Stunde verspätet',
 			'date' => '2024-01-15',
@@ -1066,6 +1151,76 @@ class TimeEntryControllerTest extends TestCase
 		$this->assertFalse($data['success']);
 		$this->assertSame('manual_time_entry_disabled', $data['error_code']);
 		$this->assertStringContainsString('Manual time entries are not enabled', $data['error']);
+	}
+
+
+	public function testApiStoreStartEndRequiresJustificationWhenFourEyesEnabled(): void
+	{
+		$this->appConfigValues[Constants::CONFIG_MANUAL_TIME_ENTRIES_REQUIRE_APPROVAL] = '1';
+		$this->hasAssignableManager = true;
+
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'date' => '2024-01-15',
+			'startTime' => '09:00',
+			'endTime' => '17:00',
+			'justification' => 'too short',
+		]);
+		$this->timeEntryMapper->expects($this->never())->method('insert');
+
+		$response = $this->controller->apiStore();
+		$data = $response->getData();
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertFalse($data['success']);
+		$this->assertSame('justification_too_short', $data['error_code']);
+	}
+
+	public function testApiStoreStartEndCreatesPendingWhenFourEyesAndManagerExist(): void
+	{
+		$this->complianceService->method('blockingIssuesForCompletedEntry')->willReturn([]);
+		$this->appConfigValues[Constants::CONFIG_MANUAL_TIME_ENTRIES_REQUIRE_APPROVAL] = '1';
+		$this->hasAssignableManager = true;
+
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'date' => '2024-01-15',
+			'startTime' => '09:00',
+			'endTime' => '17:00',
+			'breaks' => [
+				['start' => '12:00', 'end' => '12:30'],
+			],
+			'justification' => 'Forgot to stamp yesterday after a site visit.',
+		]);
+
+		$savedEntry = new TimeEntry();
+		$savedEntry->setId(1);
+		$savedEntry->setUserId($userId);
+		$savedEntry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$savedEntry->setIsManualEntry(true);
+		$savedEntry->setStartTime(new \DateTime('2024-01-15T09:00:00'));
+		$savedEntry->setEndTime(new \DateTime('2024-01-15T17:00:00'));
+		$savedEntry->setCreatedAt(new \DateTime());
+		$savedEntry->setUpdatedAt(new \DateTime());
+
+		$this->correctionService->expects($this->once())->method('prepareManualPending');
+		$this->correctionService->expects($this->never())->method('autoApprove');
+		$this->timeEntryMapper->expects($this->once())
+			->method('insert')
+			->willReturn($savedEntry);
+
+		$response = $this->controller->apiStore();
+		$data = $response->getData();
+
+		$this->assertSame(Http::STATUS_CREATED, $response->getStatus());
+		$this->assertTrue($data['success']);
+		$this->assertStringContainsString('approval', strtolower((string)$data['message']));
 	}
 
 	public function testApiStoreLegacyDateHoursReturns403WhenManualTimeEntryDisabled(): void

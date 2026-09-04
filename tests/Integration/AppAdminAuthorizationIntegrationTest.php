@@ -42,6 +42,6 @@ class AppAdminAuthorizationIntegrationTest extends TestCase
 
 		$this->assertInstanceOf(TemplateResponse::class, $response);
 		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
-		$this->assertSame('403', $response->getTemplateName());
+		$this->assertSame('access-denied', $response->getTemplateName());
 	}
 }

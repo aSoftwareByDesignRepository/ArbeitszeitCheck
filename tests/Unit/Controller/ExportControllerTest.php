@@ -334,6 +334,60 @@ class ExportControllerTest extends TestCase
 		$this->assertStringContainsString('\'  +SUM(1,1)', $content);
 	}
 
+	public function testAbsencesExportSortByTypeGroupsCsvSections(): void
+	{
+		$userId = 'testuser';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($userId);
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$sick = new Absence();
+		$sick->setId(2);
+		$sick->setUserId($userId);
+		$sick->setType(Absence::TYPE_SICK_LEAVE);
+		$sick->setStartDate(new \DateTime('2024-06-10'));
+		$sick->setEndDate(new \DateTime('2024-06-10'));
+		$sick->setDays(1);
+		$sick->setReason('flu');
+		$sick->setStatus(Absence::STATUS_APPROVED);
+		$sick->setApproverComment(null);
+		$sick->setApprovedAt(null);
+		$sick->setCreatedAt(new \DateTime('2024-06-09'));
+		$sick->setUpdatedAt(new \DateTime('2024-06-09'));
+
+		$vacation = new Absence();
+		$vacation->setId(1);
+		$vacation->setUserId($userId);
+		$vacation->setType(Absence::TYPE_VACATION);
+		$vacation->setStartDate(new \DateTime('2024-06-01'));
+		$vacation->setEndDate(new \DateTime('2024-06-02'));
+		$vacation->setDays(2);
+		$vacation->setReason('trip');
+		$vacation->setStatus(Absence::STATUS_APPROVED);
+		$vacation->setApproverComment(null);
+		$vacation->setApprovedAt(null);
+		$vacation->setCreatedAt(new \DateTime('2024-05-01'));
+		$vacation->setUpdatedAt(new \DateTime('2024-05-01'));
+
+		// Deliberately return date order (vacation first); sort=type must regroup.
+		$this->absenceMapper->expects($this->once())
+			->method('findByUserAndDateRange')
+			->willReturn([$vacation, $sick]);
+
+		$response = $this->controller->absences('csv', '2024-06-01', '2024-06-30', 'type');
+		$this->assertInstanceOf(DataDownloadResponse::class, $response);
+		$content = (string)$response->render();
+		$this->assertStringContainsString('Sorted by absence type', $content);
+		$firstTypeMarker = strpos($content, 'Absence type');
+		$this->assertNotFalse($firstTypeMarker);
+		$secondTypeMarker = strpos($content, 'Absence type', (int)$firstTypeMarker + 1);
+		$this->assertNotFalse($secondTypeMarker);
+		$slice = substr($content, (int)$firstTypeMarker, (int)$secondTypeMarker - (int)$firstTypeMarker);
+		// sick_leave sorts before vacation
+		$this->assertStringContainsString(Absence::TYPE_SICK_LEAVE, $slice);
+		$this->assertStringNotContainsString(Absence::TYPE_VACATION, $slice);
+	}
+
 	/**
 	 * Test absences export uses default date range
 	 */

@@ -118,5 +118,55 @@ class TimeEntryTest extends TestCase
 
 		$this->assertEqualsWithDelta((10 / 60), $entry->getBreakDurationHours(false), 0.0001);
 	}
-}
 
+	public function testPendingApprovalWithoutEndOccupiesLikePaused(): void
+	{
+		$now = new \DateTime('2026-08-30T12:00:00+00:00');
+		$updated = new \DateTime('2026-08-30T10:00:00+00:00');
+
+		$entry = new TimeEntry();
+		$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$entry->setStartTime(new \DateTime('2026-08-30T08:00:00+00:00'));
+		$entry->setEndTime(null);
+		$entry->setUpdatedAt($updated);
+
+		$end = $entry->occupancyEnd($now);
+		$this->assertNotNull($end);
+		$this->assertSame('2026-08-30T10:00:00+00:00', $end->format('c'));
+	}
+
+	public function testPendingApprovalWithEndUsesRealEnd(): void
+	{
+		$now = new \DateTime('2026-08-30T12:00:00+00:00');
+		$entry = new TimeEntry();
+		$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$entry->setStartTime(new \DateTime('2026-08-30T08:00:00+00:00'));
+		$entry->setEndTime(new \DateTime('2026-08-30T16:00:00+00:00'));
+
+		$end = $entry->occupancyEnd($now);
+		$this->assertSame('2026-08-30T16:00:00+00:00', $end->format('c'));
+	}
+
+	public function testCompletedWithoutEndDoesNotOccupy(): void
+	{
+		$now = new \DateTime('2026-08-30T12:00:00+00:00');
+		$entry = new TimeEntry();
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime(new \DateTime('2026-08-30T08:00:00+00:00'));
+		$entry->setEndTime(null);
+
+		$this->assertNull($entry->occupancyEnd($now));
+	}
+
+	public function testActiveWithoutEndOccupiesUntilNow(): void
+	{
+		$now = new \DateTime('2026-08-30T12:00:00+00:00');
+		$entry = new TimeEntry();
+		$entry->setStatus(TimeEntry::STATUS_ACTIVE);
+		$entry->setStartTime(new \DateTime('2026-08-30T08:00:00+00:00'));
+		$entry->setEndTime(null);
+
+		$end = $entry->occupancyEnd($now);
+		$this->assertSame('2026-08-30T12:00:00+00:00', $end->format('c'));
+	}
+}

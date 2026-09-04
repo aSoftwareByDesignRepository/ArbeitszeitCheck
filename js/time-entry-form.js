@@ -48,6 +48,8 @@
 class TimeEntryFormManager {
 	constructor() {
 		this.formConfig = (window.ArbeitszeitCheck && window.ArbeitszeitCheck.timeEntryForm) || {};
+		const stepRaw = parseInt(this.formConfig.minuteStep, 10);
+		this.minuteStep = (!isNaN(stepRaw) && stepRaw >= 1 && stepRaw <= 30) ? stepRaw : 5;
 		this.form = document.getElementById('time-entry-form');
 		this.startTimeHour = document.getElementById('entry-start-time-hour');
 		this.startTimeMinute = document.getElementById('entry-start-time-minute');
@@ -208,10 +210,121 @@ class TimeEntryFormManager {
 		// Main time inputs with auto-break calculation
 		if (this.startTimeHour && this.startTimeMinute && this.startTimeHidden) {
 			this.bindTimeInputs(this.startTimeHour, this.startTimeMinute, this.startTimeHidden, true);
+			this.bindFreeTypeInput(
+				document.getElementById('entry-start-time-type'),
+				this.startTimeHour,
+				this.startTimeMinute,
+				this.startTimeHidden,
+				true
+			);
 		}
 		if (this.endTimeHour && this.endTimeMinute && this.endTimeHidden) {
 			this.bindTimeInputs(this.endTimeHour, this.endTimeMinute, this.endTimeHidden, true);
+			this.bindFreeTypeInput(
+				document.getElementById('entry-end-time-type'),
+				this.endTimeHour,
+				this.endTimeMinute,
+				this.endTimeHidden,
+				true
+			);
 		}
+	}
+
+	ensureMinuteOption(minuteSelect, minutePadded) {
+		if (!minuteSelect || minutePadded === '' || minutePadded === '--') {
+			return;
+		}
+		const exists = Array.from(minuteSelect.options).some((o) => o.value === minutePadded);
+		if (!exists) {
+			const opt = document.createElement('option');
+			opt.value = minutePadded;
+			opt.textContent = minutePadded;
+			minuteSelect.appendChild(opt);
+			const values = Array.from(minuteSelect.options)
+				.filter((o) => o.value !== '')
+				.map((o) => o.value)
+				.sort();
+			const keepEmpty = minuteSelect.querySelector('option[value=""]');
+			minuteSelect.innerHTML = '';
+			if (keepEmpty) {
+				minuteSelect.appendChild(keepEmpty);
+			}
+			values.forEach((v) => {
+				const o = document.createElement('option');
+				o.value = v;
+				o.textContent = v;
+				minuteSelect.appendChild(o);
+			});
+		}
+	}
+
+	bindFreeTypeInput(typeInput, hourSelect, minuteSelect, hiddenInput, enableAutoBreak = false) {
+		if (!typeInput || !hourSelect || !minuteSelect || !hiddenInput) {
+			return;
+		}
+		if (typeInput.hasAttribute('data-bound')) {
+			return;
+		}
+		typeInput.setAttribute('data-bound', 'true');
+
+		const syncFromSelects = () => {
+			const hour = hourSelect.value;
+			const minute = minuteSelect.value;
+			if (!hour || hour === '--' || !minute || minute === '--') {
+				return;
+			}
+			typeInput.value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+		};
+
+		const applyTyped = () => {
+			const raw = String(typeInput.value || '').trim().replace('.', ':');
+			const match = raw.match(/^(\d{1,2}):(\d{1,2})$/);
+			if (!match) {
+				if (raw !== '') {
+					typeInput.setAttribute('aria-invalid', 'true');
+				}
+				return;
+			}
+			const hourNum = parseInt(match[1], 10);
+			const minuteNum = parseInt(match[2], 10);
+			if (isNaN(hourNum) || hourNum < 0 || hourNum > 23 || isNaN(minuteNum) || minuteNum < 0 || minuteNum > 59) {
+				typeInput.setAttribute('aria-invalid', 'true');
+				return;
+			}
+			typeInput.setAttribute('aria-invalid', 'false');
+			const hour = String(hourNum).padStart(2, '0');
+			const minute = String(minuteNum).padStart(2, '0');
+			hourSelect.value = hour;
+			this.ensureMinuteOption(minuteSelect, minute);
+			minuteSelect.value = minute;
+			hiddenInput.value = `${hour}:${minute}`;
+			typeInput.value = `${hour}:${minute}`;
+			hourSelect.dispatchEvent(new Event('change', { bubbles: true }));
+			if (enableAutoBreak) {
+				this.handleAutoBreakCalculation({ notify: false });
+			}
+			this.updateTimeSummary();
+		};
+
+		hourSelect.addEventListener('change', syncFromSelects);
+		minuteSelect.addEventListener('change', syncFromSelects);
+		typeInput.addEventListener('change', applyTyped);
+		typeInput.addEventListener('blur', applyTyped);
+		// Apply as soon as a complete HH:MM is present (Playwright fill / paste / IME
+		// often never synthesise a reliable change+blur pair on Chromium).
+		typeInput.addEventListener('input', () => {
+			const raw = String(typeInput.value || '').trim().replace('.', ':');
+			if (/^\d{1,2}:\d{2}$/.test(raw)) {
+				applyTyped();
+			}
+		});
+		typeInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				applyTyped();
+			}
+		});
+		syncFromSelects();
 	}
 
 	bindTimeInputs(hourSelect, minuteSelect, hiddenInput, enableAutoBreak = false) {
@@ -810,8 +923,9 @@ class TimeEntryFormManager {
 			hourSelect.appendChild(option);
 		}
 
-		// Minutes
-		for (let m = 0; m < 60; m++) {
+		// Minutes (5-minute steps by default; odd values added via ensureMinuteOption)
+		const step = this.minuteStep || 5;
+		for (let m = 0; m < 60; m += step) {
 			const option = document.createElement('option');
 			option.value = String(m).padStart(2, '0');
 			option.textContent = String(m).padStart(2, '0');

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.7.1 - 2026-09-04
+
+### Fixed
+- Non-EN store summaries no longer claim GDPR/RGPD “checks” (aligned with EN/DE).
+- **Absence report row order:** `ReportingService::generateAbsenceReport` defaults to chronological (`sort=date`); payroll type-order is opt-in via `sort=type` (report API + CSV export). Preview UI requests `sort=type` for absences.
+- **Manual time entry help:** date/start/end guidance is always visible again (night-shift hint not hidden behind Tip).
+- **Saldo PDF:** `UserRateLimit` on `overtimeBalancePdf` (30/min) to limit PDF generation abuse.
+- **Mobile rest copy:** English fallback parser accepts Slice C Pause/split guidance suffix.
+- ArbZG internal analysis path clarified as monorepo docs under `nextcloud-dev/documentation/arbeitszeitcheck/` (not shipped inside the app package).
+
+### Changed
+- Docs: `nextcloud-dev/documentation/arbeitszeitcheck/internal/ArbZG-Compliance-Analyse.md` §5 (stamp + manual share `isIntradayWorkInterruption`).
+
+## 1.7.0 - 2026-09-04
+
+### Changed
+- **Stamp-path geteilte Arbeitszeit (ArbZG §5):** live clock-in now uses the same safe `isIntradayWorkInterruption` rule as manual entries — morning Gehen and afternoon Kommen on the **same storage calendar day** are allowed when the previous block did not cross midnight. Overnight Wachdienst (e.g. 22:00→06:00 then Kommen at 10:00) still requires elapsed rest. Rest-block messages tell users to use **Pause** for short mid-session breaks. Docs (monorepo, not in app zip): `nextcloud-dev/documentation/arbeitszeitcheck/internal/ArbZG-Compliance-Analyse.md` §3; employee manuals (DE/EN).
+
+### Fixed
+- **Authenticated Outlook iCal session feed** (`authenticatedFeed`) now has `#[NoAdminRequired]` so managers / delegated app admins are not blocked by Nextcloud system-admin middleware.
+- **AppAccessMiddleware** skips `PublicPage` routes so restricted logged-in sessions cannot break kiosk / health / tokenized calendar feeds.
+- **Mobile seat assignment** uses an exclusive capacity lock (parity with terminal device slots) to prevent concurrent over-assignment past the license limit.
+
+- **Delegated app administrators** can open Administration (and related admin APIs: license, kiosk, overtime payouts). Controllers now use `#[NoAdminRequired]` with `AppAdminMiddleware` enforcing `PermissionService::isAdmin()` instead of Nextcloud system-admin middleware.
+- Access-denied pages for missing app-admin rights use the ArbeitszeitCheck access-denied template (clear message + next step) instead of the generic core 403.
+- Footer / legacy header admin links follow `PermissionService::isAdmin()` (same as the main nav).
+- Delegated app admins cannot clear the last app-admin seat (including removing themselves with an empty list).
+- Disabled accounts on the app-admin list no longer retain app-admin powers.
+
+### Security
+- Defense in depth: overtime payout admin actions still assert app-admin after middleware; employee `myHistory` remains excluded from the admin gate.
+
+### Changed
+- Nextcloud **35** support (`max-version` 35). Symfony Console 7–ready command signatures verified.
+- Migration `Version1009…` column type change uses OCP `Types` with an NC32–35 compatible `setType` shim.
+
 ## 1.6.14 - 2026-08-24
 
 ### Changed

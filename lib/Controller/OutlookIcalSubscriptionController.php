@@ -99,7 +99,10 @@ final class OutlookIcalSubscriptionController extends Controller
 	 * - teamId
 	 *
 	 * Security: returns empty body on auth/limit failures.
+	 * #[NoAdminRequired] is required so managers / delegated app admins are not
+	 * blocked by Nextcloud system-admin middleware before scope checks run.
 	 */
+	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function authenticatedFeed(?int $teamId = null, ?string $start = null, ?string $end = null): DataDisplayResponse
 	{

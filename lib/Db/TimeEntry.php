@@ -577,6 +577,33 @@ class TimeEntry extends Entity
 	}
 
 	/**
+	 * Occupancy end used for overlap detection and live-session guards.
+	 *
+	 * Completed/pending rows with a real end_time occupy until that instant.
+	 * Live active/break rows occupy until $now. Paused rows occupy until
+	 * updated_at (or $now). Pending corrections of an *open* session
+	 * (end_time null) occupy the same way as paused — otherwise a second
+	 * clock-in can start while the original session is still under review.
+	 */
+	public function occupancyEnd(\DateTime $now): ?\DateTime
+	{
+		$end = $this->getEndTime();
+		if ($end !== null) {
+			return $end;
+		}
+
+		$status = $this->getStatus();
+		if (in_array($status, [self::STATUS_ACTIVE, self::STATUS_BREAK], true)) {
+			return clone $now;
+		}
+		if ($status === self::STATUS_PAUSED || $status === self::STATUS_PENDING_APPROVAL) {
+			return $this->getUpdatedAt() ?? clone $now;
+		}
+
+		return null;
+	}
+
+	/**
 	 * Whether the entry's owner may delete it (entity-level rules only).
 	 *
 	 * Manual entries and paused (orphaned) sessions are deletable. Completed

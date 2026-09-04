@@ -8,18 +8,25 @@ use OCA\ArbeitszeitCheck\AppInfo\Application;
 use OCA\ArbeitszeitCheck\Exception\AppAccessDeniedException;
 use OCA\ArbeitszeitCheck\Service\PermissionService;
 use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Middleware;
+use OCP\AppFramework\Utility\IControllerMethodReflector;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use OCP\IUserSession;
 use OCP\L10N\IFactory;
 use Psr\Log\LoggerInterface;
+use ReflectionMethod;
 
 /**
  * App entry gate — blocks users who are not allowed to use ArbeitszeitCheck
  * before any controller action runs (parity with BudgetCheck / ProjectCheck).
+ *
+ * {@see PublicPage} endpoints (kiosk, health, tokenized iCal) keep their own
+ * auth and must not be blocked when a restricted account happens to hold a
+ * browser session cookie on the same origin.
  */
 class AppAccessMiddleware extends Middleware
 {
@@ -30,6 +37,7 @@ class AppAccessMiddleware extends Middleware
 		private readonly IURLGenerator $urlGenerator,
 		private readonly IFactory $l10nFactory,
 		private readonly LoggerInterface $logger,
+		private readonly IControllerMethodReflector $reflector,
 	) {
 	}
 
@@ -38,6 +46,15 @@ class AppAccessMiddleware extends Middleware
 		$class = is_object($controller) ? get_class($controller) : '';
 		if (!str_starts_with($class, 'OCA\\ArbeitszeitCheck\\Controller\\')) {
 			return;
+		}
+
+		try {
+			$reflection = new ReflectionMethod($controller, (string)$methodName);
+			if ($this->isPublicPage($reflection)) {
+				return;
+			}
+		} catch (\ReflectionException) {
+			// Unknown method — fall through to allowlist check.
 		}
 
 		$user = $this->userSession->getUser();
@@ -100,5 +117,13 @@ class AppAccessMiddleware extends Middleware
 		$response->renderAs(TemplateResponse::RENDER_AS_USER);
 
 		return $response;
+	}
+
+	private function isPublicPage(ReflectionMethod $reflection): bool
+	{
+		if (!empty($reflection->getAttributes(PublicPage::class))) {
+			return true;
+		}
+		return $this->reflector->hasAnnotation('PublicPage');
 	}
 }

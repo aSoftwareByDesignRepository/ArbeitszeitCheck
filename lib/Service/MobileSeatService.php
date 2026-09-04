@@ -10,15 +10,19 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IDBConnection;
 use OCP\IUserManager;
+use OCP\Lock\ILockingProvider;
 
 class MobileSeatService
 {
+	private const CAPACITY_LOCK = 'arbeitszeitcheck/mobile_seat_capacity';
+
 	public function __construct(
 		private readonly MobileSeatMapper $mobileSeatMapper,
 		private readonly LicenseService $licenseService,
 		private readonly IUserManager $userManager,
 		private readonly ITimeFactory $timeFactory,
 		private readonly IDBConnection $db,
+		private readonly ILockingProvider $lockingProvider,
 	) {
 	}
 
@@ -73,28 +77,40 @@ class MobileSeatService
 		}
 		$limit = $this->getSeatLimit();
 
-		$this->db->beginTransaction();
+		// Exclusive capacity lock (parity with TerminalDeviceService::reserveSlot):
+		// under READ COMMITTED two concurrent assignSeat calls must not both observe
+		// free capacity and exceed the licensed seat limit.
+		$this->lockingProvider->acquireLock(self::CAPACITY_LOCK, ILockingProvider::LOCK_EXCLUSIVE, 'Mobile seat capacity');
 		try {
-			if ($this->mobileSeatMapper->countSeats() >= $limit) {
-				$this->db->rollBack();
-				return ['ok' => false, 'error' => 'seat_limit_reached'];
-			}
+			$this->db->beginTransaction();
+			try {
+				if ($this->mobileSeatMapper->findByUserId($userId) !== null) {
+					$this->db->commit();
+					return ['ok' => true];
+				}
+				if ($this->mobileSeatMapper->countSeats() >= $limit) {
+					$this->db->rollBack();
+					return ['ok' => false, 'error' => 'seat_limit_reached'];
+				}
 
-			$seat = new MobileSeat();
-			$seat->setUserId($userId);
-			$seat->setAssignedAt($this->timeFactory->getDateTime());
-			$seat->setAssignedBy($assignedBy);
-			$this->mobileSeatMapper->insert($seat);
-			$this->db->commit();
-		} catch (\OCP\DB\Exception $e) {
-			$this->db->rollBack();
-			if ($this->mobileSeatMapper->findByUserId($userId) !== null) {
-				return ['ok' => true];
+				$seat = new MobileSeat();
+				$seat->setUserId($userId);
+				$seat->setAssignedAt($this->timeFactory->getDateTime());
+				$seat->setAssignedBy($assignedBy);
+				$this->mobileSeatMapper->insert($seat);
+				$this->db->commit();
+			} catch (\OCP\DB\Exception $e) {
+				$this->db->rollBack();
+				if ($this->mobileSeatMapper->findByUserId($userId) !== null) {
+					return ['ok' => true];
+				}
+				throw $e;
+			} catch (\Throwable $e) {
+				$this->db->rollBack();
+				throw $e;
 			}
-			throw $e;
-		} catch (\Throwable $e) {
-			$this->db->rollBack();
-			throw $e;
+		} finally {
+			$this->lockingProvider->releaseLock(self::CAPACITY_LOCK, ILockingProvider::LOCK_EXCLUSIVE);
 		}
 		return ['ok' => true];
 	}

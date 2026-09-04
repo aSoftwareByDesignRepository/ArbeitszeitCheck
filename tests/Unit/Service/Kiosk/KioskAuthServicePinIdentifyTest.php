@@ -129,6 +129,10 @@ class KioskAuthServicePinIdentifyTest extends TestCase
 		$time = $this->createMock(ITimeFactory::class);
 		$time->method('getDateTime')->willReturn(new \DateTime('2026-07-20 12:00:00'));
 
+		$locking = $this->createMock(ILockingProvider::class);
+		$locking->expects($this->once())->method('acquireLock');
+		$locking->expects($this->once())->method('releaseLock');
+
 		$service = new KioskAuthService(
 			$credService,
 			$credMapper,
@@ -141,7 +145,7 @@ class KioskAuthServicePinIdentifyTest extends TestCase
 			$userManager,
 			$audit,
 			$time,
-			$this->createMock(ILockingProvider::class),
+			$locking,
 		);
 
 		$terminal = new KioskTerminal();

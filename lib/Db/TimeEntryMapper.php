@@ -330,6 +330,28 @@ class TimeEntryMapper extends QBMapper
 	}
 
 	/**
+	 * Pending correction of an unfinished session (no end_time).
+	 * These rows must block a second clock-in until cancelled or decided.
+	 */
+	public function findPendingOpenSessionByUser(string $userId): ?TimeEntry
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+			->andWhere($qb->expr()->eq('status', $qb->createNamedParameter(TimeEntry::STATUS_PENDING_APPROVAL)))
+			->andWhere($qb->expr()->isNull('end_time'))
+			->orderBy('start_time', 'DESC')
+			->setMaxResults(1);
+
+		try {
+			return $this->findEntity($qb);
+		} catch (DoesNotExistException $e) {
+			return null;
+		}
+	}
+
+	/**
 	 * Paused automatic entries without end_time whose session started before the given local-day boundary.
 	 *
 	 * Used to heal rows left by legacy clock-out bugs or timezone mismatches so they no longer block UX.
@@ -819,11 +841,12 @@ class TimeEntryMapper extends QBMapper
 		// are evaluated regardless of where their start_time falls.
 		$active = $this->findActiveByUser($userId);
 		$break = $this->findOnBreakByUser($userId);
+		$pendingOpen = $this->findPendingOpenSessionByUser($userId);
 		$seenIds = [];
 		foreach ($allEntries as $entry) {
 			$seenIds[(int)$entry->getId()] = true;
 		}
-		foreach ([$active, $break] as $live) {
+		foreach ([$active, $break, $pendingOpen] as $live) {
 			if ($live !== null && !isset($seenIds[(int)$live->getId()])) {
 				$allEntries[] = $live;
 				$seenIds[(int)$live->getId()] = true;
@@ -843,32 +866,17 @@ class TimeEntryMapper extends QBMapper
 
 			$status = $entry->getStatus();
 			$entryStart = $entry->getStartTime();
-			$entryEnd = $entry->getEndTime();
 
 			// A row with no start time cannot overlap with anything.
 			if (!$entryStart) {
 				continue;
 			}
 
-			// Determine the effective end timestamp for overlap detection.
-			//
-			// - completed / pending_approval: must have a real end_time
-			// - active / break             : extend to "now" so live sessions
-			//                                 protect their slot from manual
-			//                                 entries
-			// - paused (legacy)             : extend to updated_at (when the row
-			//                                 was paused) and fall back to "now"
-			//                                 if missing so the row is still
-			//                                 considered occupied
-			$effectiveEnd = null;
-			if ($entryEnd !== null) {
-				$effectiveEnd = $entryEnd;
-			} elseif (in_array($status, [TimeEntry::STATUS_ACTIVE, TimeEntry::STATUS_BREAK], true)) {
-				$effectiveEnd = AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config);
-			} elseif ($status === TimeEntry::STATUS_PAUSED) {
-				$effectiveEnd = $entry->getUpdatedAt() ?? AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config);
-			} else {
-				// Unknown / draft state – skip rather than guess.
+			// Occupancy end: live sessions, paused rows, and pending
+			// corrections of open (no end_time) sessions. See TimeEntry::occupancyEnd.
+			$now = AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config);
+			$effectiveEnd = $entry->occupancyEnd($now);
+			if ($effectiveEnd === null) {
 				continue;
 			}
 
