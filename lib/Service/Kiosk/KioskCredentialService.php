@@ -216,11 +216,25 @@ class KioskCredentialService
 			return;
 		}
 		$lockKey = KioskCredentialLockKeys::forCredLockout($id);
-		try {
-			$this->acquireExclusive($lockKey, 'Kiosk PIN lockout');
-		} catch (KioskException) {
-			// Lockout accounting must never block identify with KIOSK_BUSY —
-			// best-effort under contention (rare); failed attempt may not persist.
+		// Short wait under contention — silent drop undercounted foyer PIN lockout.
+		$delayUs = 20000;
+		$acquired = false;
+		for ($i = 0; $i < 5; $i++) {
+			try {
+				$this->acquireExclusive($lockKey, 'Kiosk PIN lockout');
+				$acquired = true;
+				break;
+			} catch (KioskException $e) {
+				if ($e->getErrorCode() !== 'KIOSK_BUSY') {
+					throw $e;
+				}
+				usleep($delayUs);
+				$delayUs = min(100000, $delayUs * 2);
+			}
+		}
+		if (!$acquired) {
+			// Last resort: still never block identify with KIOSK_BUSY, but log via no-op
+			// return only after retries — parallel wrong-PIN floods must still converge.
 			return;
 		}
 		try {

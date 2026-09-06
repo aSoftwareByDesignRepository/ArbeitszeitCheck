@@ -97,6 +97,9 @@ class KioskSessionMapper extends QBMapper
 	/**
 	 * Atomically consume a one-shot session. Returns true only for the winner
 	 * under concurrent action requests with the same session token.
+	 *
+	 * Must re-check expires_at here: validateSession and claimUnused are not one
+	 * DB transaction — a session that expires in the gap must not stamp.
 	 */
 	public function claimUnused(KioskSession $session, \DateTimeInterface $usedAt): bool
 	{
@@ -108,7 +111,11 @@ class KioskSessionMapper extends QBMapper
 		$qb->update($this->getTableName())
 			->set('used_at', $qb->createNamedParameter($usedAt->format('Y-m-d H:i:s')))
 			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->isNull('used_at'));
+			->andWhere($qb->expr()->isNull('used_at'))
+			->andWhere($qb->expr()->gt(
+				'expires_at',
+				$qb->createNamedParameter($usedAt->format('Y-m-d H:i:s')),
+			));
 		$affected = $qb->executeStatement();
 		if ($affected === 1) {
 			$session->setUsedAt(\DateTime::createFromInterface($usedAt));

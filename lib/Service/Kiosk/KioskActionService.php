@@ -40,7 +40,12 @@ class KioskActionService
 		// cannot clock in twice even if TimeTrackingService locks are delayed.
 		$now = $this->timeFactory->getDateTime();
 		if (!$this->sessionMapper->claimUnused($session, $now)) {
-			throw new KioskException('KIOSK_SESSION_USED');
+			// claimUnused false = already used OR expired in the validate→claim gap.
+			// Never lie "USED" for an unused-but-expired row (labor-trust).
+			if ($this->sessionMapper->findUsedSession($terminal->getTerminalId(), $sessionToken, $now) !== null) {
+				throw new KioskException('KIOSK_SESSION_USED');
+			}
+			throw new KioskException('KIOSK_SESSION_INVALID');
 		}
 
 		try {

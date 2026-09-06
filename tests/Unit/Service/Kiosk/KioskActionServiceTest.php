@@ -114,16 +114,65 @@ final class KioskActionServiceTest extends TestCase
 		$auth->method('validateSession')->willReturn($session);
 		$auth->method('assertUserEligibleForAction');
 
+		$now = new \DateTime('2026-06-10 12:00:00');
+		$timeFactory = $this->createMock(ITimeFactory::class);
+		$timeFactory->method('getDateTime')->willReturn($now);
+
 		$sessionMapper = $this->createMock(KioskSessionMapper::class);
 		$sessionMapper->method('claimUnused')->willReturn(false);
+		$sessionMapper->expects(self::once())
+			->method('findUsedSession')
+			->with('tid-1', 'session-token', $now)
+			->willReturn($session);
 
 		$tracking = $this->createMock(TimeTrackingService::class);
 		$tracking->expects(self::never())->method('clockIn');
 
-		$service = $this->createService($auth, $sessionMapper, $tracking);
+		$service = $this->createService($auth, $sessionMapper, $tracking, null, $timeFactory);
 
-		$this->expectException(KioskException::class);
-		$service->performAction($terminal, 'session-token', 'clock_in');
+		try {
+			$service->performAction($terminal, 'session-token', 'clock_in');
+			self::fail('expected KioskException');
+		} catch (KioskException $e) {
+			self::assertSame('KIOSK_SESSION_USED', $e->getErrorCode());
+		}
+	}
+
+	public function testPerformActionRejectsExpiredUnusedClaimAsInvalidNotUsed(): void
+	{
+		$terminal = new KioskTerminal();
+		$terminal->setTerminalId('tid-1');
+
+		$session = new KioskSession();
+		$session->setId(9);
+		$session->setUserId('alice');
+
+		$auth = $this->createMock(KioskAuthService::class);
+		$auth->method('validateSession')->willReturn($session);
+		$auth->method('assertUserEligibleForAction');
+
+		$now = new \DateTime('2026-06-10 12:00:00');
+		$timeFactory = $this->createMock(ITimeFactory::class);
+		$timeFactory->method('getDateTime')->willReturn($now);
+
+		$sessionMapper = $this->createMock(KioskSessionMapper::class);
+		$sessionMapper->method('claimUnused')->willReturn(false);
+		$sessionMapper->expects(self::once())
+			->method('findUsedSession')
+			->with('tid-1', 'session-token', $now)
+			->willReturn(null);
+
+		$tracking = $this->createMock(TimeTrackingService::class);
+		$tracking->expects(self::never())->method('clockIn');
+
+		$service = $this->createService($auth, $sessionMapper, $tracking, null, $timeFactory);
+
+		try {
+			$service->performAction($terminal, 'session-token', 'clock_in');
+			self::fail('expected KioskException');
+		} catch (KioskException $e) {
+			self::assertSame('KIOSK_SESSION_INVALID', $e->getErrorCode());
+		}
 	}
 
 	public function testPerformActionReleasesClaimWhenClockInRejected(): void
