@@ -29,6 +29,7 @@ class OvertimeService
 	private IL10N $l10n;
 	private HolidayService $holidayCalendarService;
 	private UserOvertimeSettingsService $overtimeSettingsService;
+	private ?DutyRotationSollProvider $dutyRotationSollProvider;
 
 	public function __construct(
 		TimeEntryMapper $timeEntryMapper,
@@ -37,6 +38,7 @@ class OvertimeService
 		IL10N $l10n,
 		HolidayService $holidayCalendarService,
 		UserOvertimeSettingsService $overtimeSettingsService,
+		?DutyRotationSollProvider $dutyRotationSollProvider = null,
 	) {
 		$this->timeEntryMapper = $timeEntryMapper;
 		$this->workingTimeModelMapper = $workingTimeModelMapper;
@@ -44,6 +46,7 @@ class OvertimeService
 		$this->l10n = $l10n;
 		$this->holidayCalendarService = $holidayCalendarService;
 		$this->overtimeSettingsService = $overtimeSettingsService;
+		$this->dutyRotationSollProvider = $dutyRotationSollProvider;
 	}
 
 	/**
@@ -69,6 +72,7 @@ class OvertimeService
 
 		[$dailyHours, $weeklyHours, $schedule] = $this->resolveContractHours($userId);
 		$requiredHoursBasis = $schedule !== null ? 'weekday_schedule' : 'weekly_contract';
+		$rotationWeekLabel = null;
 
 		$periodStart = clone $startDate;
 		if ($periodStart < $effectiveYTDStart) {
@@ -81,6 +85,17 @@ class OvertimeService
 		$periodStartDay->setTime(0, 0, 0);
 		$periodEndDay = clone $endDate;
 		$periodEndDay->setTime(0, 0, 0);
+
+		$rotationHours = null;
+		if ($periodStartDay <= $periodEndDay) {
+			$rotationHours = $this->tryRotationRequiredHours($userId, $periodStart, $endDate);
+			if ($rotationHours !== null) {
+				$basis = $this->dutyRotationSollProvider?->getWeekTargetBasis($userId, $periodStart);
+				$requiredHoursBasis = $basis ?? 'rotation_pattern';
+				$rotationWeekLabel = $this->dutyRotationSollProvider?->getWeekTargetLabel($userId, $periodStart);
+			}
+		}
+
 		if ($periodStartDay > $periodEndDay) {
 			$carryInDelta = 0.0;
 			if ($calculateCumulative) {
@@ -108,6 +123,7 @@ class OvertimeService
 				'weekly_hours' => $weeklyHours,
 				'implied_daily_hours' => $impliedDailyHours,
 				'required_hours_basis' => $requiredHoursBasis,
+				'rotation_week_label' => $rotationWeekLabel,
 				'working_days' => 0.0,
 				'effective_tracking_from' => $trackingFrom !== null ? $trackingFrom->format('Y-m-d') : null,
 				'opening_balance_hours' => round($opening, 2),
@@ -124,7 +140,7 @@ class OvertimeService
 			}
 		}
 
-		$requiredHours = $this->calculateRequiredHours($userId, $periodStart, $endDate, $dailyHours, $weeklyHours, $schedule);
+		$requiredHours = $this->calculateRequiredHours($userId, $periodStart, $endDate, $dailyHours, $weeklyHours, $schedule, $rotationHours);
 		// Overtime tracking "Stichtag": do not apply the full daily/weekly target to the
 		// anchor calendar day itself. Otherwise a new employee sees a full day of
 		// undertime at login before any work is recorded (confusing UX). From the next
@@ -139,7 +155,16 @@ class OvertimeService
 			if ($anchor >= $periodStartDay && $anchor <= $periodEndDay) {
 				$anchorEnd = clone $anchor;
 				$anchorEnd->setTime(23, 59, 59);
-				$requiredHours -= $this->calculateRequiredHours($userId, $anchor, $anchorEnd, $dailyHours, $weeklyHours, $schedule);
+				$anchorRotation = $this->tryRotationRequiredHours($userId, $anchor, $anchorEnd);
+				$requiredHours -= $this->calculateRequiredHours(
+					$userId,
+					$anchor,
+					$anchorEnd,
+					$dailyHours,
+					$weeklyHours,
+					$schedule,
+					$anchorRotation,
+				);
 				if ($requiredHours < 0) {
 					$requiredHours = 0.0;
 				}
@@ -176,6 +201,7 @@ class OvertimeService
 			'weekly_hours' => $weeklyHours,
 			'implied_daily_hours' => $impliedDailyHours,
 			'required_hours_basis' => $requiredHoursBasis,
+			'rotation_week_label' => $rotationWeekLabel,
 			'working_days' => $this->countWorkingDays($userId, $periodStart, $endDate),
 			'effective_tracking_from' => $trackingFrom !== null ? $trackingFrom->format('Y-m-d') : null,
 			'opening_balance_hours' => round($opening, 2),
@@ -248,7 +274,17 @@ class OvertimeService
 		float $dailyHours,
 		float $weeklyHours,
 		?\OCA\ArbeitszeitCheck\Support\WeekdaySchedule $schedule = null,
+		?float $precomputedRotationHours = null,
 	): float {
+		// G2 on: Duty rotation Soll first; null → legacy weekday/weekly contract.
+		$rotationHours = $precomputedRotationHours;
+		if ($rotationHours === null) {
+			$rotationHours = $this->tryRotationRequiredHours($userId, $startDate, $endDate);
+		}
+		if ($rotationHours !== null) {
+			return $rotationHours;
+		}
+
 		if ($schedule !== null) {
 			return $schedule->requiredHoursForDateRange(
 				$startDate,
@@ -261,6 +297,18 @@ class OvertimeService
 		$weeks = $workingDays / 5.0;
 
 		return $weeks * $weeklyHours;
+	}
+
+	private function tryRotationRequiredHours(string $userId, \DateTime $startDate, \DateTime $endDate): ?float
+	{
+		if ($this->dutyRotationSollProvider === null || !$this->dutyRotationSollProvider->isEnabledForOrg()) {
+			return null;
+		}
+		try {
+			return $this->dutyRotationSollProvider->requiredHoursForDateRange($userId, $startDate, $endDate);
+		} catch (\Throwable) {
+			return null;
+		}
 	}
 
 	private function countWorkingDays(string $userId, \DateTime $startDate, \DateTime $endDate): float

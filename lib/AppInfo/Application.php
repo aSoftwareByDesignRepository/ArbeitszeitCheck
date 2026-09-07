@@ -581,12 +581,26 @@ class Application extends App implements IBootstrap {
 			);
 		});
 
+		// Pass null for MonthClosureService — eager query here re-enters
+		// MonthClosure → Reporting → Overtime → DutyRotationSoll and blows the
+		// PHP stack (503 for every Nextcloud request). Lazy-resolved inside
+		// DutyRotationSollProvider::resolveMonthClosure() after boot.
+		$context->registerService(\OCA\ArbeitszeitCheck\Service\DutyRotationSollProvider::class, function ($c) {
+			return new \OCA\ArbeitszeitCheck\Service\DutyRotationSollProvider(
+				$c->query(\OCP\IConfig::class),
+				$c,
+				null,
+				$c->query(\Psr\Log\LoggerInterface::class),
+			);
+		});
+
 		$context->registerService(\OCA\ArbeitszeitCheck\Service\VacationHoursDebitService::class, function ($c) {
 			return new \OCA\ArbeitszeitCheck\Service\VacationHoursDebitService(
 				$c->query(\OCA\ArbeitszeitCheck\Db\UserWorkingTimeModelMapper::class),
 				$c->query(\OCA\ArbeitszeitCheck\Db\WorkingTimeModelMapper::class),
 				$c->query(HolidayService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\VacationUnitService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\DutyRotationSollProvider::class),
 			);
 		});
 
@@ -805,6 +819,7 @@ class Application extends App implements IBootstrap {
 				$c->query(\OCP\IL10N::class),
 				$c->query(HolidayService::class),
 				$c->query(\OCA\ArbeitszeitCheck\Service\UserOvertimeSettingsService::class),
+				$c->query(\OCA\ArbeitszeitCheck\Service\DutyRotationSollProvider::class),
 			);
 		});
 

@@ -28,6 +28,7 @@ class VacationHoursDebitService
 		private WorkingTimeModelMapper $workingTimeModelMapper,
 		private HolidayService $holidayService,
 		private VacationUnitService $vacationUnitService,
+		private ?DutyRotationSollProvider $dutyRotationSollProvider = null,
 	) {
 	}
 
@@ -36,7 +37,7 @@ class VacationHoursDebitService
 	 *
 	 * @return array{
 	 *   hours: float,
-	 *   basis: 'weekday_schedule'|'model_daily'|'org_hours_per_day',
+	 *   basis: 'weekday_schedule'|'model_daily'|'org_hours_per_day'|'rotation_pattern'|'published_roster'|'open_roster',
 	 *   average_daily: float,
 	 *   weekday_nets: array<string, float>|null,
 	 *   one_day_hours: float
@@ -53,6 +54,11 @@ class VacationHoursDebitService
 			$tmp = $startDt;
 			$startDt = $endDt;
 			$endDt = $tmp;
+		}
+
+		$rotation = $this->tryRotationEstimate($userId, $startDt, $endDt);
+		if ($rotation !== null) {
+			return $rotation;
 		}
 
 		$orgHpd = $this->vacationUnitService->getHoursPerDay();
@@ -101,7 +107,7 @@ class VacationHoursDebitService
 	 * Snapshot for UI / mobile companions (additive; old clients ignore).
 	 *
 	 * @return array{
-	 *   basis: 'weekday_schedule'|'model_daily'|'org_hours_per_day',
+	 *   basis: 'weekday_schedule'|'model_daily'|'org_hours_per_day'|'rotation_pattern'|'published_roster'|'open_roster',
 	 *   average_daily: float,
 	 *   weekday_nets: array<string, float>|null,
 	 *   one_day_hours: float
@@ -118,6 +124,58 @@ class VacationHoursDebitService
 			'weekday_nets' => $est['weekday_nets'],
 			'one_day_hours' => $est['one_day_hours'],
 		];
+	}
+
+	/**
+	 * @return array{
+	 *   hours: float,
+	 *   basis: 'rotation_pattern'|'published_roster'|'open_roster',
+	 *   average_daily: float,
+	 *   weekday_nets: null,
+	 *   one_day_hours: float
+	 * }|null
+	 */
+	private function tryRotationEstimate(string $userId, \DateTime $startDt, \DateTime $endDt): ?array
+	{
+		if ($this->dutyRotationSollProvider === null || !$this->dutyRotationSollProvider->isEnabledForOrg()) {
+			return null;
+		}
+		try {
+			$sum = 0.0;
+			$days = 0;
+			$oneDay = null;
+			$basis = null;
+			$cursor = clone $startDt;
+			while ($cursor <= $endDt) {
+				$h = $this->dutyRotationSollProvider->dayNetHoursForUser($userId, $cursor);
+				if ($h === null) {
+					return null;
+				}
+				$sum += $h;
+				$days++;
+				if ($oneDay === null) {
+					$oneDay = $h;
+					$basis = $this->dutyRotationSollProvider->getWeekTargetBasis($userId, $cursor) ?? 'rotation_pattern';
+					if (!in_array($basis, ['rotation_pattern', 'published_roster', 'open_roster'], true)) {
+						$basis = 'rotation_pattern';
+					}
+				}
+				$cursor = (clone $cursor)->modify('+1 day');
+			}
+			if ($days < 1 || $oneDay === null) {
+				return null;
+			}
+			$avg = $sum / $days;
+			return [
+				'hours' => $this->vacationUnitService->roundAmount(max(0.0, $sum)),
+				'basis' => $basis,
+				'average_daily' => $this->vacationUnitService->roundAmount(max(0.25, $avg)),
+				'weekday_nets' => null,
+				'one_day_hours' => $this->vacationUnitService->roundAmount(max(0.25, $oneDay)),
+			];
+		} catch (\Throwable) {
+			return null;
+		}
 	}
 
 	/**
