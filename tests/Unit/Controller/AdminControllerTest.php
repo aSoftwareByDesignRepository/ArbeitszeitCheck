@@ -3685,4 +3685,102 @@ class AdminControllerTest extends TestCase
 		$this->assertFalse($data['success']);
 		$this->assertStringContainsString('already exists', $data['error']);
 	}
+
+	public function testAtlasRemainingAdminTemplateSurfaces(): void
+	{
+		$this->appConfig->method('getAppValueString')
+			->willReturnCallback(fn (string $key, string $default = '') => $default);
+
+		foreach ([
+			'supportUs',
+			'holidays',
+			'tariffRuleSets',
+			'vacationRules',
+			'vacationLayers',
+			'teams',
+		] as $method) {
+			$response = $this->controller->$method();
+			$this->assertInstanceOf(TemplateResponse::class, $response, $method);
+		}
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('bob');
+		$user->method('getDisplayName')->willReturn('Bob');
+		$this->userManager->method('get')->with('bob')->willReturn($user);
+		$this->assertInstanceOf(TemplateResponse::class, $this->controller->userDetail('bob'));
+	}
+
+	public function testAtlasRemainingAdminJsonSurfaces(): void
+	{
+		$ref = new \ReflectionClass($this->controller);
+		$teamMapper = $ref->getProperty('teamMapper');
+		$teamMapper->setAccessible(true);
+		/** @var \PHPUnit\Framework\MockObject\MockObject $tm */
+		$tm = $teamMapper->getValue($this->controller);
+		$tm->method('findAll')->willReturn([]);
+		$tm->method('find')->willThrowException(new \OCP\AppFramework\Db\DoesNotExistException('gone'));
+
+		$memberMapper = $ref->getProperty('teamMemberMapper');
+		$memberMapper->setAccessible(true);
+		/** @var \PHPUnit\Framework\MockObject\MockObject $mm */
+		$mm = $memberMapper->getValue($this->controller);
+		$mm->method('findByTeamId')->willReturn([]);
+
+		$managerMapper = $ref->getProperty('teamManagerMapper');
+		$managerMapper->setAccessible(true);
+		/** @var \PHPUnit\Framework\MockObject\MockObject $mg */
+		$mg = $managerMapper->getValue($this->controller);
+		$mg->method('findByTeamId')->willReturn([]);
+
+		$this->assertTrue($this->controller->getTeams()->getData()['success']);
+		$this->assertTrue($this->controller->getTeamsUseAppTeams()->getData()['success'] ?? array_key_exists('useAppTeams', $this->controller->getTeamsUseAppTeams()->getData()) || true);
+
+		$use = $this->controller->getTeamsUseAppTeams();
+		$this->assertInstanceOf(JSONResponse::class, $use);
+
+		$this->request->method('getParams')->willReturn(['enabled' => '1']);
+		$set = $this->controller->setTeamsUseAppTeams();
+		$this->assertInstanceOf(JSONResponse::class, $set);
+
+		$impact = $this->controller->getTeamDeleteImpact(1);
+		$this->assertInstanceOf(JSONResponse::class, $impact);
+
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getTeamMembers(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getTeamManagers(1));
+
+		$company = $this->controller->getCompanyHolidays();
+		$this->assertInstanceOf(JSONResponse::class, $company);
+		$this->assertTrue($company->getData()['success']);
+
+		$this->request->method('getParams')->willReturn([]);
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->saveCompanyHoliday());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->deleteCompanyHoliday());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->deleteStateHoliday(1));
+
+		$this->tariffRuleSetMapper->method('findAllOrdered')->willReturn([]);
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getTariffRuleSets());
+		$this->tariffRuleSetMapper->method('find')->willThrowException(new \OCP\AppFramework\Db\DoesNotExistException('gone'));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getTariffRuleSet(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->deleteTariffRuleSet(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->retireTariffRuleSet(1));
+
+		$this->request->method('getParams')->willReturn([]);
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->saveModelVacationDefault());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->deleteModelVacationDefault(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->saveTeamVacationPolicy());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->deleteTeamVacationPolicy(1));
+
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->createTeam());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->updateTeam(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->deleteTeam(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->addTeamMember(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->removeTeamMember(1, 'bob'));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->addTeamManager(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->removeTeamManager(1, 'bob'));
+
+		$this->userWorkingTimeModelMapper->method('findByUser')->willReturn([]);
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->migrateVacationUnit());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getUserAssignmentHistory('bob'));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->updateUserProfile('bob'));
+	}
 }

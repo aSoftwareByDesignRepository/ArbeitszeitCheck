@@ -417,4 +417,17 @@ class SettingsControllerTest extends TestCase
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 	}
+
+	public function testIndexApiReturnsSettings(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->userSettingsMapper->method('getUserSettings')->willReturn([]);
+
+		$response = $this->controller->index_api();
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$this->assertTrue($response->getData()['success']);
+		$this->assertArrayHasKey('settings', $response->getData());
+	}
 }

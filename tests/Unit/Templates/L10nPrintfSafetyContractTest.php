@@ -109,7 +109,11 @@ class L10nPrintfSafetyContractTest extends TestCase
 			$src,
 		);
 		$this->assertStringContainsString(
-			"TemplateL10n::translate(\$l, 'Current window: %1\$s through %2\$s (last 3 months through next 12 months).')",
+			"TemplateL10n::translate(\$l, '%1\$s – %2\$s')",
+			$src,
+		);
+		$this->assertStringContainsString(
+			"TemplateL10n::translate(\$l, 'Calendar language for this link: %s')",
 			$src,
 		);
 	}

@@ -56,6 +56,8 @@ class PageControllerTest extends TestCase
 		$absenceService = $this->createMock(AbsenceService::class);
 		$timeEntryMapper = $this->createMock(TimeEntryMapper::class);
 		$absenceMapper = $this->createMock(AbsenceMapper::class);
+		$timeEntryMapper->method('countByUser')->willReturn(0);
+		$absenceMapper->method('countByUser')->willReturn(0);
 		$userSettingsMapper = $this->createMock(UserSettingsMapper::class);
 		$userSettingsMapper->method('getSetting')->willReturn(new UserSetting());
 		$teamResolver = $this->createMock(TeamResolverService::class);
@@ -67,6 +69,7 @@ class PageControllerTest extends TestCase
 		$userSession->method('getUser')->willReturn($user);
 		$groupManager = $this->createMock(IGroupManager::class);
 		$urlGenerator = $this->createMock(IURLGenerator::class);
+		$urlGenerator->method('linkToRoute')->willReturn('/apps/arbeitszeitcheck/settings/breaks');
 		$config = $this->createMock(IConfig::class);
 		$permissionService = $this->createMock(PermissionService::class);
 		$permissionService->method('canAccessManagerDashboard')->willReturn(false);
@@ -216,5 +219,55 @@ class PageControllerTest extends TestCase
 		$this->assertEquals('timeline', $response->getTemplateName());
 		$params = $response->getParams();
 		$this->assertSame('timeline', $params['pageId'] ?? null);
+	}
+
+	public function testGetTheAppReturnsTemplate(): void
+	{
+		$response = $this->controller->getTheApp();
+		$this->assertInstanceOf(TemplateResponse::class, $response);
+		$this->assertEquals('get-the-app', $response->getTemplateName());
+	}
+
+	public function testSettingsRedirectsToDefaultSection(): void
+	{
+		$response = $this->controller->settings();
+		$this->assertInstanceOf(RedirectResponse::class, $response);
+		$this->assertStringContainsString('/settings/breaks', $response->getRedirectUrl());
+	}
+
+	public function testSettingsSectionUnknownReturnsNotFound(): void
+	{
+		$response = $this->controller->settingsSection('not-a-real-section');
+		$this->assertInstanceOf(\OCP\AppFramework\Http\NotFoundResponse::class, $response);
+	}
+
+	public function testTimeEntriesReturnsTemplate(): void
+	{
+		$response = $this->controller->timeEntries();
+		$this->assertInstanceOf(TemplateResponse::class, $response);
+		$this->assertEquals('time-entries', $response->getTemplateName());
+	}
+
+	public function testAbsencesReturnsTemplate(): void
+	{
+		$response = $this->controller->absences();
+		$this->assertInstanceOf(TemplateResponse::class, $response);
+		$this->assertEquals('absences', $response->getTemplateName());
+	}
+
+	public function testOvertimeBalancePdfReturnsDownloadOrJson(): void
+	{
+		$ref = new \ReflectionClass($this->controller);
+		$display = $ref->getProperty('overtimeDisplayService');
+		$display->setAccessible(true);
+		/** @var \PHPUnit\Framework\MockObject\MockObject $svc */
+		$svc = $display->getValue($this->controller);
+		$svc->method('getYearToDateBalanceForTrafficLight')->willReturn(0.0);
+
+		$response = $this->controller->overtimeBalancePdf();
+		$this->assertTrue(
+			$response instanceof \OCP\AppFramework\Http\DataDownloadResponse
+			|| $response instanceof \OCP\AppFramework\Http\JSONResponse
+		);
 	}
 }

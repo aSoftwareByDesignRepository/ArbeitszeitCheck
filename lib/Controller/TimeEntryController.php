@@ -1042,9 +1042,9 @@ class TimeEntryController extends Controller
 
 			$timeEntry->setStatus($manualRequiresApproval ? TimeEntry::STATUS_PENDING_APPROVAL : TimeEntry::STATUS_COMPLETED);
 			$timeEntry->setIsManualEntry(true);
-			if (!$manualRequiresApproval) {
-				$timeEntry->setJustification($justificationText);
-			}
+			// Always set plain justification before validate(); prepareManualPending()
+			// rewrites it to the JSON envelope when four-eyes approval is required.
+			$timeEntry->setJustification($justificationText);
 			$nowAt = AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config);
 			$timeEntry->setCreatedAt($nowAt);
 			$timeEntry->setUpdatedAt(clone $nowAt);
@@ -2662,9 +2662,9 @@ class TimeEntryController extends Controller
 				}
 				$timeEntry->setStatus($manualRequiresApproval ? TimeEntry::STATUS_PENDING_APPROVAL : TimeEntry::STATUS_COMPLETED);
 				$timeEntry->setIsManualEntry(true);
-				if (!$manualRequiresApproval) {
-					$timeEntry->setJustification($justificationText);
-				}
+				// Always set plain justification before validate(); prepareManualPending()
+				// rewrites it to the JSON envelope when four-eyes approval is required.
+				$timeEntry->setJustification($justificationText);
 				$nowAt = AppLocalNaiveDateTimeNormalizer::nowMutableInAppStorage($this->config);
 				$timeEntry->setCreatedAt($nowAt);
 				$timeEntry->setUpdatedAt(clone $nowAt);

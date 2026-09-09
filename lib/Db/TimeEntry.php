@@ -58,6 +58,7 @@ use OCP\AppFramework\Db\Entity;
  * @method void setApprovedByUserId(string|null $approvedByUserId)
  * @method \DateTime|null getApprovedAt()
  * @method void setApprovedAt(\DateTime|null $approvedAt)
+ * @method string|null getLiveUserId()
  */
 class TimeEntry extends Entity
 {
@@ -134,6 +135,15 @@ class TimeEntry extends Entity
 	protected $approvedAt;
 
 	/**
+	 * Read-only dual-read of DB-generated `live_user_id` (MySQL STORED generated
+	 * column / Postgres partial-unique helper). Set only by mapper hydration —
+	 * never write this field; the database owns the value for open sessions.
+	 *
+	 * @var string|null
+	 */
+	protected $liveUserId;
+
+	/**
 	 * Not persisted. Profile floor for countable breaks (DE/CH 15, AT 10).
 	 * When null, {@see resolveCountableMinBreakMinutes()} uses the profile
 	 * for this entry's user when the container is available, else 15.
@@ -164,6 +174,21 @@ class TimeEntry extends Entity
 		$this->addType('approvedBy', 'integer');
 		$this->addType('approvedByUserId', 'string');
 		$this->addType('approvedAt', 'datetime');
+		$this->addType('liveUserId', 'string');
+	}
+
+	/**
+	 * Hydration-only setter: `live_user_id` is owned by the database
+	 * (generated column / partial unique index). Never mark it dirty for INSERT/UPDATE.
+	 */
+	public function setLiveUserId(?string $liveUserId): void
+	{
+		$this->liveUserId = $liveUserId;
+	}
+
+	public function getLiveUserId(): ?string
+	{
+		return $this->liveUserId;
 	}
 
 	/**

@@ -1314,4 +1314,282 @@ class TimeEntryControllerTest extends TestCase
 		$response = $this->controller->update($entryId, (new \DateTime('yesterday'))->format('d.m.Y'), 8.0);
 		$this->assertTrue($response->getData()['success']);
 	}
+
+	public function testIndexApiAliasesDelegateToIndex(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->timeEntryMapper->method('findByUser')->willReturn([]);
+		$this->timeEntryMapper->method('countByUser')->willReturn(0);
+
+		foreach (['index_api', 'apiIndex'] as $method) {
+			$response = $this->controller->$method();
+			$this->assertTrue($response->getData()['success'], $method);
+		}
+	}
+
+	public function testApiAssignableProjectcheckProjectsWhenDisabled(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$response = $this->controller->apiAssignableProjectcheckProjects();
+		$this->assertTrue($response->getData()['success']);
+		$this->assertArrayHasKey('enabled', $response->getData());
+	}
+
+	public function testGetOvertimeBankReturnsStatus(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$response = $this->controller->getOvertimeBank();
+		$this->assertTrue($response->getData()['success']);
+		$this->assertArrayHasKey('bank', $response->getData());
+	}
+
+	public function testGetStatsReturnsPayload(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->timeTrackingService->method('getWorkingHoursForPeriod')->willReturn(0.0);
+		$this->timeEntryMapper->method('getTotalBreakHoursByUserAndDateRange')->willReturn(0.0);
+		$this->timeEntryMapper->method('countByUser')->willReturn(0);
+		$this->overtimeService->method('calculateOvertime')->willReturn([
+			'overtime_hours' => 0.0,
+			'required_hours' => 0.0,
+			'total_hours_worked' => 0.0,
+			'cumulative_balance_after' => 0.0,
+		]);
+
+		$response = $this->controller->getStats('2026-01-01', '2026-01-31');
+		$this->assertTrue($response->getData()['success']);
+	}
+
+	public function testGetDeletionImpactForbiddenWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$entry = new TimeEntry();
+		$entry->setId(9);
+		$entry->setUserId('other');
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+
+		$response = $this->controller->getDeletionImpact(9);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
+	public function testGetDeletionImpactOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$entry = new TimeEntry();
+		$entry->setId(9);
+		$entry->setUserId('testuser');
+		$entry->setIsManualEntry(true);
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime((new \DateTime())->modify('-1 day')->setTime(9, 0, 0));
+		$entry->setEndTime((new \DateTime())->modify('-1 day')->setTime(17, 0, 0));
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+
+		$response = $this->controller->getDeletionImpact(9);
+		$this->assertTrue($response->getData()['success']);
+		$this->assertArrayHasKey('impact', $response->getData());
+	}
+
+	public function testCancelCorrectionForbiddenWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$entry = new TimeEntry();
+		$entry->setId(3);
+		$entry->setUserId('other');
+		$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+
+		$response = $this->controller->cancelCorrection(3);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
+	public function testUpdatePostAndApiUpdatePostDelegate(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$entry = new TimeEntry();
+		$entry->setId(1);
+		$entry->setUserId('testuser');
+		$entry->setIsManualEntry(true);
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setJustification('j');
+		$entry->setStartTime((new \DateTime())->modify('-1 day')->setTime(9, 0, 0));
+		$entry->setEndTime((new \DateTime())->modify('-1 day')->setTime(17, 0, 0));
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+		$this->timeEntryMapper->method('update')->willReturn($entry);
+		$this->request->method('getParams')->willReturn([
+			'date' => (new \DateTime('yesterday'))->format('Y-m-d'),
+			'hours' => '8',
+		]);
+
+		$this->assertTrue($this->controller->updatePost(1)->getData()['success']);
+		$this->assertTrue($this->controller->apiUpdatePost(1)->getData()['success']);
+	}
+
+	public function testCheckOverlapInvalidTimestamps(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$response = $this->controller->checkOverlap('not-a-date', 'also-bad');
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testCreateAndEditTemplateSurfaces(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->timeCaptureMethodService->method('isManualTimeEntryEnabled')->willReturn(false);
+		$this->timeEntryMapper->method('findByUser')->willReturn([]);
+		$this->timeEntryMapper->method('countByUser')->willReturn(0);
+
+		$create = $this->controller->create();
+		$this->assertInstanceOf(\OCP\AppFramework\Http\TemplateResponse::class, $create);
+
+		$entry = new TimeEntry();
+		$entry->setId(1);
+		$entry->setUserId('other');
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+		$edit = $this->controller->edit(1);
+		$this->assertInstanceOf(\OCP\AppFramework\Http\TemplateResponse::class, $edit);
+	}
+
+	public function testCompleteInvalidId(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$response = $this->controller->complete(0);
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+	}
+
+	/**
+	 * Object-level AuthZ: API update aliases must reject non-owned entries (BOLA).
+	 */
+	public function testApiUpdateReturnsForbiddenWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'date' => '2024-01-16',
+			'hours' => '8',
+		]);
+
+		$entry = new TimeEntry();
+		$entry->setId(42);
+		$entry->setUserId('otheruser');
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setIsManualEntry(true);
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+		$this->timeEntryMapper->expects($this->never())->method('update');
+
+		$response = $this->controller->apiUpdate(42);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testApiUpdatePostReturnsForbiddenWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'date' => '2024-01-16',
+			'hours' => '8',
+		]);
+
+		$entry = new TimeEntry();
+		$entry->setId(42);
+		$entry->setUserId('otheruser');
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setIsManualEntry(true);
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+		$this->timeEntryMapper->expects($this->never())->method('update');
+
+		$response = $this->controller->apiUpdatePost(42);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testRequestCorrectionReturnsForbiddenWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'justification' => 'Wrong time recorded for testing',
+		]);
+
+		$entry = new TimeEntry();
+		$entry->setId(7);
+		$entry->setUserId('otheruser');
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+		$this->timeEntryMapper->expects($this->never())->method('update');
+
+		$response = $this->controller->requestCorrection(7);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertSame('Access denied', $response->getData()['error']);
+	}
+
+	public function testCompleteReturnsForbiddenWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([]);
+
+		$this->timeTrackingService->expects($this->once())
+			->method('completePausedEntry')
+			->with('testuser', 9, null)
+			->willThrowException(new \OCA\ArbeitszeitCheck\Exception\BusinessRuleException('Access denied'));
+
+		$response = $this->controller->complete(9);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertSame('Access denied', $response->getData()['error']);
+	}
 }

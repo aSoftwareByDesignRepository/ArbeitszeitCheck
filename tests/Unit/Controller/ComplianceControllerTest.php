@@ -920,4 +920,19 @@ class ComplianceControllerTest extends TestCase
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 	}
+
+	public function testCheckRestPeriodReturnsPayload(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->complianceService->method('checkRestPeriodForStartTime')->willReturn([
+			'valid' => true,
+			'message' => 'ok',
+		]);
+
+		$response = $this->controller->checkRestPeriod('2026-09-08T09:00:00+02:00');
+		$this->assertTrue($response->getData()['success']);
+		$this->assertTrue($response->getData()['valid']);
+	}
 }

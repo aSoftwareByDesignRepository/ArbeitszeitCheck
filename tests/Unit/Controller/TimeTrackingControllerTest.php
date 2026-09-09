@@ -241,6 +241,44 @@ class TimeTrackingControllerTest extends TestCase
 	/**
 	 * Test clockOut returns success response
 	 */
+	public function testClockOutReturnsErrorWhenNotAuthenticated(): void
+	{
+		$this->userSession->expects($this->once())
+			->method('getUser')
+			->willReturn(null);
+
+		$response = $this->controller->clockOut();
+
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$this->assertEquals(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+	}
+
+	public function testStartBreakReturnsErrorWhenNotAuthenticated(): void
+	{
+		$this->userSession->expects($this->once())
+			->method('getUser')
+			->willReturn(null);
+
+		$response = $this->controller->startBreak();
+
+		$this->assertEquals(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testEndBreakReturnsErrorWhenNotAuthenticated(): void
+	{
+		$this->userSession->expects($this->once())
+			->method('getUser')
+			->willReturn(null);
+
+		$response = $this->controller->endBreak();
+
+		$this->assertEquals(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
 	public function testClockOutSuccess(): void
 	{
 		$userId = 'testuser';
@@ -421,5 +459,51 @@ class TimeTrackingControllerTest extends TestCase
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 		$this->assertEquals('User is not currently on break', $data['error']);
+	}
+
+	public function testGetBreakStatusSuccess(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->timeTrackingService->expects($this->once())
+			->method('getBreakStatus')
+			->with('testuser')
+			->willReturn(['onBreak' => false]);
+
+		$response = $this->controller->getBreakStatus();
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertTrue($response->getData()['success']);
+		$this->assertFalse($response->getData()['breakStatus']['onBreak']);
+	}
+
+	public function testGetBreakStatusUnauthorized(): void
+	{
+		$this->userSession->method('getUser')->willReturn(null);
+		$response = $this->controller->getBreakStatus();
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+	}
+
+	public function testEnforceDailyMaximumSuccess(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->timeTrackingService->method('isAtOrAboveDailyMaximum')->willReturn(false);
+		$this->timeTrackingService->method('enforceDailyMaximumForUser')->willReturn(null);
+		$this->timeTrackingService->method('getStatus')->willReturn(['status' => 'clocked_out']);
+
+		$response = $this->controller->enforceDailyMaximum();
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertTrue($data['success']);
+		$this->assertFalse($data['enforced']);
+	}
+
+	public function testEnforceDailyMaximumUnauthorized(): void
+	{
+		$this->userSession->method('getUser')->willReturn(null);
+		$response = $this->controller->enforceDailyMaximum();
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $response->getStatus());
 	}
 }

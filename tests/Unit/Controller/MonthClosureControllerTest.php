@@ -243,4 +243,155 @@ class MonthClosureControllerTest extends TestCase
 		$res = $c->pdf();
 		$this->assertInstanceOf(DataDownloadResponse::class, $res);
 	}
+
+	public function testFeatureReturnsEnabledFlag(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$mcs = $this->createMock(MonthClosureService::class);
+		$mcs->method('getGraceDaysAfterEndOfMonth')->willReturn(5);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('1');
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnArgument(0);
+		$c = $this->makeController(
+			$request,
+			$this->sessionUser('alice'),
+			$mcs,
+			$this->createMock(PermissionService::class),
+			$config,
+			$l10n,
+			$this->createMock(IUserManager::class),
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(LoggerInterface::class)
+		);
+		$res = $c->feature();
+		$this->assertTrue($res->getData()['enabled']);
+		$this->assertSame(5, $res->getData()['graceDaysAfterEom']);
+	}
+
+	public function testPeriodsWhenFeatureDisabled(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$mcs = $this->createMock(MonthClosureService::class);
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('0');
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnArgument(0);
+		$c = $this->makeController(
+			$request,
+			$this->sessionUser('alice'),
+			$mcs,
+			$this->createMock(PermissionService::class),
+			$config,
+			$l10n,
+			$this->createMock(IUserManager::class),
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(LoggerInterface::class)
+		);
+		$res = $c->periods();
+		$this->assertTrue($res->getData()['success']);
+		$this->assertFalse($res->getData()['featureEnabled']);
+	}
+
+	public function testStatusInvalidMonth(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			return match ($name) {
+				'year' => '2026',
+				'month' => '13',
+				default => $default,
+			};
+		});
+		$mcs = $this->createMock(MonthClosureService::class);
+		$config = $this->createMock(IConfig::class);
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnArgument(0);
+		$c = $this->makeController(
+			$request,
+			$this->sessionUser('alice'),
+			$mcs,
+			$this->createMock(PermissionService::class),
+			$config,
+			$l10n,
+			$this->createMock(IUserManager::class),
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(LoggerInterface::class)
+		);
+		$res = $c->status();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $res->getStatus());
+	}
+
+	public function testFinalizeInvalidMonth(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParams')->willReturn(['year' => 0, 'month' => 0]);
+		$mcs = $this->createMock(MonthClosureService::class);
+		$config = $this->createMock(IConfig::class);
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnArgument(0);
+		$c = $this->makeController(
+			$request,
+			$this->sessionUser('alice'),
+			$mcs,
+			$this->createMock(PermissionService::class),
+			$config,
+			$l10n,
+			$this->createMock(IUserManager::class),
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(LoggerInterface::class)
+		);
+		$res = $c->finalize();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $res->getStatus());
+	}
+
+	public function testFinalizeUnauthorizedWhenNotLoggedIn(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParams')->willReturn(['year' => 2026, 'month' => 3]);
+		$session = $this->createMock(IUserSession::class);
+		$session->method('getUser')->willReturn(null);
+		$mcs = $this->createMock(MonthClosureService::class);
+		$config = $this->createMock(IConfig::class);
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnArgument(0);
+		$c = $this->makeController(
+			$request,
+			$session,
+			$mcs,
+			$this->createMock(PermissionService::class),
+			$config,
+			$l10n,
+			$this->createMock(IUserManager::class),
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(LoggerInterface::class)
+		);
+		$res = $c->finalize();
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $res->getStatus());
+	}
+
+	public function testReopenForbiddenForNonAdmin(): void
+	{
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParams')->willReturn(['userId' => 'bob', 'year' => 2026, 'month' => 3]);
+		$mcs = $this->createMock(MonthClosureService::class);
+		$config = $this->createMock(IConfig::class);
+		$l10n = $this->createMock(IL10N::class);
+		$l10n->method('t')->willReturnArgument(0);
+		$ps = $this->createMock(PermissionService::class);
+		$ps->method('isAdmin')->willReturn(false);
+		$c = $this->makeController(
+			$request,
+			$this->sessionUser('alice'),
+			$mcs,
+			$ps,
+			$config,
+			$l10n,
+			$this->createMock(IUserManager::class),
+			$this->createMock(AuditLogMapper::class),
+			$this->createMock(LoggerInterface::class)
+		);
+		$res = $c->reopen();
+		$this->assertSame(Http::STATUS_FORBIDDEN, $res->getStatus());
+	}
 }

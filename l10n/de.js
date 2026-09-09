@@ -3521,7 +3521,7 @@
 		"Team updated" : "Team aktualisiert",
 		"Team vacation policies" : "Team-Urlaubsrichtlinien",
 		"Team vacation policy not found" : "Team-Urlaubsrichtlinie nicht gefunden",
-		"Teams" : "Mannschaften",
+		"Teams" : "Teams",
 		"Teams and departments" : "Teams und Abteilungen",
 		"Teams and locations" : "Teams und Standorte",
 		"Teams, Abteilungen oder andere Organisationseinheiten in einer flexiblen Hierarchie definieren. Mitglieder und Leitungen zuweisen. Wenn unten aktiviert, können Leitungen Abwesenheiten und Zeitkorrekturen ihrer Einheiten freigeben." : "Teams, Abteilungen oder andere Organisationseinheiten in einer flexiblen Hierarchie definieren. Mitglieder und Leitungen zuweisen. Wenn unten aktiviert, können Leitungen Abwesenheiten und Zeitkorrekturen ihrer Einheiten freigeben.",

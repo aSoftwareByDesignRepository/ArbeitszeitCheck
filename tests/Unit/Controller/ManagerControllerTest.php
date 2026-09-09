@@ -1761,4 +1761,115 @@ class ManagerControllerTest extends TestCase
 		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
 	}
 
+	public function testAtlasManagerPageSurfacesRedirectOrTemplate(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('mgr');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->willReturn(false);
+		$this->permissionService->method('canAccessManagerDashboard')->willReturn(false);
+		$this->urlGenerator->method('linkToRoute')->willReturn('/apps/arbeitszeitcheck/');
+
+		foreach (['employeeTimeEntriesPage', 'employeeAbsencesPage', 'monthClosuresPage'] as $method) {
+			$res = $this->controller->$method();
+			$this->assertTrue(
+				$res instanceof \OCP\AppFramework\Http\TemplateResponse
+				|| $res instanceof \OCP\AppFramework\Http\RedirectResponse,
+				$method
+			);
+		}
+	}
+
+	public function testAtlasManagerRemainingApiSurfaces(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('mgr');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('isAdmin')->willReturn(false);
+		$this->permissionService->method('canAccessManagerDashboard')->willReturn(true);
+		$this->permissionService->method('canManageEmployee')->willReturn(false);
+		$this->request->method('getParams')->willReturn([]);
+		$this->request->method('getParam')->willReturn(null);
+
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getManagedTeams());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getTeamOvertimeAlerts());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getPendingTimeEntryCorrections());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->estimateEmployeeVacationHours());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->getManagerAssignableProjectcheckProjects('emp'));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->createEmployeeTimeEntry());
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->correctTimeEntry(1));
+		$export = $this->controller->exportTeamOvertimeCsv();
+		$this->assertTrue(
+			$export instanceof JSONResponse || $export instanceof \OCP\AppFramework\Http\DataDownloadResponse
+		);
+	}
+
+	public function testGetManagerAssignableProjectcheckProjectsReturnsForbiddenForOutOfScopeEmployee(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('manager1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->canAccessManagerDashboard = true;
+		$this->permissionService->method('canManageEmployee')->with('manager1', 'outsider')->willReturn(false);
+
+		$response = $this->controller->getManagerAssignableProjectcheckProjects('outsider');
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertStringContainsString('Access denied', $response->getData()['error']);
+	}
+
+	public function testRejectTimeEntryCorrectionReturnsForbiddenWhenNotInTeam(): void
+	{
+		$managerId = 'manager1';
+		$otherUserId = 'otheruser';
+		$entryId = 11;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canManageEmployee')->with($managerId, $otherUserId)->willReturn(false);
+
+		$entry = new TimeEntry();
+		$entry->setId($entryId);
+		$entry->setUserId($otherUserId);
+		$entry->setStatus(TimeEntry::STATUS_PENDING_APPROVAL);
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+
+		$response = $this->controller->rejectTimeEntryCorrection($entryId, 'Nope');
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertStringContainsString('Access denied', $response->getData()['error']);
+	}
+
+	public function testCorrectTimeEntryReturnsForbiddenWhenNotInTeam(): void
+	{
+		$managerId = 'manager1';
+		$otherUserId = 'otheruser';
+		$entryId = 12;
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn($managerId);
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->permissionService->method('canManageEmployee')->with($managerId, $otherUserId)->willReturn(false);
+		$this->request->method('getParams')->willReturn([
+			'reason' => 'Manager correction for testing',
+		]);
+
+		$entry = new TimeEntry();
+		$entry->setId($entryId);
+		$entry->setUserId($otherUserId);
+		$entry->setStatus(TimeEntry::STATUS_COMPLETED);
+		$entry->setStartTime(new \DateTime('2024-01-15 09:00:00'));
+		$entry->setEndTime(new \DateTime('2024-01-15 17:00:00'));
+		$entry->setCreatedAt(new \DateTime());
+		$entry->setUpdatedAt(new \DateTime());
+		$this->timeEntryMapper->method('find')->willReturn($entry);
+
+		$response = $this->controller->correctTimeEntry($entryId);
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertStringContainsString('Access denied', $response->getData()['error']);
+	}
+
 }

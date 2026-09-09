@@ -213,4 +213,59 @@ class DashboardWidgetControllerTest extends TestCase {
 		$this->assertSame(7, $data['timeEntry']['id']);
 		$this->assertSame('active', $data['timeEntry']['status']);
 	}
+
+	public function testStartBreakClockOutEndBreakSuccessPaths(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$entry = $this->createMock(TimeEntry::class);
+		$entry->method('getSummary')->willReturn(['id' => 2, 'status' => 'break']);
+		$this->timeTrackingService->method('startBreak')->willReturn($entry);
+		$this->timeTrackingService->method('endBreak')->willReturn($entry);
+		$this->timeTrackingService->method('clockOut')->willReturn($entry);
+		$this->timeTrackingService->method('getStatus')->willReturn(['status' => 'break']);
+
+		foreach (['startBreak', 'endBreak', 'clockOut'] as $method) {
+			$response = $this->controller->$method();
+			$this->assertSame(Http::STATUS_OK, $response->getStatus(), $method);
+			$this->assertTrue($response->getData()['success'], $method);
+		}
+	}
+
+	public function testStartBreakUnauthorized(): void {
+		$this->userSession->method('getUser')->willReturn(null);
+		$response = $this->controller->startBreak();
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+	}
+
+	public function testAdminDataRejectsUnauthorized(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->widgetDataService->method('getAdminWidgetData')->willReturn(['authorized' => false]);
+
+		$response = $this->controller->adminData();
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testEndBreakAndClockOutUnauthorized(): void {
+		$this->userSession->method('getUser')->willReturn(null);
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->endBreak()->getStatus());
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->clockOut()->getStatus());
+	}
+
+	public function testAdminDataReturnsPayloadWhenAuthorized(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('u1');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->widgetDataService->method('getAdminWidgetData')
+			->with('u1', 10)
+			->willReturn(['authorized' => true, 'employees' => []]);
+
+		$response = $this->controller->adminData();
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertTrue($response->getData()['success']);
+	}
 }

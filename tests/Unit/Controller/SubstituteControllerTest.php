@@ -352,4 +352,33 @@ class SubstituteControllerTest extends TestCase
 		$data = $response->getData();
 		$this->assertFalse($data['success']);
 	}
+
+	/**
+	 * Object-level AuthZ: wrong substitute cannot decline another user's request.
+	 */
+	public function testDeclineReturns400WhenNotDesignatedSubstitute(): void
+	{
+		$this->mockAuthenticatedUser('intruder');
+		$this->absenceService->expects($this->once())
+			->method('declineBySubstitute')
+			->with(42, 'intruder', '')
+			->willThrowException(new \Exception('You are not the designated substitute for this absence'));
+
+		$response = $this->controller->decline(42);
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$data = $response->getData();
+		$this->assertFalse($data['success']);
+		$this->assertSame('You are not the designated substitute for this absence', $data['error']);
+	}
+
+	public function testDeclineReturnsUnauthorizedWhenNotLoggedIn(): void
+	{
+		$this->userSession->method('getUser')->willReturn(null);
+
+		$response = $this->controller->decline(1);
+
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
 }

@@ -708,4 +708,240 @@ class AbsenceControllerTest extends TestCase
 		$this->assertEquals(Http::STATUS_SEE_OTHER, $response->getStatus());
 		$this->assertStringContainsString('shorten_error=', $response->getRedirectURL());
 	}
+
+	public function testIndexApiAliasesDelegateToIndex(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->absenceService->method('getAbsencesByUser')->willReturn([]);
+
+		foreach (['index_api'] as $method) {
+			$response = $this->controller->$method();
+			$this->assertTrue($response->getData()['success'], $method);
+		}
+	}
+
+	public function testUsersReturnsColleagues(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->teamResolver->method('getColleagueIds')->with('testuser')->willReturn(['bob']);
+		$bob = $this->createMock(IUser::class);
+		$bob->method('getUID')->willReturn('bob');
+		$bob->method('getDisplayName')->willReturn('Bob');
+		$bob->method('isEnabled')->willReturn(true);
+		$this->userManager->method('get')->with('bob')->willReturn($bob);
+
+		$response = $this->controller->users();
+		$this->assertTrue($response->getData()['success']);
+		$this->assertSame('bob', $response->getData()['users'][0]['userId']);
+	}
+
+	public function testStatsReturnsVacationStats(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->absenceService->method('getVacationStats')->with('testuser', 2026)->willReturn([
+			'used' => 2.0,
+			'entitlement' => 25.0,
+			'total_available' => 25.0,
+			'carryover_days' => 0,
+			'carryover_usable' => 0,
+			'carryover_expires_on' => null,
+			'carryover_unused_locked_after_deadline' => false,
+		]);
+
+		$response = $this->controller->stats(2026);
+		$this->assertTrue($response->getData()['success']);
+		$this->assertSame(25.0, $response->getData()['vacationStats']['entitlement']);
+	}
+
+	public function testEntitlementTraceUnauthorized(): void
+	{
+		$this->userSession->method('getUser')->willReturn(null);
+		$response = $this->controller->entitlementTrace();
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $response->getStatus());
+	}
+
+	public function testEntitlementTraceHappy(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParam')->willReturnCallback(static function (string $name, $default = null) {
+			return $name === 'asOfDate' ? '2026-06-01' : $default;
+		});
+		$this->vacationEntitlementEngine->method('computeForDate')->willReturn([
+			'days' => 25.0,
+			'trace' => ['step' => 1],
+		]);
+		$this->vacationEntitlementEngine->method('redactTraceForUser')->willReturn(['step' => 1]);
+
+		$response = $this->controller->entitlementTrace();
+		$this->assertTrue($response->getData()['success']);
+	}
+
+	public function testEstimateVacationHoursRequiresDates(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParam')->willReturn('');
+
+		$response = $this->controller->estimateVacationHours('', '');
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+	}
+
+	public function testCreateShowEditTemplateSurfaces(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->teamResolver->method('getColleagueIds')->willReturn([]);
+		$this->absenceService->method('getAbsence')->willReturn(null);
+
+		$this->assertInstanceOf(\OCP\AppFramework\Http\TemplateResponse::class, $this->controller->create());
+		$this->assertInstanceOf(\OCP\AppFramework\Http\TemplateResponse::class, $this->controller->show(1));
+		$this->assertInstanceOf(\OCP\AppFramework\Http\TemplateResponse::class, $this->controller->edit(1));
+	}
+
+	public function testUpdatePostDelegatesToUpdate(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([]);
+		$this->absenceService->method('updateAbsence')->willThrowException(new \InvalidArgumentException('missing'));
+
+		$response = $this->controller->updatePost(1);
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testApiStoreUpdateDeleteAndCancelSurfaces(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([]);
+
+		$store = $this->controller->apiStore();
+		$this->assertInstanceOf(JSONResponse::class, $store);
+
+		$this->absenceMapper->method('find')->willThrowException(new DoesNotExistException('gone'));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->apiUpdate(1));
+		$this->assertInstanceOf(JSONResponse::class, $this->controller->apiDelete(1));
+		$cancel = $this->controller->cancel(1);
+		$this->assertTrue(
+			$cancel instanceof JSONResponse || $cancel instanceof \OCP\AppFramework\Http\RedirectResponse
+		);
+	}
+
+	/**
+	 * Object-level AuthZ negatives for path-param absence mutations (not license MW).
+	 */
+	public function testApiShowReturnsNotFoundWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$this->absenceService->expects($this->once())
+			->method('getAbsence')
+			->with(55, 'testuser')
+			->willReturn(null);
+
+		$response = $this->controller->apiShow(55);
+		$this->assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+	}
+
+	public function testApiUpdateReturnsNotFoundWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn([
+			'start_date' => '2024-06-01',
+			'end_date' => '2024-06-05',
+		]);
+
+		$absence = new Absence();
+		$absence->setId(55);
+		$absence->setUserId('otheruser');
+		$absence->setStartDate(new \DateTime('2024-06-01'));
+		$absence->setEndDate(new \DateTime('2024-06-05'));
+		$this->absenceMapper->method('find')->willReturn($absence);
+		$this->absenceService->expects($this->never())->method('updateAbsence');
+
+		$response = $this->controller->apiUpdate(55);
+		$this->assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertSame('Absence not found', $response->getData()['error']);
+	}
+
+	public function testApiDeleteReturnsNotFoundWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$absence = new Absence();
+		$absence->setId(55);
+		$absence->setUserId('otheruser');
+		$absence->setStartDate(new \DateTime('2024-06-01'));
+		$absence->setEndDate(new \DateTime('2024-06-05'));
+		$this->absenceMapper->method('find')->willReturn($absence);
+		$this->absenceService->expects($this->never())->method('deleteAbsence');
+
+		$response = $this->controller->apiDelete(55);
+		$this->assertSame(Http::STATUS_NOT_FOUND, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertSame('Absence not found', $response->getData()['error']);
+	}
+
+	public function testCancelReturnsErrorWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+
+		$absence = new Absence();
+		$absence->setId(55);
+		$absence->setUserId('otheruser');
+		$absence->setStartDate(new \DateTime('2099-06-01'));
+		$absence->setEndDate(new \DateTime('2099-06-05'));
+		$this->absenceMapper->method('find')->willReturn($absence);
+		$this->absenceService->expects($this->once())
+			->method('cancelAbsence')
+			->with(55, 'testuser')
+			->willThrowException(new \Exception('Absence not found'));
+
+		$response = $this->controller->cancel(55);
+		$this->assertInstanceOf(JSONResponse::class, $response);
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertSame('Absence not found', $response->getData()['error']);
+	}
+
+	public function testShortenReturnsErrorWhenNotOwned(): void
+	{
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('testuser');
+		$this->userSession->method('getUser')->willReturn($user);
+		$this->request->method('getParams')->willReturn(['end_date' => '2024-06-03']);
+
+		$this->absenceService->expects($this->once())
+			->method('shortenAbsence')
+			->with(55, 'testuser', '2024-06-03')
+			->willThrowException(new \Exception('Absence not found'));
+
+		$response = $this->controller->shorten(55);
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertFalse($response->getData()['success']);
+		$this->assertSame('Absence not found', $response->getData()['error']);
+	}
 }

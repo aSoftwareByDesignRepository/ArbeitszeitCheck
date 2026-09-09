@@ -142,6 +142,9 @@ class MobileBootstrapController extends Controller {
 	private function requireSubstituteTypes(): array
 	{
 		$raw = $this->config->getAppValue('arbeitszeitcheck', 'require_substitute_types', '[]');
+		if (!is_string($raw) || $raw === '') {
+			$raw = '[]';
+		}
 		$decoded = json_decode($raw, true);
 		if (!is_array($decoded)) {
 			return [];

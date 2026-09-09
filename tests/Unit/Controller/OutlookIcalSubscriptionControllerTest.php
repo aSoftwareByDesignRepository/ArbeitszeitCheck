@@ -667,4 +667,20 @@ final class OutlookIcalSubscriptionControllerTest extends TestCase
 		self::assertSame(Http::STATUS_OK, $response->getStatus());
 		self::assertTrue($response->getData()['enabled']);
 	}
+
+	public function testAdminCreateSubscriptionLinkAndRotateAndLegacyFeed(): void
+	{
+		$permissionService = $this->createMock(PermissionService::class);
+		$permissionService->method('isAdmin')->willReturn(false);
+		$controller = $this->makeController(
+			userSession: $this->sessionUser('bob'),
+			permissionService: $permissionService,
+		);
+		$create = $controller->adminCreateSubscriptionLink();
+		self::assertInstanceOf(JSONResponse::class, $create);
+		$rotate = $controller->adminRotateToken();
+		self::assertInstanceOf(JSONResponse::class, $rotate);
+		$legacy = $controller->tokenizedFeedLegacy('bad-token');
+		self::assertInstanceOf(DataDisplayResponse::class, $legacy);
+	}
 }
